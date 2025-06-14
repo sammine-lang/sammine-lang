@@ -86,7 +86,6 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
     }
     }
   }
-  this->abort("Should not happen in ParseDefinition()");
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
 }
 
