@@ -49,26 +49,15 @@ void CgVisitor::visit(FuncDefAST *ast) {
   this->exit_new_scope();
 }
 
-void CgVisitor::visit(IfExprAST *ast) {
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
-}
-
 void CgVisitor::preorder_walk(ProgramAST *ast) {
   jasmine.initGlobalRootChain();
+  ref_counter.declare_malloc_wrapper(CodegenUtils::hasFunctionMain(ast));
   // TODO: In the future, we need to move both this function someplace else.
   //
   // INFO: To use for both function decl, malloc and printf
   llvm::PointerType *int8ptr =
       llvm::PointerType::get(llvm::Type::getInt8Ty(*this->resPtr->Context),
                              0); // 0 stands for generic address space
-
-  // INFO: malloc, since we're a GC language, duhhhh
-  llvm::FunctionType *MallocType = llvm::FunctionType::get(
-      int8ptr,                                        // return type (i8*)
-      llvm::Type::getInt64Ty(*this->resPtr->Context), // arg: size_t (i64)
-      false);                                         // not variadic
-  resPtr->Module->getOrInsertFunction("malloc", MallocType);
 
   // INFO: printf (variadic: takes i8* format string, ...)
   llvm::FunctionType *PrintfType = llvm::FunctionType::get(
@@ -96,30 +85,6 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
 }
 void CgVisitor::preorder_walk(ExternAST *ast) {}
 void CgVisitor::preorder_walk(RecordDefAST *ast) {}
-void CgVisitor::preorder_walk(FuncDefAST *ast) {
-  auto name = ast->Prototype->functionName;
-
-  auto *Function = this->getCurrentFunction();
-
-  assert(Function);
-  llvm::BasicBlock *mainblock =
-      llvm::BasicBlock::Create(*(resPtr->Context), "entry", Function);
-
-  resPtr->Builder->SetInsertPoint(mainblock);
-  jasmine.setStackEntryFromCaller(ast, Function);
-
-  //
-  // INFO:: Copy all the arguments to the entry block
-  for (auto &Arg : Function->args()) {
-    auto *Alloca = CodegenUtils::CreateEntryBlockAlloca(
-        Function, std::string(Arg.getName()), Arg.getType());
-    resPtr->Builder->CreateStore(&Arg, Alloca);
-
-    this->allocaValues.top()[std::string(Arg.getName())] = Alloca;
-  }
-
-  return;
-}
 void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
