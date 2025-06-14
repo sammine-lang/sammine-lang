@@ -1,7 +1,5 @@
 <map id="include/typecheck/BiTypeChecker.h" name="include/typecheck/BiTypeChecker.h">
-<area shape="rect" id="Node000001" title="Defines the BiTypeCheckerVisitor, consist of the flow for Bi&#45;Directional Type checking,..." alt="" coords="116,5,285,46"/>
-<area shape="rect" id="Node000002" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="5,94,177,120"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="163,57,109,96,106,91,160,53"/>
-<area shape="rect" id="Node000003" href="$BiTypeChecker_8cpp.html" title="Implementation of BiTypeCheckerVisitor, an ASTVisitor that traverses the AST to synthesize node types..." alt="" coords="200,94,419,120"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="241,53,294,91,291,96,238,57"/>
+<area shape="rect" id="Node000001" title="Defines the BiTypeCheckerVisitor, consist of the flow for Bi&#45;Directional Type checking,..." alt="" coords="30,5,199,46"/>
+<area shape="rect" id="Node000002" href="$BiTypeChecker_8cpp.html" title="Implementation of BiTypeCheckerVisitor, an ASTVisitor that traverses the AST to synthesize node types..." alt="" coords="5,94,224,120"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="117,62,117,93,112,93,112,62"/>
 </map>

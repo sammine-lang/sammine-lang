@@ -97,40 +97,47 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:acffffd0daa3fffffc318085a4a74d31e" id="r_acffffd0daa3fffffc318085a4a74d31e"><td class="memItemLeft" align="right" valign="top"><a id="acffffd0daa3fffffc318085a4a74d31e" name="acffffd0daa3fffffc318085a4a74d31e"></a>
-&#160;</td><td class="memItemRight" valign="bottom"><b>ShadowGarbageCollector</b> (llvm::Module &amp;module, llvm::LLVMContext &amp;context, llvm::IRBuilder&lt;&gt; &amp;builder)</td></tr>
-<tr class="separator:acffffd0daa3fffffc318085a4a74d31e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1128a317e911ff2b8ac8b74102144a5a" id="r_a1128a317e911ff2b8ac8b74102144a5a"><td class="memItemLeft" align="right" valign="top"><a id="a1128a317e911ff2b8ac8b74102144a5a" name="a1128a317e911ff2b8ac8b74102144a5a"></a>
+&#160;</td><td class="memItemRight" valign="bottom"><b>ShadowGarbageCollector</b> (<a class="el" href="classsammine__lang_1_1LLVMRes.html">LLVMRes</a> &amp;resPtr)</td></tr>
+<tr class="separator:a1128a317e911ff2b8ac8b74102144a5a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:abd904441fc700f1340c2321ea03c61cb" id="r_abd904441fc700f1340c2321ea03c61cb"><td class="memItemLeft" align="right" valign="top"><a id="abd904441fc700f1340c2321ea03c61cb" name="abd904441fc700f1340c2321ea03c61cb"></a>
 virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><b>llvmStrategy</b> ()</td></tr>
 <tr class="separator:abd904441fc700f1340c2321ea03c61cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a75f4773c9885279ffd7960c1653f4cae" id="r_a75f4773c9885279ffd7960c1653f4cae"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a75f4773c9885279ffd7960c1653f4cae">createFrameMapForCallee</a> (<a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *)</td></tr>
-<tr class="memdesc:a75f4773c9885279ffd7960c1653f4cae"><td class="mdescLeft">&#160;</td><td class="mdescRight">Insert a FrameMap in the beginning of each function.  <br /></td></tr>
-<tr class="separator:a75f4773c9885279ffd7960c1653f4cae"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aaf22919ee1ce1d69ea033a0045cbf833" id="r_aaf22919ee1ce1d69ea033a0045cbf833"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aaf22919ee1ce1d69ea033a0045cbf833">setStackEntryFromCaller</a> (<a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *)</td></tr>
-<tr class="separator:aaf22919ee1ce1d69ea033a0045cbf833"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a88a90de8f11cbce4b551ef00b23bfce4" id="r_a88a90de8f11cbce4b551ef00b23bfce4"><td class="memItemLeft" align="right" valign="top">llvm::GlobalVariable *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a88a90de8f11cbce4b551ef00b23bfce4">getFrameMapForCallee</a> (<a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *)</td></tr>
+<tr class="memdesc:a88a90de8f11cbce4b551ef00b23bfce4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Insert a FrameMap in the beginning of each function.  <br /></td></tr>
+<tr class="separator:a88a90de8f11cbce4b551ef00b23bfce4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a29c2312181e5e929ac63311fb851f4bf" id="r_a29c2312181e5e929ac63311fb851f4bf"><td class="memItemLeft" align="right" valign="top"><a id="a29c2312181e5e929ac63311fb851f4bf" name="a29c2312181e5e929ac63311fb851f4bf"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>applyStrategy</b> (llvm::Function *f)</td></tr>
+<tr class="separator:a29c2312181e5e929ac63311fb851f4bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a40fa8b5f0d51a164f518b31024dec50b" id="r_a40fa8b5f0d51a164f518b31024dec50b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a40fa8b5f0d51a164f518b31024dec50b">setStackEntry</a> (<a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *callee, llvm::Function *llvm_callee)</td></tr>
+<tr class="separator:a40fa8b5f0d51a164f518b31024dec50b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acfd32a2bb1c8fbe00776a57f2f63c56c" id="r_acfd32a2bb1c8fbe00776a57f2f63c56c"><td class="memItemLeft" align="right" valign="top"><a id="acfd32a2bb1c8fbe00776a57f2f63c56c" name="acfd32a2bb1c8fbe00776a57f2f63c56c"></a>
+void&#160;</td><td class="memItemRight" valign="bottom"><b>relieveStackEntry</b> ()</td></tr>
+<tr class="separator:acfd32a2bb1c8fbe00776a57f2f63c56c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a858cdd9e6da6e8a3e8c62bb7b1e1cf32" id="r_a858cdd9e6da6e8a3e8c62bb7b1e1cf32"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a858cdd9e6da6e8a3e8c62bb7b1e1cf32">initGlobalRootChain</a> ()</td></tr>
 <tr class="separator:a858cdd9e6da6e8a3e8c62bb7b1e1cf32"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2a8e3bffad80f5f1e0c56ac73c02121a" id="r_a2a8e3bffad80f5f1e0c56ac73c02121a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2a8e3bffad80f5f1e0c56ac73c02121a">initGCFunc</a> ()</td></tr>
 <tr class="separator:a2a8e3bffad80f5f1e0c56ac73c02121a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a75f4773c9885279ffd7960c1653f4cae" name="a75f4773c9885279ffd7960c1653f4cae"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a75f4773c9885279ffd7960c1653f4cae">&#9670;&#160;</a></span>createFrameMapForCallee()</h2>
+<a id="a88a90de8f11cbce4b551ef00b23bfce4" name="a88a90de8f11cbce4b551ef00b23bfce4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a88a90de8f11cbce4b551ef00b23bfce4">&#9670;&#160;</a></span>getFrameMapForCallee()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void sammine_lang::AST::ShadowGarbageCollector::createFrameMapForCallee </td>
+          <td class="memname">llvm::GlobalVariable * sammine_lang::AST::ShadowGarbageCollector::getFrameMapForCallee </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *</td>          <td class="paramname"><span class="paramname"><em>f</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *</td>          <td class="paramname"><span class="paramname"><em>callee</em></span></td><td>)</td>
           <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 <p>Insert a FrameMap in the beginning of each function. </p>
-<p>The map for a single function's stack frame. One of these is compiled as constant data into the executable for each function.</p>
+<p>The map for a single function's stack frame. One of these is compiled as constant data into the executable for each function. INFO: from Jasmine: Ok, this is set up so that it scales into a future where we not only stores the NumRoots but also the meta data for each root.</p>
+<p>INFO: Right now, we only have NumRoots so it might seem wasteful but in a far future, this will be more efficient. I just don't want to incorporate NumRoots straight into stack entry now so later i have to rewrite all this</p>
 <p>Storage of metadata values is elided if the metadata parameter to @llvm.gcroot is null.</p>
 
 </div>
@@ -179,23 +186,26 @@ virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><b>llvmSt
 
 </div>
 </div>
-<a id="aaf22919ee1ce1d69ea033a0045cbf833" name="aaf22919ee1ce1d69ea033a0045cbf833"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aaf22919ee1ce1d69ea033a0045cbf833">&#9670;&#160;</a></span>setStackEntryFromCaller()</h2>
+<a id="a40fa8b5f0d51a164f518b31024dec50b" name="a40fa8b5f0d51a164f518b31024dec50b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a40fa8b5f0d51a164f518b31024dec50b">&#9670;&#160;</a></span>setStackEntry()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">void sammine_lang::AST::ShadowGarbageCollector::setStackEntryFromCaller </td>
+          <td class="memname">void sammine_lang::AST::ShadowGarbageCollector::setStackEntry </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *</td>          <td class="paramname"><span class="paramname"><em>f</em></span></td><td>)</td>
+          <td class="paramtype"><a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *</td>          <td class="paramname"><span class="paramname"><em>callee</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">llvm::Function *</td>          <td class="paramname"><span class="paramname"><em>llvm_callee</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 <p>INFO: We'll set the global curr_stack_entry-&gt;next to be the caller, We'll also set the curr_stack_entry-&gt;frame_map to be the callee's frame map</p>
 <p>INFO: this will require us to keep a map of string to FrameMap in the <a class="el" href="classsammine__lang_1_1AST_1_1ShadowGarbageCollector.html">ShadowGarbageCollector</a> class. For more details, see createFrameMap</p>
-<p>A link in the dynamic shadow stack. One of these is embedded in the stack frame of each function on the call stack.</p>
 
 </div>
 </div>

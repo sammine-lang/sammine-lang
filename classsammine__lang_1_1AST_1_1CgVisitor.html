@@ -128,16 +128,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a58269e1be122a22709de746bf1af2485" id="r_a58269e1be122a22709de746bf1af2485"><td class="memItemLeft" align="right" valign="top"><a id="a58269e1be122a22709de746bf1af2485" name="a58269e1be122a22709de746bf1af2485"></a>
 &#160;</td><td class="memItemRight" valign="bottom"><b>CgVisitor</b> (std::shared_ptr&lt; <a class="el" href="classsammine__lang_1_1LLVMRes.html">sammine_lang::LLVMRes</a> &gt; resPtr)</td></tr>
 <tr class="separator:a58269e1be122a22709de746bf1af2485"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7d41db130b2f54158e87d0fceb3b5a84" id="r_a7d41db130b2f54158e87d0fceb3b5a84"><td class="memItemLeft" align="right" valign="top">llvm::AllocaInst *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7d41db130b2f54158e87d0fceb3b5a84">CreateEntryBlockAlloca</a> (llvm::Function *TheFunction, const std::string &amp;VarName, llvm::Type *)</td></tr>
-<tr class="separator:a7d41db130b2f54158e87d0fceb3b5a84"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa162e08125dce9643cbad469896e5f4c" id="r_aa162e08125dce9643cbad469896e5f4c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa162e08125dce9643cbad469896e5f4c">enter_new_scope</a> () override</td></tr>
 <tr class="separator:aa162e08125dce9643cbad469896e5f4c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae165b0878ae80c6a0a0c2608791e505a" id="r_ae165b0878ae80c6a0a0c2608791e505a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae165b0878ae80c6a0a0c2608791e505a">exit_new_scope</a> () override</td></tr>
 <tr class="separator:ae165b0878ae80c6a0a0c2608791e505a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a17f93f9dfa6be26180d98a446578b7d0" id="r_a17f93f9dfa6be26180d98a446578b7d0"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a17f93f9dfa6be26180d98a446578b7d0">visit</a> (<a class="el" href="classsammine__lang_1_1AST_1_1FuncDefAST.html">FuncDefAST</a> *) override</td></tr>
 <tr class="separator:a17f93f9dfa6be26180d98a446578b7d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7545d45728e323b47dc860132d941d60" id="r_a7545d45728e323b47dc860132d941d60"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7545d45728e323b47dc860132d941d60">visit</a> (<a class="el" href="classsammine__lang_1_1AST_1_1IfExprAST.html">IfExprAST</a> *ast) override</td></tr>
-<tr class="separator:a7545d45728e323b47dc860132d941d60"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a912b3243b526abda1a2b243f273f4873" id="r_a912b3243b526abda1a2b243f273f4873"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a912b3243b526abda1a2b243f273f4873">preorder_walk</a> (<a class="el" href="classsammine__lang_1_1AST_1_1ProgramAST.html">ProgramAST</a> *ast) override</td></tr>
 <tr class="separator:a912b3243b526abda1a2b243f273f4873"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a65b03319a795e3cb91ba5bfba4d5403f" id="r_a65b03319a795e3cb91ba5bfba4d5403f"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a65b03319a795e3cb91ba5bfba4d5403f">preorder_walk</a> (<a class="el" href="classsammine__lang_1_1AST_1_1VarDefAST.html">VarDefAST</a> *ast) override</td></tr>
@@ -251,6 +247,9 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>visit</b> (<a
 <tr class="memitem:a10684571a0362597a9ff63b4d15d0ec3 inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor" id="r_a10684571a0362597a9ff63b4d15d0ec3"><td class="memItemLeft" align="right" valign="top">
 virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>visit</b> (<a class="el" href="classsammine__lang_1_1AST_1_1BlockAST.html">BlockAST</a> *ast)</td></tr>
 <tr class="separator:a10684571a0362597a9ff63b4d15d0ec3 inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8926223d4965e34a75cd32a7a47173ed inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor" id="r_a8926223d4965e34a75cd32a7a47173ed"><td class="memItemLeft" align="right" valign="top">
+virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>visit</b> (<a class="el" href="classsammine__lang_1_1AST_1_1IfExprAST.html">IfExprAST</a> *ast)</td></tr>
+<tr class="separator:a8926223d4965e34a75cd32a7a47173ed inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7fcc2cf1f12072fe34a2313bbc1cc93c inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor" id="r_a7fcc2cf1f12072fe34a2313bbc1cc93c"><td class="memItemLeft" align="right" valign="top">
 virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>visit</b> (<a class="el" href="classsammine__lang_1_1AST_1_1TypedVarAST.html">TypedVarAST</a> *ast)</td></tr>
 <tr class="separator:a7fcc2cf1f12072fe34a2313bbc1cc93c inherit pub_methods_classsammine__lang_1_1AST_1_1ASTVisitor"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -344,34 +343,6 @@ int64_t&#160;</td><td class="memItemRight" valign="bottom"><b>diag_count</b> = 0
 <tr class="separator:ace3df888c31deaf3805b52d605c56023 inherit pro_attribs_classsammine__util_1_1Reportee"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a7d41db130b2f54158e87d0fceb3b5a84" name="a7d41db130b2f54158e87d0fceb3b5a84"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7d41db130b2f54158e87d0fceb3b5a84">&#9670;&#160;</a></span>CreateEntryBlockAlloca()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">llvm::AllocaInst * sammine_lang::AST::CgVisitor::CreateEntryBlockAlloca </td>
-          <td>(</td>
-          <td class="paramtype">llvm::Function *</td>          <td class="paramname"><span class="paramname"><em>Function</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>VarName</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">llvm::Type *</td>          <td class="paramname"><span class="paramname"><em>type</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<p>CreateEntryBlockAlloca - Create an alloca instruction in the entry block of the function. This is used for mutable variables etc.</p>
-<p>from the llvm blog: mem2reg only looks for alloca instructions in the entry block of the function. Being in the entry block guarantees that the alloca is only executed once, which makes analysis simpler. </p>
-
-</div>
-</div>
 <a id="aa162e08125dce9643cbad469896e5f4c" name="aa162e08125dce9643cbad469896e5f4c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aa162e08125dce9643cbad469896e5f4c">&#9670;&#160;</a></span>enter_new_scope()</h2>
 
@@ -1346,7 +1317,7 @@ int64_t&#160;</td><td class="memItemRight" valign="bottom"><b>diag_count</b> = 0
 </div>
 </div>
 <a id="a17f93f9dfa6be26180d98a446578b7d0" name="a17f93f9dfa6be26180d98a446578b7d0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a17f93f9dfa6be26180d98a446578b7d0">&#9670;&#160;</a></span>visit() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a17f93f9dfa6be26180d98a446578b7d0">&#9670;&#160;</a></span>visit()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1371,33 +1342,6 @@ int64_t&#160;</td><td class="memItemRight" valign="bottom"><b>diag_count</b> = 0
 <p>In the future we might have to support <a class="el" href="classsammine__lang_1_1AST_1_1BlockAST.html" title="An AST to simulate a { } code block.">BlockAST</a> </p>
 
 <p>Reimplemented from <a class="el" href="classsammine__lang_1_1AST_1_1ScopedASTVisitor.html#a81fd27300633a13456ca4286c0232440">sammine_lang::AST::ScopedASTVisitor</a>.</p>
-
-</div>
-</div>
-<a id="a7545d45728e323b47dc860132d941d60" name="a7545d45728e323b47dc860132d941d60"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7545d45728e323b47dc860132d941d60">&#9670;&#160;</a></span>visit() <span class="overload">[2/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">void sammine_lang::AST::CgVisitor::visit </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="classsammine__lang_1_1AST_1_1IfExprAST.html">IfExprAST</a> *</td>          <td class="paramname"><span class="paramname"><em>ast</em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel override">override</span><span class="mlabel virtual">virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Reimplemented from <a class="el" href="classsammine__lang_1_1AST_1_1ASTVisitor.html">sammine_lang::AST::ASTVisitor</a>.</p>
 
 </div>
 </div>

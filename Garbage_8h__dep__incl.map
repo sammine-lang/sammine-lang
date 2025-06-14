@@ -1,0 +1,8 @@
+<map id="include/codegen/Garbage.h" name="include/codegen/Garbage.h">
+<area shape="rect" id="Node000001" title="Houses ShadowGarbageCollector scheme as well as the ref counter." alt="" coords="98,5,276,31"/>
+<area shape="rect" id="Node000002" href="$CodegenVisitor_8h.html" title="Defined CgVisitor, which lowers ASTs to LLVM IR." alt="" coords="5,79,223,105"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="166,44,128,80,125,77,162,40"/>
+<area shape="rect" id="Node000003" href="$CodegenVisitor_8cpp.html" title="Implementation for CodegenVisitor, it converts the AST Representation into LLVM IR and it also uses a..." alt="" coords="83,153,292,178"/>
+<area shape="poly" id="edge3_Node000001_Node000003" title=" " alt="" coords="214,41,227,58,238,78,239,100,231,121,204,154,200,150,227,119,234,100,233,80,223,61,210,44"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="139,114,177,150,173,154,135,117"/>
+</map>

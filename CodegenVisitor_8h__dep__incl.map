@@ -1,7 +1,5 @@
 <map id="include/codegen/CodegenVisitor.h" name="include/codegen/CodegenVisitor.h">
-<area shape="rect" id="Node000001" title="Defined CgVisitor, which lowers ASTs to LLVM IR." alt="" coords="108,5,325,31"/>
-<area shape="rect" id="Node000002" href="$CodegenVisitor_8cpp.html" title="Implementation for CodegenVisitor, it converts the AST Representation into LLVM IR and it also uses a..." alt="" coords="5,79,214,105"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="187,42,129,81,126,76,184,38"/>
-<area shape="rect" id="Node000003" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="237,79,408,105"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="248,38,306,76,303,81,245,42"/>
+<area shape="rect" id="Node000001" title="Defined CgVisitor, which lowers ASTs to LLVM IR." alt="" coords="5,5,223,31"/>
+<area shape="rect" id="Node000002" href="$CodegenVisitor_8cpp.html" title="Implementation for CodegenVisitor, it converts the AST Representation into LLVM IR and it also uses a..." alt="" coords="10,79,218,105"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="117,46,117,79,111,79,111,46"/>
 </map>

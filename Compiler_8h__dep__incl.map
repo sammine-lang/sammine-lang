@@ -1,7 +1,5 @@
 <map id="include/compiler/Compiler.h" name="include/compiler/Compiler.h">
-<area shape="rect" id="Node000001" title="Define the Compiler staging." alt="" coords="85,5,265,31"/>
-<area shape="rect" id="Node000002" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="5,79,177,105"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="151,43,107,81,103,77,148,39"/>
-<area shape="rect" id="Node000003" href="$sammine_8cpp.html" title="The main file to produce an executable that is the sammine compiler." alt="" coords="200,79,320,105"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="203,39,248,77,244,81,199,43"/>
+<area shape="rect" id="Node000001" title="Define the Compiler staging." alt="" coords="5,5,186,31"/>
+<area shape="rect" id="Node000002" href="$sammine_8cpp.html" title="The main file to produce an executable that is the sammine compiler." alt="" coords="35,79,156,105"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="98,46,98,79,93,79,93,46"/>
 </map>

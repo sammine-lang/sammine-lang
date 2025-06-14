@@ -1,9 +1,7 @@
 <map id="include/parser/Parser.h" name="include/parser/Parser.h">
-<area shape="rect" id="Node000001" title="Defines Parser, which consumes tokens and constructs the AST." alt="" coords="144,5,298,31"/>
+<area shape="rect" id="Node000001" title="Defines Parser, which consumes tokens and constructs the AST." alt="" coords="61,5,215,31"/>
 <area shape="rect" id="Node000002" href="$Parser_8cpp.html" title="Implementation for Parser class, it takes in the token stream and converts it into Parsing things suc..." alt="" coords="5,79,111,105"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="180,40,87,81,85,76,178,35"/>
-<area shape="rect" id="Node000003" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="135,79,306,105"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="223,46,223,79,218,79,218,46"/>
-<area shape="rect" id="Node000004" href="$test__parser_8cpp.html" title="The unit&#45;test file for all things related to a parser." alt="" coords="330,79,498,105"/>
-<area shape="poly" id="edge3_Node000001_Node000004" title=" " alt="" coords="269,34,382,76,380,81,267,39"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="115,43,73,81,70,77,111,39"/>
+<area shape="rect" id="Node000003" href="$test__parser_8cpp.html" title="The unit&#45;test file for all things related to a parser." alt="" coords="135,79,304,105"/>
+<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="165,39,207,77,204,81,161,43"/>
 </map>

@@ -1,14 +1,23 @@
 <map id="include/codegen/SammineJIT.h" name="include/codegen/SammineJIT.h">
-<area shape="rect" id="Node000001" title="JIT Compiler based on Kaleidoscope." alt="" coords="256,5,459,31"/>
-<area shape="rect" id="Node000002" href="$LLVMRes_8h.html" title="Defined LLVMRes, which encapsulates the state of LLVM (Context, Modules, IRBuilder,..." alt="" coords="155,79,344,105"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="328,42,269,81,266,76,325,38"/>
-<area shape="rect" id="Node000006" href="$SammineJIT_8cpp.html" title="The Implementation for SammineJIT." alt="" coords="368,79,563,105"/>
-<area shape="poly" id="edge6_Node000001_Node000006" title=" " alt="" coords="390,38,449,76,446,81,387,42"/>
-<area shape="rect" id="Node000003" href="$CodegenVisitor_8h.html" title="Defined CgVisitor, which lowers ASTs to LLVM IR." alt="" coords="68,153,285,178"/>
-<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="228,117,190,154,187,150,225,114"/>
-<area shape="rect" id="Node000005" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="237,226,408,252"/>
-<area shape="poly" id="edge5_Node000002_Node000005" title=" " alt="" coords="274,114,300,151,315,191,323,225,318,226,310,193,295,154,269,117"/>
-<area shape="rect" id="Node000004" href="$CodegenVisitor_8cpp.html" title="Implementation for CodegenVisitor, it converts the AST Representation into LLVM IR and it also uses a..." alt="" coords="5,226,214,252"/>
-<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="157,191,123,228,119,224,153,188"/>
-<area shape="poly" id="edge4_Node000003_Node000005" title=" " alt="" coords="216,183,299,223,297,228,214,188"/>
+<area shape="rect" id="Node000001" title="JIT Compiler based on Kaleidoscope." alt="" coords="300,5,503,31"/>
+<area shape="rect" id="Node000002" href="$LLVMRes_8h.html" title="Defined LLVMRes, which encapsulates the state of LLVM (Context, Modules, IRBuilder,..." alt="" coords="199,79,387,105"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="372,42,313,81,310,76,369,38"/>
+<area shape="rect" id="Node000009" href="$SammineJIT_8cpp.html" title="The Implementation for SammineJIT." alt="" coords="412,79,606,105"/>
+<area shape="poly" id="edge12_Node000001_Node000009" title=" " alt="" coords="434,38,492,76,489,81,431,42"/>
+<area shape="rect" id="Node000003" href="$CodegenUtils_8h_source.html" title=" " alt="" coords="538,226,745,252"/>
+<area shape="poly" id="edge2_Node000002_Node000003" title=" " alt="" coords="356,107,419,126,485,150,563,188,623,224,621,228,560,193,483,155,417,131,354,112"/>
+<area shape="rect" id="Node000005" href="$CodegenVisitor_8h.html" title="Defined CgVisitor, which lowers ASTs to LLVM IR." alt="" coords="68,226,286,252"/>
+<area shape="poly" id="edge4_Node000002_Node000005" title=" " alt="" coords="276,119,189,227,185,224,272,115"/>
+<area shape="rect" id="Node000006" href="$Garbage_8h.html" title="Houses ShadowGarbageCollector scheme as well as the ref counter." alt="" coords="5,153,184,178"/>
+<area shape="poly" id="edge6_Node000002_Node000006" title=" " alt="" coords="246,113,129,155,127,150,244,108"/>
+<area shape="rect" id="Node000007" href="$TypeConverter_8h.html" title="Defines the TypeConverter, which holds the characistics of converting our AST types into LLVM IR type..." alt="" coords="258,153,472,178"/>
+<area shape="poly" id="edge9_Node000002_Node000007" title=" " alt="" coords="318,114,355,150,351,154,314,117"/>
+<area shape="rect" id="Node000004" href="$CodegenVisitor_8cpp.html" title="Implementation for CodegenVisitor, it converts the AST Representation into LLVM IR and it also uses a..." alt="" coords="73,300,281,326"/>
+<area shape="poly" id="edge3_Node000003_Node000004" title=" " alt="" coords="547,258,257,302,256,297,547,252"/>
+<area shape="poly" id="edge5_Node000005_Node000004" title=" " alt="" coords="180,267,180,300,174,300,174,267"/>
+<area shape="poly" id="edge8_Node000006_Node000004" title=" " alt="" coords="74,191,56,221,54,236,58,251,71,266,87,279,125,297,123,302,85,284,67,270,53,253,48,237,51,219,70,188"/>
+<area shape="poly" id="edge7_Node000006_Node000005" title=" " alt="" coords="122,187,165,224,162,228,118,191"/>
+<area shape="poly" id="edge10_Node000007_Node000005" title=" " alt="" coords="320,187,210,228,208,223,318,182"/>
+<area shape="rect" id="Node000008" href="$TypeConverter_8cpp.html" title="Implementation for TypeConverter, converting AST Node types into LLVM IR Types." alt="" coords="310,226,514,252"/>
+<area shape="poly" id="edge11_Node000007_Node000008" title=" " alt="" coords="383,190,406,224,402,227,379,193"/>
 </map>

@@ -1,7 +1,5 @@
 <map id="include/semantics/GeneralSemanticsVisitor.h" name="include/semantics/GeneralSemanticsVisitor.h">
-<area shape="rect" id="Node000001" title="Defines GeneralSemanticsVisitor, an ASTVisitor that enforces general semantic rules for scoped defini..." alt="" coords="111,5,287,46"/>
-<area shape="rect" id="Node000002" href="$Compiler_8cpp.html" title="Implementation of Compiler, consist the pipeline for executing all stages (Lex, Parser,..." alt="" coords="5,102,177,127"/>
-<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="165,58,107,103,104,99,161,54"/>
-<area shape="rect" id="Node000003" href="$GeneralSemanticsVisitor_8cpp.html" title="Implementation for GeneralSemanticsVisitor." alt="" coords="201,94,416,135"/>
-<area shape="poly" id="edge2_Node000001_Node000003" title=" " alt="" coords="237,54,285,91,282,96,234,58"/>
+<area shape="rect" id="Node000001" title="Defines GeneralSemanticsVisitor, an ASTVisitor that enforces general semantic rules for scoped defini..." alt="" coords="25,5,200,46"/>
+<area shape="rect" id="Node000002" href="$GeneralSemanticsVisitor_8cpp.html" title="Implementation for GeneralSemanticsVisitor." alt="" coords="5,94,220,135"/>
+<area shape="poly" id="edge1_Node000001_Node000002" title=" " alt="" coords="115,62,115,94,110,94,110,62"/>
 </map>
