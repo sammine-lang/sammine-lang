@@ -31,23 +31,17 @@ private:
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
   ShadowGarbageCollector jasmine;
+  RefCounter ref_counter;
 
 public:
   CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr)
-      : resPtr(resPtr), type_converter(*resPtr->Context.get()),
-        jasmine(*resPtr->Module.get(), *resPtr->Context.get(),
-                *resPtr->Builder.get()) {
-    assert(this->resPtr);
-  }
-  llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Function *TheFunction,
-                                           const std::string &VarName,
-                                           llvm::Type *);
+      : resPtr(resPtr), type_converter(*resPtr), jasmine(*resPtr),
+        ref_counter(*resPtr) {}
 
   void enter_new_scope() override;
   void exit_new_scope() override;
 
   virtual void visit(FuncDefAST *) override;
-  virtual void visit(IfExprAST *ast) override;
   // visit
   // pre order
   // TODO: Implement these

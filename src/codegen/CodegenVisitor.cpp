@@ -4,16 +4,15 @@
 
 #include "codegen/CodegenVisitor.h"
 #include "ast/Ast.h"
+#include "codegen/CodegenUtils.h"
 #include "codegen/Garbage.h"
 #include "lex/Token.h"
-#include "util/Utilities.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
 //! \file CodegenVisitor.cpp
 //! \brief Implementation for CodegenVisitor, it converts the AST Representation
@@ -29,13 +28,6 @@ using llvm::BasicBlock;
 /// mem2reg only looks for alloca instructions in the entry block of the
 /// function. Being in the entry block guarantees that the alloca is only
 /// executed once, which makes analysis simpler.
-llvm::AllocaInst *CgVisitor::CreateEntryBlockAlloca(llvm::Function *Function,
-                                                    const std::string &VarName,
-                                                    llvm::Type *type) {
-  llvm::IRBuilder<> TmpB(&Function->getEntryBlock(),
-                         Function->getEntryBlock().begin());
-  return TmpB.CreateAlloca(type, nullptr, VarName);
-}
 
 llvm::Function *CgVisitor::getCurrentFunction() { return this->current_func; }
 void CgVisitor::enter_new_scope() {
@@ -57,25 +49,15 @@ void CgVisitor::visit(FuncDefAST *ast) {
   this->exit_new_scope();
 }
 
-void CgVisitor::visit(IfExprAST *ast) {
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
-}
-
 void CgVisitor::preorder_walk(ProgramAST *ast) {
+  jasmine.initGlobalRootChain();
+  ref_counter.declare_malloc_wrapper(CodegenUtils::hasFunctionMain(ast));
   // TODO: In the future, we need to move both this function someplace else.
   //
   // INFO: To use for both function decl, malloc and printf
   llvm::PointerType *int8ptr =
       llvm::PointerType::get(llvm::Type::getInt8Ty(*this->resPtr->Context),
                              0); // 0 stands for generic address space
-
-  // INFO: malloc, since we're a GC language, duhhhh
-  llvm::FunctionType *MallocType = llvm::FunctionType::get(
-      int8ptr,                                        // return type (i8*)
-      llvm::Type::getInt64Ty(*this->resPtr->Context), // arg: size_t (i64)
-      false);                                         // not variadic
-  resPtr->Module->getOrInsertFunction("malloc", MallocType);
 
   // INFO: printf (variadic: takes i8* format string, ...)
   llvm::FunctionType *PrintfType = llvm::FunctionType::get(
@@ -88,7 +70,7 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
   auto var_name = ast->TypedVar->name;
-  auto alloca = this->CreateEntryBlockAlloca(
+  auto alloca = CodegenUtils::CreateEntryBlockAlloca(
       getCurrentFunction(), var_name, type_converter.get_type(ast->type));
   this->allocaValues.top()[var_name] = alloca;
 }
@@ -103,30 +85,6 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
 }
 void CgVisitor::preorder_walk(ExternAST *ast) {}
 void CgVisitor::preorder_walk(RecordDefAST *ast) {}
-void CgVisitor::preorder_walk(FuncDefAST *ast) {
-  auto name = ast->Prototype->functionName;
-
-  auto *Function = this->getCurrentFunction();
-
-  assert(Function);
-  llvm::BasicBlock *mainblock =
-      llvm::BasicBlock::Create(*(resPtr->Context), "entry", Function);
-
-  resPtr->Builder->SetInsertPoint(mainblock);
-
-  //
-  // INFO:: Copy all the arguments to the entry block
-  for (auto &Arg : Function->args()) {
-    llvm::AllocaInst *Alloca = CreateEntryBlockAlloca(
-        Function, std::string(Arg.getName()), Arg.getType());
-    resPtr->Builder->CreateStore(&Arg, Alloca);
-
-    this->allocaValues.top()[std::string(Arg.getName())] = Alloca;
-  }
-
-  jasmine.setStackEntryFromCaller(ast);
-  return;
-}
 void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {

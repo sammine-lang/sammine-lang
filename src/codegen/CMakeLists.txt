@@ -3,7 +3,7 @@ add_project_library(SammineJIT)
 add_project_library(TypeConverter)
 add_project_library(Garbage)
 
-add_library(CodegenVisitor OBJECT ${CMAKE_CURRENT_LIST_DIR}/CodegenVisitor.cpp ${CMAKE_CURRENT_LIST_DIR}/FunctionCodegen.cpp )
+add_library(CodegenVisitor OBJECT ${CMAKE_CURRENT_LIST_DIR}/CodegenVisitor.cpp ${CMAKE_CURRENT_LIST_DIR}/CodegenUtils.cpp ${CMAKE_CURRENT_LIST_DIR}/FunctionCodegen.cpp )
 target_link_libraries(CodegenVisitor PRIVATE project_options)
 
 # Final linkage for folder

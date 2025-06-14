@@ -1,4 +1,5 @@
 #pragma once
+#include "codegen/LLVMRes.h"
 #include "lex/Token.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
@@ -19,6 +20,6 @@ public:
   llvm::Type *get_return_type(Type t);
   llvm::CmpInst::Predicate get_cmp_func(Type a, Type b, TokenType tok);
 
-  TypeConverter(llvm::LLVMContext &context) : context(context) {}
+  TypeConverter(LLVMRes &resPtr) : context(*resPtr.Context.get()) {}
 };
 } // namespace sammine_lang::AST
