@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s 
+# RUN: %sammine_exe% --file %s  --diagnostics
 fn f() -> f64 {
     let x : f64 = 2.0;
     let y = 2.0;

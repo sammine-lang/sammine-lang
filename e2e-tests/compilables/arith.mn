@@ -1,4 +1,4 @@
-# RUN: ! %sammine_exe% --file %s  
+# RUN: ! %sammine_exe% --file %s  --diagnostics
 fn f() {
     let x : f64 = 1 + 1 ;
     let y : f64 = x;

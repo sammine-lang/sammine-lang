@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s 
+# RUN: %sammine_exe% --file %s  --diagnostics
 fn foo(i: i64) -> i64 {
   return i;
 }
