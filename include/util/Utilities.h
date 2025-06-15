@@ -41,6 +41,11 @@ void abort_if_not(const T &condition,
     abort(message);
   }
 }
+inline void log_diagnostics(const std::string &diagnostics) {
+  fmt::print(stderr, fg(fmt::terminal_color::bright_green), "{}\n",
+             diagnostics);
+}
+
 //! A class representing a location for sammine-lang, this is helpful in
 //! debugging
 

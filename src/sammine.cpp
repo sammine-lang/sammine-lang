@@ -7,10 +7,26 @@
 #include "compiler/Compiler.h"
 #include "fmt/color.h"
 #include <argparse/argparse.hpp>
+#include <cpptrace/basic.hpp>
+#include <cpptrace/cpptrace.hpp>
+#include <csignal>
+#include <cstdlib>
+#include <unistd.h>
 using sammine_lang::compiler_option_enum;
 
+void handler(int sig) {
+  // print out all the frames to stderr
+  fprintf(stderr,
+          "Something has gone terribly wrong in the sammine-lang compiler.");
+  fprintf(stderr, "An error has occured outside of sammine_util::abort() and "
+                  "Reporter::report()");
+  fprintf(stderr, "Error: signal %d:\n", sig);
+  cpptrace::generate_trace().print_with_snippets();
+  exit(1);
+}
 using namespace sammine_lang;
 int main(int argc, char *argv[]) {
+  signal(SIGSEGV, handler);
   argparse::ArgumentParser program("sammine");
 
   std::map<compiler_option_enum, std::string> compiler_options;

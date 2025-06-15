@@ -1,4 +1,4 @@
-# RUN:  %sammine_exe% --file %s  --check
+# RUN:  %sammine_exe% --file %s  --check --diagnostics
 Record test { var: i64, };
 
 fn foo() {

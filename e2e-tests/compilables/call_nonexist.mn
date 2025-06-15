@@ -1,4 +1,4 @@
-# RUN: ! %sammine_exe% --file %s 
+# RUN: ! %sammine_exe% --file %s  --diagnostics
 fn f() {
  a();
  return;

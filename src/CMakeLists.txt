@@ -33,5 +33,5 @@ add_subdirectory(compiler)
 add_executable(sammine ${CMAKE_CURRENT_LIST_DIR}/sammine.cpp)
 target_include_directories(sammine PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS})
 
-target_link_libraries(sammine compiler util _ast Lexer Parser 
+target_link_libraries(sammine compiler cpptrace::cpptrace util _ast Lexer Parser 
      semantics typecheck Types _codegen  fmt argparse)

@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s --check
+# RUN: %sammine_exe% --file %s --check --diagnostics
 
 # this is a function
 fn f(x : i64) -> i64 {

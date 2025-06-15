@@ -20,24 +20,22 @@ jobs:
       - name: Check out the code
         uses: actions/checkout@v3
 
-      - name: Invoking the action 
-        uses: Shuriken-Group/setup_llvm_tools@v0.0.0
-        with:
-          download_path: "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-x86_64-linux-gnu-ubuntu-18.04.tar.xz"
-          destination: "/usr/local"
-
       - name: Install LLVM/Clang, Catch2, mold and libtinfo5
         run: |
-          # wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 18 
           sudo apt update
           sudo apt install -y clang-tidy catch2 mold 
-          # sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
       - name: Configure codebase 
         run: |
           mkdir -p build
-          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=MOLD -DSAMMINE_TEST=ON
+          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=MOLD -DSAMMINE_TEST=ON -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm/
+          # -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_CXX_SCAN_FOR_MODULES=OFF   -DCMAKE_GENERATOR=Ninja 
 
       - name: Build codebase
         run: |

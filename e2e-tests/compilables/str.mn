@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s  --check
+# RUN: %sammine_exe% --file %s  --check --diagnostics
 fn a() {
     let x = "abc";
 }

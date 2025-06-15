@@ -17,16 +17,16 @@ jobs:
     steps:
       - name: Check out the code
         uses: actions/checkout@v3
-      - name: Invoking the action 
+
+      - name: Download prebuilt packages for llvm macos
         uses: Shuriken-Group/setup_llvm_tools@v0.0.0
         with:
           download_path: "https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/clang+llvm-18.1.8-arm64-apple-macos11.tar.xz"
           destination: "/usr/local"
 
-      - name: Install LLVM/Clang, Catch2, and lld
+      - name: Install Catch2
         run: |
-          brew install llvm catch2 lld 
-
+          brew install catch2 
       - name: Configure codebase 
         run: |
           mkdir -p build
