@@ -1,6 +1,6 @@
 
 # .github/workflows/clang-tidy.yml
-name: "clang-tidy CI"
+name: "Ubuntu"
 
 
 on:
@@ -13,7 +13,7 @@ on:
       - main
 
 jobs:
-  tidy-check:
+  check:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,11 +28,11 @@ jobs:
 
       - name: Install LLVM/Clang, Catch2, mold and libtinfo5
         run: |
-          wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          # wget http://security.ubuntu.com/ubuntu/pool/universe/n/ncurses/libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
           sudo apt update
           sudo apt install -y clang-tidy catch2 mold 
-          sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
+          # sudo apt install ./libtinfo5_6.3-2ubuntu0.1_amd64.deb
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -46,11 +46,15 @@ jobs:
       - name: Configure codebase 
         run: |
           mkdir -p build
-          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=MOLD
+          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=MOLD -DSAMMINE_TEST=ON
 
       - name: Build codebase
         run: |
           cmake --build build -j4 
+
+      - name: Test codebase
+        run: |
+          cmake --build build -j4 --target unit-tests e2e-tests
 
       - name: Run clang-tidy
         run: |
