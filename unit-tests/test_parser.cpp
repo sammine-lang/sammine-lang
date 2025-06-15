@@ -18,7 +18,7 @@ TEST_CASE("Empty program parsing", "[Parser]") {
 
   auto programAST = pg.Parse();
 
-  REQUIRE(!pg.has_errors());
+  REQUIRE_FALSE(pg.has_errors());
 }
 
 TEST_CASE("Variable definition parsing", "[Parser]") {
@@ -30,12 +30,12 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
-    REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE_TRUE(varDef->TypedVar->name == "b");
+    REQUIRE_TRUE(varDef->TypedVar->type_lexeme == "blablabla");
   }
 
   SECTION("Variable definition with binary expression") {
@@ -45,12 +45,12 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
-    REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE_TRUE(varDef->TypedVar->name == "b");
+    REQUIRE_TRUE(varDef->TypedVar->type_lexeme == "blablabla");
   }
 
   SECTION("Variable definition with call expression") {
@@ -60,17 +60,17 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
-    REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE_TRUE(varDef->TypedVar->name == "b");
+    REQUIRE_TRUE(varDef->TypedVar->type_lexeme == "blablabla");
 
     auto expr =
         static_cast<sammine_lang::AST::CallExprAST *>(varDef->Expression.get());
-    REQUIRE(expr->functionName == "hi");
-    REQUIRE(expr->arguments.size() == 0);
+    REQUIRE_TRUE(expr->functionName == "hi");
+    REQUIRE_TRUE(expr->arguments.size() == 0);
   }
 
   SECTION("Variable definition with string literal expression") {
@@ -82,8 +82,8 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
-    REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE_TRUE(varDef->TypedVar->name == "b");
+    REQUIRE_TRUE(varDef->TypedVar->type_lexeme == "blablabla");
   }
 }
 
@@ -94,42 +94,42 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
 
   SECTION("Single argument") {
     auto lex = Lexer("fn f(x:f64) -> f64 {\n \n }");
-    REQUIRE(lex.getTokenStream()->hasErrors() == false);
+    REQUIRE_TRUE(lex.getTokenStream()->hasErrors() == false);
     auto pg = Parser(lex.getTokenStream());
 
     auto programAST = pg.Parse();
-    REQUIRE(!pg.has_errors());
-    REQUIRE(programAST->DefinitionVec.size() == 1);
+    REQUIRE_FALSE(pg.has_errors());
+    REQUIRE_TRUE(programAST->DefinitionVec.size() == 1);
 
     auto func_def =
         static_cast<AST::FuncDefAST *>(programAST->DefinitionVec.front().get());
 
     // Check if downcast is valid.
-    REQUIRE(func_def != nullptr);
+    REQUIRE_TRUE(func_def != nullptr);
 
-    REQUIRE(func_def->Prototype->returnType == "f64");
-    REQUIRE(func_def->Prototype->functionName == "f");
-    REQUIRE(func_def->Prototype->parameterVectors.size() == 1);
+    REQUIRE_TRUE(func_def->Prototype->returnType == "f64");
+    REQUIRE_TRUE(func_def->Prototype->functionName == "f");
+    REQUIRE_TRUE(func_def->Prototype->parameterVectors.size() == 1);
   }
 
   SECTION("Multiple argument") {
     auto lex = Lexer("fn f(x:f64, y : hi, z : hoe) {\n  \n }");
-    REQUIRE(lex.getTokenStream()->hasErrors() == false);
+    REQUIRE_TRUE(lex.getTokenStream()->hasErrors() == false);
     auto pg = Parser(lex.getTokenStream());
 
     auto programAST = pg.Parse();
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
-    REQUIRE(programAST->DefinitionVec.size() == 1);
+    REQUIRE_TRUE(programAST->DefinitionVec.size() == 1);
 
     auto func_def =
         static_cast<AST::FuncDefAST *>(programAST->DefinitionVec.front().get());
 
     // Check if downcast is valid.
-    REQUIRE(func_def != nullptr);
+    REQUIRE_TRUE(func_def != nullptr);
 
-    REQUIRE(func_def->Prototype->functionName == "f");
-    REQUIRE(func_def->Prototype->parameterVectors.size() == 3);
+    REQUIRE_TRUE(func_def->Prototype->functionName == "f");
+    REQUIRE_TRUE(func_def->Prototype->parameterVectors.size() == 3);
   }
 
   SECTION("None return") {
@@ -141,14 +141,14 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     auto pg = Parser(lex.getTokenStream());
     auto programAST = pg.Parse();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
   }
 }
 
 TEST_CASE("FAILED TO PARSE", "[Parser]") {
   auto lex = Lexer("a a a a a");
-  REQUIRE(!lex.has_errors());
+  REQUIRE_FALSE(lex.has_errors());
   auto pg = Parser(lex.getTokenStream());
   auto programAST = pg.Parse();
-  REQUIRE(pg.has_errors());
+  REQUIRE_TRUE(pg.has_errors());
 }
