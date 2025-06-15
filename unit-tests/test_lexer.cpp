@@ -189,6 +189,6 @@ TEST_CASE("Complex combination", "[Lexer]") {
 
     auto tokStream = lex.getTokenStream();
 
-    REQUIRE(!tokStream->hasErrors());
+    REQUIRE_FALSE(tokStream->hasErrors());
   }
 }

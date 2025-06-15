@@ -18,7 +18,7 @@ TEST_CASE("Empty program parsing", "[Parser]") {
 
   auto programAST = pg.Parse();
 
-  REQUIRE(!pg.has_errors());
+  REQUIRE_FALSE(pg.has_errors());
 }
 
 TEST_CASE("Variable definition parsing", "[Parser]") {
@@ -30,7 +30,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
@@ -45,7 +45,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
@@ -60,7 +60,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto programAST = pg.ParseVarDef();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
@@ -98,7 +98,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     auto pg = Parser(lex.getTokenStream());
 
     auto programAST = pg.Parse();
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
     REQUIRE(programAST->DefinitionVec.size() == 1);
 
     auto func_def =
@@ -118,7 +118,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     auto pg = Parser(lex.getTokenStream());
 
     auto programAST = pg.Parse();
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
 
     REQUIRE(programAST->DefinitionVec.size() == 1);
 
@@ -141,13 +141,13 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     auto pg = Parser(lex.getTokenStream());
     auto programAST = pg.Parse();
 
-    REQUIRE(!pg.has_errors());
+    REQUIRE_FALSE(pg.has_errors());
   }
 }
 
 TEST_CASE("FAILED TO PARSE", "[Parser]") {
   auto lex = Lexer("a a a a a");
-  REQUIRE(!lex.has_errors());
+  REQUIRE_FALSE(lex.has_errors());
   auto pg = Parser(lex.getTokenStream());
   auto programAST = pg.Parse();
   REQUIRE(pg.has_errors());

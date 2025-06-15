@@ -1,3 +1,4 @@
+# RUN: %sammine_exe% --file %s 
 fn foo(i: i64) -> i64 {
   return i;
 }

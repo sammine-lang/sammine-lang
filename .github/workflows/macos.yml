@@ -1,4 +1,4 @@
-name: "MacOS yml"
+name: "MacOS"
 
 
 on:
@@ -11,13 +11,12 @@ on:
       - main
 
 jobs:
-  tidy-check:
+  check:
     runs-on: macos-latest
 
     steps:
       - name: Check out the code
         uses: actions/checkout@v3
-
       - name: Invoking the action 
         uses: Shuriken-Group/setup_llvm_tools@v0.0.0
         with:
@@ -31,11 +30,22 @@ jobs:
       - name: Configure codebase 
         run: |
           mkdir -p build
-          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=LLD
+          cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_LINKER_TYPE=LLD -DSAMMINE_TEST=ON
 
       - name: Build codebase
         run: |
           cmake --build build -j4 
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install lit and filecheck
+        run: pip install lit filecheck
+
+      - name: Test codebase
+        run: |
+          cmake --build build -j4 --target unit-tests e2e-tests
 
       - name: Run clang-tidy
         run: |

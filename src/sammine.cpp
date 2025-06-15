@@ -21,10 +21,11 @@ int main(int argc, char *argv[]) {
   gi.add_argument("-s", "--str")
       .help("An input string for compiler to scan over.");
 
-  gi.add_argument("--check")
+  program.add_argument("--check")
       .help("Performs compiler check only, no codegen")
       .default_value(std::string("false"))
       .implicit_value(std::string("true"));
+
   auto &g_diag = program.add_group("Diagnostics");
   g_diag
       .add_argument("", "--llvm-ir") // TODO: Somehow make the internal compiler

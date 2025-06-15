@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s --check
+# RUN: ! %sammine_exe% --file %s 
 
 # this is a function
 fn f(x : f64) {
