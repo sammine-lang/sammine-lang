@@ -6,13 +6,53 @@
 
 #include "compiler/Compiler.h"
 #include "fmt/color.h"
+#include "llvm/Support/CommandLine.h"
 #include <argparse/argparse.hpp>
 #include <cpptrace/basic.hpp>
 #include <cpptrace/cpptrace.hpp>
 #include <csignal>
 #include <cstdlib>
 #include <unistd.h>
+using namespace llvm;
 using sammine_lang::compiler_option_enum;
+
+// ---------------------------------------------
+// primary options
+// ---------------------------------------------
+static cl::opt<std::string>
+    InputFile("file", cl::desc("An input file for compiler to scan over"),
+              cl::value_desc("filename"));
+
+static cl::alias InputFileShort("f", cl::desc("Alias for --file"),
+                                cl::aliasopt(InputFile));
+
+static cl::opt<std::string>
+    InputString("str", cl::desc("An input string for compiler to scan over"),
+                cl::value_desc("source"));
+
+static cl::alias InputStringShort("s", cl::desc("Alias for --str"),
+                                  cl::aliasopt(InputString));
+
+static cl::opt<bool>
+    CheckOnly("check", cl::desc("Performs compiler check only, no codegen"),
+              cl::init(false));
+// ---------------------------------------------
+// Diagnostics options
+// ---------------------------------------------
+static cl::OptionCategory DiagnosticCat("Diagnostics");
+
+static cl::opt<bool> EmitAST("ast-ir",
+                             cl::desc("Spit out internal AST IR to stdout"),
+                             cl::init(false), cl::cat(DiagnosticCat));
+
+static cl::opt<bool> EmitLLVMIR("llvm-ir",
+                                cl::desc("Spit out LLVM IR to stdout"),
+                                cl::init(false), cl::cat(DiagnosticCat));
+
+static cl::opt<bool>
+    EmitDiagnostic("diagnostics",
+                   cl::desc("Stage-wise diagnostics (for compiler devs)"),
+                   cl::init(false), cl::cat(DiagnosticCat));
 
 void handler(int sig) {
   // print out all the frames to stderr
@@ -24,63 +64,26 @@ void handler(int sig) {
   cpptrace::generate_trace().print_with_snippets();
   exit(1);
 }
+
 using namespace sammine_lang;
 int main(int argc, char *argv[]) {
   signal(SIGSEGV, handler);
-  argparse::ArgumentParser program("sammine");
+  cl::ParseCommandLineOptions(argc, argv, "sammine compiler\n");
 
-  std::map<compiler_option_enum, std::string> compiler_options;
-
-  auto &gi = program.add_mutually_exclusive_group(true);
-  gi.add_argument("-f", "--file")
-      .help("An input file for compiler to scan over.");
-  gi.add_argument("-s", "--str")
-      .help("An input string for compiler to scan over.");
-
-  program.add_argument("--check")
-      .help("Performs compiler check only, no codegen")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"));
-
-  auto &g_diag = program.add_group("Diagnostics");
-  g_diag
-      .add_argument("", "--llvm-ir") // TODO: Somehow make the internal compiler
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out LLVM-IR to stdout");
-  g_diag.add_argument("", "--ast-ir")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out the internal AST to stdout");
-  g_diag.add_argument("", "--diagnostics")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out stage-wise diagnostics for "
-            "sammine-lang developers");
-
-  if (argc < 1) {
-    std::cerr << program;
-    return 1;
-  }
-  try {
-    program.parse_args(argc, argv); // Example: ./main -abc 1.95 2.47
-    compiler_options[compiler_option_enum::FILE] =
-        program.present("-f") ? program.get("-f") : "";
-    compiler_options[compiler_option_enum::STR] =
-        program.present("-s") ? program.get("-s") : "";
-    compiler_options[compiler_option_enum::LLVM_IR] = program.get("--llvm-ir");
-    compiler_options[compiler_option_enum::AST_IR] = program.get("--ast-ir");
-    compiler_options[compiler_option_enum::DIAGNOSTIC] =
-        program.get("--diagnostics");
-    compiler_options[compiler_option_enum::CHECK] = program.get("--check");
-  } catch (const std::exception &err) {
-    fmt::print(stderr, fg(fmt::terminal_color::bright_red),
-               "Error while parsing arguments\n");
-    std::cerr << err.what() << std::endl;
-    std::cerr << program;
+  if (InputFile.empty()) {
+    llvm::errs() << "error: you must pass either -f <file> or -s <source>\n";
     return 1;
   }
 
-  CompilerRunner::run(compiler_options);
+  std::map<compiler_option_enum, std::string> opts;
+
+  opts[compiler_option_enum::FILE] = InputFile;
+  opts[compiler_option_enum::STR] = InputString;
+  opts[compiler_option_enum::CHECK] = CheckOnly ? "true" : "false";
+  opts[compiler_option_enum::LLVM_IR] = EmitLLVMIR ? "true" : "false";
+  opts[compiler_option_enum::AST_IR] = EmitAST ? "true" : "false";
+  opts[compiler_option_enum::DIAGNOSTIC] = EmitDiagnostic ? "true" : "false";
+
+  CompilerRunner::run(opts);
   return 0;
 }

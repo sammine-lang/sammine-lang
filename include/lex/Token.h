@@ -10,7 +10,6 @@
 namespace sammine_lang {
 enum TokenType {
   // TODO: Add void keyword for return.
-  // Also might have to add a !=, ++i, --i
   TokADD, // +
   TokSUB, // -
   TokMUL, // *
