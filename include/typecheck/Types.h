@@ -13,7 +13,6 @@
 //! \file Types.h
 //! \brief Defines the core Type system for Sammine
 enum class TypeKind {
-  // TODO: Add other data types that are smaller, i8, u8, i16, u16, i32, u32
   I64_t,
   F64_t,
   Unit,
