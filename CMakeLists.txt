@@ -9,6 +9,12 @@ set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter)
 endif()
+
+
+set(NO_RTTI "-fno-rtti")
+add_definitions(${NO_RTTI})
+
+
 add_subdirectory(externals/)
 
 # LLVM-STUFF

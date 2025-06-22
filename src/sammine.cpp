@@ -17,25 +17,29 @@ using namespace llvm;
 using sammine_lang::compiler_option_enum;
 
 // ---------------------------------------------
+// version
+// ---------------------------------------------
+void printVersion(raw_ostream &out) { out << "Sammine Compiler raw beta\n"; }
+
+// ---------------------------------------------
 // primary options
 // ---------------------------------------------
+static cl::OptionCategory PrimaryCat("Primary");
 static cl::opt<std::string>
     InputFile("file", cl::desc("An input file for compiler to scan over"),
-              cl::value_desc("filename"));
+              cl::value_desc("filename"), cl::cat(PrimaryCat));
 
 static cl::alias InputFileShort("f", cl::desc("Alias for --file"),
-                                cl::aliasopt(InputFile));
+                                cl::aliasopt(InputFile), cl::cat(PrimaryCat));
 
 static cl::opt<std::string>
     InputString("str", cl::desc("An input string for compiler to scan over"),
-                cl::value_desc("source"));
+                cl::value_desc("source"), cl::cat(PrimaryCat));
 
 static cl::alias InputStringShort("s", cl::desc("Alias for --str"),
-                                  cl::aliasopt(InputString));
+                                  cl::aliasopt(InputString),
+                                  cl::cat(PrimaryCat));
 
-static cl::opt<bool>
-    CheckOnly("check", cl::desc("Performs compiler check only, no codegen"),
-              cl::init(false));
 // ---------------------------------------------
 // Diagnostics options
 // ---------------------------------------------
@@ -53,6 +57,9 @@ static cl::opt<bool>
     EmitDiagnostic("diagnostics",
                    cl::desc("Stage-wise diagnostics (for compiler devs)"),
                    cl::init(false), cl::cat(DiagnosticCat));
+static cl::opt<bool>
+    CheckOnly("check", cl::desc("Performs compiler check only, no codegen"),
+              cl::init(false), cl::cat(DiagnosticCat));
 
 void handler(int sig) {
   // print out all the frames to stderr
@@ -68,6 +75,8 @@ void handler(int sig) {
 using namespace sammine_lang;
 int main(int argc, char *argv[]) {
   signal(SIGSEGV, handler);
+  cl::SetVersionPrinter(printVersion);
+  cl::HideUnrelatedOptions({&PrimaryCat, &DiagnosticCat});
   cl::ParseCommandLineOptions(argc, argv, "sammine compiler\n");
 
   if (InputFile.empty()) {
