@@ -53,10 +53,9 @@ class ShadowGarbageCollector {
   inline static std::string GLOBAL_ROOT_CHAIN = "global_root_chain";
   inline static std::string FRAME_MAP = "frame_map";
 
+public:
   llvm::StructType *FRAME_MAP_TYPE;
   llvm::StructType *STACK_ENTRY_TYPE;
-
-public:
   ShadowGarbageCollector(LLVMRes &resPtr)
       : module(*resPtr.Module.get()), context(*resPtr.Context.get()),
         builder(*resPtr.Builder) {
@@ -69,8 +68,7 @@ public:
     // INFO: Stack entry
     STACK_ENTRY_TYPE = llvm::StructType::create(context, "stack_entry_type");
     llvm::PointerType *int64ptr =
-        llvm::PointerType::get(llvm::Type::getInt64Ty(context),
-                               0); // 0 stands for generic address space
+        llvm::PointerType::get(context, 0); // 0 stands for generic address space
     llvm::ArrayType *root_array = llvm::ArrayType::get(int64ptr, 0);
     // llvm::ArrayType *MetaArrayTy =
     //     llvm::ArrayType::get(int8ptr, MetaDataEntries.size());
@@ -95,12 +93,11 @@ class RefCounter {
   llvm::LLVMContext &context;
   llvm::IRBuilder<> &builder;
 
-  inline static constexpr int REFCNT_SIZE = sizeof(int32_t);
-
   inline static std::string REFCNT_MALLOC_WRAPPER_NAME =
       "refcnt_malloc_wrapper";
 
 public:
+  inline static constexpr int REFCNT_SIZE = sizeof(int32_t);
   void declare_refcnt_visitor(bool is_main_file,
                               llvm::StructType *stack_entry_type,
                               llvm::StructType *frame_map_type);

@@ -276,7 +276,7 @@ void RefCounter::declare_malloc_wrapper(bool is_main_file) {
 
     // Cast to i32* to store refcnt at start
     llvm::Type *i32Ty = llvm::Type::getInt32Ty(context);
-    llvm::PointerType *i32PtrTy = llvm::PointerType::get(i32Ty, 0);
+    llvm::PointerType *i32PtrTy = llvm::PointerType::get(context, 0);
     llvm::Value *refcntPtr =
         Builder.CreateBitCast(rawPtr, i32PtrTy, "refcnt_ptr");
 
@@ -288,22 +288,239 @@ void RefCounter::declare_malloc_wrapper(bool is_main_file) {
   }
 }
 
-void RefCounter::decrease_refcnt(llvm::Value *) {}
-void RefCounter::increase_refcnt(llvm::Value *) {}
+void RefCounter::increase_refcnt(llvm::Value *ptr) {
+  if (!ptr) return;
+  
+  // Cast pointer to i8* if needed
+  llvm::Type *i8Ty = llvm::Type::getInt8Ty(context);
+  llvm::PointerType *i8PtrTy = llvm::PointerType::get(context, 0);
+  llvm::Value *i8Ptr = builder.CreateBitCast(ptr, i8PtrTy, "ptr_as_i8");
+  
+  // Get pointer to ref count (4 bytes before the data)
+  llvm::Type *i32Ty = llvm::Type::getInt32Ty(context);
+  llvm::Value *refcntOffset = llvm::ConstantInt::get(
+      llvm::Type::getInt64Ty(context), -static_cast<int64_t>(REFCNT_SIZE));
+  llvm::Value *refcntPtr = builder.CreateGEP(i8Ty, i8Ptr, refcntOffset, "refcnt_ptr");
+  
+  // Cast to i32* and load current ref count
+  llvm::PointerType *i32PtrTy = llvm::PointerType::get(context, 0);
+  llvm::Value *refcntI32Ptr = builder.CreateBitCast(refcntPtr, i32PtrTy, "refcnt_i32_ptr");
+  llvm::Value *currentRefcnt = builder.CreateLoad(i32Ty, refcntI32Ptr, "current_refcnt");
+  
+  // Increment and store
+  llvm::Value *newRefcnt = builder.CreateAdd(
+      currentRefcnt, llvm::ConstantInt::get(i32Ty, 1), "new_refcnt");
+  builder.CreateStore(newRefcnt, refcntI32Ptr);
+}
+
+void RefCounter::decrease_refcnt(llvm::Value *ptr) {
+  if (!ptr) return;
+  
+  // Cast pointer to i8* if needed
+  llvm::Type *i8Ty = llvm::Type::getInt8Ty(context);
+  llvm::PointerType *i8PtrTy = llvm::PointerType::get(context, 0);
+  llvm::Value *i8Ptr = builder.CreateBitCast(ptr, i8PtrTy, "ptr_as_i8");
+  
+  // Get pointer to ref count (4 bytes before the data)
+  llvm::Type *i32Ty = llvm::Type::getInt32Ty(context);
+  llvm::Value *refcntOffset = llvm::ConstantInt::get(
+      llvm::Type::getInt64Ty(context), -static_cast<int64_t>(REFCNT_SIZE));
+  llvm::Value *refcntPtr = builder.CreateGEP(i8Ty, i8Ptr, refcntOffset, "refcnt_ptr");
+  
+  // Cast to i32* and load current ref count
+  llvm::PointerType *i32PtrTy = llvm::PointerType::get(context, 0);
+  llvm::Value *refcntI32Ptr = builder.CreateBitCast(refcntPtr, i32PtrTy, "refcnt_i32_ptr");
+  llvm::Value *currentRefcnt = builder.CreateLoad(i32Ty, refcntI32Ptr, "current_refcnt");
+  
+  // Decrement ref count
+  llvm::Value *newRefcnt = builder.CreateSub(
+      currentRefcnt, llvm::ConstantInt::get(i32Ty, 1), "new_refcnt");
+  builder.CreateStore(newRefcnt, refcntI32Ptr);
+  
+  // Check if ref count reached zero
+  llvm::Value *isZero = builder.CreateICmpEQ(
+      newRefcnt, llvm::ConstantInt::get(i32Ty, 0), "is_zero");
+  
+  // Create basic blocks for conditional free
+  llvm::Function *currentFunc = builder.GetInsertBlock()->getParent();
+  llvm::BasicBlock *freeBB = llvm::BasicBlock::Create(context, "free_block", currentFunc);
+  llvm::BasicBlock *continueBB = llvm::BasicBlock::Create(context, "continue_block", currentFunc);
+  
+  // Branch based on ref count
+  builder.CreateCondBr(isZero, freeBB, continueBB);
+  
+  // Free block - call free() on the original allocated pointer (with ref count)
+  builder.SetInsertPoint(freeBB);
+  llvm::Function *freeFunc = module.getFunction("free");
+  if (!freeFunc) {
+    // Declare free function if not already declared
+    llvm::FunctionType *freeType = llvm::FunctionType::get(
+        llvm::Type::getVoidTy(context), {llvm::PointerType::get(context, 0)}, false);
+    freeFunc = llvm::Function::Create(freeType, llvm::Function::ExternalLinkage, 
+                                     "free", &module);
+  }
+  builder.CreateCall(freeFunc, {refcntPtr});
+  builder.CreateBr(continueBB);
+  
+  // Continue block
+  builder.SetInsertPoint(continueBB);
+}
 void RefCounter::declare_refcnt_visitor(bool is_main_file,
                                         llvm::StructType *stack_entry_type,
                                         llvm::StructType *frame_map_type) {
-
-  // TODO: Declare the refcnt_visitor
-  //
-  //
-  // TODO: Defines the refcnt_visitor function that takes a struct
-  //
-  //
-  // TODO: get the num root
-  //
-  // TODO: construct a simple for loop
-  //    - Get the ref cnt inside each root
-  //    - if it is 0, free the root
+  // Declare the refcnt_visitor function type: void refcnt_visitor(void)
+  llvm::FunctionType *visitorType = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(context), {}, false);
+  
+  llvm::Function *visitorFunc = llvm::Function::Create(
+      visitorType, llvm::Function::ExternalLinkage, "refcnt_visitor", &module);
+  
+  if (is_main_file) {
+    // Define the function body only in main file
+    llvm::BasicBlock *entryBB = llvm::BasicBlock::Create(context, "entry", visitorFunc);
+    llvm::IRBuilder<> visitorBuilder(entryBB);
+    
+    // Get types we'll need
+    llvm::Type *i32Ty = llvm::Type::getInt32Ty(context);
+    llvm::Type *i64Ty = llvm::Type::getInt64Ty(context);
+    llvm::PointerType *i8PtrTy = llvm::PointerType::get(context, 0);
+    llvm::PointerType *stackEntryPtrTy = llvm::PointerType::get(context, 0);
+    llvm::PointerType *frameMapPtrTy = llvm::PointerType::get(context, 0);
+    
+    // Get global_root_chain
+    llvm::GlobalVariable *globalRootChain = module.getGlobalVariable("global_root_chain");
+    assert(globalRootChain && "global_root_chain not found");
+    
+    // Load current stack entry
+    llvm::Value *currentEntry = visitorBuilder.CreateLoad(
+        stackEntryPtrTy, globalRootChain, "current_entry");
+    
+    // Create loop blocks
+    llvm::BasicBlock *loopCondBB = llvm::BasicBlock::Create(context, "loop_cond", visitorFunc);
+    llvm::BasicBlock *loopBodyBB = llvm::BasicBlock::Create(context, "loop_body", visitorFunc);
+    llvm::BasicBlock *innerLoopCondBB = llvm::BasicBlock::Create(context, "inner_loop_cond", visitorFunc);
+    llvm::BasicBlock *innerLoopBodyBB = llvm::BasicBlock::Create(context, "inner_loop_body", visitorFunc);
+    llvm::BasicBlock *innerLoopIncBB = llvm::BasicBlock::Create(context, "inner_loop_inc", visitorFunc);
+    llvm::BasicBlock *loopNextBB = llvm::BasicBlock::Create(context, "loop_next", visitorFunc);
+    llvm::BasicBlock *exitBB = llvm::BasicBlock::Create(context, "exit", visitorFunc);
+    
+    visitorBuilder.CreateBr(loopCondBB);
+    
+    // Loop condition: while (currentEntry != null)
+    visitorBuilder.SetInsertPoint(loopCondBB);
+    llvm::PHINode *entryPhi = visitorBuilder.CreatePHI(stackEntryPtrTy, 2, "entry_phi");
+    entryPhi->addIncoming(currentEntry, entryBB);
+    
+    llvm::Value *isNonNull = visitorBuilder.CreateICmpNE(
+        entryPhi, llvm::ConstantPointerNull::get(stackEntryPtrTy), "is_non_null");
+    visitorBuilder.CreateCondBr(isNonNull, loopBodyBB, exitBB);
+    
+    // Loop body: process current stack entry
+    visitorBuilder.SetInsertPoint(loopBodyBB);
+    
+    // Get frame map from current entry
+    llvm::Value *frameMapPtr = visitorBuilder.CreateStructGEP(
+        stack_entry_type, entryPhi, 1, "framemap_ptr");
+    llvm::Value *frameMap = visitorBuilder.CreateLoad(frameMapPtrTy, frameMapPtr, "framemap");
+    
+    // Get number of roots from frame map
+    llvm::Value *numRootsPtr = visitorBuilder.CreateStructGEP(
+        frame_map_type, frameMap, 0, "num_roots_ptr");
+    llvm::Value *numRoots = visitorBuilder.CreateLoad(i64Ty, numRootsPtr, "num_roots");
+    
+    // Get roots array pointer
+    llvm::Value *rootsPtr = visitorBuilder.CreateStructGEP(
+        stack_entry_type, entryPhi, 2, "roots_ptr");
+    
+    // Inner loop initialization
+    llvm::Value *zeroIdx = llvm::ConstantInt::get(i64Ty, 0);
+    visitorBuilder.CreateBr(innerLoopCondBB);
+    
+    // Inner loop condition: for (i = 0; i < numRoots; i++)
+    visitorBuilder.SetInsertPoint(innerLoopCondBB);
+    llvm::PHINode *idxPhi = visitorBuilder.CreatePHI(i64Ty, 2, "idx_phi");
+    idxPhi->addIncoming(zeroIdx, loopBodyBB);
+    
+    llvm::Value *isLessThan = visitorBuilder.CreateICmpSLT(idxPhi, numRoots, "is_less_than");
+    visitorBuilder.CreateCondBr(isLessThan, innerLoopBodyBB, loopNextBB);
+    
+    // Inner loop body: check and process each root
+    visitorBuilder.SetInsertPoint(innerLoopBodyBB);
+    
+    // Get root pointer at index i
+    llvm::Value *rootElementPtr = visitorBuilder.CreateGEP(
+        i8PtrTy, rootsPtr, idxPhi, "root_element_ptr");
+    llvm::Value *rootPtr = visitorBuilder.CreateLoad(i8PtrTy, rootElementPtr, "root_ptr");
+    
+    // Check if root is non-null
+    llvm::Value *rootIsNonNull = visitorBuilder.CreateICmpNE(
+        rootPtr, llvm::ConstantPointerNull::get(i8PtrTy), "root_is_non_null");
+    
+    llvm::BasicBlock *processRootBB = llvm::BasicBlock::Create(context, "process_root", visitorFunc);
+    llvm::BasicBlock *skipRootBB = llvm::BasicBlock::Create(context, "skip_root", visitorFunc);
+    
+    visitorBuilder.CreateCondBr(rootIsNonNull, processRootBB, skipRootBB);
+    
+    // Process root block
+    visitorBuilder.SetInsertPoint(processRootBB);
+    
+    // Get reference count (4 bytes before the data pointer)
+    llvm::Value *refcntOffset = llvm::ConstantInt::get(i64Ty, -static_cast<int64_t>(REFCNT_SIZE));
+    llvm::Value *refcntPtr = visitorBuilder.CreateGEP(
+        llvm::Type::getInt8Ty(context), rootPtr, refcntOffset, "refcnt_ptr");
+    
+    llvm::PointerType *i32PtrTy = llvm::PointerType::get(context, 0);
+    llvm::Value *refcntI32Ptr = visitorBuilder.CreateBitCast(refcntPtr, i32PtrTy, "refcnt_i32_ptr");
+    llvm::Value *refCount = visitorBuilder.CreateLoad(i32Ty, refcntI32Ptr, "ref_count");
+    
+    // Check if reference count is zero
+    llvm::Value *refCountIsZero = visitorBuilder.CreateICmpEQ(
+        refCount, llvm::ConstantInt::get(i32Ty, 0), "ref_count_is_zero");
+    
+    llvm::BasicBlock *freeRootBB = llvm::BasicBlock::Create(context, "free_root", visitorFunc);
+    
+    visitorBuilder.CreateCondBr(refCountIsZero, freeRootBB, skipRootBB);
+    
+    // Free root block
+    visitorBuilder.SetInsertPoint(freeRootBB);
+    
+    // Call free on the original allocation (including ref count)
+    llvm::Function *freeFunc = module.getFunction("free");
+    if (!freeFunc) {
+      llvm::FunctionType *freeType = llvm::FunctionType::get(
+          llvm::Type::getVoidTy(context), {llvm::PointerType::get(context, 0)}, false);
+      freeFunc = llvm::Function::Create(freeType, llvm::Function::ExternalLinkage, 
+                                       "free", &module);
+    }
+    visitorBuilder.CreateCall(freeFunc, {refcntPtr});
+    
+    // Clear the root pointer in the stack entry
+    visitorBuilder.CreateStore(llvm::ConstantPointerNull::get(i8PtrTy), rootElementPtr);
+    
+    visitorBuilder.CreateBr(skipRootBB);
+    
+    // Skip root block - continue to next iteration
+    visitorBuilder.SetInsertPoint(skipRootBB);
+    visitorBuilder.CreateBr(innerLoopIncBB);
+    
+    // Inner loop increment
+    visitorBuilder.SetInsertPoint(innerLoopIncBB);
+    llvm::Value *nextIdx = visitorBuilder.CreateAdd(
+        idxPhi, llvm::ConstantInt::get(i64Ty, 1), "next_idx");
+    idxPhi->addIncoming(nextIdx, innerLoopIncBB);
+    visitorBuilder.CreateBr(innerLoopCondBB);
+    
+    // Move to next stack entry
+    visitorBuilder.SetInsertPoint(loopNextBB);
+    llvm::Value *nextEntryPtr = visitorBuilder.CreateStructGEP(
+        stack_entry_type, entryPhi, 0, "next_entry_ptr");
+    llvm::Value *nextEntry = visitorBuilder.CreateLoad(stackEntryPtrTy, nextEntryPtr, "next_entry");
+    entryPhi->addIncoming(nextEntry, loopNextBB);
+    visitorBuilder.CreateBr(loopCondBB);
+    
+    // Exit block
+    visitorBuilder.SetInsertPoint(exitBB);
+    visitorBuilder.CreateRetVoid();
+  }
 }
 } // namespace sammine_lang::AST

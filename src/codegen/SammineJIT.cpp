@@ -6,6 +6,7 @@
 
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h" // Provides the SimpleCompiler class.
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h" // Provides the DynamicLibrarySearchGenerator class.
+#include "llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h" // Provides SelfExecutorProcessControl
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 //! \file SammineJIT.cpp
 //! \brief The Implementation for SammineJIT
@@ -17,7 +18,7 @@ SammineJIT::SammineJIT(std::unique_ptr<llvm::orc::ExecutionSession> ES,
     : ES(std::move(ES)),
       ObjectLayer(
           *this->ES,
-          []() { return std::make_unique<llvm::SectionMemoryManager>(); }),
+          [](const llvm::MemoryBuffer&) { return std::make_unique<llvm::SectionMemoryManager>(); }),
       CompileLayer(
           *this->ES, ObjectLayer,
           std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(JTMB))),

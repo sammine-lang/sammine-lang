@@ -54,6 +54,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
 }
 
 void CgVisitor::postorder_walk(FuncDefAST *ast) {
+  
   // TODO: A function should return the last expression (only float for now)
   auto not_verified = verifyFunction(*getCurrentFunction(), &llvm::errs());
   // if (llvm::Value *RetVal = ast->Block->val) {
@@ -90,7 +91,6 @@ void CgVisitor::preorder_walk(CallExprAST *ast) {
     ast->val = resPtr->Builder->CreateCall(callee, ArgsVector, "calltmp");
   else
     resPtr->Builder->CreateCall(callee, ArgsVector);
-  // INFO: For now, the caller will be in charge of cleaning up
-  jasmine.relieveStackEntry();
+  // TODO: Handle reference counting for function arguments and return values
 }
 } // namespace sammine_lang::AST

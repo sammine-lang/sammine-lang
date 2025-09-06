@@ -1,0 +1,17 @@
+# RUN: %sammine_exe% --file %s --llvm-ir
+# Test garbage collection with strings
+
+fn test_gc() {
+    let str1 = "Hello World";
+    let str2 = "Testing GC";
+    let str3 = "Reference Counting";
+    
+    # These strings should be tracked in shadow stack
+    # and cleaned up when function exits
+}
+
+fn main() {
+    test_gc();
+    # After test_gc() returns, all strings should be freed
+    # due to reference counting
+}

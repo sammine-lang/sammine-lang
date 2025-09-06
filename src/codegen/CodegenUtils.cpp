@@ -28,8 +28,7 @@ bool CodegenUtils::hasFunctionMain(ProgramAST *ast) {
 
 llvm::FunctionType *CodegenUtils::declare_malloc(llvm::Module &module) {
   llvm::PointerType *int8ptr =
-      llvm::PointerType::get(llvm::Type::getInt8Ty(module.getContext()),
-                             0); // 0 stands for generic address space
+      llvm::PointerType::get(module.getContext(), 0); // 0 stands for generic address space
 
   // INFO: malloc, since we're a GC language, duhhhh
   llvm::FunctionType *MallocType = llvm::FunctionType::get(

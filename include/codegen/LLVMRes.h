@@ -5,6 +5,7 @@
 #include "util/Utilities.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/TargetParser/Triple.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/IR/BasicBlock.h"
@@ -93,9 +94,10 @@ public:
 
     Module = std::make_unique<llvm::Module>("KaleidoscopeJIT", *Context);
     assert(Module);
-    auto TargetTriple = LLVMGetDefaultTargetTriple();
+    auto TargetTripleStr = LLVMGetDefaultTargetTriple();
+    llvm::Triple TargetTriple(TargetTripleStr);
     std::string Error;
-    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+    auto Target = llvm::TargetRegistry::lookupTarget(TargetTripleStr, Error);
 
     auto CPU = "generic";
     auto Features = "";

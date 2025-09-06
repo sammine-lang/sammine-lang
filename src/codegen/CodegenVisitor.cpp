@@ -52,12 +52,14 @@ void CgVisitor::visit(FuncDefAST *ast) {
 void CgVisitor::preorder_walk(ProgramAST *ast) {
   jasmine.initGlobalRootChain();
   ref_counter.declare_malloc_wrapper(CodegenUtils::hasFunctionMain(ast));
+  ref_counter.declare_refcnt_visitor(CodegenUtils::hasFunctionMain(ast), 
+                                     jasmine.STACK_ENTRY_TYPE, 
+                                     jasmine.FRAME_MAP_TYPE);
   // TODO: In the future, we need to move both this function someplace else.
   //
   // INFO: To use for both function decl, malloc and printf
   llvm::PointerType *int8ptr =
-      llvm::PointerType::get(llvm::Type::getInt8Ty(*this->resPtr->Context),
-                             0); // 0 stands for generic address space
+      llvm::PointerType::get(*this->resPtr->Context, 0); // 0 stands for generic address space
 
   // INFO: printf (variadic: takes i8* format string, ...)
   llvm::FunctionType *PrintfType = llvm::FunctionType::get(
@@ -88,6 +90,8 @@ void CgVisitor::preorder_walk(RecordDefAST *ast) {}
 void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
+  cleanUpGarbageBeforeExit();
+
   // INFO: If we cannot parse return expr, treat it as unit for now
   if (!ast->return_expr || ast->return_expr->type == Type::Unit())
     resPtr->Builder->CreateRetVoid();
@@ -287,5 +291,65 @@ void CgVisitor::preorder_walk(IfExprAST *ast) {
   resPtr->Builder->SetInsertPoint(MergeBB);
 }
 void CgVisitor::preorder_walk(TypedVarAST *ast) {}
+
+void CgVisitor::postorder_walk(StringExprAST *ast) {
+  // Allocate memory for string using ref-counted malloc wrapper
+  std::string stringContent = ast->string_content;
+  size_t stringLen = stringContent.length() + 1; // +1 for null terminator
+  
+  // Call refcnt_malloc_wrapper to allocate memory
+  llvm::Function *refcntMalloc = resPtr->Module->getFunction("refcnt_malloc_wrapper");
+  assert(refcntMalloc && "refcnt_malloc_wrapper not declared");
+  
+  llvm::Value *sizeValue = llvm::ConstantInt::get(
+      llvm::Type::getInt64Ty(*resPtr->Context), stringLen);
+  
+  // Allocate memory (returns pointer to data, with ref count stored before it)
+  llvm::Value *allocatedPtr = resPtr->Builder->CreateCall(
+      refcntMalloc, {sizeValue}, "string_alloc");
+  
+  // Skip past the reference count to get the actual string data pointer
+  llvm::Value *refcntSize = llvm::ConstantInt::get(
+      llvm::Type::getInt64Ty(*resPtr->Context), 
+      static_cast<int64_t>(RefCounter::REFCNT_SIZE));
+  
+  llvm::Type *i8Ty = llvm::Type::getInt8Ty(*resPtr->Context);
+  llvm::Value *stringDataPtr = resPtr->Builder->CreateGEP(
+      i8Ty, allocatedPtr, refcntSize, "string_data_ptr");
+  
+  // Copy string content to allocated memory
+  // Create a global constant for the string literal
+  llvm::Constant *stringConstant = llvm::ConstantDataArray::getString(
+      *resPtr->Context, stringContent, true); // true = add null terminator
+  
+  llvm::GlobalVariable *globalString = new llvm::GlobalVariable(
+      *resPtr->Module, stringConstant->getType(), true,
+      llvm::GlobalValue::PrivateLinkage, stringConstant, "str_literal");
+  
+  // Get memcpy function
+  llvm::Function *memcpyFunc = llvm::Intrinsic::getOrInsertDeclaration(
+      resPtr->Module.get(), llvm::Intrinsic::memcpy,
+      {llvm::PointerType::get(*resPtr->Context, 0), llvm::PointerType::get(*resPtr->Context, 0),
+       llvm::Type::getInt64Ty(*resPtr->Context)});
+  
+  // Cast global string to i8*
+  llvm::Value *srcPtr = resPtr->Builder->CreateBitCast(
+      globalString, llvm::PointerType::get(*resPtr->Context, 0), "src_ptr");
+  
+  // Call memcpy to copy string data
+  resPtr->Builder->CreateCall(memcpyFunc, {
+      stringDataPtr,                                                    // dest
+      srcPtr,                                                          // src
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*resPtr->Context), stringLen), // size
+      llvm::ConstantInt::get(llvm::Type::getInt1Ty(*resPtr->Context), false)       // is_volatile
+  });
+  
+  // Set the AST node's value to the string data pointer (not the allocation pointer)
+  ast->val = stringDataPtr;
+  ast->type = Type::String(stringContent);
+  
+  // TODO: Register this string in the shadow stack as a GC root
+  // This will be implemented in the scope entry/exit hooks phase
+}
 
 } // namespace sammine_lang::AST

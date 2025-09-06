@@ -33,6 +33,17 @@ private:
   ShadowGarbageCollector jasmine;
   RefCounter ref_counter;
 
+  void cleanUpGarbageBeforeExit() {
+    // Before function exit, call the reference count visitor to clean up any zero-ref objects
+    llvm::Function *refcntVisitorFunc = resPtr->Module->getFunction("refcnt_visitor");
+    if (refcntVisitorFunc) {
+      // Call refcnt_visitor() to check all GC roots in shadow stack
+      resPtr->Builder->CreateCall(refcntVisitorFunc, {});
+    }
+    
+    // Clean up the shadow stack entry for this function
+    jasmine.relieveStackEntry();
+  }
 public:
   CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr)
       : resPtr(resPtr), type_converter(*resPtr), jasmine(*resPtr),
@@ -75,7 +86,7 @@ public:
   virtual void postorder_walk(ReturnExprAST *ast) override;
   virtual void postorder_walk(BinaryExprAST *ast) override;
   virtual void postorder_walk(NumberExprAST *ast) override {}
-  virtual void postorder_walk(StringExprAST *ast) override {}
+  virtual void postorder_walk(StringExprAST *ast) override;
   virtual void postorder_walk(BoolExprAST *ast) override {}
   virtual void postorder_walk(VariableExprAST *ast) override {}
   virtual void postorder_walk(BlockAST *ast) override;
