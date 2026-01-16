@@ -12,6 +12,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <unistd.h>
+#include <utility>
 using sammine_lang::compiler_option_enum;
 
 void handler(int sig) {
@@ -42,7 +43,7 @@ int main(int argc, char *argv[]) {
       .default_value(std::string("false"))
       .implicit_value(std::string("true"));
 
-  auto &g_diag = program.add_group("Diagnostics");
+  auto &g_diag = program.add_group("Diagnostics related options");
   g_diag
       .add_argument("", "--llvm-ir") // TODO: Somehow make the internal compiler
       .default_value(std::string("false"))
@@ -53,10 +54,10 @@ int main(int argc, char *argv[]) {
       .implicit_value(std::string("true"))
       .help("sammine compiler spits out the internal AST to stdout");
   g_diag.add_argument("", "--diagnostics")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out stage-wise diagnostics for "
-            "sammine-lang developers");
+      .default_value(std::string("none"))
+      .help("sammine compiler spits out diagnostics for "
+            "sammine-lang developers. Use "
+            "with value for logging: --diagnostics=stages;lexer;parser. Default value is none");
 
   if (argc < 1) {
     std::cerr << program;
@@ -66,13 +67,13 @@ int main(int argc, char *argv[]) {
     program.parse_args(argc, argv); // Example: ./main -abc 1.95 2.47
     compiler_options[compiler_option_enum::FILE] =
         program.present("-f") ? program.get("-f") : "";
-    compiler_options[compiler_option_enum::STR] =
+    compiler_options[STR] =
         program.present("-s") ? program.get("-s") : "";
-    compiler_options[compiler_option_enum::LLVM_IR] = program.get("--llvm-ir");
-    compiler_options[compiler_option_enum::AST_IR] = program.get("--ast-ir");
-    compiler_options[compiler_option_enum::DIAGNOSTIC] =
+    compiler_options[LLVM_IR] = program.get("--llvm-ir");
+    compiler_options[AST_IR] = program.get("--ast-ir");
+    compiler_options[DIAGNOSTIC] =
         program.get("--diagnostics");
-    compiler_options[compiler_option_enum::CHECK] = program.get("--check");
+    compiler_options[CHECK] = program.get("--check");
   } catch (const std::exception &err) {
     fmt::print(stderr, fg(fmt::terminal_color::bright_red),
                "Error while parsing arguments\n");

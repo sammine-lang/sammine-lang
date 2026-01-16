@@ -1,5 +1,5 @@
 find_package(Catch2 3 REQUIRED)
-
+include(Catch)
 
 file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*.cpp)
 
@@ -12,13 +12,12 @@ target_include_directories(tests PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_D
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain ${llvm_libs} ${lib_source})
 
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
-include(CTest)
-include(Catch)
 
 catch_discover_tests(tests  WORKING_DIRECTORY  ${CMAKE_CURRENT_LIST_DIR}
 DISCOVERY_MODE PRE_TEST)
 
 add_custom_target(unit-tests
   COMMAND ctest --test-dir ${CMAKE_SOURCE_DIR}/build --output-on-failure
+  DEPENDS tests
 )
 

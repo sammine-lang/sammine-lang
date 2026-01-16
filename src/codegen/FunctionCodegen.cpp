@@ -10,12 +10,10 @@ void CgVisitor::preorder_walk(FuncDefAST *ast) {
   auto name = ast->Prototype->functionName;
 
   auto *Function = this->getCurrentFunction();
-  jasmine.applyStrategy(Function);
   llvm::BasicBlock *mainblock =
       llvm::BasicBlock::Create(*(resPtr->Context), "entry", Function);
 
   resPtr->Builder->SetInsertPoint(mainblock);
-  jasmine.setStackEntry(ast, Function);
 
   //
   // INFO:: Copy all the arguments to the entry block

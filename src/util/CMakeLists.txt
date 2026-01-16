@@ -1,2 +1,2 @@
-add_library(util OBJECT ${CMAKE_CURRENT_LIST_DIR}/Utilities.cpp)
+add_library(util OBJECT ${CMAKE_CURRENT_LIST_DIR}/Utilities.cpp ${CMAKE_CURRENT_LIST_DIR}/Logging.cpp)
 target_link_libraries(util PRIVATE project_options fmt::fmt cpptrace::cpptrace)

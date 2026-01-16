@@ -13,6 +13,7 @@
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
+#include "util/Logging.h"
 #include "util/Utilities.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CodeGen.h"
@@ -20,6 +21,8 @@
 #include <cstdlib>
 #include <memory>
 #include <system_error>
+
+#define DEBUG_TYPE "stages"
 
 // INFO: Declaration
 namespace sammine_lang {
@@ -41,8 +44,6 @@ class Compiler {
   void codegen();
   void produce_executable();
   void set_error() { error = true; }
-  void log_diagnostics(const std::string &diagnostics);
-  void force_log_diagnostics(const std::string &diagnostics);
 
 public:
   Compiler(std::map<compiler_option_enum, std::string> &compiler_options);
@@ -59,14 +60,7 @@ void CompilerRunner::run(
   auto compiler = Compiler(compiler_options);
   compiler.start();
 }
-void Compiler::log_diagnostics(const std::string &diagnostics) {
-  if (compiler_options[compiler_option_enum::DIAGNOSTIC] == "true")
-    Compiler::force_log_diagnostics(diagnostics);
-}
-inline void Compiler::force_log_diagnostics(const std::string &diagnostics) {
-  fmt::print(stderr, fg(fmt::terminal_color::bright_green), "{}\n",
-             diagnostics);
-}
+
 Compiler::Compiler(
     std::map<compiler_option_enum, std::string> &compiler_options)
     : compiler_options(compiler_options) {
@@ -89,17 +83,27 @@ Compiler::Compiler(
 
   *this->resPtr;
   this->reporter = sammine_util::Reporter(file_name, input, context_radius);
+
+  // Initialize debug logging from --diagnostics flag
+  std::string diagnostic_value = compiler_options[compiler_option_enum::DIAGNOSTIC];
+  sammine_log::set_enabled_types(diagnostic_value);
 }
 
 void Compiler::lex() {
-  log_diagnostics(fmt::format("Start lexing stage..."));
+  LOG({
+    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+               "Start lexing stage...\n");
+  });
   Lexer lxr = Lexer(input);
   reporter.report(lxr);
   tokStream = lxr.getTokenStream();
 }
 
 void Compiler::parse() {
-  log_diagnostics(fmt::format("Start parsing stage..."));
+  LOG({
+    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+               "Start parsing stage...\n");
+  });
   Parser psr = Parser(tokStream, reporter);
 
   auto result = psr.Parse();
@@ -115,7 +119,10 @@ void Compiler::semantics() {
     if (this->error) {
       return;
     }
-    log_diagnostics(fmt::format("Start scope checking stage..."));
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "Start scope checking stage...\n");
+    });
     auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
 
     programAST->accept_vis(&vs);
@@ -127,7 +134,10 @@ void Compiler::semantics() {
   {
     if (this->error)
       return;
-    log_diagnostics(fmt::format("Start general semantics stage..."));
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "Start general semantics stage...\n");
+    });
     auto vs = sammine_lang::AST::GeneralSemanticsVisitor();
 
     programAST->accept_vis(&vs);
@@ -140,7 +150,10 @@ void Compiler::typecheck() {
   if (this->error) {
     return;
   }
-  log_diagnostics(fmt::format("Start bi-direcitonal type checking stage..."));
+  LOG({
+    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+               "Start bi-direcitonal type checking stage...\n");
+  });
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
   programAST->accept_vis(&vs);
   reporter.report(vs);
@@ -149,11 +162,17 @@ void Compiler::typecheck() {
 
 void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
-    log_diagnostics(fmt::format("Start dumping ast-ir stage..."));
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "Start dumping ast-ir stage...\n");
+    });
     AST::ASTPrinter::print(programAST.get());
   }
   if (this->error) {
-    log_diagnostics("There were errors in previous stages. Aborting now");
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "There were errors in previous stages. Aborting now\n");
+    });
     std::exit(1);
   }
 }
@@ -162,12 +181,17 @@ void Compiler::codegen() {
     std::exit(1);
   }
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
-    log_diagnostics(fmt::format(
-        "Finished checking. Stopping at codegen stage with compiler's "
-        "--check flag. "));
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "Finished checking. Stopping at codegen stage with compiler's "
+                 "--check flag. \n");
+    });
     std::exit(0);
   }
-  log_diagnostics(fmt::format("Start code-gen stage..."));
+  LOG({
+    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+               "Start code-gen stage...\n");
+  });
   auto vs = sammine_lang::AST::CgVisitor(resPtr);
   programAST->accept_vis(&vs);
 
@@ -180,9 +204,15 @@ void Compiler::produce_executable() {
     std::exit(1);
   }
 
-  log_diagnostics(fmt::format("Start executable/lib stage..."));
+  LOG({
+    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+               "Start executable/lib stage...\n");
+  });
   if (compiler_options[compiler_option_enum::LLVM_IR] == "true") {
-    force_log_diagnostics("Logging pre optimization llvm IR");
+    LOG({
+      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+                 "Logging pre optimization llvm IR\n");
+    });
     resPtr->Module->print(llvm::errs(), nullptr);
   }
   llvm::raw_fd_ostream dest(

@@ -55,6 +55,7 @@ add_subdirectory(src)
 
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
+include(CTest)
 if (SAMMINE_TEST)
   enable_testing()
   add_subdirectory(unit-tests)

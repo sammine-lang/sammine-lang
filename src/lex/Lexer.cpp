@@ -2,7 +2,11 @@
 // Created by jjasmine on 3/8/24.
 //
 
+#define DEBUG_TYPE "lexer"
+
 #include "lex/Lexer.h"
+#include "util/Logging.h"
+#include "fmt/core.h"
 #include "functional"
 #include "lex/Token.h"
 #include <cassert>
@@ -21,6 +25,11 @@ void Lexer::updateLocation() {
   location = sammine_util::Location(location.source_end, location.source_end);
 }
 Lexer::Lexer(const std::string &input) : Lexer() {
+  LOG({
+    fmt::print(stderr, "[{}] Starting lexical analysis on input of {} bytes\n",
+               DEBUG_TYPE, input.size());
+  });
+
   size_t i = 0;
   size_t i_0 = 0;
 

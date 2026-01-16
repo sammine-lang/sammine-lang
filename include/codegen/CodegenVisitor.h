@@ -6,7 +6,6 @@
 #include "TypeConverter.h"
 #include "ast/AstBase.h"
 #include "ast/AstDecl.h"
-#include "codegen/Garbage.h"
 #include "codegen/LLVMRes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Type.h>
@@ -30,24 +29,10 @@ private:
 
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
-  ShadowGarbageCollector jasmine;
-  RefCounter ref_counter;
 
-  void cleanUpGarbageBeforeExit() {
-    // Before function exit, call the reference count visitor to clean up any zero-ref objects
-    llvm::Function *refcntVisitorFunc = resPtr->Module->getFunction("refcnt_visitor");
-    if (refcntVisitorFunc) {
-      // Call refcnt_visitor() to check all GC roots in shadow stack
-      resPtr->Builder->CreateCall(refcntVisitorFunc, {});
-    }
-    
-    // Clean up the shadow stack entry for this function
-    jasmine.relieveStackEntry();
-  }
 public:
   CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr)
-      : resPtr(resPtr), type_converter(*resPtr), jasmine(*resPtr),
-        ref_counter(*resPtr) {}
+      : resPtr(resPtr), type_converter(*resPtr) {}
 
   void enter_new_scope() override;
   void exit_new_scope() override;
