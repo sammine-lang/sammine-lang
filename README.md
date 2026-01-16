@@ -85,6 +85,6 @@ Failed scoping:
    3|    # Use `let` keyword
    4|    let x = 0;
 
-# Did something seems wrong? Report it via [https://github.com/badumbatish/sammine-lang/issues]
+# Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 # Give us a screenshot of the error as well as your contextual source code
 ```

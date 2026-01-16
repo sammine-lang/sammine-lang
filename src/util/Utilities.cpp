@@ -230,7 +230,7 @@ void Reporter::report(const Reportee &reports) const {
   if (reports.has_message()) {
     print_fmt(fmt::terminal_color::bright_green,
               "\n# Did something seems wrong? Report it via "
-              "[https://github.com/badumbatish/sammine-lang/issues]\n");
+              "[https://codeberg.org/badumbatish/sammine-lang/issues]\n");
     print_fmt(fmt::terminal_color::bright_green,
               "# Give us a screenshot of the error as well as your contextual "
               "source code\n");
