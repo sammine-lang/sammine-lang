@@ -12,7 +12,7 @@ class ScopeGeneratorVisitor : public ScopedASTVisitor {
 public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
-  LexicalStack<sammine_util::Location> scope_stack;
+  LexicalStack<sammine_util::Location, AST::FuncDefAST*> scope_stack;
   std::set<std::string> pre_func;
   ScopeGeneratorVisitor() {
     pre_func.insert("printf");

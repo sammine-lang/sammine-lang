@@ -107,13 +107,13 @@ public:
   virtual ~ASTVisitor() = 0;
 };
 
-template <class T> class LexicalStack : public std::stack<LexicalContext<T>> {
+template <class T, class S> class LexicalStack : public std::stack<LexicalContext<T, S>> {
 public:
   void push_context() {
     if (this->empty())
-      this->push(LexicalContext<T>());
+      this->push(LexicalContext<T, S>());
     else
-      this->push(LexicalContext<T>(&this->top()));
+      this->push(LexicalContext<T, S>(&this->top()));
   }
   void pop_context() {
     if (this->empty())
@@ -139,7 +139,7 @@ public:
     return this->top().recursive_get_from_name(name);
   }
 
-  LexicalContext<T> *parent_scope() { return this->top().parent_scope; }
+  LexicalContext<T, S> *parent_scope() { return this->top().parent_scope; }
 };
 
 class ScopedASTVisitor : public ASTVisitor {

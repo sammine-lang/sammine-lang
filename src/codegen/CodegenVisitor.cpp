@@ -6,13 +6,18 @@
 #include "ast/Ast.h"
 #include "codegen/CodegenUtils.h"
 #include "lex/Token.h"
+#include "util/Logging.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include <cstdio>
 #include <cstdlib>
+
+#define DEBUG_TYPE "codegen"
+
 //! \file CodegenVisitor.cpp
 //! \brief Implementation for CodegenVisitor, it converts the AST Representation
 //! into LLVM IR and it also uses a visitor pattern in order to traverse through
@@ -54,14 +59,8 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   // INFO: To use for both function decl, malloc and printf
   llvm::PointerType *int8ptr =
       llvm::PointerType::get(*this->resPtr->Context, 0); // 0 stands for generic address space
-
-  // INFO: printf (variadic: takes i8* format string, ...)
-  llvm::FunctionType *PrintfType = llvm::FunctionType::get(
-      llvm::Type::getInt32Ty(*this->resPtr->Context), // return type (int)
-      int8ptr,                                        // first arg: i8* (format)
-      true);                                          // variadic
                                                       //
-  this->resPtr->Module->getOrInsertFunction("printf", PrintfType);
+  CodegenUtils::declare_fn(*this->resPtr->Module, "printf", llvm::Type::getInt32Ty(*this->resPtr->Context), int8ptr, true);
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
@@ -287,6 +286,7 @@ void CgVisitor::preorder_walk(TypedVarAST *ast) {}
 void CgVisitor::postorder_walk(StringExprAST *ast) {
   // Allocate memory for string using ref-counted malloc wrapper
   std::string stringContent = ast->string_content;
+  ast->val = this->resPtr->Builder->CreateGlobalString(stringContent);
   ast->type = Type::String(stringContent);
   
 }

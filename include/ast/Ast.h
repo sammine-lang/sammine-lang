@@ -186,6 +186,8 @@ public:
   }
 
   virtual std::string getTreeName() override { return "FuncDefAST"; }
+
+  std::string getFunctionName() { return Prototype->functionName; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);

@@ -67,7 +67,7 @@ public:
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(RecordDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override {}
-  virtual void postorder_walk(CallExprAST *ast) override {}
+  virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;
   virtual void postorder_walk(BinaryExprAST *ast) override;
   virtual void postorder_walk(NumberExprAST *ast) override {}

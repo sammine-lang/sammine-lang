@@ -1,5 +1,5 @@
 # RUN: %sammine_exe% --file %s --check --diagnostics
 fn main() -> i64 {
   # add sth like print here
-  return 0;
+  return;
 }

@@ -16,16 +16,21 @@ enum NameQueryResult {
 };
 
 //! \brief LexicalContext class
-template <class T> class LexicalContext {
+template <class T, class Scope> class LexicalContext {
   std::set<std::string> symbols;
   std::unordered_map<std::string, T> symbols_to_t;
 
 public:
   LexicalContext *parent_scope;
+  std::optional<Scope> s; 
 
   explicit LexicalContext() : symbols(), symbols_to_t(), parent_scope() {}
   LexicalContext(LexicalContext *parent_scope)
       : symbols(), symbols_to_t(), parent_scope(parent_scope) {}
+
+  void setScope(Scope s) {
+    this->s = s;
+  }
 
   void registerNameT(const std::string &name, T l) {
     symbols.insert(name);

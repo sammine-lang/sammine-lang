@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast/Ast.h"
 #include "ast/AstBase.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
@@ -12,7 +13,7 @@ namespace sammine_lang {
 
 namespace AST {
 
-class TypingContext : public LexicalContext<Type> {};
+class TypingContext : public LexicalContext<Type, AST::FuncDefAST*> {};
 class BiTypeCheckerVisitor : public ScopedASTVisitor,
                              public TypeCheckerVisitor {
   /// INFO: Ok let's talk about error propagation in this checker.
@@ -23,10 +24,10 @@ class BiTypeCheckerVisitor : public ScopedASTVisitor,
 
 public:
   // INFO: x, y, z
-  LexicalStack<Type> id_to_type;
+  LexicalStack<Type, AST::FuncDefAST*> id_to_type;
 
   // INFO: i64, f64 bla bla bla
-  LexicalStack<Type> typename_to_type;
+  LexicalStack<Type, AST::FuncDefAST*> typename_to_type;
   TypeMapOrdering type_map_ordering;
   const std::set<std::string> &pre_func;
   virtual void enter_new_scope() override {

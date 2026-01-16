@@ -19,6 +19,7 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <system_error>
 
@@ -219,8 +220,12 @@ void Compiler::produce_executable() {
     });
     resPtr->Module->print(llvm::errs(), nullptr);
   }
+
+  // Output .o and executable in current directory using just the stem
+  std::string output_stem =
+      std::filesystem::path(this->file_name).stem().string();
   llvm::raw_fd_ostream dest(
-      llvm::raw_fd_ostream(this->file_name + ".o", resPtr->EC));
+      llvm::raw_fd_ostream(output_stem + ".o", resPtr->EC));
   if (resPtr->EC) {
     llvm::errs() << "Could not open file: " << resPtr->EC.message();
     return;
@@ -236,14 +241,14 @@ void Compiler::produce_executable() {
   resPtr->pass.run(*resPtr->Module);
   dest.flush();
 
-  auto try_compile_with = [this](const std::string &compiler) {
+  auto try_compile_with = [&output_stem](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
-      return test_result == 0;
-    std::string command = fmt::format("{} {}.o -o {}.exe", compiler,
-                                      this->file_name, this->file_name);
+      return false;
+    std::string command =
+        fmt::format("{} {}.o -o {}.exe", compiler, output_stem, output_stem);
     int result = std::system(command.c_str());
     return result == 0;
   };

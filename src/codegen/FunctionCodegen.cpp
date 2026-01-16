@@ -67,22 +67,22 @@ void CgVisitor::postorder_walk(FuncDefAST *ast) {
   }
 }
 
-void CgVisitor::preorder_walk(CallExprAST *ast) {
+void CgVisitor::preorder_walk(CallExprAST *ast) {}
 
+void CgVisitor::postorder_walk(CallExprAST *ast) {
   llvm::Function *callee = resPtr->Module->getFunction(ast->functionName);
   if (!callee) {
     this->abort("Unknown function called");
     return;
   }
 
-  if (ast->arguments.size() != callee->arg_size())
+  // Skip arg count check for variadic functions (like printf)
+  if (!callee->isVarArg() && ast->arguments.size() != callee->arg_size())
     this->abort("Incorrect number of arguments passed");
-  std::vector<llvm::Value *> ArgsVector;
 
-  for (size_t i = 0; i < ast->arguments.size(); i++) {
-    auto arg_ast = ast->arguments[i].get();
-    arg_ast->accept_vis(this);
-    ArgsVector.push_back(arg_ast->val);
+  std::vector<llvm::Value *> ArgsVector;
+  for (auto &arg : ast->arguments) {
+    ArgsVector.push_back(arg->val);
   }
 
   if (callee->getReturnType() != llvm::Type::getVoidTy(*resPtr->Context))

@@ -18,7 +18,12 @@ void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {
 }
 
 void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {
+  this->id_to_type.top().setScope(ast);
+  this->typename_to_type.top().setScope(ast);
+
+  ast->accept_synthesis(this);
+}
 void BiTypeCheckerVisitor::preorder_walk(RecordDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {
   ast->accept_synthesis(this);
@@ -26,9 +31,23 @@ void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {
   ast->accept_synthesis(this);
 }
-void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {
-  ast->accept_synthesis(this);
-}
+ void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {
+    auto t = ast->accept_synthesis(this);
+
+    auto scope_fn = this->id_to_type.top().s.value();
+    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+    auto return_type = fn_type.get_return_type();
+
+    if (t != return_type) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Wrong return type for function {}, expected "
+                                  "{} but got {}",
+                                  scope_fn->getFunctionName(),
+                                  return_type.to_string(), t.to_string()));
+    }
+
+    ast->set_checked();
+  }
 void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {
   ast->accept_synthesis(this);
@@ -77,6 +96,17 @@ void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {
 
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {
   id_to_type.parent_scope()->registerNameT(ast->functionName, ast->type);
+
+  // main must return i64
+  if (ast->functionName == "main") {
+    auto fn_type = std::get<FunctionType>(ast->type.type_data);
+    auto return_type = fn_type.get_return_type();
+    if (return_type != Type::I64_t()) {
+      this->add_error(ast->get_location(),
+                      fmt::format("main must return i64, found {}",
+                                  return_type.to_string()));
+    }
+  }
 }
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {
   if (ast->checked() || pre_func.contains(ast->functionName))
