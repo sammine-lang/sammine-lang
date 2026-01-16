@@ -113,6 +113,11 @@ public:
   }
   virtual std::string getTreeName() override { return "PrototypeAST"; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
+
+  bool returnsUnit() {
+    return returnType == "unit" || returnType.empty();
+  }
+
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);
   }
@@ -188,6 +193,11 @@ public:
   virtual std::string getTreeName() override { return "FuncDefAST"; }
 
   std::string getFunctionName() { return Prototype->functionName; }
+
+  bool returnsUnit() {
+    return Prototype->returnsUnit();
+  }
+
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);

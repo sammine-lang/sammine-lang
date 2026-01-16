@@ -38,6 +38,7 @@ public:
   void exit_new_scope() override;
 
   virtual void visit(FuncDefAST *) override;
+  virtual void visit(IfExprAST *) override;
   // visit
   // pre order
   // TODO: Implement these

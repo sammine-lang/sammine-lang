@@ -208,11 +208,17 @@ void CgVisitor::preorder_walk(VariableExprAST *ast) {
                                          ast->variableName);
 }
 void CgVisitor::preorder_walk(UnitExprAST *ast) {}
-void CgVisitor::preorder_walk(IfExprAST *ast) {
+void CgVisitor::preorder_walk(IfExprAST *ast) {}
+
+// Override visit to control child traversal order for if-expr codegen
+void CgVisitor::visit(IfExprAST *ast) {
+  // First, codegen the condition
   ast->bool_expr->accept_vis(this);
   if (!ast->bool_expr->val) {
     this->abort("Failed to codegen condition of if-expr");
   }
+
+  // Convert condition to i1 based on type
   switch (ast->bool_expr->type.type_kind) {
   case TypeKind::I64_t:
     ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
@@ -256,30 +262,34 @@ void CgVisitor::preorder_walk(IfExprAST *ast) {
 
   llvm::Function *function = resPtr->Builder->GetInsertBlock()->getParent();
 
-  // Create blocks for the then and else cases.  Insert the 'then' block at
-  // the end of the function.
+  // Create blocks for the then and else cases
   BasicBlock *ThenBB = BasicBlock::Create(*resPtr->Context, "then", function);
   BasicBlock *ElseBB = BasicBlock::Create(*resPtr->Context, "else");
   BasicBlock *MergeBB = BasicBlock::Create(*resPtr->Context, "ifcont");
 
   resPtr->Builder->CreateCondBr(ast->bool_expr->val, ThenBB, ElseBB);
 
+  // Codegen then block
   resPtr->Builder->SetInsertPoint(ThenBB);
-
   ast->thenBlockAST->accept_vis(this);
   if (!ThenBB->back().isTerminator())
     resPtr->Builder->CreateBr(MergeBB);
 
+  // Codegen else block
   function->insert(function->end(), ElseBB);
   resPtr->Builder->SetInsertPoint(ElseBB);
-
   ast->elseBlockAST->accept_vis(this);
-
   if (!ElseBB->back().isTerminator())
     resPtr->Builder->CreateBr(MergeBB);
 
-  function->insert(function->end(), MergeBB);
-  resPtr->Builder->SetInsertPoint(MergeBB);
+  // Continue at merge block only if it has predecessors
+  if (MergeBB->hasNPredecessorsOrMore(1)) {
+    function->insert(function->end(), MergeBB);
+    resPtr->Builder->SetInsertPoint(MergeBB);
+  } else {
+    // Both branches terminated, no merge block needed
+    delete MergeBB;
+  }
 }
 void CgVisitor::preorder_walk(TypedVarAST *ast) {}
 

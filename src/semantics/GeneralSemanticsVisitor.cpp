@@ -6,7 +6,8 @@
 //! \brief Implementation for GeneralSemanticsVisitor
 namespace sammine_lang::AST {
 void GeneralSemanticsVisitor::preorder_walk(FuncDefAST *ast) {
-  need_return.insert(ast->Block.get());
+  if (ast->returnsUnit())
+    need_return.insert(ast->Block.get());
 }
 void GeneralSemanticsVisitor::preorder_walk(BlockAST *ast) { returned = false; }
 void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {

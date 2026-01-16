@@ -66,7 +66,20 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
     std::string str = "";
     i = advance(i);
     while (input[i] != '\"') {
-      str += input[i];
+      if (input[i] == '\\') {
+        i = advance(i);
+        switch (input[i]) {
+        case 'n': str += '\n'; break;
+        case 't': str += '\t'; break;
+        case 'r': str += '\r'; break;
+        case '\\': str += '\\'; break;
+        case '\"': str += '\"'; break;
+        case '0': str += '\0'; break;
+        default: str += input[i]; break;
+        }
+      } else {
+        str += input[i];
+      }
       i = advance(i);
     }
     i = advance(i);
