@@ -32,21 +32,6 @@ void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {
   ast->accept_synthesis(this);
 }
  void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {
-    auto t = ast->accept_synthesis(this);
-
-    auto scope_fn = this->id_to_type.top().s.value();
-    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
-    auto return_type = fn_type.get_return_type();
-
-    if (t != return_type) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Wrong return type for function {}, expected "
-                                  "{} but got {}",
-                                  scope_fn->getFunctionName(),
-                                  return_type.to_string(), t.to_string()));
-    }
-
-    ast->set_checked();
   }
 void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {
@@ -134,9 +119,25 @@ void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {
 
   ast->set_checked();
 }
-void BiTypeCheckerVisitor::postorder_walk(ReturnExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(ReturnExprAST *ast) {
+  auto t = ast->accept_synthesis(this);
+
+  auto scope_fn = this->id_to_type.top().s.value();
+  auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+  auto return_type = fn_type.get_return_type();
+
+  if (t != return_type) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Wrong return type for function {}, expected "
+                                "{} but got {}",
+                                scope_fn->getFunctionName(),
+                                return_type.to_string(), t.to_string()));
+  }
+
+  ast->set_checked();
+}
 void BiTypeCheckerVisitor::postorder_walk(BinaryExprAST *ast) {
-  ast->accept_synthesis(this);
+  ast->type = ast->accept_synthesis(this);
 }
 void BiTypeCheckerVisitor::postorder_walk(StringExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(NumberExprAST *ast) {}
