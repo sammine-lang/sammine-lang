@@ -162,6 +162,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
                                     ast->Op->tok_type),
         L, R);
   }
+  if (ast->Op->tok_type == TokMOD) {
+    ast->val = resPtr->Builder->CreateSRem(L, R);
+  }
   if (!ast->val) {
     std::cout << ast->Op->lexeme << std::endl;
     this->abort();

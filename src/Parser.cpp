@@ -18,6 +18,7 @@ static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokASSIGN, 2}, {TokenType::TokLESS, 10},
     {TokenType::TokEQUAL, 10}, {TokenType::TokADD, 20},
     {TokenType::TokSUB, 20},   {TokenType::TokMUL, 40},
+    {TokenType::TokMOD, 40},
     {TokenType::TokOR, 1},
 };
 
@@ -208,7 +209,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   }
 
   // this is for fn
-  auto fn = expect(TokenType::TokFunc);
+  auto fn = expect(TokenType::TokLet);
   if (!fn) {
     return std::make_pair(std::make_unique<FuncDefAST>(nullptr, nullptr),
                           NONCOMMITTED);

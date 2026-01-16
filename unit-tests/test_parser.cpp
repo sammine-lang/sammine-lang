@@ -93,7 +93,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
   //}
 
   SECTION("Single argument") {
-    auto lex = Lexer("fn f(x:f64) -> f64 {\n \n }");
+    auto lex = Lexer("let f(x:f64) -> f64 {\n \n }");
     REQUIRE(lex.getTokenStream()->hasErrors() == false);
     auto pg = Parser(lex.getTokenStream());
 
@@ -113,7 +113,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
   }
 
   SECTION("Multiple argument") {
-    auto lex = Lexer("fn f(x:f64, y : hi, z : hoe) {\n  \n }");
+    auto lex = Lexer("let f(x:f64, y : hi, z : hoe) {\n  \n }");
     REQUIRE(lex.getTokenStream()->hasErrors() == false);
     auto pg = Parser(lex.getTokenStream());
 
@@ -133,7 +133,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
   }
 
   SECTION("None return") {
-    auto lex = Lexer("fn f() {\n  \n }");
+    auto lex = Lexer("let f() {\n  \n }");
 
     // sammine_lang::Lexer lex("fn f(x:f64, y : hi, z : hoe) -> f64 {\n return
     // 2; \n }");
