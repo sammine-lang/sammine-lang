@@ -1,5 +1,5 @@
 # RUN: %sammine_exe% --file %s  --check --diagnostics
-fn main() {
+fn main() -> i64 {
     let x = "abc";
-    return;
+    return 0;
 }

@@ -4,7 +4,8 @@ fn bar() {
   return;
 }
 
-fn main() {
+fn main() -> i64 {
   bar();
-  return;
+  printf("2");
+  return 0;
 }

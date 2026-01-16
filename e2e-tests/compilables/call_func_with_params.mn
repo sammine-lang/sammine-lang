@@ -3,8 +3,8 @@ fn foo(i: i64) -> i64 {
   return i;
 }
 
-fn main() {
+fn main() -> i64 {
   let i : i64 = 0;
   foo(i);
-  return;
+  return 0;
 }
