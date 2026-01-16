@@ -18,7 +18,13 @@ public:
   static bool isFunctionMain(FuncDefAST *);
   static bool hasFunctionMain(ProgramAST *);
 
-  static llvm::FunctionType *declare_malloc(llvm::Module &);
+  static llvm::FunctionCallee declare_malloc(llvm::Module &);
+
+  static llvm::FunctionCallee declare_fn(llvm::Module &module,
+                                         const std::string &name,
+                                         llvm::Type *return_type,
+                                         llvm::ArrayRef<llvm::Type *> param_types,
+                                         bool is_vararg = false);
 };
 
 class CodegenCommenter {

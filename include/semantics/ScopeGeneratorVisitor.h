@@ -13,14 +13,37 @@ public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
   LexicalStack<sammine_util::Location> scope_stack;
-  ScopeGeneratorVisitor() { scope_stack.push_context(); }
+  std::set<std::string> pre_func;
+  ScopeGeneratorVisitor() {
+    pre_func.insert("printf");
+    scope_stack.push_context();
+  }
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
 
   virtual void enter_new_scope() override { this->scope_stack.push_context(); }
   virtual void exit_new_scope() override { this->scope_stack.pop_context(); }
-
+  NameQueryResult can_see(const std::string &symbol) {
+    auto result = this->scope_stack.recursiveQueryName(symbol);
+    if (result == nameNotFound)
+      return pre_func.contains(symbol) ? nameFound : nameNotFound;
+    return result;
+  }
+  NameQueryResult can_see_parent(const std::string &symbol) {
+  auto *parent_scope = this->scope_stack.parent_scope();
+    auto result = parent_scope->recursiveQueryName(symbol);
+    if (result == nameNotFound)
+      return pre_func.contains(symbol) ? nameFound : nameNotFound;
+    return result;
+  }
+  void register_name_parent(const std::string &symbol, sammine_util::Location loc) {
+    auto *parent_scope = this->scope_stack.parent_scope();
+    return parent_scope->registerNameT(symbol, loc);
+  }
+  void register_name(const std::string &symbol, sammine_util::Location loc) {
+    return this->scope_stack.registerNameT(symbol, loc);
+  }
   // pre order
 
   // INFO: Nothing here

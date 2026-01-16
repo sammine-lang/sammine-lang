@@ -26,16 +26,19 @@ bool CodegenUtils::hasFunctionMain(ProgramAST *ast) {
   return false;
 }
 
-llvm::FunctionType *CodegenUtils::declare_malloc(llvm::Module &module) {
+llvm::FunctionCallee CodegenUtils::declare_malloc(llvm::Module &module) {
   llvm::PointerType *int8ptr =
       llvm::PointerType::get(module.getContext(), 0); // 0 stands for generic address space
+  return declare_fn(module, "malloc", int8ptr, {llvm::Type::getInt64Ty(module.getContext())});
+}
 
-  // INFO: malloc, since we're a GC language, duhhhh
-  llvm::FunctionType *MallocType = llvm::FunctionType::get(
-      int8ptr,                                     // return type (i8*)
-      llvm::Type::getInt64Ty(module.getContext()), // arg: size_t (i64)
-      false);                                      // not variadic
-  module.getOrInsertFunction("malloc", MallocType);
-  return MallocType;
+llvm::FunctionCallee
+CodegenUtils::declare_fn(llvm::Module &module, const std::string &name,
+                         llvm::Type *return_type,
+                         llvm::ArrayRef<llvm::Type *> param_types,
+                         bool is_vararg) {
+  llvm::FunctionType *fn_type =
+      llvm::FunctionType::get(return_type, param_types, is_vararg);
+  return module.getOrInsertFunction(name, fn_type);
 }
 } // namespace sammine_lang

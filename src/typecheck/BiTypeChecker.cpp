@@ -79,7 +79,7 @@ void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {
   id_to_type.parent_scope()->registerNameT(ast->functionName, ast->type);
 }
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {
-  if (ast->checked())
+  if (ast->checked() || pre_func.contains(ast->functionName))
     return;
 
   auto ty = get_type_from_id_parent(ast->functionName);
@@ -173,7 +173,7 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
-  if (ast->synthesized())
+  if (ast->synthesized() || pre_func.contains(ast->functionName))
     return ast->type;
   auto ty = get_type_from_id_parent(ast->functionName);
   switch (ty->type_kind) {

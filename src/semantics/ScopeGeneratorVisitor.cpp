@@ -28,9 +28,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
       this->abort("Should not be any other def");
 
     if (fn_name != "") {
-      if (this->scope_stack.recursiveQueryName(fn_name) == nameNotFound)
-        this->scope_stack.registerNameT(fn_name, loc);
-      else if (this->scope_stack.recursiveQueryName(fn_name) == nameFound) {
+      if (can_see(fn_name) == nameNotFound)
+        register_name(fn_name, loc);
+      else if (can_see(fn_name) == nameFound) {
         add_error(loc, fmt::format(
                            "[SCOPE1]: The name `{}` has been introduced before",
                            fn_name));
@@ -44,9 +44,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
 void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
 
   auto var_name = ast->TypedVar->name;
-  if (this->scope_stack.recursiveQueryName(var_name) == nameNotFound) {
-    this->scope_stack.registerNameT(var_name, ast->TypedVar->get_location());
-  } else if (this->scope_stack.recursiveQueryName(var_name) == nameFound) {
+  if (can_see(var_name) == nameNotFound) {
+    register_name(var_name, ast->TypedVar->get_location());
+  } else if (can_see(var_name) == nameFound) {
     add_error(ast->get_location(),
               fmt::format("[SCOPE1]: The name `{}` has been introduced before",
                           var_name));
@@ -60,15 +60,12 @@ void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(RecordDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
-
-  auto *parent_scope = this->scope_stack.parent_scope();
-
   auto var_name = ast->functionName;
-  if (parent_scope->recursiveQueryName(var_name) == nameNotFound)
-    parent_scope->registerNameT(var_name, ast->get_location());
+  if (can_see_parent(var_name) == nameNotFound)
+    register_name_parent(var_name, ast->get_location());
 
   for (auto &param : ast->parameterVectors)
-    this->scope_stack.registerNameT(param->name, param->get_location());
+    register_name(param->name, param->get_location());
 }
 void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -92,7 +89,7 @@ void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
 
   auto var_name = ast->functionName;
-  if (this->scope_stack.parent_scope()->recursiveQueryName(var_name) ==
+  if (can_see_parent(var_name) ==
       nameNotFound) {
     add_error(
         ast->get_location(),
@@ -110,7 +107,7 @@ void ScopeGeneratorVisitor::postorder_walk(BoolExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
 
   auto var_name = ast->variableName;
-  if (this->scope_stack.recursiveQueryName(var_name) == nameNotFound) {
+  if (can_see(var_name) == nameNotFound) {
     add_error(ast->get_location(),
               fmt::format("The variable named {} for the variable expression "
                           "is not found before",

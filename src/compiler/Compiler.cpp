@@ -32,6 +32,9 @@ class Compiler {
   std::map<compiler_option_enum, std::string> compiler_options;
   std::shared_ptr<LLVMRes> resPtr;
   std::string file_name, input;
+  
+  const std::set<std::string> pre_func { "printf"};
+
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
   bool error;
@@ -67,6 +70,7 @@ Compiler::Compiler(
   this->error = false;
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
+
   if (this->input != "") {
     this->file_name = "From string input";
   } else if (this->file_name != "") {
@@ -154,7 +158,7 @@ void Compiler::typecheck() {
     fmt::print(stderr, fg(fmt::terminal_color::bright_green),
                "Start bi-direcitonal type checking stage...\n");
   });
-  auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
+  auto vs = sammine_lang::AST::BiTypeCheckerVisitor(pre_func);
   programAST->accept_vis(&vs);
   reporter.report(vs);
   this->error = vs.has_errors();

@@ -28,6 +28,7 @@ public:
   // INFO: i64, f64 bla bla bla
   LexicalStack<Type> typename_to_type;
   TypeMapOrdering type_map_ordering;
+  const std::set<std::string> &pre_func;
   virtual void enter_new_scope() override {
     id_to_type.push_context();
     typename_to_type.push_context();
@@ -41,7 +42,7 @@ public:
     id_to_type.pop();
     typename_to_type.pop();
   }
-  BiTypeCheckerVisitor() { this->enter_new_scope(); }
+  BiTypeCheckerVisitor(const std::set<std::string> &pre_func) : pre_func(pre_func) { this->enter_new_scope(); }
 
   std::optional<Type> get_type_from_id(const std::string &str) {
 
