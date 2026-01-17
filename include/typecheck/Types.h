@@ -19,6 +19,7 @@ enum class TypeKind {
   Bool,
   String,
   Function,
+  Record,
   Never,
   NonExistent,
   Poisoned
@@ -89,6 +90,8 @@ struct Type {
       return "f64";
     case TypeKind::Unit:
       return "()";
+    case TypeKind::Record:
+      return "record";
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Function: {

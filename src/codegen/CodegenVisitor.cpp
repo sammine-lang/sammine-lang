@@ -204,6 +204,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
   case TypeKind::String:
+  case TypeKind::Record:
     this->abort(".....");
   }
   this->abort_if_not(ast->val, "cannot generate number");
@@ -258,6 +259,9 @@ void CgVisitor::visit(IfExprAST *ast) {
     this->abort("Invalid syntax for now");
     break;
   case TypeKind::Unit:
+    this->abort("Invalid syntax for now");
+    break;
+  case TypeKind::Record:
     this->abort("Invalid syntax for now");
     break;
   case TypeKind::Bool:

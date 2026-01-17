@@ -25,6 +25,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
                                  llvm::Type::getInt32Ty(context));
   case TypeKind::Function:
     sammine_util::abort("Function is not first-class yet");
+  case TypeKind::Record:
+    sammine_util::abort("Record not yet converted");
   case TypeKind::Never:
     sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:
@@ -71,7 +73,6 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     case TokenType::TokGreaterEqual:
       return CmpInst::ICMP_SGE;
     default:
-
       sammine_util::abort("Invalid token for integer comparison");
     }
     break;
@@ -97,22 +98,21 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     break;
   }
   case TypeKind::Unit:
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
   case TypeKind::Function:
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
   case TypeKind::Never:
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
   case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::String:
+  case TypeKind::Record:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
-  case TypeKind::Poisoned:
+    sammine_util::abort(
+        fmt::format("Cannot compare values of this type: {}", a.to_string()));
+    sammine_util::abort(
+        fmt::format("Cannot compare values of this type: {}", a.to_string()));
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
     break;
-  case TypeKind::String:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
     break;

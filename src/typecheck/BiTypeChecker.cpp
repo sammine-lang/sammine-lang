@@ -224,6 +224,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Bool:
   case TypeKind::Never:
   case TypeKind::NonExistent:
+  case TypeKind::Record:
   case TypeKind::Poisoned:
     this->abort(fmt::format("should not happen here with function {}",
                             ast->functionName));
