@@ -25,6 +25,7 @@
 CLAUDE.md
 log/
 package-lock.json
+.devcontainer/
 
 # Compiled Static libraries
 *.lai
