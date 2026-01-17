@@ -1,4 +1,4 @@
-# RUN:  %sammine --file %s  --check --diagnostics
+# RUN:  %sammine --file %full  --check --diagnostics
 Record test { var: i64, };
 
 let foo() {

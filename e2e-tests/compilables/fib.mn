@@ -1,4 +1,4 @@
-# RUN: %sammine --file %s && ./%basename_s.exe | %check %s
+# RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 34
 let fib(x: i64) -> i64 {
   if x == 0 || x == 1 {

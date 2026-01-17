@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %s  --diagnostics
+# RUN: ! %sammine --file %full  --diagnostics
 
 # this is a function
 fn f(x : f64) {

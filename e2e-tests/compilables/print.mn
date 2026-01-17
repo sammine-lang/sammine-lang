@@ -1,4 +1,4 @@
-# RUN: %sammine --file %s --check --diagnostics
+# RUN: %sammine --file %full --check --diagnostics
 let main() -> i64 {
   # add sth like print here
   return 0;
