@@ -21,6 +21,11 @@
 *.mod
 *.smod
 
+*.cast
+CLAUDE.md
+log/
+package-lock.json
+
 # Compiled Static libraries
 *.lai
 *.la
