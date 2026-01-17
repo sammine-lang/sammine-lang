@@ -4,6 +4,7 @@
 
 #include "compiler/Compiler.h"
 #include "ast/Ast.h"
+#include "ast/AstBase.h"
 #include "codegen/CodegenVisitor.h"
 #include "codegen/LLVMRes.h"
 #include "fmt/color.h"
@@ -253,7 +254,7 @@ void Compiler::produce_executable() {
     return result == 0;
   };
   for (auto &def : this->programAST->DefinitionVec) {
-    if (auto func_def = static_cast<AST::FuncDefAST *>(def.get())) {
+    if (auto func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
       if (func_def->Prototype->functionName == "main") {
         if (try_compile_with("clang++") || try_compile_with("g++"))
           std::exit(0);
@@ -279,7 +280,6 @@ void Compiler::start() {
   // no error, proceed with current stage
   // error, skip current stage and go next
   // error, compiler-ending stage
-  std::string prev = "";
   for (auto stage : CompilerStages) {
     stage(this);
   }

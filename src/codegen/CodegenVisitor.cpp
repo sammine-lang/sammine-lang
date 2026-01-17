@@ -94,7 +94,9 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
   }
 }
 void CgVisitor::preorder_walk(ExternAST *ast) {}
-void CgVisitor::preorder_walk(RecordDefAST *ast) {}
+void CgVisitor::preorder_walk(RecordDefAST *ast) {
+  this->abort("You forgot to implement record");
+}
 void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
@@ -109,11 +111,11 @@ void CgVisitor::preorder_walk(BinaryExprAST *ast) {}
 
 void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   if (ast->Op->tok_type == TokenType::TokASSIGN) {
-    VariableExprAST *LHSE = static_cast<VariableExprAST *>(ast->LHS.get());
+    VariableExprAST *LHSE = dynamic_cast<VariableExprAST *>(ast->LHS.get());
     if (!LHSE) {
       this->abort("Left hand side of assignment must be a variable, "
                   "current LHS cannot "
-                  "be statically cast to VarExprAST");
+                  "be cast to VarExprAST");
       return;
     }
 
@@ -181,7 +183,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
     ast->val = resPtr->Builder->CreateSRem(L, R);
   }
   if (!ast->val) {
-    std::cout << ast->Op->lexeme << std::endl;
+    LOG({
+      std::cout << ast->Op->lexeme << std::endl;
+        });
     this->abort();
   }
 
@@ -212,12 +216,8 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   this->abort_if_not(ast->val, "cannot generate number");
 }
 void CgVisitor::preorder_walk(BoolExprAST *ast) {
-  if (ast->b)
-    ast->val = llvm::ConstantFP::get(*resPtr->Context,
-                                     llvm::APFloat(std::stod("1.0")));
-  else
-    ast->val = llvm::ConstantFP::get(*resPtr->Context,
-                                     llvm::APFloat(std::stod("0.0")));
+  ast->val = llvm::ConstantFP::get(
+      *resPtr->Context, llvm::APFloat(std::stod(ast->b ? "1.0" : "0.0")));
 }
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
   auto *alloca = this->allocaValues.top()[ast->variableName];
@@ -260,8 +260,11 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Function:
   case TypeKind::Never:
   case TypeKind::String:
-    LOG({ ASTPrinter::print(ast->bool_expr.get()); });
-    this->abort("Invalid syntax or broken typechecker for now");
+    LOG({
+      fmt::print("[CODEGEN] Logging IfExprAST's bool expr \n");
+      ASTPrinter::print(ast->bool_expr.get());
+    });
+    this->abort("Invalid syntax or broken typechecker for now\n");
     break;
   case TypeKind::Bool:
     ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
@@ -281,7 +284,8 @@ void CgVisitor::visit(IfExprAST *ast) {
 
   resPtr->Builder->CreateCondBr(ast->bool_expr->val, ThenBB, ElseBB);
 
-  auto blockBranchHelper = [this, &MergeBB](BasicBlock* bb, BlockAST* block_ast) {
+  auto blockBranchHelper = [this, &MergeBB](BasicBlock *bb,
+                                            BlockAST *block_ast) {
     resPtr->Builder->SetInsertPoint(bb);
     block_ast->accept_vis(this);
 
@@ -301,7 +305,7 @@ void CgVisitor::visit(IfExprAST *ast) {
 
   // Codegen else block
   function->insert(function->end(), ElseBB);
-  
+
   auto [ElseV, ElseEndBB] = blockBranchHelper(ElseBB, ast->elseBlockAST.get());
 
   // Continue at merge block only if it has predecessors

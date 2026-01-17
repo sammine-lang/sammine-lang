@@ -1,5 +1,6 @@
 # RUN:  %sammine --file %full  --check --diagnostics
 Record test { var: i64, };
+Record test2 { var1: i64, var2 : f64, };
 
 let foo() {
   return;

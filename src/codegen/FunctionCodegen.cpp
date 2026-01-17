@@ -52,8 +52,6 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
 }
 
 void CgVisitor::postorder_walk(FuncDefAST *ast) {
-  
-  // TODO: A function should return the last expression (only float for now)
   auto not_verified = verifyFunction(*getCurrentFunction(), &llvm::errs());
   // if (llvm::Value *RetVal = ast->Block->val) {
   //   // Finish off the function.
@@ -89,6 +87,5 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     ast->val = resPtr->Builder->CreateCall(callee, ArgsVector, "calltmp");
   else
     resPtr->Builder->CreateCall(callee, ArgsVector);
-  // TODO: Handle reference counting for function arguments and return values
 }
 } // namespace sammine_lang::AST
