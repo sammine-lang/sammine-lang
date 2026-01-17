@@ -4,6 +4,7 @@
 #include "ast/AstDecl.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
+#include <map>
 //! \file GeneralSemanticsVisitor.h
 //! \brief Defines GeneralSemanticsVisitor, an ASTVisitor that enforces general
 //! semantic rules for scoped definitions, detecting duplicates,
@@ -11,7 +12,8 @@
 namespace sammine_lang::AST {
 /// General
 class GeneralSemanticsVisitor : public ScopedASTVisitor {
-  std::set<BlockAST *> need_return;
+  // Maps function blocks to whether they return unit (true) or a value (false)
+  std::map<BlockAST *, bool> func_blocks;
   bool returned = false;
 
 public:
