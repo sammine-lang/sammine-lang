@@ -128,12 +128,13 @@ public:
                 }
                 if (!found) {
                     std::cerr << chk.prefix << "-NEXT: error: expected pattern not found on next line\n";
-                    std::cerr << "  Pattern: " << chk.pattern << "\n";
+                    std::cerr << "  Expected pattern: " << chk.pattern << "\n";
                     std::cerr << "  From check file line " << chk.line_number << "\n";
                     if (last_match_line + 1 < static_cast<int>(input_lines.size())) {
-                        std::cerr << "  Next line was: " << input_lines[last_match_line + 1] << "\n";
+                        std::cerr << "  Actual next line (line " << (last_match_line + 2) << "): "
+                                  << input_lines[last_match_line + 1] << "\n";
                     } else {
-                        std::cerr << "  No more input lines\n";
+                        std::cerr << "  No more input lines (expected more output)\n";
                     }
                     return false;
                 }
@@ -149,10 +150,11 @@ public:
                 }
                 if (!found) {
                     std::cerr << chk.prefix << "-SAME: error: expected pattern not found on same line\n";
-                    std::cerr << "  Pattern: " << chk.pattern << "\n";
+                    std::cerr << "  Expected pattern: " << chk.pattern << "\n";
                     std::cerr << "  From check file line " << chk.line_number << "\n";
                     if (last_match_line >= 0) {
-                        std::cerr << "  Line was: " << input_lines[last_match_line] << "\n";
+                        std::cerr << "  Actual line (line " << (last_match_line + 1) << "): "
+                                  << input_lines[last_match_line] << "\n";
                     }
                     return false;
                 }
@@ -188,9 +190,23 @@ public:
 
                 if (!found) {
                     std::cerr << chk.prefix << ": error: expected pattern not found\n";
-                    std::cerr << "  Pattern: " << chk.pattern << "\n";
+                    std::cerr << "  Expected pattern: " << chk.pattern << "\n";
                     std::cerr << "  From check file line " << chk.line_number << "\n";
                     std::cerr << "  Searched from line " << (search_start + 1) << " to end\n";
+
+                    // Show actual input lines to help identify the mismatch
+                    if (search_start < input_lines.size()) {
+                        std::cerr << "\n  Actual input (lines " << (search_start + 1) << "-"
+                                  << std::min(search_start + 10, input_lines.size()) << "):\n";
+                        for (size_t i = search_start; i < std::min(search_start + 10, input_lines.size()); i++) {
+                            std::cerr << "    " << (i + 1) << ": " << input_lines[i] << "\n";
+                        }
+                        if (input_lines.size() > search_start + 10) {
+                            std::cerr << "    ... (" << (input_lines.size() - search_start - 10) << " more lines)\n";
+                        }
+                    } else {
+                        std::cerr << "  No input lines in search range\n";
+                    }
                     return false;
                 }
             }
