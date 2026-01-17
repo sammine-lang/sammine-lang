@@ -4,6 +4,7 @@
 
 #include "codegen/CodegenVisitor.h"
 #include "ast/Ast.h"
+#include "ast/AstBase.h"
 #include "codegen/CodegenUtils.h"
 #include "lex/Token.h"
 #include "util/Logging.h"
@@ -16,6 +17,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <llvm/IR/BasicBlock.h>
 #include <llvm/Support/raw_ostream.h>
 
 #define DEBUG_TYPE "codegen"
@@ -252,17 +254,14 @@ void CgVisitor::visit(IfExprAST *ast) {
         "ifcond_f64");
     break;
   case TypeKind::NonExistent:
-    ASTPrinter::print(ast->bool_expr.get());
-    this->abort("Invalid syntax for now");
-    break;
   case TypeKind::Poisoned:
-    this->abort("Invalid syntax for now");
-    break;
   case TypeKind::Unit:
-    this->abort("Invalid syntax for now");
-    break;
   case TypeKind::Record:
-    this->abort("Invalid syntax for now");
+  case TypeKind::Function:
+  case TypeKind::Never:
+  case TypeKind::String:
+    LOG({ ASTPrinter::print(ast->bool_expr.get()); });
+    this->abort("Invalid syntax or broken typechecker for now");
     break;
   case TypeKind::Bool:
     ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
@@ -270,17 +269,6 @@ void CgVisitor::visit(IfExprAST *ast) {
             ast->bool_expr->val, llvm::Type::getDoubleTy(*resPtr->Context)),
         llvm::ConstantFP::get(*resPtr->Context, llvm::APFloat(0.0)),
         "ifcond_bool");
-    break;
-  case TypeKind::Function:
-    this->abort(
-        "Invalid syntax for now, typechecker should caught this function");
-    break;
-  case TypeKind::Never:
-    this->abort("Never type should not reach codegen for if condition");
-    break;
-  case TypeKind::String:
-    this->abort("Cannot turn str to boolean, typecheck should have "
-                "caught this string");
     break;
   }
 
@@ -293,34 +281,28 @@ void CgVisitor::visit(IfExprAST *ast) {
 
   resPtr->Builder->CreateCondBr(ast->bool_expr->val, ThenBB, ElseBB);
 
-  // Codegen then block
-  resPtr->Builder->SetInsertPoint(ThenBB);
-  ast->thenBlockAST->accept_vis(this);
+  auto blockBranchHelper = [this, &MergeBB](BasicBlock* bb, BlockAST* block_ast) {
+    resPtr->Builder->SetInsertPoint(bb);
+    block_ast->accept_vis(this);
 
-  // Get the value from the then block (last statement's value)
-  llvm::Value *ThenV = nullptr;
-  if (!ast->thenBlockAST->Statements.empty()) {
-    ThenV = ast->thenBlockAST->Statements.back()->val;
-  }
-  // Get the actual block we're in now (codegen might have created new blocks)
-  BasicBlock *ThenEndBB = resPtr->Builder->GetInsertBlock();
-  if (!ThenEndBB->getTerminator())
-    resPtr->Builder->CreateBr(MergeBB);
+    llvm::Value *V = nullptr;
+    if (!block_ast->Statements.empty()) {
+      V = block_ast->Statements.back()->val;
+    }
+    BasicBlock *end_bb = resPtr->Builder->GetInsertBlock();
+    // Get the actual block we're in now (codegen might have created new blocks)
+    if (!end_bb->getTerminator())
+      resPtr->Builder->CreateBr(MergeBB);
+
+    return std::pair{V, end_bb};
+  };
+
+  auto [ThenV, ThenEndBB] = blockBranchHelper(ThenBB, ast->thenBlockAST.get());
 
   // Codegen else block
   function->insert(function->end(), ElseBB);
-  resPtr->Builder->SetInsertPoint(ElseBB);
-  ast->elseBlockAST->accept_vis(this);
-
-  // Get the value from the else block (last statement's value)
-  llvm::Value *ElseV = nullptr;
-  if (!ast->elseBlockAST->Statements.empty()) {
-    ElseV = ast->elseBlockAST->Statements.back()->val;
-  }
-  // Get the actual block we're in now
-  BasicBlock *ElseEndBB = resPtr->Builder->GetInsertBlock();
-  if (!ElseEndBB->getTerminator())
-    resPtr->Builder->CreateBr(MergeBB);
+  
+  auto [ElseV, ElseEndBB] = blockBranchHelper(ElseBB, ast->elseBlockAST.get());
 
   // Continue at merge block only if it has predecessors
   if (MergeBB->hasNPredecessorsOrMore(1)) {
