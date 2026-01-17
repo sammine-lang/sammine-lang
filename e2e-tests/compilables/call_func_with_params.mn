@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s  --diagnostics
+# RUN: %sammine --file %s  --diagnostics
 let foo(i: i64) -> i64 {
   return i;
 }

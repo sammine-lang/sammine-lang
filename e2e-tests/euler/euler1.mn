@@ -1,0 +1,20 @@
+# RUN: %sammine --file %s && ./%basename_s.exe | %check %s
+# Project Euler Problem 1: Sum of multiples of 3 or 5 below 1000
+# CHECK: 233168
+
+let sum_multiples(n: i64, acc: i64) -> i64 {
+  if n >= 1000 {
+    return acc;
+  } else {
+    if n % 3 == 0 || n % 5 == 0 {
+      return sum_multiples(n + 1, acc + n);
+    } else {
+      return sum_multiples(n + 1, acc);
+    };
+  };
+}
+
+let main() -> i64 {
+  printf("%d\n", sum_multiples(0, 0));
+  return 0;
+}

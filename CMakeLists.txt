@@ -51,7 +51,7 @@ endif()
 SET(INCLUDE_PROJECT_DIR "${CMAKE_SOURCE_DIR}/include/")
 
 add_subdirectory(src)
-
+add_subdirectory(tools)
 
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)

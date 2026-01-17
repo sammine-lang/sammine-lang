@@ -1,4 +1,5 @@
-# RUN: %sammine_exe% --file %s --check --diagnostics
+# RUN: %sammine --file %s && ./%basename_s.exe | %check %s
+# CHECK: 34
 let fib(x: i64) -> i64 {
   if x == 0 || x == 1 {
     return x;

@@ -1,4 +1,5 @@
-# RUN: %sammine_exe% --file %s --check --diagnostics 
+# RUN: %sammine --file %s && ./%basename_s.exe | %check %s
+# CHECK: 2
 
 let main() -> i64 {
   let x = if true {

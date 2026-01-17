@@ -1,4 +1,4 @@
-# RUN: %sammine_exe% --file %s  
+# RUN: %sammine --file %s  
 
 let even(x : i64) -> i64 {
   if x % 2 == 0 {

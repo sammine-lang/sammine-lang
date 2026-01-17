@@ -551,6 +551,17 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
                                         std::make_unique<BlockAST>()),
             SUCCESS};
   }
+
+  auto x = tokStream->peek();
+  if (x->tok_type == TokenType::TokIf) {
+    auto [else_if_expr, else_if_result] = ParseIfExpr();
+    auto else_block = std::make_unique<BlockAST>();
+    else_block->Statements.push_back(std::move(else_if_expr));
+    return {std::make_unique<IfExprAST>(std::move(cond), std::move(then_block),
+                                        std::move(else_block)),
+            else_if_result};
+  }
+
   auto [else_block, else_result] = ParseBlock();
 
   switch (else_result) {
