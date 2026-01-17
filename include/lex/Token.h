@@ -1,4 +1,5 @@
 #pragma once
+#include "util/Logging.h"
 #include "util/Utilities.h"
 #include <map>
 #include <memory>
@@ -75,6 +76,8 @@ enum TokenType {
   // TokIf
   TokIf,   // if
   TokElse, // else
+
+  TokType, // Type
 
   // TokCOMMENTS
   TokSingleComment, //
@@ -197,6 +200,11 @@ public:
 
   void push_back(const Token &token) {
     this->push_back(std::make_shared<Token>(token));
+  }
+
+  void rollback(size_t rollback_count) {
+    assert(current_index >= rollback_count && "Current index needs to be larger than rollback count");
+    this->current_index -= rollback_count;
   }
 
   std::shared_ptr<Token> &exhaust_until(TokenType tokType) {

@@ -103,6 +103,8 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       tokStream->push_back(Token(TokReturn, "return", location));
     else if (IdentifierStr == "Record")
       tokStream->push_back(Token(TokRecord, "Record", location));
+    else if (IdentifierStr == "Type")
+      tokStream->push_back(Token(TokType, "Type", location));
     else if (IdentifierStr == "if")
       tokStream->push_back(Token(TokIf, "if", location));
     else if (IdentifierStr == "else")

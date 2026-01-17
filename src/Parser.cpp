@@ -91,6 +91,19 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
 }
 
+auto Parser::ParseTypeDef() -> p<DefinitionAST> {
+  auto type_tok = expect(TokType);
+  if (!type_tok)
+    return {nullptr, NONCOMMITTED};
+
+  auto id = expect(TokID);
+  if (!id) {
+    this->add_error(type_tok->get_location(),
+                    "Failed to parse an identifier after token Type");
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  return {nullptr, ParserError::SUCCESS};
+}
 auto Parser::ParseRecordDef() -> p<DefinitionAST> {
   auto record_tok = expect(TokRecord);
   if (!record_tok)

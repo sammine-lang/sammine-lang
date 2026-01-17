@@ -43,6 +43,7 @@ public:
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
+  [[nodiscard]] auto ParseTypeDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseRecordDef() -> p<DefinitionAST>;
 
   // Parse type
