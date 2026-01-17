@@ -25,6 +25,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
                                  llvm::Type::getInt32Ty(context));
   case TypeKind::Function:
     sammine_util::abort("Function is not first-class yet");
+  case TypeKind::Never:
+    sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:
     sammine_util::abort("Existed a type that is not synthesized yet");
   case TypeKind::Poisoned:
@@ -98,6 +100,9 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
   case TypeKind::Function:
+    sammine_util::abort(
+        fmt::format("Cannot compare values of this type: {}", a.to_string()));
+  case TypeKind::Never:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
   case TypeKind::NonExistent:

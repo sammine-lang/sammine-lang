@@ -78,6 +78,12 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
 }
 
 bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) {
+  // Never is compatible with any type (bottom type subtyping rule)
+  // Since Never represents "no value is ever produced", it can be assigned
+  // to any type because the assignment will never actually happen.
+  if (b.type_kind == TypeKind::Never) {
+    return true;
+  }
 
   if (a.type_kind == TypeKind::NonExistent &&
       b.type_kind != TypeKind::NonExistent) {

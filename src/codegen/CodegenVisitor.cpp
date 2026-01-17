@@ -13,8 +13,10 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <llvm/Support/raw_ostream.h>
 
 #define DEBUG_TYPE "codegen"
 
@@ -57,14 +59,20 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   // TODO: In the future, we need to move both this function someplace else.
   //
   // INFO: To use for both function decl, malloc and printf
-  llvm::PointerType *int8ptr =
-      llvm::PointerType::get(*this->resPtr->Context, 0); // 0 stands for generic address space
-                                                      //
-  CodegenUtils::declare_fn(*this->resPtr->Module, "printf", llvm::Type::getInt32Ty(*this->resPtr->Context), int8ptr, true);
+  llvm::PointerType *int8ptr = llvm::PointerType::get(
+      *this->resPtr->Context, 0); // 0 stands for generic address space
+                                  //
+  CodegenUtils::declare_fn(*this->resPtr->Module, "printf",
+                           llvm::Type::getInt32Ty(*this->resPtr->Context),
+                           int8ptr, true);
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
   auto var_name = ast->TypedVar->name;
+  LOG({
+    fmt::print("[CODEGEN] Codegen preorder_walk for VarDefAST for {}\n",
+               ast->TypedVar->name);
+  });
   auto alloca = CodegenUtils::CreateEntryBlockAlloca(
       getCurrentFunction(), var_name, type_converter.get_type(ast->type));
   this->allocaValues.top()[var_name] = alloca;
@@ -72,6 +80,11 @@ void CgVisitor::preorder_walk(VarDefAST *ast) {
 void CgVisitor::postorder_walk(VarDefAST *ast) {
   auto var_name = ast->TypedVar->name;
   auto alloca = this->allocaValues.top()[var_name];
+
+  LOG({
+    fmt::print("[CODEGEN] Codegen postorder_walk for VarDefAST for {}\n",
+               ast->TypedVar->name);
+  });
   if (ast->Expression == nullptr) {
     this->abort_if_not(ast->Expression, "is this legal?");
   } else {
@@ -187,6 +200,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Unit:
   case TypeKind::Bool:
   case TypeKind::Function:
+  case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
   case TypeKind::String:
@@ -248,7 +262,7 @@ void CgVisitor::visit(IfExprAST *ast) {
     break;
   case TypeKind::Bool:
     ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
-        resPtr->Builder->CreateUIToFP(
+        resPtr->Builder->CreateSIToFP(
             ast->bool_expr->val, llvm::Type::getDoubleTy(*resPtr->Context)),
         llvm::ConstantFP::get(*resPtr->Context, llvm::APFloat(0.0)),
         "ifcond_bool");
@@ -256,6 +270,9 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Function:
     this->abort(
         "Invalid syntax for now, typechecker should caught this function");
+    break;
+  case TypeKind::Never:
+    this->abort("Never type should not reach codegen for if condition");
     break;
   case TypeKind::String:
     this->abort("Cannot turn str to boolean, typecheck should have "
@@ -275,20 +292,47 @@ void CgVisitor::visit(IfExprAST *ast) {
   // Codegen then block
   resPtr->Builder->SetInsertPoint(ThenBB);
   ast->thenBlockAST->accept_vis(this);
-  if (!ThenBB->back().isTerminator())
+
+  // Get the value from the then block (last statement's value)
+  llvm::Value *ThenV = nullptr;
+  if (!ast->thenBlockAST->Statements.empty()) {
+    ThenV = ast->thenBlockAST->Statements.back()->val;
+  }
+  // Get the actual block we're in now (codegen might have created new blocks)
+  BasicBlock *ThenEndBB = resPtr->Builder->GetInsertBlock();
+  if (!ThenEndBB->getTerminator())
     resPtr->Builder->CreateBr(MergeBB);
 
   // Codegen else block
   function->insert(function->end(), ElseBB);
   resPtr->Builder->SetInsertPoint(ElseBB);
   ast->elseBlockAST->accept_vis(this);
-  if (!ElseBB->back().isTerminator())
+
+  // Get the value from the else block (last statement's value)
+  llvm::Value *ElseV = nullptr;
+  if (!ast->elseBlockAST->Statements.empty()) {
+    ElseV = ast->elseBlockAST->Statements.back()->val;
+  }
+  // Get the actual block we're in now
+  BasicBlock *ElseEndBB = resPtr->Builder->GetInsertBlock();
+  if (!ElseEndBB->getTerminator())
     resPtr->Builder->CreateBr(MergeBB);
 
   // Continue at merge block only if it has predecessors
   if (MergeBB->hasNPredecessorsOrMore(1)) {
     function->insert(function->end(), MergeBB);
     resPtr->Builder->SetInsertPoint(MergeBB);
+
+    // Create PHI node to merge values if both branches produce values
+    // and the if expression has a non-Unit, non-Never type
+    if (ThenV && ElseV && ast->type.type_kind != TypeKind::Unit &&
+        ast->type.type_kind != TypeKind::Never) {
+      llvm::PHINode *PN =
+          resPtr->Builder->CreatePHI(ThenV->getType(), 2, "iftmp");
+      PN->addIncoming(ThenV, ThenEndBB);
+      PN->addIncoming(ElseV, ElseEndBB);
+      ast->val = PN;
+    }
   } else {
     // Both branches terminated, no merge block needed
     delete MergeBB;
@@ -301,7 +345,6 @@ void CgVisitor::postorder_walk(StringExprAST *ast) {
   std::string stringContent = ast->string_content;
   ast->val = this->resPtr->Builder->CreateGlobalString(stringContent);
   ast->type = Type::String(stringContent);
-  
 }
 
 } // namespace sammine_lang::AST

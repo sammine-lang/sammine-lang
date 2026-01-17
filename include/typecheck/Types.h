@@ -13,13 +13,13 @@
 //! \file Types.h
 //! \brief Defines the core Type system for Sammine
 enum class TypeKind {
-  // TODO: Add other data types that are smaller, i8, u8, i16, u16, i32, u32
   I64_t,
   F64_t,
   Unit,
   Bool,
   String,
   Function,
+  Never,
   NonExistent,
   Poisoned
 };
@@ -54,6 +54,7 @@ struct Type {
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
   static Type Poisoned() { return Type{TypeKind::Poisoned, std::monostate()}; }
   static Type Unit() { return Type{TypeKind::Unit, std::monostate()}; }
+  static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
   static Type String(const std::string &str) {
     return Type{TypeKind::String, str};
   }
@@ -104,6 +105,8 @@ struct Type {
 
       return res;
     }
+    case TypeKind::Never:
+      return "!";
     case TypeKind::NonExistent:
       return "??";
     case TypeKind::Poisoned:

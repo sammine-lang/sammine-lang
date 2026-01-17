@@ -41,7 +41,9 @@ void BiTypeCheckerVisitor::preorder_walk(NumberExprAST *ast) {
 
   ast->accept_synthesis(this);
 }
-void BiTypeCheckerVisitor::preorder_walk(BoolExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(BoolExprAST *ast) {
+  ast->accept_synthesis(this);
+}
 void BiTypeCheckerVisitor::preorder_walk(VariableExprAST *ast) {
   ast->accept_synthesis(this);
 }
@@ -120,7 +122,9 @@ void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {
   ast->set_checked();
 }
 void BiTypeCheckerVisitor::postorder_walk(ReturnExprAST *ast) {
-  auto t = ast->accept_synthesis(this);
+  ast->accept_synthesis(this);
+
+  auto t = ast->return_expr->accept_synthesis(this);
 
   auto scope_fn = this->id_to_type.top().s.value();
   auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
@@ -218,6 +222,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::F64_t:
   case TypeKind::Unit:
   case TypeKind::Bool:
+  case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
     this->abort(fmt::format("should not happen here with function {}",
@@ -227,12 +232,20 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
-  // TODO: make sure it returns the right type and all that
-  return ast->type = ast->return_expr->accept_synthesis(this);
+  // Return expressions have type Never (⊥) since they diverge from normal flow
+  return ast->type = Type::Never();
 }
 Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
+
+  // If either operand is Never, the whole expression is Never
+  // (control flow diverges before the binary operation is evaluated)
+  if (ast->LHS->type.type_kind == TypeKind::Never ||
+      ast->RHS->type.type_kind == TypeKind::Never) {
+    return ast->type = Type::Never();
+  }
+
   if (!this->type_map_ordering.compatible_to_from(ast->LHS->type,
                                                   ast->RHS->type))
     this->abort();
@@ -262,13 +275,31 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   return ast->type;
 }
 Type BiTypeCheckerVisitor::synthesize(BoolExprAST *ast) {
-  return Type::NonExistent();
+  return ast->type = Type::Bool();
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
   return ast->type = id_to_type.get_from_name(ast->variableName);
 }
 Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
-  return Type::NonExistent();
+  // Block typing rule:
+  // 1. Type each statement in order
+  // 2. If any statement has type ⊥ (Never), stop: the block's type is ⊥
+  // 3. Otherwise, the block's type is the type of the last expression
+  // 4. If there is no final expression, the type is ()
+
+  if (ast->Statements.empty()) {
+    return ast->type = Type::Unit();
+  }
+
+  for (auto &stmt : ast->Statements) {
+    auto stmt_type = stmt->accept_synthesis(this);
+    if (stmt_type.type_kind == TypeKind::Never) {
+      return ast->type = Type::Never();
+    }
+  }
+
+  // Block's type is the type of the last expression
+  return ast->type = ast->Statements.back()->type;
 }
 Type BiTypeCheckerVisitor::synthesize(UnitExprAST *ast) {
   if (ast->synthesized())
@@ -276,7 +307,47 @@ Type BiTypeCheckerVisitor::synthesize(UnitExprAST *ast) {
   return ast->type = Type::Unit();
 }
 Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
-  return Type::NonExistent();
+  // If expression typing rule:
+  // 1. Condition must be bool
+  // 2. If both branches have type Never, the if has type Never
+  // 3. If one branch has type Never, the if has the type of the other branch
+  // 4. Otherwise, both branches must have the same type
+
+  auto cond_type = ast->bool_expr->accept_synthesis(this);
+  if (cond_type.type_kind != TypeKind::Bool) {
+    this->add_error(ast->get_location(),
+                    fmt::format("If condition must be bool, got {}",
+                                cond_type.to_string()));
+  }
+
+  auto then_type = ast->thenBlockAST->accept_synthesis(this);
+  auto else_type = ast->elseBlockAST->accept_synthesis(this);
+
+  // If both branches have type Never, the if has type Never
+  if (then_type.type_kind == TypeKind::Never &&
+      else_type.type_kind == TypeKind::Never) {
+    return ast->type = Type::Never();
+  }
+
+  // If one branch has type Never, the if has the type of the other branch
+  if (then_type.type_kind == TypeKind::Never) {
+    return ast->type = else_type;
+  }
+  if (else_type.type_kind == TypeKind::Never) {
+    return ast->type = then_type;
+  }
+
+  // Both branches must have compatible types
+  if (then_type != else_type) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("If branches have incompatible types: then has {}, else "
+                    "has {}",
+                    then_type.to_string(), else_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  return ast->type = then_type;
 }
 Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
   if (ast->synthesized())

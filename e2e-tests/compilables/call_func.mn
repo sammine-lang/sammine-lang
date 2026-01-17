@@ -1,11 +1,11 @@
 # RUN: %sammine_exe% --file %s --check --diagnostics 
 
-let bar() {
-  return;
-}
-
 let main() -> i64 {
-  bar();
-  printf("2");
+  let x = if true {
+    2;
+  } else {
+    3;
+  };
+  printf("%d", x);
   return 0;
 }
