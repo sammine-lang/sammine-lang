@@ -232,10 +232,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
-  if (ast->return_expr)
-    return ast->type = ast->return_expr->accept_synthesis(this);
-  else 
-    return ast->type = Type::Unit();
+  return ast->type = Type::Never();
 }
 Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
@@ -253,6 +250,8 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     this->abort();
   if (ast->Op->is_comparison())
     return ast->type = Type::Bool();
+  if (ast->Op->is_assign()) 
+    return ast->type = Type::Unit();
 
   return ast->type = ast->LHS->type;
 }

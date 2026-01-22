@@ -169,6 +169,7 @@ public:
            tok_type == TokLessEqual || tok_type == TokGREATER ||
            tok_type == TokEQUAL;
   }
+  bool is_assign() { return tok_type == TokASSIGN; }
   bool is_logical() { return tok_type == TokOR || tok_type == TokAND; }
   Location get_location() const { return this->location; }
 };

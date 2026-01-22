@@ -18,6 +18,7 @@ static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokASSIGN, 2},
     {TokenType::TokLESS, 10},
     {TokenType::TokGreaterEqual, 10},
+    {TokenType::TokGREATER, 10},
     {TokenType::TokEQUAL, 10},
     {TokenType::TokADD, 20},
     {TokenType::TokSUB, 20},
@@ -479,7 +480,7 @@ auto Parser::ParseReturnExpr() -> p<ExprAST> {
   auto semi = expect(TokenType::TokSemiColon);
   if (!semi) {
     this->error("Missing the semicolon for the return statement",
-                return_tok->get_location());
+               return_tok ?return_tok->get_location() : this->tokStream->peek()->get_location());
     return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
             COMMITTED_NO_MORE_ERROR};
   }
@@ -695,7 +696,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
         break;
       }
       this->error("Failed to parse a semicolon after an expression for a "
-                  "statement in a block");
+                  "statement in a block", a->get_location());
       blockAST->Statements.push_back(std::move(a));
       this->tokStream->exhaust_until(TokSemiColon);
       continue;
