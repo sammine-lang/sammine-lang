@@ -15,10 +15,13 @@ namespace sammine_lang {
 using namespace AST;
 //! \brief Holds the precedence of a binary operation
 static std::map<TokenType, int> binopPrecedence = {
-    {TokenType::TokASSIGN, 2}, {TokenType::TokLESS, 10},
+    {TokenType::TokASSIGN, 2},
+    {TokenType::TokLESS, 10},
     {TokenType::TokGreaterEqual, 10},
-    {TokenType::TokEQUAL, 10}, {TokenType::TokADD, 20},
-    {TokenType::TokSUB, 20},   {TokenType::TokMUL, 40},
+    {TokenType::TokEQUAL, 10},
+    {TokenType::TokADD, 20},
+    {TokenType::TokSUB, 20},
+    {TokenType::TokMUL, 40},
     {TokenType::TokMOD, 40},
     {TokenType::TokOR, 1},
 };
