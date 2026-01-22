@@ -114,9 +114,7 @@ public:
   virtual std::string getTreeName() override { return "PrototypeAST"; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
 
-  bool returnsUnit() {
-    return returnType == "unit" || returnType.empty();
-  }
+  bool returnsUnit() { return returnType == "unit" || returnType.empty(); }
 
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);
@@ -154,6 +152,7 @@ public:
 };
 class ExprAST : public AstBase, public Printable {
 public:
+  bool is_statement = true;
   ~ExprAST() = default;
 };
 
@@ -194,9 +193,7 @@ public:
 
   std::string getFunctionName() { return Prototype->functionName; }
 
-  bool returnsUnit() {
-    return Prototype->returnsUnit();
-  }
+  bool returnsUnit() { return Prototype->returnsUnit(); }
 
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
@@ -360,9 +357,11 @@ public:
   ReturnExprAST(std::shared_ptr<Token> return_tok,
                 std::unique_ptr<ExprAST> return_expr)
       : is_implicit(false), return_expr(std::move(return_expr)) {
-    if (return_expr == nullptr) {
+    if (this->return_expr == nullptr) {
       this->join_location(return_tok);
-    } else {
+    } else if (return_tok == nullptr) {
+      this->join_location(this->return_expr.get());
+    } else if (return_tok && this->return_expr) {
       this->join_location(return_tok)->join_location(this->return_expr.get());
     }
   }
