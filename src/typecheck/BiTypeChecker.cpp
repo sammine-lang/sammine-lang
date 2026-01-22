@@ -31,8 +31,7 @@ void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {
   ast->accept_synthesis(this);
 }
- void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {
-  }
+void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {
   ast->accept_synthesis(this);
@@ -233,8 +232,10 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
-  // Return expressions have type Never (⊥) since they diverge from normal flow
-  return ast->type = Type::Never();
+  if (ast->return_expr)
+    return ast->type = ast->return_expr->accept_synthesis(this);
+  else 
+    return ast->type = Type::Unit();
 }
 Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
@@ -284,7 +285,8 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
   // Block typing rule:
   // 1. Type each statement in order
-  // 2. If any statement has type ⊥ (Never), stop: the block's type is ⊥
+  // 2. If any statement has type ! (Never) and is not the return , stop: the
+  // block's type is !
   // 3. Otherwise, the block's type is the type of the last expression
   // 4. If there is no final expression, the type is ()
 

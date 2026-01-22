@@ -19,7 +19,7 @@ void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {
   auto it = func_blocks.find(ast);
   if (it != func_blocks.end()) {
     // This is a function block
-    if (!this->returned) {
+    if (!this->returned) { // if we haven't found any return stmt
       bool returns_unit = it->second;
       if (returns_unit) {
         // Unit-returning function: add implicit return unit
@@ -29,7 +29,7 @@ void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {
         // Value-returning function: wrap last statement in implicit return
         auto last_stmt = std::move(ast->Statements.back());
         // Only wrap if not already a return
-        if (dynamic_cast<ReturnExprAST *>(last_stmt.get()) == nullptr) {
+        if (dynamic_cast<ReturnExprAST *>(last_stmt.get()) == nullptr && last_stmt->is_statement == false) {
           ast->Statements.back() =
               std::make_unique<ReturnExprAST>(std::move(last_stmt));
         } else {

@@ -223,10 +223,10 @@ void Compiler::produce_executable() {
   }
 
   // Output .o and executable in current directory using just the stem
-  std::string output_stem =
+  std::string stem =
       std::filesystem::path(this->file_name).stem().string();
   llvm::raw_fd_ostream dest(
-      llvm::raw_fd_ostream(output_stem + ".o", resPtr->EC));
+      llvm::raw_fd_ostream(stem + ".o", resPtr->EC));
   if (resPtr->EC) {
     llvm::errs() << "Could not open file: " << resPtr->EC.message();
     return;
@@ -242,14 +242,14 @@ void Compiler::produce_executable() {
   resPtr->pass.run(*resPtr->Module);
   dest.flush();
 
-  auto try_compile_with = [&output_stem](const std::string &compiler) {
+  auto try_compile_with = [&stem](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
       return false;
     std::string command =
-        fmt::format("{} {}.o -o {}.exe", compiler, output_stem, output_stem);
+        fmt::format("{} {}.o -o {}.exe", compiler, stem, stem);
     int result = std::system(command.c_str());
     return result == 0;
   };

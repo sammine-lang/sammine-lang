@@ -195,7 +195,7 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
       locator.get_start_end_of_singular_line_token();
 
   print_fmt(LINE_COLOR, "    |");
-  print_fmt(fmt::terminal_color::bright_blue, "At {}:{}:{}\n", file_name,
+  print_fmt(fmt::terminal_color::bright_blue, "{}:{}:{}\n", file_name,
             row_num + 1, col_start);
   if (!locator.is_on_singular_line()) {
     print_fmt(LINE_COLOR, "    |");

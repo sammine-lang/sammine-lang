@@ -8,6 +8,7 @@
 #include "codegen/CodegenUtils.h"
 #include "lex/Token.h"
 #include "util/Logging.h"
+#include "util/Utilities.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -101,7 +102,7 @@ void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
   // INFO: If we cannot parse return expr, treat it as unit for now
-  if (!ast->return_expr || ast->return_expr->type == Type::Unit())
+  if (ast->type == Type::Unit())
     resPtr->Builder->CreateRetVoid();
   else
     resPtr->Builder->CreateRet(ast->return_expr->val);
@@ -183,9 +184,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
     ast->val = resPtr->Builder->CreateSRem(L, R);
   }
   if (!ast->val) {
-    LOG({
-      std::cout << ast->Op->lexeme << std::endl;
-        });
+    LOG({ std::cout << ast->Op->lexeme << std::endl; });
     this->abort();
   }
 
