@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full  --diagnostics
 
 # this is a function
-fn f(x : f64) {
+let f(x : f64) {
     let x : f64 = 1 + 1 ;
     let x : f64 = 1;
      x + 2 + 3 +1;

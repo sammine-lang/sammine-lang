@@ -6,15 +6,15 @@ let fib_v1(x: i64) -> i64 {
     return x;
   } else {
     return fib_v1(x-1) + fib_v1(x-2);
-  };
+  }
 }
 
 let fib_v2(x: i64) -> i64 {
   if x == 0 || x == 1 {
-    x;
+    x
   } else {
-    fib_v2(x-1) + fib_v2(x-2);
-  };
+    fib_v2(x-1) + fib_v2(x-2)
+  }
 }
 
 let main() -> i64 {

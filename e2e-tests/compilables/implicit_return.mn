@@ -4,15 +4,15 @@
 # Test implicit return - no explicit 'return' keyword needed
 let sum_multiples(n: i64, acc: i64) -> i64 {
   if n >= 1000 {
-    acc;
+    acc
   } else if n % 3 == 0 || n % 5 == 0 {
-    sum_multiples(n + 1, acc + n);
+    sum_multiples(n + 1, acc + n)
   } else {
-    sum_multiples(n + 1, acc);
-  };
+    sum_multiples(n + 1, acc)
+  }
 }
 
 let main() -> i64 {
   printf("%d\n", sum_multiples(0, 0));
-  0;
+  0
 }
