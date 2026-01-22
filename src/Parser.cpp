@@ -683,11 +683,21 @@ auto Parser::ParseBlock() -> p<BlockAST> {
     auto [a, a_result] = ParseExpr();
     switch (a_result) {
     case SUCCESS: {
-      auto semi = expect(TokenType::TokSemiColon, /*exhausts=*/true);
-      if (!semi)
-        this->error("Failed to parse a semicolon after an expression for a "
-                    "statement in a block");
+      auto tok = this->tokStream->peek();
+      if (tok->tok_type == TokenType::TokSemiColon) {
+        blockAST->Statements.push_back(std::move(a));
+        this->tokStream->consume();
+        continue;
+      }
+      if (tok->tok_type == TokenType::TokRightCurly) {
+        blockAST->Statements.push_back(std::move(a));
+        blockAST->Statements.back()->is_statement = false;
+        break;
+      }
+      this->error("Failed to parse a semicolon after an expression for a "
+                  "statement in a block");
       blockAST->Statements.push_back(std::move(a));
+      this->tokStream->exhaust_until(TokSemiColon);
       continue;
     }
     case NONCOMMITTED:
