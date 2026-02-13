@@ -1,0 +1,38 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 142913828922
+
+# Project Euler Problem 10: Sum of all primes below 2,000,000
+
+let is_prime_h(n: i64, d: i64) -> i64 {
+  if d * d > n {
+    1i64
+  } else if n % d == 0i64 {
+    0i64
+  } else {
+    is_prime_h(n, d + 1i64)
+  }
+}
+
+let is_prime(n: i64) -> i64 {
+  if n < 2i64 {
+    0i64
+  } else {
+    is_prime_h(n, 2i64)
+  }
+}
+
+let sum_primes(n: i64, limit: i64, acc: i64) -> i64 {
+  if n >= limit {
+    acc
+  } else if is_prime(n) > 0i64 {
+    sum_primes(n + 1i64, limit, acc + n)
+  } else {
+    sum_primes(n + 1i64, limit, acc)
+  }
+}
+
+let main() -> i32 {
+  let result : i64 = sum_primes(2i64, 2000000i64, 0i64);
+  printf("%lld\n", result);
+  return 0;
+}
