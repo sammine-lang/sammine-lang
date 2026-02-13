@@ -1,4 +1,5 @@
 #pragma once
+#include "ast/Ast.h"
 #include "ast/AstDecl.h"
 #include "lex/Token.h"
 #include "util/Utilities.h"
@@ -47,6 +48,7 @@ public:
   [[nodiscard]] auto ParseRecordDef() -> p<DefinitionAST>;
 
   // Parse type
+  [[nodiscard]] auto ParseTypeExpr() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypedVar() -> p<TypedVarAST>;
 
   // Parse pressions
@@ -56,6 +58,8 @@ public:
       -> p<ExprAST>;
   [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
 
+  [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseAddrOfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArguments()

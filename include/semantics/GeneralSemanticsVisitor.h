@@ -49,6 +49,8 @@ public:
   virtual void preorder_walk(IfExprAST *ast) override {}
   virtual void preorder_walk(UnitExprAST *ast) override {}
   virtual void preorder_walk(TypedVarAST *ast) override {}
+  virtual void preorder_walk(DerefExprAST *ast) override {}
+  virtual void preorder_walk(AddrOfExprAST *ast) override {}
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override {}
@@ -67,5 +69,7 @@ public:
   virtual void postorder_walk(IfExprAST *ast) override {}
   virtual void postorder_walk(UnitExprAST *ast) override {}
   virtual void postorder_walk(TypedVarAST *ast) override {}
+  virtual void postorder_walk(DerefExprAST *ast) override {}
+  virtual void postorder_walk(AddrOfExprAST *ast) override {}
 };
 } // namespace sammine_lang::AST

@@ -19,6 +19,35 @@ namespace AST {
 using Identifier = std::string;
 class Printable {};
 
+class TypeExprAST {
+public:
+  sammine_util::Location location;
+  virtual ~TypeExprAST() = default;
+  virtual std::string to_string() const = 0;
+};
+
+class SimpleTypeExprAST : public TypeExprAST {
+public:
+  std::string name;
+  explicit SimpleTypeExprAST(std::shared_ptr<Token> tok) {
+    if (tok) {
+      name = tok->lexeme;
+      location = tok->get_location();
+    }
+  }
+  std::string to_string() const override { return name; }
+};
+
+class PointerTypeExprAST : public TypeExprAST {
+public:
+  std::unique_ptr<TypeExprAST> pointee;
+  explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee)
+      : pointee(std::move(pointee)) {}
+  std::string to_string() const override {
+    return "ptr<" + pointee->to_string() + ">";
+  }
+};
+
 class DefinitionAST : public AstBase, public Printable {};
 
 class ProgramAST : public AstBase, public Printable {
@@ -40,15 +69,16 @@ public:
 class TypedVarAST : public AstBase, public Printable {
 public:
   std::string name;
-  std::string type_lexeme;
+  std::unique_ptr<TypeExprAST> type_expr;
 
   explicit TypedVarAST(std::shared_ptr<Token> name,
-                       std::shared_ptr<Token> type) {
-    this->join_location(name)->join_location(type);
+                       std::unique_ptr<TypeExprAST> type_expr)
+      : type_expr(std::move(type_expr)) {
+    this->join_location(name);
     if (name)
       this->name = name->lexeme;
-    if (type)
-      this->type_lexeme = type->lexeme;
+    if (this->type_expr)
+      this->join_location(this->type_expr->location);
   }
   explicit TypedVarAST(std::shared_ptr<Token> name) {
     this->join_location(name);
@@ -77,17 +107,19 @@ class PrototypeAST : public AstBase, public Printable {
 public:
   llvm::Function *function;
   std::string functionName;
-  std::string returnType;
+  std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
 
   explicit PrototypeAST(
-      std::shared_ptr<Token> functionName, std::shared_ptr<Token> returnType,
-      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors) {
+      std::shared_ptr<Token> functionName,
+      std::unique_ptr<TypeExprAST> return_type_expr,
+      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
+      : return_type_expr(std::move(return_type_expr)) {
     assert(functionName);
-    assert(returnType);
     this->functionName = functionName->lexeme;
-    this->returnType = returnType->lexeme;
-    this->join_location(functionName)->join_location(returnType);
+    this->join_location(functionName);
+    if (this->return_type_expr)
+      this->join_location(this->return_type_expr->location);
 
     this->parameterVectors = std::move(parameterVectors);
 
@@ -114,7 +146,7 @@ public:
   virtual std::string getTreeName() override { return "PrototypeAST"; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
 
-  bool returnsUnit() { return returnType == "unit" || returnType.empty(); }
+  bool returnsUnit() { return return_type_expr == nullptr; }
 
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);
@@ -476,6 +508,47 @@ public:
   };
 
   virtual std::string getTreeName() override { return "VariableExprAST"; }
+  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
+  virtual void walk_with_preorder(ASTVisitor *visitor) override {
+    visitor->preorder_walk(this);
+  }
+  virtual void walk_with_postorder(ASTVisitor *visitor) override {
+    visitor->postorder_walk(this);
+  }
+  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
+    return visitor->synthesize(this);
+  }
+};
+class DerefExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> operand;
+  explicit DerefExprAST(std::shared_ptr<Token> star_tok,
+                        std::unique_ptr<ExprAST> operand)
+      : operand(std::move(operand)) {
+    this->join_location(star_tok)->join_location(this->operand.get());
+  }
+  virtual std::string getTreeName() override { return "DerefExprAST"; }
+  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
+  virtual void walk_with_preorder(ASTVisitor *visitor) override {
+    visitor->preorder_walk(this);
+  }
+  virtual void walk_with_postorder(ASTVisitor *visitor) override {
+    visitor->postorder_walk(this);
+  }
+  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
+    return visitor->synthesize(this);
+  }
+};
+
+class AddrOfExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> operand;
+  explicit AddrOfExprAST(std::shared_ptr<Token> amp_tok,
+                         std::unique_ptr<ExprAST> operand)
+      : operand(std::move(operand)) {
+    this->join_location(amp_tok)->join_location(this->operand.get());
+  }
+  virtual std::string getTreeName() override { return "AddrOfExprAST"; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);

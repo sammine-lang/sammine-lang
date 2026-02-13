@@ -1,0 +1,9 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 42
+let main() -> i32 {
+  let x : i32 = 42;
+  let p : ptr<i32> = &x;
+  let y : i32 = *p;
+  printf("%d\n", y);
+  return 0;
+}

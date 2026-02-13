@@ -25,6 +25,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
   case TypeKind::String:
     return llvm::StructType::get(context, llvm::PointerType::getInt8Ty(context),
                                  llvm::Type::getInt32Ty(context));
+  case TypeKind::Pointer:
+    return llvm::PointerType::get(context, 0);
   case TypeKind::Function:
     sammine_util::abort("Function is not first-class yet");
   case TypeKind::Record:
@@ -102,6 +104,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   }
   case TypeKind::Unit:
   case TypeKind::Function:
+  case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

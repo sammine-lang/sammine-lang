@@ -26,6 +26,8 @@ class BoolExprAST;
 class VariableExprAST;
 class BlockAST;
 class IfExprAST;
+class DerefExprAST;
+class AddrOfExprAST;
 
 } // namespace AST
 } // namespace sammine_lang

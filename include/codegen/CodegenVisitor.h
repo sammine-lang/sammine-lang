@@ -59,6 +59,8 @@ public:
   virtual void preorder_walk(IfExprAST *ast) override;
   virtual void preorder_walk(UnitExprAST *ast) override;
   virtual void preorder_walk(TypedVarAST *ast) override;
+  virtual void preorder_walk(DerefExprAST *ast) override {}
+  virtual void preorder_walk(AddrOfExprAST *ast) override {}
 
   // post order
   // TODO: Implement these?
@@ -79,5 +81,10 @@ public:
   virtual void postorder_walk(IfExprAST *ast) override {}
   virtual void postorder_walk(UnitExprAST *ast) override {}
   virtual void postorder_walk(TypedVarAST *ast) override {}
+  virtual void postorder_walk(DerefExprAST *ast) override;
+  virtual void postorder_walk(AddrOfExprAST *ast) override {}
+
+  virtual void visit(DerefExprAST *ast) override;
+  virtual void visit(AddrOfExprAST *ast) override;
 };
 } // namespace sammine_lang::AST

@@ -35,7 +35,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
     REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }
 
   SECTION("Variable definition with binary expression") {
@@ -50,7 +50,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
     REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }
 
   SECTION("Variable definition with call expression") {
@@ -65,7 +65,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
     REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
 
     auto expr =
         static_cast<sammine_lang::AST::CallExprAST *>(varDef->Expression.get());
@@ -83,7 +83,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
     REQUIRE(varDef->TypedVar->name == "b");
-    REQUIRE(varDef->TypedVar->type_lexeme == "blablabla");
+    REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }
 }
 
@@ -107,7 +107,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     // Check if downcast is valid.
     REQUIRE(func_def != nullptr);
 
-    REQUIRE(func_def->Prototype->returnType == "f64");
+    REQUIRE(func_def->Prototype->return_type_expr->to_string() == "f64");
     REQUIRE(func_def->Prototype->functionName == "f");
     REQUIRE(func_def->Prototype->parameterVectors.size() == 1);
   }

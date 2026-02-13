@@ -116,6 +116,18 @@ void ASTVisitor::visit(TypedVarAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(DerefExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(AddrOfExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
 // -------------------------------------------------------
 ScopedASTVisitor::~ScopedASTVisitor() {}
 

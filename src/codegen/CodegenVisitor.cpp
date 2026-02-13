@@ -211,6 +211,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Unit:
   case TypeKind::Bool:
   case TypeKind::Function:
+  case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -268,6 +269,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Unit:
   case TypeKind::Record:
   case TypeKind::Function:
+  case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::String:
     LOG({
@@ -345,6 +347,29 @@ void CgVisitor::postorder_walk(StringExprAST *ast) {
   std::string stringContent = ast->string_content;
   ast->val = this->resPtr->Builder->CreateGlobalString(stringContent);
   ast->type = Type::String(stringContent);
+}
+
+void CgVisitor::visit(DerefExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void CgVisitor::postorder_walk(DerefExprAST *ast) {
+  auto pointee_type = std::get<PointerType>(ast->operand->type.type_data).get_pointee();
+  ast->val = resPtr->Builder->CreateLoad(
+      type_converter.get_type(pointee_type), ast->operand->val, "deref");
+}
+
+void CgVisitor::visit(AddrOfExprAST *ast) {
+  ast->walk_with_preorder(this);
+  // Don't visit operand normally - we need the alloca, not the loaded value
+  auto *var_expr = dynamic_cast<VariableExprAST *>(ast->operand.get());
+  this->abort_if_not(var_expr, "Address-of (&) requires a variable operand");
+  auto *alloca = this->allocaValues.top()[var_expr->variableName];
+  this->abort_if_not(alloca, "Unknown variable in address-of expression");
+  ast->val = alloca;
+  ast->walk_with_postorder(this);
 }
 
 } // namespace sammine_lang::AST

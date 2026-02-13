@@ -20,6 +20,7 @@ enum class TypeKind {
   Bool,
   String,
   Function,
+  Pointer,
   Record,
   Never,
   NonExistent,
@@ -43,7 +44,16 @@ public:
 
   FunctionType(const std::vector<Type> &total_types);
 };
-using TypeData = std::variant<FunctionType, std::string, std::monostate>;
+class PointerType {
+  TypePtr pointee;
+
+public:
+  bool operator==(const PointerType &t) const;
+  bool operator<(const PointerType &t) const;
+  Type get_pointee() const;
+  PointerType(Type pointee);
+};
+using TypeData = std::variant<FunctionType, PointerType, std::string, std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -63,6 +73,9 @@ struct Type {
   }
   static Type NonExistent() {
     return Type{TypeKind::NonExistent, std::monostate()};
+  }
+  static Type Pointer(Type pointee) {
+    return Type{TypeKind::Pointer, PointerType(pointee)};
   }
   static Type Function(std::vector<Type> params);
   explicit operator bool() const {
@@ -98,6 +111,8 @@ struct Type {
       return "record";
     case TypeKind::Bool:
       return "bool";
+    case TypeKind::Pointer:
+      return "ptr<" + std::get<PointerType>(type_data).get_pointee().to_string() + ">";
     case TypeKind::Function: {
       std::string res = "(";
       auto fn_type = std::get<FunctionType>(type_data);

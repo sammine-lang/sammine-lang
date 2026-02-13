@@ -29,6 +29,16 @@ std::span<const Type> FunctionType::get_params_types() const {
 
 Type FunctionType::get_return_type() const { return total_types.back(); }
 
+PointerType::PointerType(Type pointee)
+    : pointee(std::make_shared<Type>(std::move(pointee))) {}
+bool PointerType::operator==(const PointerType &t) const {
+  return *pointee == *t.pointee;
+}
+bool PointerType::operator<(const PointerType &t) const {
+  return *pointee == *t.pointee;
+}
+Type PointerType::get_pointee() const { return *pointee; }
+
 Type Type::Function(std::vector<Type> params) {
   return Type{TypeKind::Function, FunctionType{params}};
 }
@@ -38,10 +48,11 @@ bool Type::operator>(const Type &t) const { return this->operator==(t); }
 bool Type::operator==(const Type &other) const {
   if (this->type_kind != other.type_kind)
     return false;
-  if (this->type_kind != TypeKind::Function)
-    return true;
+  if (this->type_kind == TypeKind::Function ||
+      this->type_kind == TypeKind::Pointer)
+    return this->type_data == other.type_data;
 
-  return this->type_data == other.type_data;
+  return true;
 }
 
 std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) {

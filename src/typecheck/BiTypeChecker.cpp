@@ -52,6 +52,12 @@ void BiTypeCheckerVisitor::preorder_walk(UnitExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypedVarAST *ast) {
   ast->accept_synthesis(this);
 }
+void BiTypeCheckerVisitor::preorder_walk(DerefExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+void BiTypeCheckerVisitor::preorder_walk(AddrOfExprAST *ast) {
+  ast->accept_synthesis(this);
+}
 
 // post order
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -150,6 +156,8 @@ void BiTypeCheckerVisitor::postorder_walk(BlockAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IfExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(UnitExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypedVarAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(DerefExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(AddrOfExprAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -164,7 +172,7 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   //
   // if you do, then just use type lexeme as type of typed var
 
-  if (!ast->TypedVar->type_lexeme.empty())
+  if (ast->TypedVar->type_expr != nullptr)
     ast->type = ast->TypedVar->accept_synthesis(this);
   else if (ast->Expression)
     ast->type = ast->Expression->accept_synthesis(this);
@@ -196,11 +204,10 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
   for (size_t i = 0; i < ast->parameterVectors.size(); i++)
     v.push_back(ast->parameterVectors[i]->accept_synthesis(this));
 
-  if (ast->returnType.empty())
+  if (ast->returnsUnit())
     v.push_back(Type::Unit());
   else
-    v.push_back(
-        get_type_from_type_lexeme(ast->returnType, ast->get_location()));
+    v.push_back(resolve_type_expr(ast->return_type_expr.get()));
   ast->type = Type::Function(std::move(v));
 
   return ast->type;
@@ -222,6 +229,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::F64_t:
   case TypeKind::Unit:
   case TypeKind::Bool:
+  case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Record:
@@ -355,11 +363,32 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
   if (ast->synthesized())
     return ast->type;
-  auto ast_type =
-      get_type_from_type_lexeme(ast->type_lexeme, ast->get_location());
+  auto ast_type = resolve_type_expr(ast->type_expr.get());
 
   id_to_type.registerNameT(ast->name, ast_type);
   return ast->type = ast_type;
+}
+
+Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind != TypeKind::Pointer) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot dereference non-pointer type '{}'",
+                                operand_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+  return ast->type = std::get<PointerType>(operand_type.type_data).get_pointee();
+}
+
+Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  return ast->type = Type::Pointer(operand_type);
 }
 
 } // namespace sammine_lang::AST

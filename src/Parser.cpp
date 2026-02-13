@@ -335,32 +335,104 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
 }
 
+auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
+  if (auto ptr_tok = expect(TokenType::TokPtr)) {
+    if (!expect(TokenType::TokLESS)) {
+      this->error("Expected '<' after 'ptr'", ptr_tok->get_location());
+      return nullptr;
+    }
+    auto inner = ParseTypeExpr();
+    if (!inner) {
+      this->error("Expected type inside 'ptr<...>'", ptr_tok->get_location());
+      return nullptr;
+    }
+    if (!expect(TokenType::TokGREATER)) {
+      this->error("Expected '>' to close 'ptr<...>'", ptr_tok->get_location());
+      return nullptr;
+    }
+    auto result = std::make_unique<PointerTypeExprAST>(std::move(inner));
+    result->location = ptr_tok->get_location();
+    return result;
+  }
+  if (auto id = expect(TokenType::TokID)) {
+    return std::make_unique<SimpleTypeExprAST>(id);
+  }
+  return nullptr;
+}
+
 auto Parser::ParseTypedVar() -> p<TypedVarAST> {
   auto name = expect(TokenType::TokID);
   if (!name) {
-    return std::make_pair(std::make_unique<TypedVarAST>(nullptr, nullptr),
-                          NONCOMMITTED);
+    return std::make_pair(
+        std::make_unique<TypedVarAST>(nullptr, nullptr), NONCOMMITTED);
   }
 
   auto colon = expect(TokenType::TokColon);
   if (!colon)
     return std::make_pair(std::make_unique<TypedVarAST>(name), SUCCESS);
-  auto type = expect(TokenType::TokID);
+  auto type_expr = ParseTypeExpr();
 
-  // TODO: Make this error more specific:
-  // `let x : ;` should let user know that we don't fuck around and correct
-  // them to `let x : f64;` or `let x : T` for some specific T
-  if (!type) {
+  if (!type_expr) {
     this->error("Expected type name after token `:`", colon->get_location());
-    return std::make_pair(std::make_unique<TypedVarAST>(name, type),
-                          COMMITTED_NO_MORE_ERROR);
+    return std::make_pair(
+        std::make_unique<TypedVarAST>(name, std::move(type_expr)),
+        COMMITTED_NO_MORE_ERROR);
   }
 
-  return std::make_pair(std::make_unique<TypedVarAST>(name, type), SUCCESS);
+  return std::make_pair(
+      std::make_unique<TypedVarAST>(name, std::move(type_expr)), SUCCESS);
 }
+auto Parser::ParseDerefExpr() -> p<ExprAST> {
+  auto star_tok = expect(TokenType::TokMUL);
+  if (!star_tok)
+    return {nullptr, NONCOMMITTED};
+  auto [operand, result] = ParsePrimaryExpr();
+  switch (result) {
+  case SUCCESS:
+    return {std::make_unique<DerefExprAST>(star_tok, std::move(operand)),
+            SUCCESS};
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse operand for dereference", star_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<DerefExprAST>(star_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->error("Expected expression after '*'", star_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  this->abort("Should not happen in ParseDerefExpr");
+  return {nullptr, COMMITTED_EMIT_MORE_ERROR};
+}
+
+auto Parser::ParseAddrOfExpr() -> p<ExprAST> {
+  auto amp_tok = expect(TokenType::TokAndLogical);
+  if (!amp_tok)
+    return {nullptr, NONCOMMITTED};
+  auto [operand, result] = ParsePrimaryExpr();
+  switch (result) {
+  case SUCCESS:
+    return {std::make_unique<AddrOfExprAST>(amp_tok, std::move(operand)),
+            SUCCESS};
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse operand for address-of", amp_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<AddrOfExprAST>(amp_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->error("Expected expression after '&'", amp_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  this->abort("Should not happen in ParseAddrOfExpr");
+  return {nullptr, COMMITTED_EMIT_MORE_ERROR};
+}
+
 auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   using ParseFunction = std::function<p<ExprAST>(Parser *)>;
   std::vector<std::pair<ParseFunction, std::string>> ParseFunctions = {
+      {&Parser::ParseDerefExpr, "DerefExpr"},
+      {&Parser::ParseAddrOfExpr, "AddrOfExpr"},
       {&Parser::ParseCallExpr, "CallExpr"},
       {&Parser::ParseParenExpr, "parenthesis"},
       {&Parser::ParseIfExpr, "IfExpr"},
@@ -662,13 +734,16 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!arrow)
     return {std::make_unique<PrototypeAST>(id, std::move(params)), SUCCESS};
 
-  if (auto returnType = expect(TokID))
-    return {std::make_unique<PrototypeAST>(id, returnType, std::move(params)),
+  auto return_type_expr = ParseTypeExpr();
+  if (return_type_expr)
+    return {std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
+                                           std::move(params)),
             SUCCESS};
   else {
     this->error("Failed to parse the return type after the token `->`",
                 arrow->get_location());
-    return {std::make_unique<PrototypeAST>(id, returnType, std::move(params)),
+    return {std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
+                                           std::move(params)),
             COMMITTED_EMIT_MORE_ERROR};
   }
 }

@@ -63,6 +63,7 @@ enum TokenType {
   TokReturn,
   TokFunc,   // fn
   TokRecord, // record
+  TokPtr,    // ptr
   TokArrow,  // ->
   TokLet,    // let
   TokExtern, // extern
@@ -136,6 +137,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokArrow, "->"},
     {TokLet, "let"},
     {TokRecord, "Record"},
+    {TokPtr, "ptr"},
     {TokID, "identifier"},
 
     {TokNum, "number"},

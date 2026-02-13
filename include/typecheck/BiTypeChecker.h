@@ -93,6 +93,8 @@ public:
   virtual void preorder_walk(BlockAST *ast) override;
   virtual void preorder_walk(IfExprAST *ast) override;
   virtual void preorder_walk(TypedVarAST *ast) override;
+  virtual void preorder_walk(DerefExprAST *ast) override;
+  virtual void preorder_walk(AddrOfExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -112,6 +114,8 @@ public:
   virtual void postorder_walk(BlockAST *ast) override;
   virtual void postorder_walk(IfExprAST *ast) override;
   virtual void postorder_walk(TypedVarAST *ast) override;
+  virtual void postorder_walk(DerefExprAST *ast) override;
+  virtual void postorder_walk(AddrOfExprAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -130,21 +134,32 @@ public:
   virtual Type synthesize(BlockAST *ast) override;
   virtual Type synthesize(IfExprAST *ast) override;
   virtual Type synthesize(TypedVarAST *ast) override;
+  virtual Type synthesize(DerefExprAST *ast) override;
+  virtual Type synthesize(AddrOfExprAST *ast) override;
 
-  Type get_type_from_type_lexeme(const std::string &type_lexeme,
-                                 sammine_util::Location location) {
-    if (type_lexeme.empty()) {
+  Type resolve_type_expr(TypeExprAST *type_expr) {
+    if (!type_expr)
       return Type::NonExistent();
-    }
-    auto get_type_opt = this->get_typename_type(type_lexeme);
 
-    if (!get_type_opt.has_value()) {
-      this->add_error(location,
-                      fmt::format("Type '{}' not found in the current scope.",
-                                  type_lexeme));
-      return Type::Poisoned();
-    } else
+    if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(type_expr)) {
+      auto get_type_opt = this->get_typename_type(simple->name);
+      if (!get_type_opt.has_value()) {
+        this->add_error(type_expr->location,
+                        fmt::format("Type '{}' not found in the current scope.",
+                                    simple->name));
+        return Type::Poisoned();
+      }
       return get_type_opt.value();
+    }
+
+    if (auto *ptr = dynamic_cast<PointerTypeExprAST *>(type_expr)) {
+      auto pointee = resolve_type_expr(ptr->pointee.get());
+      if (pointee.type_kind == TypeKind::Poisoned)
+        return Type::Poisoned();
+      return Type::Pointer(pointee);
+    }
+
+    return Type::NonExistent();
   }
 };
 } // namespace AST
