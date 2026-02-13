@@ -1,0 +1,5 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: main must return i32, found i64
+let main() -> i64 {
+  return 0;
+}

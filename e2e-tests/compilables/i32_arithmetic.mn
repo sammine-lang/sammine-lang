@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 15
+# CHECK-NEXT: 5
+# CHECK-NEXT: 50
+# CHECK-NEXT: 2
+
+let main() -> i32 {
+  let a : i32 = 10;
+  let b : i32 = 5;
+  printf("%d\n", a + b);
+  printf("%d\n", a - b);
+  printf("%d\n", a * b);
+  printf("%d\n", a / b);
+  return 0;
+}
