@@ -18,6 +18,7 @@
   - `SimpleTypeExprAST` → lookup in `typename_to_type`
   - `PointerTypeExprAST` → recursive resolve, wrap in `Type::Pointer()`
 - Default integer (no decimal point) synthesizes as `I32_t`; with decimal → `F64_t`
+- Number literal type suffixes (`i32`, `i64`, `f64`) override the default: `synthesize(NumberExprAST*)` finds the first alpha char, extracts the suffix, strips it from `ast->number`, and sets the type — invalid suffixes abort with an error
 - `main` function must return `i32` (checked in `postorder_walk(PrototypeAST*)`)
 
 ## Alloc/Free Type Rules

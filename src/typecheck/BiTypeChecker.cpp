@@ -298,7 +298,34 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
 
   this->abort_on(ast->number.empty(),
                  "NumberExprAST should have a number lexeme");
-  if (ast->number.find('.') == std::string::npos)
+
+  // Check for type suffix (e.g., 42i64, 3.14f64)
+  // Find the first alpha character — everything from there is the suffix
+  std::string suffix;
+  size_t suffix_start = ast->number.size();
+  for (size_t i = 0; i < ast->number.size(); ++i) {
+    if (std::isalpha(ast->number[i])) {
+      suffix_start = i;
+      break;
+    }
+  }
+  if (suffix_start < ast->number.size()) {
+    suffix = ast->number.substr(suffix_start);
+    ast->number = ast->number.substr(0, suffix_start);
+  }
+
+  if (!suffix.empty()) {
+    if (suffix == "i32")
+      ast->type = Type::I32_t();
+    else if (suffix == "i64")
+      ast->type = Type::I64_t();
+    else if (suffix == "f64")
+      ast->type = Type::F64_t();
+    else
+      this->abort_on(true,
+                     fmt::format("invalid type suffix '{}' on number literal",
+                                 suffix));
+  } else if (ast->number.find('.') == std::string::npos)
     ast->type = Type::I32_t();
   else
     ast->type = Type::F64_t();

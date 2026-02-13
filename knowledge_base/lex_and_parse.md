@@ -5,6 +5,7 @@
 - Token types defined in `include/lex/Token.h` — add to `TokenType` enum and `TokenMap`
 - Existing operator tokens reused for pointer ops: `TokMUL` = `*` (deref), `TokAndLogical` = `&` (addr-of), `TokLESS`/`TokGREATER` = `<`/`>` (for `ptr<T>`)
 - Keyword tokens for built-in functions: `TokAlloc` = `alloc`, `TokFree` = `free`
+- Number literals support type suffixes: `42i32`, `600851475143i64`, `3.14f64` — the lexer consumes any alphanumeric suffix after digits, stored as part of the `TokNum` lexeme
 
 ## Parser
 - Parser uses committed/non-committed error model: `SUCCESS`, `COMMITTED_NO_MORE_ERROR`, `COMMITTED_EMIT_MORE_ERROR`, `NONCOMMITTED`

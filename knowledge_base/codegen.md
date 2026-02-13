@@ -3,6 +3,7 @@
 ## TypeConverter (`src/codegen/TypeConverter.cpp`)
 - `get_type(Type)`: maps `TypeKind` → `llvm::Type*`
   - `I32_t` → `getInt32Ty`, `I64_t` → `getInt64Ty`, `F64_t` → `getDoubleTy`
+- `NumberExprAST` codegen: `I32_t` uses `std::stoi`, `I64_t` uses `std::stoll`, `F64_t` uses `std::stod` — suffix is already stripped by type checker
   - `Pointer` → `llvm::PointerType::get(context, 0)` (opaque pointer)
   - `Bool` → `getInt1Ty`, `Unit` → `getVoidTy`
 - `get_cmp_func(Type, Type, TokenType)`: returns `llvm::CmpInst::Predicate`

@@ -152,6 +152,14 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
       } while (i < input.length() - 1 && isdigit(input[i]));
     }
 
+    // Consume any type suffix (e.g., i32, i64, f64)
+    if (i < input.length() - 1 && isalpha(input[i])) {
+      while (i < input.length() - 1 && isalnum(input[i])) {
+        NumStr += input[i];
+        i = advance(i);
+      }
+    }
+
     tokStream->push_back(Token(TokNum, NumStr, location));
 
   } else if (input[i] == '.') {

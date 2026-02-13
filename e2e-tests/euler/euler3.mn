@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 6857
+
+# Project Euler Problem 3: Largest prime factor of 600851475143
+
+let find_factor(n: i64, d: i64) -> i64 {
+  if d * d > n {
+    n
+  } else if n % d == 0i64 {
+    find_factor(n / d, d)
+  } else {
+    find_factor(n, d + 1i64)
+  }
+}
+
+let main() -> i32 {
+  let result : i64 = find_factor(600851475143i64, 2i64);
+  printf("%lld\n", result);
+  return 0;
+}

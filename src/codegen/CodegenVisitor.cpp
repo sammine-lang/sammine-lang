@@ -232,7 +232,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
     break;
   case TypeKind::I64_t:
     ast->val = llvm::ConstantInt::get(
-        *resPtr->Context, llvm::APInt(64, std::stoi(ast->number), true));
+        *resPtr->Context, llvm::APInt(64, std::stoll(ast->number), true));
     break;
   case TypeKind::F64_t:
     ast->val = llvm::ConstantFP::get(*resPtr->Context,
