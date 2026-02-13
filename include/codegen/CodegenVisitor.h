@@ -68,6 +68,7 @@ public:
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override {}
   virtual void preorder_walk(IndexExprAST *ast) override {}
   virtual void preorder_walk(LenExprAST *ast) override {}
+  virtual void preorder_walk(UnaryNegExprAST *ast) override {}
 
   // post order
   // TODO: Implement these?
@@ -95,6 +96,7 @@ public:
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
+  virtual void postorder_walk(UnaryNegExprAST *ast) override;
 
   virtual void visit(DerefExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;

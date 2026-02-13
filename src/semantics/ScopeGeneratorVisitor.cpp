@@ -85,6 +85,7 @@ void ScopeGeneratorVisitor::preorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
@@ -132,4 +133,5 @@ void ScopeGeneratorVisitor::postorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 } // namespace sammine_lang::AST

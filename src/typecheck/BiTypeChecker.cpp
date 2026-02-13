@@ -189,6 +189,11 @@ void BiTypeCheckerVisitor::visit(LenExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(UnaryNegExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 // pre order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
@@ -214,6 +219,7 @@ void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 
 // post order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -240,6 +246,7 @@ void BiTypeCheckerVisitor::postorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -595,6 +602,22 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   }
 
   return ast->type = Type::I32_t();
+}
+
+Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind != TypeKind::I32_t &&
+      operand_type.type_kind != TypeKind::I64_t &&
+      operand_type.type_kind != TypeKind::F64_t) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot negate non-numeric type '{}'",
+                                operand_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+  return ast->type = operand_type;
 }
 
 } // namespace sammine_lang::AST

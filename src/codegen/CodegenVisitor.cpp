@@ -537,4 +537,14 @@ void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
   resPtr->Builder->SetInsertPoint(ContinueBB);
 }
 
+void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
+  auto operand_val = ast->operand->val;
+  if (ast->operand->type == Type::I32_t() || ast->operand->type == Type::I64_t())
+    ast->val = resPtr->Builder->CreateNeg(operand_val, "neg");
+  else if (ast->operand->type == Type::F64_t())
+    ast->val = resPtr->Builder->CreateFNeg(operand_val, "fneg");
+  else
+    this->abort("UnaryNegExprAST has invalid operand type");
+}
+
 } // namespace sammine_lang::AST

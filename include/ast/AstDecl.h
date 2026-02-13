@@ -33,6 +33,7 @@ class FreeExprAST;
 class ArrayLiteralExprAST;
 class IndexExprAST;
 class LenExprAST;
+class UnaryNegExprAST;
 
 } // namespace AST
 } // namespace sammine_lang

@@ -132,6 +132,10 @@ public:
   virtual void preorder_walk(LenExprAST *ast) = 0;
   virtual void postorder_walk(LenExprAST *ast) = 0;
 
+  virtual void visit(UnaryNegExprAST *ast);
+  virtual void preorder_walk(UnaryNegExprAST *ast) = 0;
+  virtual void postorder_walk(UnaryNegExprAST *ast) = 0;
+
   virtual ~ASTVisitor() = 0;
 };
 
@@ -209,6 +213,7 @@ public:
   virtual Type synthesize(ArrayLiteralExprAST *ast) = 0;
   virtual Type synthesize(IndexExprAST *ast) = 0;
   virtual Type synthesize(LenExprAST *ast) = 0;
+  virtual Type synthesize(UnaryNegExprAST *ast) = 0;
 
   virtual ~TypeCheckerVisitor() = 0;
 };

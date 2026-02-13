@@ -19,14 +19,18 @@ enum ParserError {
 using namespace AST;
 using namespace sammine_util;
 class Parser : public Reportee {
-
-  void error(const std::string &msg, Location loc = Location::NonPrintable()) {
+  Location last_exhaustible_loc = Location::NonPrintable(); 
+  void imm_error(const std::string &msg, Location loc = Location::NonPrintable()) {
+    if (loc == Location::NonPrintable()) 
+      loc = last_exhaustible_loc;
     if (reporter.has_value()) {
       reporter->get().immediate_error(msg, loc);
     }
     this->error_count++;
   }
-  void diag(const std::string &msg, Location loc = Location::NonPrintable()) {
+  void imm_diag(const std::string &msg, Location loc = Location::NonPrintable()) {
+    if (loc == Location::NonPrintable()) 
+      loc = last_exhaustible_loc;
     if (reporter.has_value()) {
       reporter->get().immediate_diag(msg, loc);
     }
@@ -59,6 +63,7 @@ public:
       -> p<ExprAST>;
   [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
 
+  [[nodiscard]] auto ParseUnaryNegExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseAddrOfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseAllocExpr() -> p<ExprAST>;

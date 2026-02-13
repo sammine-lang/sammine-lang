@@ -99,6 +99,7 @@ public:
   virtual void visit(ArrayLiteralExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
+  virtual void visit(UnaryNegExprAST *ast) override;
 
   // pre order
 
@@ -126,6 +127,7 @@ public:
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
+  virtual void preorder_walk(UnaryNegExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -152,6 +154,7 @@ public:
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
+  virtual void postorder_walk(UnaryNegExprAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -177,6 +180,7 @@ public:
   virtual Type synthesize(ArrayLiteralExprAST *ast) override;
   virtual Type synthesize(IndexExprAST *ast) override;
   virtual Type synthesize(LenExprAST *ast) override;
+  virtual Type synthesize(UnaryNegExprAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)

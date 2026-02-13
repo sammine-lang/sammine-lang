@@ -74,6 +74,7 @@ public:
   virtual void visit(ArrayLiteralExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
+  virtual void visit(UnaryNegExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
@@ -99,6 +100,7 @@ public:
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
+  virtual void preorder_walk(UnaryNegExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -125,6 +127,7 @@ public:
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
+  virtual void postorder_walk(UnaryNegExprAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -482,5 +485,15 @@ void AstPrinterVisitor::preorder_walk(LenExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(IndexExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(LenExprAST *ast) {}
+
+void AstPrinterVisitor::visit(UnaryNegExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(UnaryNegExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 
 } // namespace sammine_lang::AST
