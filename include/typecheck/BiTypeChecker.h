@@ -34,6 +34,7 @@ public:
     id_to_type.push_context();
     typename_to_type.push_context();
 
+    typename_to_type.registerNameT("i32", Type::I32_t());
     typename_to_type.registerNameT("i64", Type::I64_t());
     typename_to_type.registerNameT("f64", Type::F64_t());
     typename_to_type.registerNameT("bool", Type::Bool());

@@ -83,13 +83,13 @@ void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {
   id_to_type.parent_scope()->registerNameT(ast->functionName, ast->type);
 
-  // main must return i64
+  // main must return i32
   if (ast->functionName == "main") {
     auto fn_type = std::get<FunctionType>(ast->type.type_data);
     auto return_type = fn_type.get_return_type();
-    if (return_type != Type::I64_t()) {
+    if (return_type != Type::I32_t()) {
       this->add_error(ast->get_location(),
-                      fmt::format("main must return i64, found {}",
+                      fmt::format("main must return i32, found {}",
                                   return_type.to_string()));
     }
   }
@@ -217,6 +217,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
     this->add_error(ast->get_location(),
                     "A string cannot be in place of a call expression");
     return Type::Poisoned();
+  case TypeKind::I32_t:
   case TypeKind::I64_t:
   case TypeKind::F64_t:
   case TypeKind::Unit:
@@ -269,7 +270,7 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   this->abort_on(ast->number.empty(),
                  "NumberExprAST should have a number lexeme");
   if (ast->number.find('.') == std::string::npos)
-    ast->type = Type::I64_t();
+    ast->type = Type::I32_t();
   else
     ast->type = Type::F64_t();
 

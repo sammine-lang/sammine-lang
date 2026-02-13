@@ -1,7 +1,7 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 4613732 
 
-let even_fib(a: i64, b: i64, sum: i64) -> i64 {
+let even_fib(a: i32, b: i32, sum: i32) -> i32 {
   if b > 4000000 {
     sum
   } else {
@@ -15,7 +15,7 @@ let even_fib(a: i64, b: i64, sum: i64) -> i64 {
   }
 }
 
-let main() -> i64 {
+let main() -> i32 {
   printf("%d\n", even_fib(0, 1, 0));
   return 0;
 }

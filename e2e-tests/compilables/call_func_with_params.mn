@@ -1,10 +1,10 @@
 # RUN: %sammine --file %full  --diagnostics
-let foo(i: i64) -> i64 {
+let foo(i: i32) -> i32 {
   return i;
 }
 
-let main() -> i64 {
-  let i : i64 = 0;
+let main() -> i32 {
+  let i : i32 = 0;
   foo(i);
   return 0;
 }

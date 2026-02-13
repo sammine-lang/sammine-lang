@@ -13,6 +13,7 @@
 //! \file Types.h
 //! \brief Defines the core Type system for Sammine
 enum class TypeKind {
+  I32_t,
   I64_t,
   F64_t,
   Unit,
@@ -50,6 +51,7 @@ struct Type {
   bool is_checked = false;
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
+  static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
   static Type I64_t() { return Type{TypeKind::I64_t, std::monostate()}; }
   static Type F64_t() { return Type{TypeKind::F64_t, std::monostate()}; }
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
@@ -84,6 +86,8 @@ struct Type {
 
   std::string to_string() const {
     switch (type_kind) {
+    case TypeKind::I32_t:
+      return "i32";
     case TypeKind::I64_t:
       return "i64";
     case TypeKind::F64_t:

@@ -1,6 +1,6 @@
 # RUN: %sammine --file %full  
 
-let even(x : i64) -> i64 {
+let even(x : i32) -> i32 {
   if x % 2 == 0 {
     return 0;
   } else {
@@ -8,6 +8,6 @@ let even(x : i64) -> i64 {
   };
 
 }
-let main() -> i64 {
+let main() -> i32 {
   return 0;
 }

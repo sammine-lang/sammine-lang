@@ -138,7 +138,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   auto R = ast->RHS->val;
 
   if (ast->Op->tok_type == TokenType::TokADD) {
-    if (ast->LHS->type == Type::I64_t())
+    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
       ast->val = resPtr->Builder->CreateAdd(L, R, "add_expr");
     else if (ast->LHS->type == Type::F64_t())
       ast->val = resPtr->Builder->CreateFAdd(L, R, "add_expr");
@@ -146,7 +146,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       this->abort();
   }
   if (ast->Op->tok_type == TokenType::TokSUB) {
-    if (ast->LHS->type == Type::I64_t())
+    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
       ast->val = resPtr->Builder->CreateSub(L, R, "sub_expr");
     else if (ast->LHS->type == Type::F64_t())
       ast->val = resPtr->Builder->CreateFSub(L, R, "sub_expr");
@@ -154,7 +154,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       this->abort();
   }
   if (ast->Op->tok_type == TokenType::TokMUL) {
-    if (ast->LHS->type == Type::I64_t())
+    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
       ast->val = resPtr->Builder->CreateMul(L, R, "mul_expr");
     else if (ast->LHS->type == Type::F64_t())
       ast->val = resPtr->Builder->CreateFMul(L, R, "mul_expr");
@@ -162,7 +162,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       this->abort();
   }
   if (ast->Op->tok_type == TokenType::TokDIV) {
-    if (ast->LHS->type == Type::F64_t())
+    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
+      ast->val = resPtr->Builder->CreateSDiv(L, R, "div_expr");
+    else if (ast->LHS->type == Type::F64_t())
       ast->val = resPtr->Builder->CreateFDiv(L, R, "div_expr");
     else
       this->abort();
@@ -194,6 +196,10 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
 void CgVisitor::preorder_walk(StringExprAST *ast) {}
 void CgVisitor::preorder_walk(NumberExprAST *ast) {
   switch (ast->type.type_kind) {
+  case TypeKind::I32_t:
+    ast->val = llvm::ConstantInt::get(
+        *resPtr->Context, llvm::APInt(32, std::stoi(ast->number), true));
+    break;
   case TypeKind::I64_t:
     ast->val = llvm::ConstantInt::get(
         *resPtr->Context, llvm::APInt(64, std::stoi(ast->number), true));
@@ -210,7 +216,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Poisoned:
   case TypeKind::String:
   case TypeKind::Record:
-    this->abort(".....");
+    this->abort("NumberExprAST has invalid type kind");
   }
   this->abort_if_not(ast->val, "cannot generate number");
 }
@@ -239,11 +245,16 @@ void CgVisitor::visit(IfExprAST *ast) {
 
   // Convert condition to i1 based on type
   switch (ast->bool_expr->type.type_kind) {
+  case TypeKind::I32_t:
+    ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
+        ast->bool_expr->val,
+        llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(32, 0)),
+        "ifcond_i32");
+    break;
   case TypeKind::I64_t:
-    ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
-        resPtr->Builder->CreateSIToFP(
-            ast->bool_expr->val, llvm::Type::getDoubleTy(*resPtr->Context)),
-        llvm::ConstantFP::get(*resPtr->Context, llvm::APFloat(0.0)),
+    ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
+        ast->bool_expr->val,
+        llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(64, 0)),
         "ifcond_i64");
     break;
   case TypeKind::F64_t:

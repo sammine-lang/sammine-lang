@@ -1,7 +1,7 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 34
 # CHECK-NEXT: 34
-let fib_v1(x: i64) -> i64 {
+let fib_v1(x: i32) -> i32 {
   if x == 0 || x == 1 {
     return x;
   } else {
@@ -9,7 +9,7 @@ let fib_v1(x: i64) -> i64 {
   }
 }
 
-let fib_v2(x: i64) -> i64 {
+let fib_v2(x: i32) -> i32 {
   if x == 0 || x == 1 {
     x
   } else {
@@ -17,7 +17,7 @@ let fib_v2(x: i64) -> i64 {
   }
 }
 
-let main() -> i64 {
+let main() -> i32 {
   printf("%d\n", fib_v1(9));
   printf("%d\n", fib_v2(9));
   return 0;

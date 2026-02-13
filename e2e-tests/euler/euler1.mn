@@ -2,7 +2,7 @@
 # CHECK: 233168
 
 # Project Euler Problem 1: Sum of multiples of 3 or 5 below 1000
-let sum_multiples(n: i64, acc: i64) -> i64 {
+let sum_multiples(n: i32, acc: i32) -> i32 {
   if n >= 1000 {
     acc
   } else if n % 3 == 0 || n % 5 == 0 {
@@ -12,7 +12,7 @@ let sum_multiples(n: i64, acc: i64) -> i64 {
   }
 }
 
-let main() -> i64 {
+let main() -> i32 {
   printf("%d\n", sum_multiples(0, 0));
   return 0;
 }

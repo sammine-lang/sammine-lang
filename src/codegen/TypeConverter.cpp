@@ -12,6 +12,8 @@
 namespace sammine_lang::AST {
 llvm::Type *TypeConverter::get_type(Type t) {
   switch (t.type_kind) {
+  case TypeKind::I32_t:
+    return llvm::Type::getInt32Ty(context);
   case TypeKind::I64_t:
     return llvm::Type::getInt64Ty(context);
   case TypeKind::F64_t:
@@ -56,6 +58,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
 
   switch (a.type_kind) {
 
+  case TypeKind::I32_t:
   case TypeKind::I64_t:
   case TypeKind::Bool: {
     // Signed integer comparisons
