@@ -25,7 +25,6 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->Prototype->accept_vis(this);
   ast->accept_synthesis(this);
   ast->Block->accept_vis(this);
-  ast->set_checked();
   exit_new_scope();
 }
 
@@ -48,18 +47,15 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   ast->Expression->accept_vis(this);
   ast->accept_synthesis(this);
-  if (!ast->checked()) {
-    auto to = ast->type;
-    auto from = ast->Expression->accept_synthesis(this);
-    if (!type_map_ordering.compatible_to_from(to, from)) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Type mismatch in variable definition: Synthesized {}, "
-                      "checked against {}.",
-                      to.to_string(), from.to_string()));
-      ast->type = Type::Poisoned();
-    }
-    ast->set_checked();
+  auto to = ast->type;
+  auto from = ast->Expression->accept_synthesis(this);
+  if (!type_map_ordering.compatible_to_from(to, from)) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Type mismatch in variable definition: Synthesized {}, "
+                    "checked against {}.",
+                    to.to_string(), from.to_string()));
+    ast->type = Type::Poisoned();
   }
 }
 
@@ -73,7 +69,7 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
-  if (!ast->checked() && !pre_func.contains(ast->functionName)) {
+  if (!pre_func.contains(ast->functionName)) {
     auto ty = get_type_from_id_parent(ast->functionName);
     auto func = std::get<FunctionType>(ty->type_data);
     auto params = func.get_params_types();
@@ -94,7 +90,6 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
                 ast->functionName));
       }
     }
-    ast->set_checked();
   }
 }
 
@@ -102,19 +97,16 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   if (ast->return_expr)
     ast->return_expr->accept_vis(this);
   ast->accept_synthesis(this);
-  if (!ast->checked()) {
-    auto t = ast->return_expr->accept_synthesis(this);
-    auto scope_fn = this->id_to_type.top().s.value();
-    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
-    auto return_type = fn_type.get_return_type();
-    if (t != return_type) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Wrong return type for function {}, expected "
-                                  "{} but got {}",
-                                  scope_fn->getFunctionName(),
-                                  return_type.to_string(), t.to_string()));
-    }
-    ast->set_checked();
+  auto t = ast->return_expr->accept_synthesis(this);
+  auto scope_fn = this->id_to_type.top().s.value();
+  auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+  auto return_type = fn_type.get_return_type();
+  if (t != return_type) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Wrong return type for function {}, expected "
+                                "{} but got {}",
+                                scope_fn->getFunctionName(),
+                                return_type.to_string(), t.to_string()));
   }
 }
 

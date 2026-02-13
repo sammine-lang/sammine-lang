@@ -271,8 +271,6 @@ public:
   sammine_util::Location get_location() { return this->location; }
   bool synthesized() const { return this->type.synthesized(); }
 
-  bool checked() const { return this->type.checked(); }
-  void set_checked() { this->type.is_checked = true; }
 };
 } // namespace AST
 } // namespace sammine_lang

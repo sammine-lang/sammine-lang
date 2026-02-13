@@ -70,7 +70,6 @@ using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string,
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
-  bool is_checked = false;
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
   static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
@@ -99,9 +98,6 @@ struct Type {
   bool synthesized() const {
     return this->type_kind != TypeKind::NonExistent ||
            this->type_kind == TypeKind::Poisoned;
-  }
-  bool checked() const {
-    return this->is_checked || this->type_kind == TypeKind::Poisoned;
   }
   Type(TypeKind type_kind, TypeData type_data)
       : type_kind(type_kind), type_data(type_data) {}
