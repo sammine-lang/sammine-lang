@@ -16,7 +16,10 @@
 #include "typecheck/BiTypeChecker.h"
 #include "util/Logging.h"
 #include "util/Utilities.h"
+#include "llvm/Analysis/CGSCCPassManager.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstdlib>
@@ -220,6 +223,25 @@ void Compiler::produce_executable() {
                  "Logging pre optimization llvm IR\n");
     });
     resPtr->Module->print(llvm::errs(), nullptr);
+  }
+
+  // Run O2 optimization pipeline on the module
+  {
+    llvm::LoopAnalysisManager LAM;
+    llvm::FunctionAnalysisManager FAM;
+    llvm::CGSCCAnalysisManager CGAM;
+    llvm::ModuleAnalysisManager MAM;
+
+    llvm::PassBuilder PB(resPtr->target_machine.get());
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    llvm::ModulePassManager MPM =
+        PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
+    MPM.run(*resPtr->Module, MAM);
   }
 
   // Output .o and executable in current directory using just the stem
