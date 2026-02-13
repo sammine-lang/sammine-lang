@@ -18,6 +18,13 @@
   - **Alloc (`alloc(expr)`)**: `postorder_walk` computes `sizeof(T)` via `DataLayout`, calls `malloc(size)`, stores operand value into returned pointer
   - **Free (`free(expr)`)**: `postorder_walk` calls `free(operand_val)`, sets `ast->val = nullptr`
 
+## Assignment Codegen (`postorder_walk(BinaryExprAST*)`)
+The `TokASSIGN` branch supports two LHS forms:
+- **`VariableExprAST`** — look up alloca by name, `CreateStore(RHS, alloca)`
+- **`DerefExprAST`** — use `operand->val` (the pointer), `CreateStore(RHS, pointer)`
+
+Any future LHS pattern (e.g. struct field access) would add another `dynamic_cast` branch here.
+
 ## Runtime Function Declarations
 - `malloc` and `free` are declared in `preorder_walk(ProgramAST*)` alongside `printf`
 - `CodegenUtils::declare_malloc()` and `CodegenUtils::declare_free()` in `src/codegen/CodegenUtils.cpp`
