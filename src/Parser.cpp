@@ -23,6 +23,7 @@ static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokADD, 20},
     {TokenType::TokSUB, 20},
     {TokenType::TokMUL, 40},
+    {TokenType::TokDIV, 40},
     {TokenType::TokMOD, 40},
     {TokenType::TokOR, 1},
 };
@@ -335,6 +336,35 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
 }
 
+auto Parser::consumeClosingAngleBracket() -> bool {
+  // Case 1: A child ParseTypeExpr already split a ">>" (TokSHR) and left
+  // one '>' for us. Claim it.
+  if (split_greater_depth > 0) {
+    split_greater_depth--;
+    return true;
+  }
+  // Case 2: A plain '>' token — consume it directly.
+  if (expect(TokenType::TokGREATER))
+    return true;
+  // Case 3: ">>" token (TokSHR) — consume it, use one '>' now,
+  // and save the other for our parent.
+  if (expect(TokenType::TokSHR)) {
+    split_greater_depth++;
+    return true;
+  }
+  return false;
+}
+
+auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
+  auto result = ParseTypeExpr();
+  if (split_greater_depth > 0) {
+    split_greater_depth = 0;
+    this->error("Extra '>' in type expression", tokStream->currentLocation());
+    return nullptr;
+  }
+  return result;
+}
+
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
   if (auto ptr_tok = expect(TokenType::TokPtr)) {
     if (!expect(TokenType::TokLESS)) {
@@ -346,7 +376,7 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
       this->error("Expected type inside 'ptr<...>'", ptr_tok->get_location());
       return nullptr;
     }
-    if (!expect(TokenType::TokGREATER)) {
+    if (!consumeClosingAngleBracket()) {
       this->error("Expected '>' to close 'ptr<...>'", ptr_tok->get_location());
       return nullptr;
     }
@@ -370,7 +400,7 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
   auto colon = expect(TokenType::TokColon);
   if (!colon)
     return std::make_pair(std::make_unique<TypedVarAST>(name), SUCCESS);
-  auto type_expr = ParseTypeExpr();
+  auto type_expr = ParseTypeExprTopLevel();
 
   if (!type_expr) {
     this->error("Expected type name after token `:`", colon->get_location());
@@ -383,9 +413,20 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
       std::make_unique<TypedVarAST>(name, std::move(type_expr)), SUCCESS);
 }
 auto Parser::ParseDerefExpr() -> p<ExprAST> {
-  auto star_tok = expect(TokenType::TokMUL);
-  if (!star_tok)
-    return {nullptr, NONCOMMITTED};
+  std::shared_ptr<Token> star_tok;
+  if (pending_deref > 0) {
+    pending_deref--;
+    star_tok = pending_deref_tok;
+  } else {
+    star_tok = expect(TokenType::TokMUL);
+    if (!star_tok) {
+      star_tok = expect(TokenType::TokEXP);
+      if (!star_tok)
+        return {nullptr, NONCOMMITTED};
+      pending_deref++;
+      pending_deref_tok = star_tok;
+    }
+  }
   auto [operand, result] = ParsePrimaryExpr();
   switch (result) {
   case SUCCESS:
@@ -800,7 +841,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!arrow)
     return {std::make_unique<PrototypeAST>(id, std::move(params)), SUCCESS};
 
-  auto return_type_expr = ParseTypeExpr();
+  auto return_type_expr = ParseTypeExprTopLevel();
   if (return_type_expr)
     return {std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
                                            std::move(params)),

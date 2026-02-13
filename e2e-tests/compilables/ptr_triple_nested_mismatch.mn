@@ -1,0 +1,6 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: Expected '>' to close 'ptr<...>'
+let main() -> i32 {
+  let p : ptr<ptr<ptr<i32>> = alloc(42);
+  return 0;
+}

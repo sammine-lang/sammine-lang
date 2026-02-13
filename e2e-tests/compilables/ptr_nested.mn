@@ -1,0 +1,11 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 99
+
+let main() -> i32 {
+  let x : i32 = 99;
+  let p : ptr<i32> = &x;
+  let pp : ptr<ptr<i32>> = &p;
+  let y : i32 = **pp;
+  printf("%d\n", y);
+  return 0;
+}

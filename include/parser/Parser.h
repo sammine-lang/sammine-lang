@@ -48,6 +48,7 @@ public:
   [[nodiscard]] auto ParseRecordDef() -> p<DefinitionAST>;
 
   // Parse type
+  [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypeExpr() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypedVar() -> p<TypedVarAST>;
 
@@ -84,6 +85,15 @@ public:
                             TokenType until = TokenType::TokEOF,
                             const std::string &message = "")
       -> std::shared_ptr<Token>;
+
+  // The lexer merges ">>" into a single TokSHR token. When parsing nested
+  // angle brackets (e.g. ptr<ptr<i32>>), the innermost closing '>' consumes
+  // the whole TokSHR and deposits one '>' here for its parent to pick up.
+  int split_greater_depth = 0;
+  [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
+
+  int pending_deref = 0;
+  std::shared_ptr<Token> pending_deref_tok;
 
   [[nodiscard]] Parser(
       std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt)
