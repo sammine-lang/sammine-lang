@@ -115,26 +115,30 @@ void CgVisitor::preorder_walk(BinaryExprAST *ast) {}
 
 void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   if (ast->Op->tok_type == TokenType::TokASSIGN) {
-    VariableExprAST *LHSE = dynamic_cast<VariableExprAST *>(ast->LHS.get());
-    if (!LHSE) {
-      this->abort("Left hand side of assignment must be a variable, "
-                  "current LHS cannot "
-                  "be cast to VarExprAST");
-      return;
-    }
-
     auto R = ast->RHS->val;
-
     if (!R)
       this->abort("Failed to codegen RHS for tok assign");
 
-    auto *Var = this->allocaValues.top()[LHSE->variableName];
-    if (!Var)
-      this->abort("Unknown variable in LHS of tok assign");
+    if (auto *LHSE = dynamic_cast<VariableExprAST *>(ast->LHS.get())) {
+      auto *Var = this->allocaValues.top()[LHSE->variableName];
+      if (!Var)
+        this->abort("Unknown variable in LHS of tok assign");
+      resPtr->Builder->CreateStore(R, Var);
+      ast->val = R;
+      return;
+    }
 
-    resPtr->Builder->CreateStore(R, Var);
-    ast->val = R;
+    if (auto *deref = dynamic_cast<DerefExprAST *>(ast->LHS.get())) {
+      auto *ptr = deref->operand->val;
+      if (!ptr)
+        this->abort("Failed to codegen pointer for deref assignment");
+      resPtr->Builder->CreateStore(R, ptr);
+      ast->val = R;
+      return;
+    }
 
+    this->abort("Left hand side of assignment must be a variable or "
+                "dereferenced pointer");
     return;
   }
   auto L = ast->LHS->val;
