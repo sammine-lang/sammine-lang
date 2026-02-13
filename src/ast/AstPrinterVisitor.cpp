@@ -69,6 +69,8 @@ public:
   virtual void visit(TypedVarAST *ast) override;
   virtual void visit(DerefExprAST *ast) override;
   virtual void visit(AddrOfExprAST *ast) override;
+  virtual void visit(AllocExprAST *ast) override;
+  virtual void visit(FreeExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
@@ -89,6 +91,8 @@ public:
   virtual void preorder_walk(TypedVarAST *ast) override;
   virtual void preorder_walk(DerefExprAST *ast) override;
   virtual void preorder_walk(AddrOfExprAST *ast) override;
+  virtual void preorder_walk(AllocExprAST *ast) override;
+  virtual void preorder_walk(FreeExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -110,6 +114,8 @@ public:
   virtual void postorder_walk(TypedVarAST *ast) override;
   virtual void postorder_walk(DerefExprAST *ast) override;
   virtual void postorder_walk(AddrOfExprAST *ast) override;
+  virtual void postorder_walk(AllocExprAST *ast) override;
+  virtual void postorder_walk(FreeExprAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -418,5 +424,24 @@ void AstPrinterVisitor::preorder_walk(DerefExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(AddrOfExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(DerefExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(AddrOfExprAST *ast) {}
+
+void AstPrinterVisitor::visit(AllocExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::visit(FreeExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(AllocExprAST *ast) {}
+void AstPrinterVisitor::preorder_walk(FreeExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(AllocExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(FreeExprAST *ast) {}
 
 } // namespace sammine_lang::AST

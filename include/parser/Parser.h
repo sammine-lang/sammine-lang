@@ -60,6 +60,8 @@ public:
 
   [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseAddrOfExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseAllocExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseFreeExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArguments()

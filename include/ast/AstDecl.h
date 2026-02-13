@@ -28,6 +28,8 @@ class BlockAST;
 class IfExprAST;
 class DerefExprAST;
 class AddrOfExprAST;
+class AllocExprAST;
+class FreeExprAST;
 
 } // namespace AST
 } // namespace sammine_lang

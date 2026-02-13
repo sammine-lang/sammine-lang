@@ -95,6 +95,8 @@ public:
   virtual void preorder_walk(TypedVarAST *ast) override;
   virtual void preorder_walk(DerefExprAST *ast) override;
   virtual void preorder_walk(AddrOfExprAST *ast) override;
+  virtual void preorder_walk(AllocExprAST *ast) override;
+  virtual void preorder_walk(FreeExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -116,6 +118,8 @@ public:
   virtual void postorder_walk(TypedVarAST *ast) override;
   virtual void postorder_walk(DerefExprAST *ast) override;
   virtual void postorder_walk(AddrOfExprAST *ast) override;
+  virtual void postorder_walk(AllocExprAST *ast) override;
+  virtual void postorder_walk(FreeExprAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -136,6 +140,8 @@ public:
   virtual Type synthesize(TypedVarAST *ast) override;
   virtual Type synthesize(DerefExprAST *ast) override;
   virtual Type synthesize(AddrOfExprAST *ast) override;
+  virtual Type synthesize(AllocExprAST *ast) override;
+  virtual Type synthesize(FreeExprAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)

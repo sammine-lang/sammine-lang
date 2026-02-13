@@ -19,6 +19,7 @@ public:
   static bool hasFunctionMain(ProgramAST *);
 
   static llvm::FunctionCallee declare_malloc(llvm::Module &);
+  static llvm::FunctionCallee declare_free(llvm::Module &);
 
   static llvm::FunctionCallee declare_fn(llvm::Module &module,
                                          const std::string &name,

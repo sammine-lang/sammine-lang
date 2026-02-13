@@ -428,11 +428,77 @@ auto Parser::ParseAddrOfExpr() -> p<ExprAST> {
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
 }
 
+auto Parser::ParseAllocExpr() -> p<ExprAST> {
+  auto alloc_tok = expect(TokenType::TokAlloc);
+  if (!alloc_tok)
+    return {nullptr, NONCOMMITTED};
+  auto left_paren = expect(TokenType::TokLeftParen);
+  if (!left_paren) {
+    this->error("Expected '(' after 'alloc'", alloc_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto [operand, result] = ParseExpr();
+  switch (result) {
+  case SUCCESS:
+    break;
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse expression inside alloc()", alloc_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->error("Expected expression inside alloc()", alloc_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto right_paren = expect(TokenType::TokRightParen);
+  if (!right_paren) {
+    this->error("Expected ')' to close alloc()", alloc_tok->get_location());
+    return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)), SUCCESS};
+}
+
+auto Parser::ParseFreeExpr() -> p<ExprAST> {
+  auto free_tok = expect(TokenType::TokFree);
+  if (!free_tok)
+    return {nullptr, NONCOMMITTED};
+  auto left_paren = expect(TokenType::TokLeftParen);
+  if (!left_paren) {
+    this->error("Expected '(' after 'free'", free_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto [operand, result] = ParseExpr();
+  switch (result) {
+  case SUCCESS:
+    break;
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse expression inside free()", free_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->error("Expected expression inside free()", free_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto right_paren = expect(TokenType::TokRightParen);
+  if (!right_paren) {
+    this->error("Expected ')' to close free()", free_tok->get_location());
+    return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)), SUCCESS};
+}
+
 auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   using ParseFunction = std::function<p<ExprAST>(Parser *)>;
   std::vector<std::pair<ParseFunction, std::string>> ParseFunctions = {
       {&Parser::ParseDerefExpr, "DerefExpr"},
       {&Parser::ParseAddrOfExpr, "AddrOfExpr"},
+      {&Parser::ParseAllocExpr, "AllocExpr"},
+      {&Parser::ParseFreeExpr, "FreeExpr"},
       {&Parser::ParseCallExpr, "CallExpr"},
       {&Parser::ParseParenExpr, "parenthesis"},
       {&Parser::ParseIfExpr, "IfExpr"},

@@ -58,6 +58,12 @@ void BiTypeCheckerVisitor::preorder_walk(DerefExprAST *ast) {
 void BiTypeCheckerVisitor::preorder_walk(AddrOfExprAST *ast) {
   ast->accept_synthesis(this);
 }
+void BiTypeCheckerVisitor::preorder_walk(AllocExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {
+  ast->accept_synthesis(this);
+}
 
 // post order
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -158,6 +164,8 @@ void BiTypeCheckerVisitor::postorder_walk(UnitExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypedVarAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(DerefExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(AddrOfExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(AllocExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(FreeExprAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -389,6 +397,28 @@ Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
 
   auto operand_type = ast->operand->accept_synthesis(this);
   return ast->type = Type::Pointer(operand_type);
+}
+
+Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  return ast->type = Type::Pointer(operand_type);
+}
+
+Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind != TypeKind::Pointer) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot free non-pointer type '{}'",
+                                operand_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+  return ast->type = Type::Unit();
 }
 
 } // namespace sammine_lang::AST

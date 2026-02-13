@@ -1,0 +1,6 @@
+# RUN: ! %sammine --file %full --diagnostics
+let main() -> i32 {
+  let x : i32 = 42;
+  free(x);
+  return 0;
+}

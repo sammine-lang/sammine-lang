@@ -119,6 +119,10 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       tokStream->push_back(Token(TokExtern, "extern", location));
     else if (IdentifierStr == "ptr")
       tokStream->push_back(Token(TokPtr, "ptr", location));
+    else if (IdentifierStr == "alloc")
+      tokStream->push_back(Token(TokAlloc, "alloc", location));
+    else if (IdentifierStr == "free")
+      tokStream->push_back(Token(TokFree, "free", location));
     else
       tokStream->push_back(Token(TokID, IdentifierStr, location));
   }

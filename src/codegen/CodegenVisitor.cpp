@@ -68,6 +68,9 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   CodegenUtils::declare_fn(*this->resPtr->Module, "printf",
                            llvm::Type::getInt32Ty(*this->resPtr->Context),
                            int8ptr, true);
+
+  CodegenUtils::declare_malloc(*this->resPtr->Module);
+  CodegenUtils::declare_free(*this->resPtr->Module);
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
@@ -359,6 +362,36 @@ void CgVisitor::postorder_walk(DerefExprAST *ast) {
   auto pointee_type = std::get<PointerType>(ast->operand->type.type_data).get_pointee();
   ast->val = resPtr->Builder->CreateLoad(
       type_converter.get_type(pointee_type), ast->operand->val, "deref");
+}
+
+void CgVisitor::postorder_walk(AllocExprAST *ast) {
+  auto operand_val = ast->operand->val;
+  auto operand_llvm_type = type_converter.get_type(ast->operand->type);
+
+  // Compute sizeof(T) using DataLayout
+  auto &data_layout = resPtr->Module->getDataLayout();
+  auto size = data_layout.getTypeAllocSize(operand_llvm_type);
+  auto *size_val = llvm::ConstantInt::get(
+      llvm::Type::getInt64Ty(*resPtr->Context), size);
+
+  // Call malloc(size)
+  auto *malloc_fn = resPtr->Module->getFunction("malloc");
+  auto *malloc_ptr = resPtr->Builder->CreateCall(malloc_fn, {size_val}, "alloc_ptr");
+
+  // Store the operand value through the opaque pointer
+  resPtr->Builder->CreateStore(operand_val, malloc_ptr);
+
+  ast->val = malloc_ptr;
+}
+
+void CgVisitor::postorder_walk(FreeExprAST *ast) {
+  auto *ptr_val = ast->operand->val;
+
+  // Call free(ptr)
+  auto *free_fn = resPtr->Module->getFunction("free");
+  resPtr->Builder->CreateCall(free_fn, {ptr_val});
+
+  ast->val = nullptr;
 }
 
 void CgVisitor::visit(AddrOfExprAST *ast) {

@@ -32,6 +32,12 @@ llvm::FunctionCallee CodegenUtils::declare_malloc(llvm::Module &module) {
   return declare_fn(module, "malloc", int8ptr, {llvm::Type::getInt64Ty(module.getContext())});
 }
 
+llvm::FunctionCallee CodegenUtils::declare_free(llvm::Module &module) {
+  return declare_fn(module, "free",
+                    llvm::Type::getVoidTy(module.getContext()),
+                    {llvm::PointerType::get(module.getContext(), 0)});
+}
+
 llvm::FunctionCallee
 CodegenUtils::declare_fn(llvm::Module &module, const std::string &name,
                          llvm::Type *return_type,

@@ -61,6 +61,8 @@ public:
   virtual void preorder_walk(TypedVarAST *ast) override;
   virtual void preorder_walk(DerefExprAST *ast) override {}
   virtual void preorder_walk(AddrOfExprAST *ast) override {}
+  virtual void preorder_walk(AllocExprAST *ast) override {}
+  virtual void preorder_walk(FreeExprAST *ast) override {}
 
   // post order
   // TODO: Implement these?
@@ -83,6 +85,8 @@ public:
   virtual void postorder_walk(TypedVarAST *ast) override {}
   virtual void postorder_walk(DerefExprAST *ast) override;
   virtual void postorder_walk(AddrOfExprAST *ast) override {}
+  virtual void postorder_walk(AllocExprAST *ast) override;
+  virtual void postorder_walk(FreeExprAST *ast) override;
 
   virtual void visit(DerefExprAST *ast) override;
   virtual void visit(AddrOfExprAST *ast) override;

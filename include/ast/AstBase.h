@@ -112,6 +112,14 @@ public:
   virtual void preorder_walk(AddrOfExprAST *ast) = 0;
   virtual void postorder_walk(AddrOfExprAST *ast) = 0;
 
+  virtual void visit(AllocExprAST *ast);
+  virtual void preorder_walk(AllocExprAST *ast) = 0;
+  virtual void postorder_walk(AllocExprAST *ast) = 0;
+
+  virtual void visit(FreeExprAST *ast);
+  virtual void preorder_walk(FreeExprAST *ast) = 0;
+  virtual void postorder_walk(FreeExprAST *ast) = 0;
+
   virtual ~ASTVisitor() = 0;
 };
 
@@ -184,6 +192,8 @@ public:
   virtual Type synthesize(TypedVarAST *ast) = 0;
   virtual Type synthesize(DerefExprAST *ast) = 0;
   virtual Type synthesize(AddrOfExprAST *ast) = 0;
+  virtual Type synthesize(AllocExprAST *ast) = 0;
+  virtual Type synthesize(FreeExprAST *ast) = 0;
 
   virtual ~TypeCheckerVisitor() = 0;
 };

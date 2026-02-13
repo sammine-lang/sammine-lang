@@ -1,0 +1,9 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 3.14
+let main() -> i32 {
+  let p : ptr<f64> = alloc(3.14);
+  let y : f64 = *p;
+  free(p);
+  printf("%f\n", y);
+  return 0;
+}
