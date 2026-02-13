@@ -248,6 +248,8 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Poisoned:
   case TypeKind::String:
   case TypeKind::Record:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
     this->abort("NumberExprAST has invalid type kind");
   }
   this->abort_if_not(ast->val, "cannot generate number");
@@ -304,6 +306,8 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::String:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
     LOG({
       fmt::print("[CODEGEN] Logging IfExprAST's bool expr \n");
       ASTPrinter::print(ast->bool_expr.get());

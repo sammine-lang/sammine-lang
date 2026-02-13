@@ -317,8 +317,11 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::NonExistent:
   case TypeKind::Record:
   case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
     this->abort(fmt::format("should not happen here with function {}",
                             ast->functionName));
+    break;
   }
   return Type::NonExistent();
 }

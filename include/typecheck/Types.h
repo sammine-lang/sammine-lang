@@ -25,7 +25,9 @@ enum class TypeKind {
   Record,
   Never,
   NonExistent,
-  Poisoned
+  Poisoned,
+  Integer,
+  Flt
 };
 
 struct Type;
@@ -79,6 +81,8 @@ struct Type {
   static Type Poisoned() { return Type{TypeKind::Poisoned, std::monostate()}; }
   static Type Unit() { return Type{TypeKind::Unit, std::monostate()}; }
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
+  static Type Integer() { return Type{TypeKind::Integer, std::monostate()}; }
+  static Type Flt() { return Type{TypeKind::Flt, std::monostate()}; }
   static Type String(const std::string &str) {
     return Type{TypeKind::String, str};
   }
@@ -149,6 +153,10 @@ struct Type {
       return "Poisoned";
     case TypeKind::String:
       return fmt::format("\"{}\"", std::get<std::string>(type_data));
+    case TypeKind::Integer:
+      return "Integer";
+    case TypeKind::Flt:
+      return "Flt";
     }
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");

@@ -41,6 +41,9 @@ llvm::Type *TypeConverter::get_type(Type t) {
     sammine_util::abort("Existed a type that is not synthesized yet");
   case TypeKind::Poisoned:
     sammine_util::abort("Poisoned typed should not be here");
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+    sammine_util::abort("Polymorphic literal type should not reach codegen");
   }
   sammine_util::abort("Guarded by default case");
 }
@@ -114,6 +117,8 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
   case TypeKind::String:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
   case TypeKind::Record:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
