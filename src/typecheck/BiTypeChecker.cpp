@@ -476,7 +476,19 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     return ast->type = Type::Poisoned();
   }
 
-  return ast->type = std::get<ArrayType>(arr_type.type_data).get_element();
+  auto &arr_data = std::get<ArrayType>(arr_type.type_data);
+  if (auto *num = dynamic_cast<NumberExprAST *>(ast->index_expr.get())) {
+    int idx = std::stoi(num->number);
+    int size = static_cast<int>(arr_data.get_size());
+    if (idx < 0 || idx >= size) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Array index out of bounds: index {} on array of size {}",
+                                  idx, size));
+      return ast->type = Type::Poisoned();
+    }
+  }
+
+  return ast->type = arr_data.get_element();
 }
 Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   if (ast->synthesized())

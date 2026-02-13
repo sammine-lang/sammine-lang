@@ -71,6 +71,10 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
 
   CodegenUtils::declare_malloc(*this->resPtr->Module);
   CodegenUtils::declare_free(*this->resPtr->Module);
+
+  CodegenUtils::declare_fn(*this->resPtr->Module, "exit",
+      llvm::Type::getVoidTy(*this->resPtr->Context),
+      llvm::Type::getInt32Ty(*this->resPtr->Context), false);
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
@@ -145,6 +149,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
 
       auto arr_type = type_converter.get_type(var_expr->type);
       auto idx = idx_expr->index_expr->val;
+      auto arr_size = std::get<ArrayType>(var_expr->type.type_data).get_size();
+      emitBoundsCheck(idx, arr_size);
       auto *gep = resPtr->Builder->CreateGEP(
           arr_type, alloca,
           {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
@@ -480,6 +486,9 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
 
   auto arr_type = type_converter.get_type(var_expr->type);
   auto idx = ast->index_expr->val;
+  auto arr_size = std::get<ArrayType>(var_expr->type.type_data).get_size();
+
+  emitBoundsCheck(idx, arr_size);
 
   auto *gep = resPtr->Builder->CreateGEP(
       arr_type, alloca,
@@ -494,6 +503,34 @@ void CgVisitor::postorder_walk(LenExprAST *ast) {
   auto arr_size = std::get<ArrayType>(operand_type.type_data).get_size();
   ast->val = llvm::ConstantInt::get(
       llvm::Type::getInt32Ty(*resPtr->Context), arr_size);
+}
+
+void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
+  auto &Ctx = *resPtr->Context;
+  auto *i32Ty = llvm::Type::getInt32Ty(Ctx);
+  auto *size_const = llvm::ConstantInt::get(i32Ty, arr_size);
+  auto *zero = llvm::ConstantInt::get(i32Ty, 0);
+
+  auto *oob_high = resPtr->Builder->CreateICmpSGE(idx, size_const, "oob_high");
+  auto *oob_low = resPtr->Builder->CreateICmpSLT(idx, zero, "oob_low");
+  auto *oob = resPtr->Builder->CreateOr(oob_high, oob_low, "oob");
+
+  auto *function = resPtr->Builder->GetInsertBlock()->getParent();
+  auto *ErrorBB = BasicBlock::Create(Ctx, "oob_error", function);
+  auto *ContinueBB = BasicBlock::Create(Ctx, "oob_ok", function);
+
+  resPtr->Builder->CreateCondBr(oob, ErrorBB, ContinueBB);
+
+  resPtr->Builder->SetInsertPoint(ErrorBB);
+  auto *printf_fn = resPtr->Module->getFunction("printf");
+  auto *err_msg = resPtr->Builder->CreateGlobalString(
+      "Array index out of bounds\n", "oob_msg");
+  resPtr->Builder->CreateCall(printf_fn, {err_msg});
+  auto *exit_fn = resPtr->Module->getFunction("exit");
+  resPtr->Builder->CreateCall(exit_fn, {llvm::ConstantInt::get(i32Ty, 1)});
+  resPtr->Builder->CreateUnreachable();
+
+  resPtr->Builder->SetInsertPoint(ContinueBB);
 }
 
 } // namespace sammine_lang::AST

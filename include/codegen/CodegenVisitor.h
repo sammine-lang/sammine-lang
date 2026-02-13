@@ -27,6 +27,8 @@ private:
 
   TypeConverter type_converter;
 
+  void emitBoundsCheck(llvm::Value *idx, size_t arr_size);
+
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
 
