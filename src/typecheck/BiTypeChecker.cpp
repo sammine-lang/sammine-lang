@@ -64,6 +64,15 @@ void BiTypeCheckerVisitor::preorder_walk(AllocExprAST *ast) {
 void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {
   ast->accept_synthesis(this);
 }
+void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {
+  ast->accept_synthesis(this);
+}
 
 // post order
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -166,6 +175,9 @@ void BiTypeCheckerVisitor::postorder_walk(DerefExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(AddrOfExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(AllocExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FreeExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(IndexExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -238,6 +250,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Unit:
   case TypeKind::Bool:
   case TypeKind::Pointer:
+  case TypeKind::Array:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Record:
@@ -419,6 +432,65 @@ Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
     return ast->type = Type::Poisoned();
   }
   return ast->type = Type::Unit();
+}
+
+Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  if (ast->elements.empty()) {
+    this->add_error(ast->get_location(), "Array literal must have at least one element");
+    return ast->type = Type::Poisoned();
+  }
+
+  auto first_type = ast->elements[0]->accept_synthesis(this);
+  for (size_t i = 1; i < ast->elements.size(); i++) {
+    auto elem_type = ast->elements[i]->accept_synthesis(this);
+    if (elem_type != first_type) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Array literal element type mismatch: expected {}, got {}",
+                                  first_type.to_string(), elem_type.to_string()));
+      return ast->type = Type::Poisoned();
+    }
+  }
+
+  return ast->type = Type::Array(first_type, ast->elements.size());
+}
+Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto arr_type = ast->array_expr->accept_synthesis(this);
+  if (arr_type.type_kind != TypeKind::Array) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot index non-array type '{}'",
+                                arr_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  auto idx_type = ast->index_expr->accept_synthesis(this);
+  if (idx_type.type_kind != TypeKind::I32_t && idx_type.type_kind != TypeKind::I64_t) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Array index must be integer, got '{}'",
+                                idx_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  return ast->type = std::get<ArrayType>(arr_type.type_data).get_element();
+}
+Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind != TypeKind::Array) {
+    this->add_error(ast->get_location(),
+                    fmt::format("len() requires array type, got '{}'",
+                                operand_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  return ast->type = Type::I32_t();
 }
 
 } // namespace sammine_lang::AST

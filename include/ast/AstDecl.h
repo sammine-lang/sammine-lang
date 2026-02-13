@@ -30,6 +30,9 @@ class DerefExprAST;
 class AddrOfExprAST;
 class AllocExprAST;
 class FreeExprAST;
+class ArrayLiteralExprAST;
+class IndexExprAST;
+class LenExprAST;
 
 } // namespace AST
 } // namespace sammine_lang

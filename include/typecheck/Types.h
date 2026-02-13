@@ -21,6 +21,7 @@ enum class TypeKind {
   String,
   Function,
   Pointer,
+  Array,
   Record,
   Never,
   NonExistent,
@@ -53,7 +54,18 @@ public:
   Type get_pointee() const;
   PointerType(Type pointee);
 };
-using TypeData = std::variant<FunctionType, PointerType, std::string, std::monostate>;
+class ArrayType {
+  TypePtr element;
+  size_t size;
+
+public:
+  bool operator==(const ArrayType &t) const;
+  bool operator<(const ArrayType &t) const;
+  Type get_element() const;
+  size_t get_size() const;
+  ArrayType(Type element, size_t size);
+};
+using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string, std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -76,6 +88,9 @@ struct Type {
   }
   static Type Pointer(Type pointee) {
     return Type{TypeKind::Pointer, PointerType(pointee)};
+  }
+  static Type Array(Type element, size_t size) {
+    return Type{TypeKind::Array, ArrayType(element, size)};
   }
   static Type Function(std::vector<Type> params);
   explicit operator bool() const {
@@ -113,6 +128,9 @@ struct Type {
       return "bool";
     case TypeKind::Pointer:
       return "ptr<" + std::get<PointerType>(type_data).get_pointee().to_string() + ">";
+    case TypeKind::Array:
+      return "arr<" + std::get<ArrayType>(type_data).get_element().to_string() + ", " +
+             std::to_string(std::get<ArrayType>(type_data).get_size()) + ">";
     case TypeKind::Function: {
       std::string res = "(";
       auto fn_type = std::get<FunctionType>(type_data);

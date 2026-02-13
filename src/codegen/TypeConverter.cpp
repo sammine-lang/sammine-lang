@@ -27,6 +27,10 @@ llvm::Type *TypeConverter::get_type(Type t) {
                                  llvm::Type::getInt32Ty(context));
   case TypeKind::Pointer:
     return llvm::PointerType::get(context, 0);
+  case TypeKind::Array: {
+    auto arr = std::get<ArrayType>(t.type_data);
+    return llvm::ArrayType::get(get_type(arr.get_element()), arr.get_size());
+  }
   case TypeKind::Function:
     sammine_util::abort("Function is not first-class yet");
   case TypeKind::Record:
@@ -105,6 +109,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::Unit:
   case TypeKind::Function:
   case TypeKind::Pointer:
+  case TypeKind::Array:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

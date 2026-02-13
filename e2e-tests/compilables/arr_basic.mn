@@ -1,0 +1,11 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 10
+# CHECK: 20
+# CHECK: 30
+let main() -> i32 {
+  let a : arr<i32, 3> = [10, 20, 30];
+  printf("%d\n", a[0]);
+  printf("%d\n", a[1]);
+  printf("%d\n", a[2]);
+  return 0;
+}

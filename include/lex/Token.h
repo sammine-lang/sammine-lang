@@ -47,10 +47,12 @@ enum TokenType {
   TokCeilDiv,  // /^
 
   // TokPAREN
-  TokLeftParen,  // (
-  TokRightParen, // )
-  TokLeftCurly,  // {
-  TokRightCurly, // }
+  TokLeftParen,    // (
+  TokRightParen,   // )
+  TokLeftCurly,    // {
+  TokRightCurly,   // }
+  TokLeftBracket,  // [
+  TokRightBracket, // ]
 
   // Comma and colons and all that
   TokComma,       // ,
@@ -66,6 +68,8 @@ enum TokenType {
   TokPtr,    // ptr
   TokAlloc,  // alloc
   TokFree,   // free
+  TokArr,    // arr
+  TokLen,    // len
   TokArrow,  // ->
   TokLet,    // let
   TokExtern, // extern
@@ -126,6 +130,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokRightParen, ")"},
     {TokLeftCurly, "{"},
     {TokRightCurly, "}"},
+    {TokLeftBracket, "["},
+    {TokRightBracket, "]"},
 
     {TokComma, ","},
     {TokDot, "."},
@@ -142,6 +148,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokPtr, "ptr"},
     {TokAlloc, "alloc"},
     {TokFree, "free"},
+    {TokArr, "arr"},
+    {TokLen, "len"},
     {TokID, "identifier"},
 
     {TokNum, "number"},

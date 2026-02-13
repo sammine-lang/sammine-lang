@@ -44,6 +44,7 @@ private:
   size_t handleUtilitySemiColon(size_t i, const std::string &input);
   size_t handleUtilityDoubleQuote(size_t i, const std::string &input);
   size_t handleUtilityCOLON(size_t i, const std::string &input);
+  size_t handleUtilityBRACKET(size_t i, const std::string &input);
 
   void updateLocation();
 

@@ -97,6 +97,9 @@ public:
   virtual void preorder_walk(AddrOfExprAST *ast) override;
   virtual void preorder_walk(AllocExprAST *ast) override;
   virtual void preorder_walk(FreeExprAST *ast) override;
+  virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void preorder_walk(IndexExprAST *ast) override;
+  virtual void preorder_walk(LenExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -120,6 +123,9 @@ public:
   virtual void postorder_walk(AddrOfExprAST *ast) override;
   virtual void postorder_walk(AllocExprAST *ast) override;
   virtual void postorder_walk(FreeExprAST *ast) override;
+  virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void postorder_walk(IndexExprAST *ast) override;
+  virtual void postorder_walk(LenExprAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -142,6 +148,9 @@ public:
   virtual Type synthesize(AddrOfExprAST *ast) override;
   virtual Type synthesize(AllocExprAST *ast) override;
   virtual Type synthesize(FreeExprAST *ast) override;
+  virtual Type synthesize(ArrayLiteralExprAST *ast) override;
+  virtual Type synthesize(IndexExprAST *ast) override;
+  virtual Type synthesize(LenExprAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)
@@ -163,6 +172,13 @@ public:
       if (pointee.type_kind == TypeKind::Poisoned)
         return Type::Poisoned();
       return Type::Pointer(pointee);
+    }
+
+    if (auto *arr = dynamic_cast<ArrayTypeExprAST *>(type_expr)) {
+      auto elem = resolve_type_expr(arr->element.get());
+      if (elem.type_kind == TypeKind::Poisoned)
+        return Type::Poisoned();
+      return Type::Array(elem, arr->size);
     }
 
     return Type::NonExistent();

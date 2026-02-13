@@ -384,6 +384,34 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     result->location = ptr_tok->get_location();
     return result;
   }
+  if (auto arr_tok = expect(TokenType::TokArr)) {
+    if (!expect(TokenType::TokLESS)) {
+      this->error("Expected '<' after 'arr'", arr_tok->get_location());
+      return nullptr;
+    }
+    auto elem = ParseTypeExpr();
+    if (!elem) {
+      this->error("Expected element type inside 'arr<...>'", arr_tok->get_location());
+      return nullptr;
+    }
+    if (!expect(TokenType::TokComma)) {
+      this->error("Expected ',' after element type in 'arr<TYPE, SIZE>'", arr_tok->get_location());
+      return nullptr;
+    }
+    auto size_tok = expect(TokenType::TokNum);
+    if (!size_tok) {
+      this->error("Expected integer size in 'arr<TYPE, SIZE>'", arr_tok->get_location());
+      return nullptr;
+    }
+    size_t arr_size = std::stoul(size_tok->lexeme);
+    if (!consumeClosingAngleBracket()) {
+      this->error("Expected '>' to close 'arr<...>'", arr_tok->get_location());
+      return nullptr;
+    }
+    auto result = std::make_unique<ArrayTypeExprAST>(std::move(elem), arr_size);
+    result->location = arr_tok->get_location();
+    return result;
+  }
   if (auto id = expect(TokenType::TokID)) {
     return std::make_unique<SimpleTypeExprAST>(id);
   }
@@ -533,6 +561,89 @@ auto Parser::ParseFreeExpr() -> p<ExprAST> {
   return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)), SUCCESS};
 }
 
+auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
+  auto left_bracket = expect(TokenType::TokLeftBracket);
+  if (!left_bracket)
+    return {nullptr, NONCOMMITTED};
+  std::vector<u<ExprAST>> elements;
+  auto [first, first_result] = ParseExpr();
+  switch (first_result) {
+  case SUCCESS:
+    elements.push_back(std::move(first));
+    break;
+  case NONCOMMITTED:
+    // Empty array literal [] - not supported, need at least one element
+    this->error("Expected at least one element in array literal", left_bracket->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse element in array literal", left_bracket->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  while (!tokStream->isEnd()) {
+    auto comma = expect(TokComma);
+    if (!comma)
+      break;
+    auto [elem, elem_result] = ParseExpr();
+    switch (elem_result) {
+    case SUCCESS:
+      elements.push_back(std::move(elem));
+      break;
+    case COMMITTED_EMIT_MORE_ERROR:
+      this->error("Failed to parse element in array literal");
+      [[fallthrough]];
+    case COMMITTED_NO_MORE_ERROR:
+      return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)),
+              COMMITTED_NO_MORE_ERROR};
+    case NONCOMMITTED:
+      this->error("Expected expression after ',' in array literal");
+      return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)),
+              COMMITTED_NO_MORE_ERROR};
+    }
+  }
+  auto right_bracket = expect(TokenType::TokRightBracket);
+  if (!right_bracket) {
+    this->error("Expected ']' to close array literal", left_bracket->get_location());
+    return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)), SUCCESS};
+}
+
+auto Parser::ParseLenExpr() -> p<ExprAST> {
+  auto len_tok = expect(TokenType::TokLen);
+  if (!len_tok)
+    return {nullptr, NONCOMMITTED};
+  auto left_paren = expect(TokenType::TokLeftParen);
+  if (!left_paren) {
+    this->error("Expected '(' after 'len'", len_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto [operand, result] = ParseExpr();
+  switch (result) {
+  case SUCCESS:
+    break;
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->error("Failed to parse expression inside len()", len_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<LenExprAST>(len_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->error("Expected expression inside len()", len_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto right_paren = expect(TokenType::TokRightParen);
+  if (!right_paren) {
+    this->error("Expected ')' to close len()", len_tok->get_location());
+    return {std::make_unique<LenExprAST>(len_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  return {std::make_unique<LenExprAST>(len_tok, std::move(operand)), SUCCESS};
+}
+
 auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   using ParseFunction = std::function<p<ExprAST>(Parser *)>;
   std::vector<std::pair<ParseFunction, std::string>> ParseFunctions = {
@@ -540,6 +651,8 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       {&Parser::ParseAddrOfExpr, "AddrOfExpr"},
       {&Parser::ParseAllocExpr, "AllocExpr"},
       {&Parser::ParseFreeExpr, "FreeExpr"},
+      {&Parser::ParseLenExpr, "LenExpr"},
+      {&Parser::ParseArrayLiteralExpr, "ArrayLiteralExpr"},
       {&Parser::ParseCallExpr, "CallExpr"},
       {&Parser::ParseParenExpr, "parenthesis"},
       {&Parser::ParseIfExpr, "IfExpr"},
@@ -582,6 +695,31 @@ auto Parser::ParseExpr() -> p<ExprAST> {
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
     return {std::move(LHS), COMMITTED_NO_MORE_ERROR};
+  }
+
+  // Parse index postfix: expr[idx]
+  while (auto lb = expect(TokenType::TokLeftBracket)) {
+    auto [idx, idx_result] = ParseExpr();
+    switch (idx_result) {
+    case SUCCESS:
+      break;
+    case COMMITTED_EMIT_MORE_ERROR:
+      this->error("Failed to parse index expression");
+      [[fallthrough]];
+    case COMMITTED_NO_MORE_ERROR:
+      return {std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx)),
+              COMMITTED_NO_MORE_ERROR};
+    case NONCOMMITTED:
+      this->error("Expected expression inside '[]'", lb->get_location());
+      return {nullptr, COMMITTED_NO_MORE_ERROR};
+    }
+    auto rb = expect(TokenType::TokRightBracket);
+    if (!rb) {
+      this->error("Expected ']' to close index expression", lb->get_location());
+      return {std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx)),
+              COMMITTED_NO_MORE_ERROR};
+    }
+    LHS = std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx));
   }
 
   auto [next, right_result] = ParseBinaryExpr(0, std::move(LHS));

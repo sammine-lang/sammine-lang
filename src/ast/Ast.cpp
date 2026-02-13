@@ -140,6 +140,26 @@ void ASTVisitor::visit(FreeExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(ArrayLiteralExprAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &elem : ast->elements)
+    elem->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(IndexExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->array_expr->accept_vis(this);
+  ast->index_expr->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(LenExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
 // -------------------------------------------------------
 ScopedASTVisitor::~ScopedASTVisitor() {}
 

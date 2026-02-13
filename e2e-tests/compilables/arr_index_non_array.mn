@@ -1,0 +1,7 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: Cannot index non-array type
+let main() -> i32 {
+  let x : i32 = 42;
+  let y : i32 = x[0];
+  return 0;
+}

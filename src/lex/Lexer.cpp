@@ -123,6 +123,10 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       tokStream->push_back(Token(TokAlloc, "alloc", location));
     else if (IdentifierStr == "free")
       tokStream->push_back(Token(TokFree, "free", location));
+    else if (IdentifierStr == "arr")
+      tokStream->push_back(Token(TokArr, "arr", location));
+    else if (IdentifierStr == "len")
+      tokStream->push_back(Token(TokLen, "len", location));
     else
       tokStream->push_back(Token(TokID, IdentifierStr, location));
   }
@@ -499,6 +503,7 @@ size_t Lexer::handleUtility(size_t i, const std::string &input) {
       &Lexer::handleUtilityPAREN,   &Lexer::handleUtilityCURLY,
       &Lexer::handleUtilityCOMMENT, &Lexer::handleUtilityCOMMA,
       &Lexer::handleUtilityCOLON,   &Lexer::handleUtilitySemiColon,
+      &Lexer::handleUtilityBRACKET,
   };
 
   for (auto fn : MatchFunctions) {
@@ -583,6 +588,20 @@ size_t Lexer::handleUtilitySemiColon(size_t i, const std::string &input) {
   if (input[i] == ';') {
     tokStream->push_back(Token(TokSemiColon, ";", location));
     i = advance(i);
+  }
+  return i;
+}
+
+size_t Lexer::handleUtilityBRACKET(size_t i, const std::string &input) {
+  if (input[i] == '[') {
+    tokStream->push_back(Token(TokLeftBracket, "[", location));
+    i = advance(i);
+    return i;
+  }
+  if (input[i] == ']') {
+    tokStream->push_back(Token(TokRightBracket, "]", location));
+    i = advance(i);
+    return i;
   }
   return i;
 }

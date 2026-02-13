@@ -1,0 +1,6 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: Array literal element type mismatch
+let main() -> i32 {
+  let a : arr<i32, 3> = [1, 2.0, 3];
+  return 0;
+}

@@ -39,6 +39,17 @@ bool PointerType::operator<(const PointerType &t) const {
 }
 Type PointerType::get_pointee() const { return *pointee; }
 
+ArrayType::ArrayType(Type element, size_t size)
+    : element(std::make_shared<Type>(std::move(element))), size(size) {}
+bool ArrayType::operator==(const ArrayType &t) const {
+  return *element == *t.element && size == t.size;
+}
+bool ArrayType::operator<(const ArrayType &t) const {
+  return *element == *t.element && size == t.size;
+}
+Type ArrayType::get_element() const { return *element; }
+size_t ArrayType::get_size() const { return size; }
+
 Type Type::Function(std::vector<Type> params) {
   return Type{TypeKind::Function, FunctionType{params}};
 }
@@ -49,7 +60,8 @@ bool Type::operator==(const Type &other) const {
   if (this->type_kind != other.type_kind)
     return false;
   if (this->type_kind == TypeKind::Function ||
-      this->type_kind == TypeKind::Pointer)
+      this->type_kind == TypeKind::Pointer ||
+      this->type_kind == TypeKind::Array)
     return this->type_data == other.type_data;
 
   return true;

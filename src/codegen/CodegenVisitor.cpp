@@ -137,8 +137,25 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       return;
     }
 
-    this->abort("Left hand side of assignment must be a variable or "
-                "dereferenced pointer");
+    if (auto *idx_expr = dynamic_cast<IndexExprAST *>(ast->LHS.get())) {
+      auto *var_expr = dynamic_cast<VariableExprAST *>(idx_expr->array_expr.get());
+      this->abort_if_not(var_expr, "Array index assignment requires a variable");
+      auto *alloca = this->allocaValues.top()[var_expr->variableName];
+      this->abort_if_not(alloca, "Unknown array variable in index assignment");
+
+      auto arr_type = type_converter.get_type(var_expr->type);
+      auto idx = idx_expr->index_expr->val;
+      auto *gep = resPtr->Builder->CreateGEP(
+          arr_type, alloca,
+          {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
+          "arr_idx_assign");
+      resPtr->Builder->CreateStore(R, gep);
+      ast->val = R;
+      return;
+    }
+
+    this->abort("Left hand side of assignment must be a variable, "
+                "dereferenced pointer, or array index");
     return;
   }
   auto L = ast->LHS->val;
@@ -219,6 +236,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Bool:
   case TypeKind::Function:
   case TypeKind::Pointer:
+  case TypeKind::Array:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -275,6 +293,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Poisoned:
   case TypeKind::Unit:
   case TypeKind::Record:
+  case TypeKind::Array:
   case TypeKind::Function:
   case TypeKind::Pointer:
   case TypeKind::Never:
@@ -407,6 +426,74 @@ void CgVisitor::visit(AddrOfExprAST *ast) {
   this->abort_if_not(alloca, "Unknown variable in address-of expression");
   ast->val = alloca;
   ast->walk_with_postorder(this);
+}
+
+
+// Taken from
+// echo 'void f(int *out) { int a[] = {10,20,30}; }' | clang -xc - -emit-llvm -S -o -
+void CgVisitor::postorder_walk(ArrayLiteralExprAST *ast) {
+  auto *arr_llvm_type = llvm::cast<llvm::ArrayType>(type_converter.get_type(ast->type));
+
+  // Collect element constants
+  std::vector<llvm::Constant *> constants;
+  for (auto &elem : ast->elements) {
+    auto *c = llvm::dyn_cast<llvm::Constant>(elem->val);
+    this->abort_if_not(c, "Array literal elements must be constants");
+    constants.push_back(c);
+  }
+
+  // Build a global constant array and memcpy into a local alloca
+  auto *const_arr = llvm::ConstantArray::get(arr_llvm_type, constants);
+  auto *global = new llvm::GlobalVariable(
+      *resPtr->Module, arr_llvm_type, /*isConstant=*/true,
+      llvm::GlobalValue::PrivateLinkage, const_arr, ".arr_literal");
+  global->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  auto *alloca = CodegenUtils::CreateEntryBlockAlloca(
+      getCurrentFunction(), "arr_lit_tmp", arr_llvm_type);
+
+  auto &data_layout = resPtr->Module->getDataLayout();
+  auto size = data_layout.getTypeAllocSize(arr_llvm_type);
+
+  resPtr->Builder->CreateMemCpy(
+      alloca, alloca->getAlign(),
+      global, global->getAlign(),
+      size);
+
+  ast->val = resPtr->Builder->CreateLoad(arr_llvm_type, alloca, "arr_val");
+}
+
+void CgVisitor::visit(IndexExprAST *ast) {
+  // Don't visit array_expr normally — we need the alloca, not the loaded value
+  ast->walk_with_preorder(this);
+  // Only visit index_expr to get the index value
+  ast->index_expr->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void CgVisitor::postorder_walk(IndexExprAST *ast) {
+  // Get the alloca for the array variable
+  auto *var_expr = dynamic_cast<VariableExprAST *>(ast->array_expr.get());
+  this->abort_if_not(var_expr, "Array indexing requires a variable");
+  auto *alloca = this->allocaValues.top()[var_expr->variableName];
+  this->abort_if_not(alloca, "Unknown array variable");
+
+  auto arr_type = type_converter.get_type(var_expr->type);
+  auto idx = ast->index_expr->val;
+
+  auto *gep = resPtr->Builder->CreateGEP(
+      arr_type, alloca,
+      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
+      "arr_idx");
+  auto elem_type = std::get<ArrayType>(var_expr->type.type_data).get_element();
+  ast->val = resPtr->Builder->CreateLoad(type_converter.get_type(elem_type), gep, "arr_elem");
+}
+
+void CgVisitor::postorder_walk(LenExprAST *ast) {
+  auto operand_type = ast->operand->type;
+  auto arr_size = std::get<ArrayType>(operand_type.type_data).get_size();
+  ast->val = llvm::ConstantInt::get(
+      llvm::Type::getInt32Ty(*resPtr->Context), arr_size);
 }
 
 } // namespace sammine_lang::AST
