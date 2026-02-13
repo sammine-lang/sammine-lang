@@ -74,6 +74,32 @@ public:
     return typename_top.get_from_name(str);
   }
 
+  // visit overrides
+  virtual void visit(ProgramAST *ast) override;
+  virtual void visit(VarDefAST *ast) override;
+  virtual void visit(ExternAST *ast) override;
+  virtual void visit(FuncDefAST *ast) override;
+  virtual void visit(RecordDefAST *ast) override;
+  virtual void visit(PrototypeAST *ast) override;
+  virtual void visit(CallExprAST *ast) override;
+  virtual void visit(ReturnExprAST *ast) override;
+  virtual void visit(BinaryExprAST *ast) override;
+  virtual void visit(NumberExprAST *ast) override;
+  virtual void visit(StringExprAST *ast) override;
+  virtual void visit(BoolExprAST *ast) override;
+  virtual void visit(UnitExprAST *ast) override;
+  virtual void visit(VariableExprAST *ast) override;
+  virtual void visit(BlockAST *ast) override;
+  virtual void visit(IfExprAST *ast) override;
+  virtual void visit(TypedVarAST *ast) override;
+  virtual void visit(DerefExprAST *ast) override;
+  virtual void visit(AddrOfExprAST *ast) override;
+  virtual void visit(AllocExprAST *ast) override;
+  virtual void visit(FreeExprAST *ast) override;
+  virtual void visit(ArrayLiteralExprAST *ast) override;
+  virtual void visit(IndexExprAST *ast) override;
+  virtual void visit(LenExprAST *ast) override;
+
   // pre order
 
   virtual void preorder_walk(ProgramAST *ast) override;

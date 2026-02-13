@@ -14,7 +14,7 @@ let find_factor(n: i64, d: i64) -> i64 {
 }
 
 let main() -> i32 {
-  let result : i64 = find_factor(600851475143i64, 2i64);
+  let result = find_factor(600851475143i64, 2i64);
   printf("%lld\n", result);
   return 0;
 }

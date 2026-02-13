@@ -97,7 +97,7 @@ struct Type {
     return this->type_kind != TypeKind::Poisoned;
   }
   bool synthesized() const {
-    return this->type_kind != TypeKind::NonExistent &&
+    return this->type_kind != TypeKind::NonExistent ||
            this->type_kind == TypeKind::Poisoned;
   }
   bool checked() const {

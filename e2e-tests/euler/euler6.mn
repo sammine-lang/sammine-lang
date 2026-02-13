@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 25164150
+
+# Project Euler Problem 6: Sum square difference for 1..100
+
+let sum(n: i32, acc: i32) -> i32 {
+  if n > 100 { acc } else { sum(n + 1, acc + n) }
+}
+
+let sum_squares(n: i32, acc: i32) -> i32 {
+  if n > 100 { acc } else { sum_squares(n + 1, acc + n * n) }
+}
+
+let main() -> i32 {
+  let s = sum(1, 0);
+  printf("%d\n", s * s - sum_squares(1, 0));
+  return 0;
+}

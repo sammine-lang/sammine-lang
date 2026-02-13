@@ -11,100 +11,29 @@
 //!        traverses the AST to synthesize node types, perform bidirectional
 //!        consistency checks, and register functions and variables.
 namespace sammine_lang::AST {
-// pre order
-void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {
-  ast->accept_synthesis(this);
+// visit overrides — explicit traversal order
+
+void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
+  for (auto &def : ast->DefinitionVec)
+    def->accept_vis(this);
 }
 
-void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {
-  this->id_to_type.top().setScope(ast);
-  this->typename_to_type.top().setScope(ast);
-
+void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
+  enter_new_scope();
+  id_to_type.top().setScope(ast);
+  typename_to_type.top().setScope(ast);
+  ast->Prototype->accept_vis(this);
   ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(RecordDefAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(NumberExprAST *ast) {
-
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(BoolExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(VariableExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(BlockAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(IfExprAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(UnitExprAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(TypedVarAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(DerefExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(AddrOfExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(AllocExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-// post order
-void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
-void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {
-  if (ast->checked())
-    return;
-
-  auto to = ast->accept_synthesis(this);
-  auto from = ast->Expression->accept_synthesis(this);
-  if (!type_map_ordering.compatible_to_from(to, from)) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Type mismatch in variable definition: Synthesized {}, "
-                    "checked against {}.",
-                    to.to_string(), from.to_string()));
-    ast->type = Type::Poisoned();
-  }
+  ast->Block->accept_vis(this);
   ast->set_checked();
-}
-void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
-void BiTypeCheckerVisitor::postorder_walk(RecordDefAST *ast) {}
-void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {
-  if (ast->checked())
-    return;
-
-  ast->set_checked();
+  exit_new_scope();
 }
 
-void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {
+void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
+  ast->accept_synthesis(this);
+  for (auto &var : ast->parameterVectors)
+    var->accept_vis(this);
   id_to_type.parent_scope()->registerNameT(ast->functionName, ast->type);
-
-  // main must return i32
   if (ast->functionName == "main") {
     auto fn_type = std::get<FunctionType>(ast->type.type_data);
     auto return_type = fn_type.get_return_type();
@@ -115,54 +44,195 @@ void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {
     }
   }
 }
-void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {
-  if (ast->checked() || pre_func.contains(ast->functionName))
-    return;
 
-  auto ty = get_type_from_id_parent(ast->functionName);
-  auto func = std::get<FunctionType>(ty->type_data);
-  auto params = func.get_params_types();
-  if (ast->arguments.size() != params.size()) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Function '{}' params and arguments have a type mismatch",
-                    ast->functionName));
-  }
-
-  for (const auto &[arg, par] :
-       std::ranges::views::zip(ast->arguments, params)) {
-    if (!this->type_map_ordering.compatible_to_from(par, arg->type)) {
+void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
+  ast->Expression->accept_vis(this);
+  ast->accept_synthesis(this);
+  if (!ast->checked()) {
+    auto to = ast->type;
+    auto from = ast->Expression->accept_synthesis(this);
+    if (!type_map_ordering.compatible_to_from(to, from)) {
       this->add_error(
           ast->get_location(),
-          fmt::format("Function '{}' params and arguments have a type mismatch",
-                      ast->functionName));
+          fmt::format("Type mismatch in variable definition: Synthesized {}, "
+                      "checked against {}.",
+                      to.to_string(), from.to_string()));
+      ast->type = Type::Poisoned();
     }
+    ast->set_checked();
   }
-
-  ast->set_checked();
 }
-void BiTypeCheckerVisitor::postorder_walk(ReturnExprAST *ast) {
+
+void BiTypeCheckerVisitor::visit(ExternAST *ast) {
+  ast->Prototype->accept_vis(this);
+}
+
+void BiTypeCheckerVisitor::visit(RecordDefAST *ast) {}
+
+void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
-
-  auto t = ast->return_expr->accept_synthesis(this);
-
-  auto scope_fn = this->id_to_type.top().s.value();
-  auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
-  auto return_type = fn_type.get_return_type();
-
-  if (t != return_type) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Wrong return type for function {}, expected "
-                                "{} but got {}",
-                                scope_fn->getFunctionName(),
-                                return_type.to_string(), t.to_string()));
+  for (auto &arg : ast->arguments)
+    arg->accept_vis(this);
+  if (!ast->checked() && !pre_func.contains(ast->functionName)) {
+    auto ty = get_type_from_id_parent(ast->functionName);
+    auto func = std::get<FunctionType>(ty->type_data);
+    auto params = func.get_params_types();
+    if (ast->arguments.size() != params.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format(
+              "Function '{}' params and arguments have a type mismatch",
+              ast->functionName));
+    }
+    for (const auto &[arg, par] :
+         std::ranges::views::zip(ast->arguments, params)) {
+      if (!this->type_map_ordering.compatible_to_from(par, arg->type)) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format(
+                "Function '{}' params and arguments have a type mismatch",
+                ast->functionName));
+      }
+    }
+    ast->set_checked();
   }
-
-  ast->set_checked();
 }
-void BiTypeCheckerVisitor::postorder_walk(BinaryExprAST *ast) {
+
+void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
+  if (ast->return_expr)
+    ast->return_expr->accept_vis(this);
+  ast->accept_synthesis(this);
+  if (!ast->checked()) {
+    auto t = ast->return_expr->accept_synthesis(this);
+    auto scope_fn = this->id_to_type.top().s.value();
+    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+    auto return_type = fn_type.get_return_type();
+    if (t != return_type) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Wrong return type for function {}, expected "
+                                  "{} but got {}",
+                                  scope_fn->getFunctionName(),
+                                  return_type.to_string(), t.to_string()));
+    }
+    ast->set_checked();
+  }
+}
+
+void BiTypeCheckerVisitor::visit(BinaryExprAST *ast) {
+  ast->LHS->accept_vis(this);
+  ast->RHS->accept_vis(this);
   ast->type = ast->accept_synthesis(this);
 }
+
+void BiTypeCheckerVisitor::visit(BlockAST *ast) {
+  for (auto &stmt : ast->Statements)
+    stmt->accept_vis(this);
+}
+
+void BiTypeCheckerVisitor::visit(IfExprAST *ast) {
+  ast->bool_expr->accept_vis(this);
+  ast->thenBlockAST->accept_vis(this);
+  ast->elseBlockAST->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(NumberExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(StringExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(BoolExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(UnitExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(VariableExprAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(TypedVarAST *ast) {
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(DerefExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(AddrOfExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(AllocExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(FreeExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(ArrayLiteralExprAST *ast) {
+  for (auto &elem : ast->elements)
+    elem->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(IndexExprAST *ast) {
+  ast->array_expr->accept_vis(this);
+  ast->index_expr->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(LenExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+// pre order — all empty, logic moved to visit() overrides
+void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(RecordDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(NumberExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(BoolExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(VariableExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(BlockAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(IfExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(UnitExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(TypedVarAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(DerefExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(AddrOfExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(AllocExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
+
+// post order — all empty, logic moved to visit() overrides
+void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(RecordDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(ReturnExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StringExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(NumberExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(BoolExprAST *ast) {}

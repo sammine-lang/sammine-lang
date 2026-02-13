@@ -1,0 +1,32 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 104743
+
+# Project Euler Problem 7: 10001st prime number
+
+let is_prime_check(n: i32, d: i32) -> i32 {
+  if d * d > n { 1 }
+  else if n % d == 0 { 0 }
+  else { is_prime_check(n, d + 2) }
+}
+
+let is_prime(n: i32) -> i32 {
+  if n < 2 { 0 }
+  else if n == 2 { 1 }
+  else if n % 2 == 0 { 0 }
+  else { is_prime_check(n, 3) }
+}
+
+# Count primes starting from odd candidates (2 already counted)
+let nth_prime(candidate: i32, count: i32) -> i32 {
+  if is_prime(candidate) == 1 {
+    if count == 10001 { candidate }
+    else { nth_prime(candidate + 2, count + 1) }
+  } else {
+    nth_prime(candidate + 2, count)
+  }
+}
+
+let main() -> i32 {
+  printf("%d\n", nth_prime(3, 2));
+  return 0;
+}

@@ -2,7 +2,7 @@
 
 # this is a function
 let f(x : i32) -> i32 {
-  if x  {
+  if x > 0 {
     x = 2;
   } else {
     x = 2;

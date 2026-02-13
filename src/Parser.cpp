@@ -16,7 +16,10 @@ using namespace AST;
 //! \brief Holds the precedence of a binary operation
 static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokASSIGN, 2},
+    {TokenType::TokOR, 3},
+    {TokenType::TokAND, 5},
     {TokenType::TokLESS, 10},
+    {TokenType::TokLessEqual, 10},
     {TokenType::TokGreaterEqual, 10},
     {TokenType::TokGREATER, 10},
     {TokenType::TokEQUAL, 10},
@@ -25,7 +28,6 @@ static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokMUL, 40},
     {TokenType::TokDIV, 40},
     {TokenType::TokMOD, 40},
-    {TokenType::TokOR, 1},
 };
 
 int GetTokPrecedence(TokenType tokType) {
@@ -666,8 +668,33 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
 
     auto [expr, result] = fn(this);
     switch (result) {
-    case SUCCESS:
+    case SUCCESS: {
+      // Handle index postfix: expr[idx]
+      while (auto lb = expect(TokenType::TokLeftBracket)) {
+        auto [idx, idx_result] = ParseExpr();
+        switch (idx_result) {
+        case SUCCESS:
+          break;
+        case COMMITTED_EMIT_MORE_ERROR:
+          this->error("Failed to parse index expression");
+          [[fallthrough]];
+        case COMMITTED_NO_MORE_ERROR:
+          return {std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
+                  COMMITTED_NO_MORE_ERROR};
+        case NONCOMMITTED:
+          this->error("Expected expression inside '[]'", lb->get_location());
+          return {nullptr, COMMITTED_NO_MORE_ERROR};
+        }
+        auto rb = expect(TokenType::TokRightBracket);
+        if (!rb) {
+          this->error("Expected ']' to close index expression", lb->get_location());
+          return {std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
+                  COMMITTED_NO_MORE_ERROR};
+        }
+        expr = std::make_unique<IndexExprAST>(std::move(expr), std::move(idx));
+      }
       return std::make_pair(std::move(expr), SUCCESS);
+    }
     case COMMITTED_NO_MORE_ERROR:
       return std::make_pair(std::move(expr), COMMITTED_NO_MORE_ERROR);
     case COMMITTED_EMIT_MORE_ERROR:
@@ -695,31 +722,6 @@ auto Parser::ParseExpr() -> p<ExprAST> {
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
     return {std::move(LHS), COMMITTED_NO_MORE_ERROR};
-  }
-
-  // Parse index postfix: expr[idx]
-  while (auto lb = expect(TokenType::TokLeftBracket)) {
-    auto [idx, idx_result] = ParseExpr();
-    switch (idx_result) {
-    case SUCCESS:
-      break;
-    case COMMITTED_EMIT_MORE_ERROR:
-      this->error("Failed to parse index expression");
-      [[fallthrough]];
-    case COMMITTED_NO_MORE_ERROR:
-      return {std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx)),
-              COMMITTED_NO_MORE_ERROR};
-    case NONCOMMITTED:
-      this->error("Expected expression inside '[]'", lb->get_location());
-      return {nullptr, COMMITTED_NO_MORE_ERROR};
-    }
-    auto rb = expect(TokenType::TokRightBracket);
-    if (!rb) {
-      this->error("Expected ']' to close index expression", lb->get_location());
-      return {std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx)),
-              COMMITTED_NO_MORE_ERROR};
-    }
-    LHS = std::make_unique<IndexExprAST>(std::move(LHS), std::move(idx));
   }
 
   auto [next, right_result] = ParseBinaryExpr(0, std::move(LHS));
