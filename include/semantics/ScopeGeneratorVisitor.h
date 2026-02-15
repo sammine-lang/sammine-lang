@@ -24,14 +24,14 @@ public:
 
   virtual void enter_new_scope() override { this->scope_stack.push_context(); }
   virtual void exit_new_scope() override { this->scope_stack.pop_context(); }
-  NameQueryResult can_see(const std::string &symbol) {
+  NameQueryResult can_see(const std::string &symbol) const {
     auto result = this->scope_stack.recursiveQueryName(symbol);
     if (result == nameNotFound)
       return pre_func.contains(symbol) ? nameFound : nameNotFound;
     return result;
   }
-  NameQueryResult can_see_parent(const std::string &symbol) {
-  auto *parent_scope = this->scope_stack.parent_scope();
+  NameQueryResult can_see_parent(const std::string &symbol) const {
+  const auto *parent_scope = this->scope_stack.parent_scope();
     auto result = parent_scope->recursiveQueryName(symbol);
     if (result == nameNotFound)
       return pre_func.contains(symbol) ? nameFound : nameNotFound;
