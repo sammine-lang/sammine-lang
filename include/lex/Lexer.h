@@ -54,7 +54,7 @@ public:
   std::shared_ptr<Token> peek();
   std::shared_ptr<Token> consume();
 
-  std::shared_ptr<TokenStream> getTokenStream() { return tokStream; }
+  std::shared_ptr<TokenStream> getTokenStream() const { return tokStream; }
 
   size_t advance(size_t i);
 

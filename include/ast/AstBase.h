@@ -161,17 +161,18 @@ public:
     return this->top().recursiveQueryName(name);
   }
 
-  T get_from_name(const std::string &name) {
+  T get_from_name(const std::string &name) const {
     return this->top().get_from_name(name);
   }
   NameQueryResult queryName(const std::string &name) const {
     return this->top().queryName(name);
   }
 
-  T recursive_get_from_name(const std::string &name) {
+  T recursive_get_from_name(const std::string &name) const {
     return this->top().recursive_get_from_name(name);
   }
 
+  const LexicalContext<T, S> *parent_scope() const { return this->top().parent_scope; }
   LexicalContext<T, S> *parent_scope() { return this->top().parent_scope; }
 };
 
@@ -226,7 +227,7 @@ public:
   virtual void walk_with_preorder(ASTVisitor *visitor) = 0;
   virtual void walk_with_postorder(ASTVisitor *visitor) = 0;
   virtual Type accept_synthesis(TypeCheckerVisitor *visitor) = 0;
-  virtual std::string getTreeName() = 0;
+  virtual std::string getTreeName() const = 0;
 };
 
 class AstBase : public Visitable {
@@ -274,7 +275,7 @@ public:
     change_location(location);
     return this;
   }
-  sammine_util::Location get_location() { return this->location; }
+  sammine_util::Location get_location() const { return this->location; }
   bool synthesized() const { return this->type.synthesized(); }
 
 };
