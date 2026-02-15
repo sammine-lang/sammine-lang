@@ -27,6 +27,7 @@ enum TokenType {
   TokAndLogical, // &
   TokOR,         // ||
   TokORLogical,  // |
+  TokPipe,       // |>
   TokXOR,        // ^
   TokSHL,        // <<
   TokSHR,        // >>
@@ -111,6 +112,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokAndLogical, "&"},
     {TokOR, "||"},
     {TokORLogical, "|"},
+    {TokPipe, "|>"},
     {TokXOR, "^"},
     {TokSHL, ">>"},
     {TokSHR, "<<"},

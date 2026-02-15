@@ -211,6 +211,21 @@ public:
       return Type::Array(elem, arr->size);
     }
 
+    if (auto *fn = dynamic_cast<FunctionTypeExprAST *>(type_expr)) {
+      std::vector<Type> total_types;
+      for (auto &param : fn->paramTypes) {
+        auto pt = resolve_type_expr(param.get());
+        if (pt.type_kind == TypeKind::Poisoned)
+          return Type::Poisoned();
+        total_types.push_back(pt);
+      }
+      auto ret = resolve_type_expr(fn->returnType.get());
+      if (ret.type_kind == TypeKind::Poisoned)
+        return Type::Poisoned();
+      total_types.push_back(ret);
+      return Type::Function(std::move(total_types));
+    }
+
     return Type::NonExistent();
   }
 };

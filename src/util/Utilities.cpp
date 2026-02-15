@@ -221,7 +221,7 @@ void Reporter::report(const Reportee &reports) const {
   for (const auto &[loc, report_msg, report_kind] : reports) {
 
     for (int64_t i = 1; i <= 1 && !begin; i++)
-      print_fmt(LINE_COLOR, "----|\n");
+      print_fmt(LINE_COLOR, "----|--------------------------------------------\n");
 
     begin = false;
     report_single_msg(loc, report_msg, report_kind);

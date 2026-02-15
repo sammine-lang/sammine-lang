@@ -416,6 +416,42 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     result->location = arr_tok->get_location();
     return result;
   }
+  if (auto lparen = expect(TokenType::TokLeftParen)) {
+    // Parse function type: (type, type, ...) -> retType
+    std::vector<std::unique_ptr<TypeExprAST>> paramTypes;
+    if (tokStream->peek()->tok_type != TokenType::TokRightParen) {
+      auto first = ParseTypeExpr();
+      if (!first) {
+        this->imm_error("Expected parameter type in function type", lparen->get_location());
+        return nullptr;
+      }
+      paramTypes.push_back(std::move(first));
+      while (expect(TokenType::TokComma)) {
+        auto param = ParseTypeExpr();
+        if (!param) {
+          this->imm_error("Expected parameter type after ',' in function type", lparen->get_location());
+          return nullptr;
+        }
+        paramTypes.push_back(std::move(param));
+      }
+    }
+    if (!expect(TokenType::TokRightParen)) {
+      this->imm_error("Expected ')' in function type", lparen->get_location());
+      return nullptr;
+    }
+    if (!expect(TokenType::TokArrow)) {
+      this->imm_error("Expected '->' after ')' in function type", lparen->get_location());
+      return nullptr;
+    }
+    auto retType = ParseTypeExpr();
+    if (!retType) {
+      this->imm_error("Expected return type after '->' in function type", lparen->get_location());
+      return nullptr;
+    }
+    auto result = std::make_unique<FunctionTypeExprAST>(std::move(paramTypes), std::move(retType));
+    result->location = lparen->get_location();
+    return result;
+  }
   if (auto id = expect(TokenType::TokID)) {
     return std::make_unique<SimpleTypeExprAST>(id);
   }

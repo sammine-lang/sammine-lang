@@ -6,8 +6,19 @@
 - Factory methods: `Type::I32_t()`, `Type::Pointer(pointee)`, `Type::Function(params)`, etc.
 - `PointerType` stores pointee as `std::shared_ptr<Type>` (not by value) because `Type` is forward-declared when `PointerType` is defined. `FunctionType` avoids this with `std::vector<Type>` (heap-allocated internally).
 
-## Equality
-- `Type::operator==` compares `type_kind` first, then `type_data` only for `Function` and `Pointer` kinds (other kinds are fully identified by their `TypeKind`)
+## Equality & Qualifiers
+- `Type::operator==` compares fundamental type structure only (`type_kind` + `type_data`). Qualifiers like `is_mutable` are intentionally ignored — use `compatible_to_from()` for directional checks.
+- `Type::is_mutable`: tracks whether the binding is mutable (`let mut` or `mut` param). Default `false`.
+- `Type::is_literal()`: returns `true` for primitive types (i32, i64, f64, bool, unit, string, Integer, Flt). Primitive types bypass the mutability check in `compatible_to_from` since they are always by-value.
+- `compatible_to_from(to, from)` rejects `immut → mut` for non-primitive types: `to.is_mutable && !from.is_mutable && !from.is_literal()`
+
+## Mutability
+- Variables are **immutable by default**: `let x: i32 = 5;`
+- Use `let mut` for mutable locals: `let mut x: i32 = 5; x = 10;`
+- Use `mut` for mutable function params: `let f(mut x: i32) -> i32 { x = x + 1; ... }`
+- Reassigning an immutable variable emits a type-check error with location at the `=` token
+- Mutability is set on `Type::is_mutable` during `synthesize(VarDefAST*)` and `synthesize(TypedVarAST*)`
+- Assignment check in `synthesize(BinaryExprAST*)`: if LHS is a `VariableExprAST` with `!type.is_mutable`, error
 
 ## BiTypeChecker (`include/typecheck/BiTypeChecker.h`)
 - Bidirectional: `synthesize()` produces types bottom-up, `postorder_walk()` checks consistency top-down

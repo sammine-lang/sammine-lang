@@ -388,22 +388,29 @@ size_t Lexer::handleOperatorsAND(size_t i, const std::string &input) {
 size_t Lexer::handleOperatorsOR(size_t i, const std::string &input) {
   if (input[i] == '|') {
 
-    // If the next index (i+1) is outside of input, we should return ADD
-    if (input.length() - 1 < i + 1 || (input[i + 1] != '|')) {
+    // If the next index (i+1) is outside of input, we should return logical OR
+    if (input.length() - 1 < i + 1) {
       tokStream->push_back(Token(TokORLogical, "|", location));
       i = advance(i);
       return i;
     }
 
-    i = advance(i);
-
-    if (input[i] == '|') {
-      tokStream->push_back(Token(TokOR, "||", location));
+    if (input[i + 1] == '>') {
+      tokStream->push_back(Token(TokPipe, "|>", location));
+      i = advance(i);
       i = advance(i);
       return i;
     }
 
-    i = devance(i);
+    if (input[i + 1] == '|') {
+      tokStream->push_back(Token(TokOR, "||", location));
+      i = advance(i);
+      i = advance(i);
+      return i;
+    }
+
+    tokStream->push_back(Token(TokORLogical, "|", location));
+    i = advance(i);
   }
   return i;
 }

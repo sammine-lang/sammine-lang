@@ -59,6 +59,25 @@ public:
   }
 };
 
+class FunctionTypeExprAST : public TypeExprAST {
+public:
+  std::vector<std::unique_ptr<TypeExprAST>> paramTypes;
+  std::unique_ptr<TypeExprAST> returnType;
+  FunctionTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> paramTypes,
+                      std::unique_ptr<TypeExprAST> returnType)
+      : paramTypes(std::move(paramTypes)), returnType(std::move(returnType)) {}
+  std::string to_string() const override {
+    std::string res = "(";
+    for (size_t i = 0; i < paramTypes.size(); i++) {
+      res += paramTypes[i]->to_string();
+      if (i != paramTypes.size() - 1)
+        res += ", ";
+    }
+    res += ") -> " + returnType->to_string();
+    return res;
+  }
+};
+
 class DefinitionAST : public AstBase, public Printable {};
 
 class ProgramAST : public AstBase, public Printable {

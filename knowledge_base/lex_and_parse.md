@@ -4,7 +4,7 @@
 - Keywords are recognized in `handleID()` in `src/lex/Lexer.cpp` — add string-to-token mapping there
 - Token types defined in `include/lex/Token.h` — add to `TokenType` enum and `TokenMap`
 - Existing operator tokens reused for pointer ops: `TokMUL` = `*` (deref), `TokAndLogical` = `&` (addr-of), `TokLESS`/`TokGREATER` = `<`/`>` (for `ptr<T>`)
-- Keyword tokens for built-in functions: `TokAlloc` = `alloc`, `TokFree` = `free`
+- Keyword tokens for built-in functions: `TokAlloc` = `alloc`, `TokFree` = `free`, `TokMUT` = `mut`
 - Number literals support type suffixes: `42i32`, `600851475143i64`, `3.14f64` — the lexer consumes any alphanumeric suffix after digits, stored as part of the `TokNum` lexeme
 
 ## Parser
@@ -19,6 +19,8 @@
 - All AST nodes extend `AstBase` (via `ExprAST` or `DefinitionAST`) and implement `Visitable`
 - Each node needs: `getTreeName()`, `accept_vis()`, `walk_with_preorder()`, `walk_with_postorder()`, `accept_synthesis()`
 - `TypeExprAST` hierarchy (`SimpleTypeExprAST`, `PointerTypeExprAST`) is NOT part of the visitor pattern — resolved directly by type checker via `dynamic_cast`
+- `VarDefAST` has `bool is_mutable` — set from `let mut` in `ParseVarDef()`
+- `TypedVarAST` has `bool is_mutable` — set from `mut` prefix in `ParseTypedVar()` (for function params)
 - `TypedVarAST` stores `unique_ptr<TypeExprAST> type_expr` (nullptr = no annotation)
 - `PrototypeAST` stores `unique_ptr<TypeExprAST> return_type_expr` (nullptr = unit return)
 
