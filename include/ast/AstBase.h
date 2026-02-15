@@ -30,7 +30,8 @@ struct ASTPrinter {
   static void print(ProgramAST *t);
 };
 class ASTVisitor : public sammine_util::Reportee {
-  ProgramAST *top_level_ast;
+protected:
+  ProgramAST *top_level_ast = nullptr;
 
 public:
   [[noreturn]] virtual void
