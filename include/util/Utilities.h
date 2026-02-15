@@ -42,7 +42,7 @@ void abort_if_not(const T &condition,
   }
 }
 inline void log_diagnostics(const std::string &diagnostics) {
-  fmt::print(stderr, fg(fmt::terminal_color::bright_green), "{}\n",
+  fmt::print(stderr, fg(fmt::terminal_color::green), "{}\n",
              diagnostics);
 }
 
@@ -184,7 +184,7 @@ private:
       fmt::terminal_color::bright_magenta;
 
   inline static fmt::terminal_color MSG_COLOR =
-      fmt::terminal_color::bright_blue;
+      fmt::terminal_color::blue;
   std::string file_name;
   std::string input;
   std::vector<std::pair<std::int64_t, std::string_view>> diagnostic_data;
@@ -227,7 +227,7 @@ public:
   void immediate_error(const std::string &str, Location l = Location(-1, -1)) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
-      print_fmt(fmt::terminal_color::bright_blue, "In {}\n", file_name);
+      print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
       report_singular_line(ReportKind::error, str, 0, 0);
 
     } else {
@@ -237,7 +237,7 @@ public:
   void immediate_diag(const std::string &str, Location l = Location(-1, -1)) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
-      print_fmt(fmt::terminal_color::bright_blue, "In {}\n", file_name);
+      print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
       report_singular_line(ReportKind::diag, str, 0, 0);
     } else {
       report_single_msg(l, str, ReportKind::diag);

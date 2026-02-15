@@ -184,7 +184,7 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
   for (size_t j = col_end; j < msg.size(); j++)
     fmt::print(stderr, "{}", msg[j]);
 
-  print_fmt(fmt::terminal_color::white, "\n");
+  fmt::print(stderr, "\n");
 }
 void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
                                  const std::string &format_str,
@@ -195,7 +195,7 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
       locator.get_start_end_of_singular_line_token();
 
   print_fmt(LINE_COLOR, "    |");
-  print_fmt(fmt::terminal_color::bright_blue, "{}:{}:{}\n", file_name,
+  print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name,
             row_num + 1, col_start);
   if (!locator.is_on_singular_line()) {
     print_fmt(LINE_COLOR, "    |");
@@ -210,7 +210,7 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
       indicate_singular_line(report_kind, col_start, col_end);
       report_singular_line(report_kind, format_str, col_start, col_end);
     } else {
-      print_fmt(fmt::terminal_color::white, "{}\n", str);
+      fmt::print(stderr, "{}\n", str);
     }
   }
 }
@@ -228,13 +228,13 @@ void Reporter::report(const Reportee &reports) const {
   }
 
   if (reports.has_message()) {
-    print_fmt(fmt::terminal_color::bright_green,
+    print_fmt(fmt::terminal_color::green,
               "\n# Did something seems wrong? Report it via "
               "[https://codeberg.org/badumbatish/sammine-lang/issues]\n");
-    print_fmt(fmt::terminal_color::bright_green,
+    print_fmt(fmt::terminal_color::green,
               "# Give us a screenshot of the error as well as your contextual "
               "source code\n");
-    print_fmt(fmt::terminal_color::bright_green,
+    print_fmt(fmt::terminal_color::green,
               "----------------------------------------------------------------"
               "----------\n");
   }
@@ -248,7 +248,7 @@ fmt::terminal_color Reporter::get_color_from(ReportKind report_kind) {
     return fmt::terminal_color::bright_yellow;
     break;
   case Reportee::diag:
-    return fmt::terminal_color::bright_green;
+    return fmt::terminal_color::green;
     break;
   }
   abort("fail to get color");

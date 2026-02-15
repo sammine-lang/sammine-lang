@@ -1,5 +1,5 @@
 # this is a function
-fn f(x : f64) {
+let f(x : f64) {
     # Use `let` keyword
     let x = 0;
     3 + 1;
