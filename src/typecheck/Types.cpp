@@ -56,6 +56,9 @@ Type Type::Function(std::vector<Type> params) {
 bool Type::operator!=(const Type &other) const { return !(operator==(other)); }
 bool Type::operator<(const Type &t) const { return this->operator==(t); }
 bool Type::operator>(const Type &t) const { return this->operator==(t); }
+// Compares fundamental type structure only (TypeKind + TypeData).
+// Qualifiers like is_mutable are intentionally ignored — use
+// compatible_to_from() for directional compatibility checks.
 bool Type::operator==(const Type &other) const {
   if (this->type_kind != other.type_kind)
     return false;
@@ -112,5 +115,13 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) {
       b.type_kind != TypeKind::NonExistent) {
     return true;
   }
+
+  // Mutability check: immutable cannot flow into mutable
+  // (mut -> immut is fine, immut -> mut is not)
+  // Primitive/literal types bypass this check since they are always by-value.
+  if (a.is_mutable && !b.is_mutable && !b.is_literal()) {
+    return false;
+  }
+
   return a == b;
 }

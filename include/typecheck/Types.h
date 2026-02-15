@@ -72,6 +72,7 @@ using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string,
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
+  bool is_mutable = false;
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
   static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
@@ -161,6 +162,22 @@ struct Type {
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
     return "";
+  }
+
+  bool is_literal() const {
+    switch (type_kind) {
+    case TypeKind::I32_t:
+    case TypeKind::I64_t:
+    case TypeKind::F64_t:
+    case TypeKind::Bool:
+    case TypeKind::Unit:
+    case TypeKind::String:
+    case TypeKind::Integer:
+    case TypeKind::Flt:
+      return true;
+    default:
+      return false;
+    }
   }
 
   operator std::string() { return to_string(); }

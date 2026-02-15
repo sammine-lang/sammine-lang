@@ -282,6 +282,8 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   if (!let)
     return std::make_pair(
         std::make_unique<VarDefAST>(nullptr, nullptr, nullptr), NONCOMMITTED);
+  auto mut_tok = expect(TokenType::TokMUT);
+  bool is_mutable = mut_tok != nullptr;
   auto [typedVar, tv_result] = ParseTypedVar();
   switch (tv_result) {
   case SUCCESS: {
@@ -289,7 +291,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     if (!assign_tok) {
       this->imm_error("Failed to match assign token `=`");
       return std::make_pair(
-          std::make_unique<VarDefAST>(let, std::move(typedVar), nullptr),
+          std::make_unique<VarDefAST>(let, std::move(typedVar), nullptr, is_mutable),
           COMMITTED_NO_MORE_ERROR);
     }
     auto [expr, result] = ParseExpr();
@@ -299,13 +301,13 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
       auto semicolon = expect(TokenType::TokSemiColon, true);
       if (semicolon)
         return std::make_pair(std::make_unique<VarDefAST>(
-                                  let, std::move(typedVar), std::move(expr)),
+                                  let, std::move(typedVar), std::move(expr), is_mutable),
                               SUCCESS);
 
       this->imm_error("Failed to parse semicolon after expression in a variable "
                   "definintion");
       return std::make_pair(std::make_unique<VarDefAST>(
-                                let, std::move(typedVar), std::move(expr)),
+                                let, std::move(typedVar), std::move(expr), is_mutable),
                             COMMITTED_NO_MORE_ERROR);
     }
 
@@ -316,7 +318,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     case NONCOMMITTED:
       this->imm_error("Failed to parse expr for variable definition");
       return std::make_pair(std::make_unique<VarDefAST>(
-                                let, std::move(typedVar), std::move(expr)),
+                                let, std::move(typedVar), std::move(expr), is_mutable),
                             COMMITTED_NO_MORE_ERROR);
       break;
     }
@@ -331,7 +333,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
     return std::make_pair(
-        std::make_unique<VarDefAST>(let, std::move(typedVar), nullptr),
+        std::make_unique<VarDefAST>(let, std::move(typedVar), nullptr, is_mutable),
         COMMITTED_NO_MORE_ERROR);
   }
   this->abort("Should not happen");
@@ -421,26 +423,33 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
 }
 
 auto Parser::ParseTypedVar() -> p<TypedVarAST> {
+  auto mut_tok = expect(TokenType::TokMUT);
+  bool is_mutable = mut_tok != nullptr;
   auto name = expect(TokenType::TokID);
   if (!name) {
+    if (is_mutable) {
+      this->imm_error("Expected identifier after 'mut'", mut_tok->get_location());
+      return std::make_pair(
+          std::make_unique<TypedVarAST>(nullptr, nullptr), COMMITTED_NO_MORE_ERROR);
+    }
     return std::make_pair(
         std::make_unique<TypedVarAST>(nullptr, nullptr), NONCOMMITTED);
   }
 
   auto colon = expect(TokenType::TokColon);
   if (!colon)
-    return std::make_pair(std::make_unique<TypedVarAST>(name), SUCCESS);
+    return std::make_pair(std::make_unique<TypedVarAST>(name, is_mutable), SUCCESS);
   auto type_expr = ParseTypeExprTopLevel();
 
   if (!type_expr) {
     this->imm_error("Expected type name after token `:`", colon->get_location());
     return std::make_pair(
-        std::make_unique<TypedVarAST>(name, std::move(type_expr)),
+        std::make_unique<TypedVarAST>(name, std::move(type_expr), is_mutable),
         COMMITTED_NO_MORE_ERROR);
   }
 
   return std::make_pair(
-      std::make_unique<TypedVarAST>(name, std::move(type_expr)), SUCCESS);
+      std::make_unique<TypedVarAST>(name, std::move(type_expr), is_mutable), SUCCESS);
 }
 auto Parser::ParseUnaryNegExpr() -> p<ExprAST> {
   auto sub_tok = expect(TokenType::TokSUB);
