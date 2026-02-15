@@ -48,43 +48,93 @@ to erase the build folder (similar to make clean).
 Compiler help
 
 ```
-./build/src/sammine --help
+./build/bin/sammine --help
 
-Usage: sammine [--help] [--version] [[--file VAR]|[--str VAR]] [--llvm-ir] [--diagnostics]
+Usage: sammine [--help] [--version] [[--file VAR]|[--str VAR]] [--check] [--llvm-ir] [--ast-ir] [--diagnostics VAR]
 
 Optional arguments:
   -h, --help      shows help message and exits
   -v, --version   prints version information and exits
   -f, --file      An input file for compiler to scan over.
   -s, --str       An input string for compiler to scan over.
+  --check         Performs compiler check only, no codegen
 
-diagnostics (detailed usage):
+Diagnostics related options (detailed usage):
    --llvm-ir      sammine compiler spits out LLVM-IR to stdout
-   --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers
+   --ast-ir       sammine compiler spits out the internal AST to stdout
+   --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers.
+                  Use with value for logging: --diagnostics=stages;lexer;parser. Default value is none
 ```
 
-Failed scoping:
+Fibonacci — `e2e-tests/compilables/func/fib.mn`:
 
+```sammine
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 34
+# CHECK-NEXT: 34
+let fib_v1(x: i32) -> i32 {
+  if x == 0 || x == 1 {
+    return x;
+  } else {
+    return fib_v1(x-1) + fib_v1(x-2);
+  }
+}
+
+let fib_v2(x: i32) -> i32 {
+  if x == 0 || x == 1 {
+    x
+  } else {
+    fib_v2(x-1) + fib_v2(x-2)
+  }
+}
+
+let main() -> i32 {
+  printf("%d\n", fib_v1(9));
+  printf("%d\n", fib_v2(9));
+  return 0;
+}
 ```
-./build/src/sammine -f unit-tests/artifacts/invalid_grammar.txt
 
-    |At unit-tests/artifacts/invalid_grammar.txt:4:4
-   2|fn f(x : f64) {
-   3|    # Use `let` keyword
-   4|    let x = 0;
-    |    ^^^^^^^^^
-    |    [SCOPE1]: The name `x` has been introduced before
-   5|    3 + 1;
-   6|    x + 2;
-----|
-    |At unit-tests/artifacts/invalid_grammar.txt:2:5
-   1|# this is a function
-   2|fn f(x : f64) {
-    |     ^^^^^^^
-    |     [SCOPE1]: Most recently defined `x` is here
-   3|    # Use `let` keyword
-   4|    let x = 0;
+Pointers with `alloc`/`free` — `e2e-tests/compilables/ptr/alloc_basic.mn`:
 
-# Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# Give us a screenshot of the error as well as your contextual source code
+```sammine
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 42
+let main() -> i32 {
+  let p : ptr<i32> = alloc(42);
+  let y : i32 = *p;
+  free(p);
+  printf("%d\n", y);
+  return 0;
+}
+```
+
+Arrays — `e2e-tests/compilables/array/arr_basic.mn`:
+
+```sammine
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 10
+# CHECK: 20
+# CHECK: 30
+let main() -> i32 {
+  let a : arr<i32, 3> = [10, 20, 30];
+  printf("%d\n", a[0]);
+  printf("%d\n", a[1]);
+  printf("%d\n", a[2]);
+  return 0;
+}
+```
+
+Immutable-by-default variables with `let mut` — `e2e-tests/compilables/misc/mut_reassign.mn`:
+
+```sammine
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 10
+
+let main() -> i32 {
+  let mut x: i32 = 5;
+  x = 10;
+  printf("%d\n", x);
+  return 0;
+}
 ```
