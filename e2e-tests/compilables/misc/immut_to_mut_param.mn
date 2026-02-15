@@ -1,0 +1,14 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 6
+# Primitive types bypass the mutability check (always by-value)
+
+let f(mut x: i32) -> i32 {
+  x = x + 1;
+  return x;
+}
+
+let main() -> i32 {
+  let y: i32 = 5;
+  printf("%d\n", f(y));
+  return 0;
+}

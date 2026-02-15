@@ -1,17 +1,17 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
-# CHECK: 4613732 
+# CHECK: 4613732
 
 let even_fib(a: i32, b: i32, sum: i32) -> i32 {
   if b > 4000000 {
     sum
   } else {
-    let c = b;
-    b = a + b;
-    a = c;
-    if b % 2 == 0 {
-      sum = sum + b;
+    let next_b = a + b;
+    let next_sum = if next_b % 2 == 0 {
+      sum + next_b
+    } else {
+      sum
     };
-    even_fib(a, b, sum)
+    even_fib(b, next_b, next_sum)
   }
 }
 

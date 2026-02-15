@@ -271,6 +271,7 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
     ast->type = Type::Poisoned();
   }
 
+  ast->type.is_mutable = ast->is_mutable;
   id_to_type.registerNameT(ast->TypedVar->name, ast->type);
   return ast->type;
 }
@@ -352,8 +353,19 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     this->abort();
   if (ast->Op->is_comparison())
     return ast->type = Type::Bool();
-  if (ast->Op->is_assign()) 
+  if (ast->Op->is_assign()) {
+    if (auto *var = dynamic_cast<VariableExprAST *>(ast->LHS.get())) {
+      if (!var->type.is_mutable) {
+        this->add_error(
+            ast->Op->get_location(),
+            fmt::format(
+                "Cannot reassign immutable variable '{}'. "
+                "Use 'let mut' or 'mut' to declare it as mutable",
+                var->variableName));
+      }
+    }
     return ast->type = Type::Unit();
+  }
 
   return ast->type = ast->LHS->type;
 }
@@ -485,6 +497,7 @@ Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
     return ast->type;
   auto ast_type = resolve_type_expr(ast->type_expr.get());
 
+  ast_type.is_mutable = ast->is_mutable;
   id_to_type.registerNameT(ast->name, ast_type);
   return ast->type = ast_type;
 }

@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 5
+
+# Passing mutable to immutable parameter is fine
+let f(x: i32) -> i32 {
+  return x;
+}
+
+let main() -> i32 {
+  let mut y: i32 = 5;
+  printf("%d\n", f(y));
+  return 0;
+}

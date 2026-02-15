@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full --diagnostics
+# Error: cannot reassign an immutable variable
+
+let main() -> i32 {
+  let x: i32 = 5;
+  x = 10;
+  return 0;
+}

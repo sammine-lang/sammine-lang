@@ -80,18 +80,21 @@ public:
 class TypedVarAST : public AstBase, public Printable {
 public:
   std::string name;
+  bool is_mutable = false;
   std::unique_ptr<TypeExprAST> type_expr;
 
   explicit TypedVarAST(std::shared_ptr<Token> name,
-                       std::unique_ptr<TypeExprAST> type_expr)
-      : type_expr(std::move(type_expr)) {
+                       std::unique_ptr<TypeExprAST> type_expr,
+                       bool is_mutable = false)
+      : is_mutable(is_mutable), type_expr(std::move(type_expr)) {
     this->join_location(name);
     if (name)
       this->name = name->lexeme;
     if (this->type_expr)
       this->join_location(this->type_expr->location);
   }
-  explicit TypedVarAST(std::shared_ptr<Token> name) {
+  explicit TypedVarAST(std::shared_ptr<Token> name, bool is_mutable = false)
+      : is_mutable(is_mutable) {
     this->join_location(name);
     if (name)
       this->name = name->lexeme;
@@ -282,13 +285,16 @@ public:
 //! \brief A variable definition: "var x = expression;"
 class VarDefAST : public ExprAST {
 public:
+  bool is_mutable = false;
   std::unique_ptr<TypedVarAST> TypedVar;
   std::unique_ptr<ExprAST> Expression;
 
   explicit VarDefAST(std::shared_ptr<Token> let,
                      std::unique_ptr<TypedVarAST> TypedVar,
-                     std::unique_ptr<ExprAST> Expression)
-      : TypedVar(std::move(TypedVar)), Expression(std::move(Expression)) {
+                     std::unique_ptr<ExprAST> Expression,
+                     bool is_mutable = false)
+      : is_mutable(is_mutable), TypedVar(std::move(TypedVar)),
+        Expression(std::move(Expression)) {
 
     this->join_location(let)
         ->join_location(this->TypedVar.get())
