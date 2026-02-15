@@ -14,6 +14,7 @@ namespace sammine_lang::AST {
 // visit overrides — explicit traversal order
 
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
+  top_level_ast = ast;
   for (auto &def : ast->DefinitionVec)
     def->accept_vis(this);
 }
@@ -349,8 +350,14 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   }
 
   if (!this->type_map_ordering.compatible_to_from(ast->LHS->type,
-                                                  ast->RHS->type))
-    this->abort();
+                                                  ast->RHS->type)) {
+    this->add_error(
+        ast->Op->get_location(),
+        fmt::format("Incompatible types for operator '{}': {} and {}",
+                    ast->Op->lexeme, ast->LHS->type.to_string(),
+                    ast->RHS->type.to_string()));
+    return ast->type = ast->LHS->type;
+  }
   if (ast->Op->is_comparison())
     return ast->type = Type::Bool();
   if (ast->Op->is_assign()) {

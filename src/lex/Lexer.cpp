@@ -192,9 +192,9 @@ size_t Lexer::handleSpaces(size_t i, const std::string &input) {
 }
 
 size_t Lexer::handleInvalid(size_t i, const std::string &input) {
-  tokStream->push_back(Token(TokINVALID, input.substr(i, 1), location));
-  add_error(location, "Encountered invalid token");
   i = advance(i);
+  tokStream->push_back(Token(TokINVALID, input.substr(i - 1, 1), location));
+  add_error(location, "Encountered invalid token");
   return i;
 }
 
@@ -228,22 +228,22 @@ size_t Lexer::handleOperatorsADD(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '+' && input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokADD, "+", location));
       i = advance(i);
+      tokStream->push_back(Token(TokADD, "+", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '+') {
-      tokStream->push_back(Token(TokAddIncr, "++", location));
       i = advance(i);
+      tokStream->push_back(Token(TokAddIncr, "++", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokAddAssign, "+=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokAddAssign, "+=", location));
       return i;
     }
 
@@ -258,28 +258,28 @@ size_t Lexer::handleOperatorsSUB(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '-' && input[i + 1] != '=' && input[i + 1] != '>')) {
-      tokStream->push_back(Token(TokSUB, "-", location));
       i = advance(i);
+      tokStream->push_back(Token(TokSUB, "-", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '-') {
-      tokStream->push_back(Token(TokSubDecr, "--", location));
       i = advance(i);
+      tokStream->push_back(Token(TokSubDecr, "--", location));
       return i;
     }
 
     if (input[i] == '>') {
-      tokStream->push_back(Token(TokArrow, "->", location));
       i = advance(i);
+      tokStream->push_back(Token(TokArrow, "->", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokSubAssign, "-=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokSubAssign, "-=", location));
       return i;
     }
 
@@ -294,22 +294,22 @@ size_t Lexer::handleOperatorsMUL(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '*' && input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokMUL, "*", location));
       i = advance(i);
+      tokStream->push_back(Token(TokMUL, "*", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '*') {
-      tokStream->push_back(Token(TokEXP, "**", location));
       i = advance(i);
+      tokStream->push_back(Token(TokEXP, "**", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokMulAssign, "*=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokMulAssign, "*=", location));
       return i;
     }
 
@@ -324,28 +324,28 @@ size_t Lexer::handleOperatorsDIV(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '^' && input[i + 1] != '_' && input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokDIV, "/", location));
       i = advance(i);
+      tokStream->push_back(Token(TokDIV, "/", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '^') {
-      tokStream->push_back(Token(TokCeilDiv, "/^", location));
       i = advance(i);
+      tokStream->push_back(Token(TokCeilDiv, "/^", location));
       return i;
     }
 
     if (input[i] == '_') {
-      tokStream->push_back(Token(TokFloorDiv, "/_", location));
       i = advance(i);
+      tokStream->push_back(Token(TokFloorDiv, "/_", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokDivAssign, "/=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokDivAssign, "/=", location));
       return i;
     }
 
@@ -356,8 +356,8 @@ size_t Lexer::handleOperatorsDIV(size_t i, const std::string &input) {
 
 size_t Lexer::handleOperatorsMOD(size_t i, const std::string &input) {
   if (input[i] == '%') {
-    tokStream->push_back(Token(TokMOD, "%", location));
     i = advance(i);
+    tokStream->push_back(Token(TokMOD, "%", location));
   }
   return i;
 }
@@ -367,16 +367,16 @@ size_t Lexer::handleOperatorsAND(size_t i, const std::string &input) {
 
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 || (input[i + 1] != '&')) {
-      tokStream->push_back(Token(TokAndLogical, "&", location));
       i = advance(i);
+      tokStream->push_back(Token(TokAndLogical, "&", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '&') {
-      tokStream->push_back(Token(TokAND, "&", location));
       i = advance(i);
+      tokStream->push_back(Token(TokAND, "&", location));
       return i;
     }
 
@@ -390,35 +390,35 @@ size_t Lexer::handleOperatorsOR(size_t i, const std::string &input) {
 
     // If the next index (i+1) is outside of input, we should return logical OR
     if (input.length() - 1 < i + 1) {
-      tokStream->push_back(Token(TokORLogical, "|", location));
       i = advance(i);
+      tokStream->push_back(Token(TokORLogical, "|", location));
       return i;
     }
 
     if (input[i + 1] == '>') {
+      i = advance(i);
+      i = advance(i);
       tokStream->push_back(Token(TokPipe, "|>", location));
-      i = advance(i);
-      i = advance(i);
       return i;
     }
 
     if (input[i + 1] == '|') {
+      i = advance(i);
+      i = advance(i);
       tokStream->push_back(Token(TokOR, "||", location));
-      i = advance(i);
-      i = advance(i);
       return i;
     }
 
-    tokStream->push_back(Token(TokORLogical, "|", location));
     i = advance(i);
+    tokStream->push_back(Token(TokORLogical, "|", location));
   }
   return i;
 }
 
 size_t Lexer::handleOperatorsXOR(size_t i, const std::string &input) {
   if (input[i] == '^') {
-    tokStream->push_back(Token(TokXOR, "^", location));
     i = advance(i);
+    tokStream->push_back(Token(TokXOR, "^", location));
   }
   return i;
 }
@@ -429,22 +429,22 @@ size_t Lexer::handleOperatorsCompLeft(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '<' && input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokLESS, "<", location));
       i = advance(i);
+      tokStream->push_back(Token(TokLESS, "<", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '<') {
-      tokStream->push_back(Token(TokSHL, "<<", location));
       i = advance(i);
+      tokStream->push_back(Token(TokSHL, "<<", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokLessEqual, "<=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokLessEqual, "<=", location));
       return i;
     }
 
@@ -459,22 +459,22 @@ size_t Lexer::handleOperatorsCompRight(size_t i, const std::string &input) {
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 ||
         (input[i + 1] != '>' && input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokGREATER, ">", location));
       i = advance(i);
+      tokStream->push_back(Token(TokGREATER, ">", location));
       return i;
     }
 
     i = advance(i);
 
     if (input[i] == '>') {
-      tokStream->push_back(Token(TokSHR, ">>", location));
       i = advance(i);
+      tokStream->push_back(Token(TokSHR, ">>", location));
       return i;
     }
 
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokGreaterEqual, ">=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokGreaterEqual, ">=", location));
       return i;
     }
 
@@ -488,15 +488,15 @@ size_t Lexer::handleOperatorsEqual(size_t i, const std::string &input) {
 
     // If the next index (i+1) is outside of input, we should return ADD
     if (input.length() - 1 < i + 1 || (input[i + 1] != '=')) {
-      tokStream->push_back(Token(TokASSIGN, "=", location));
       i = advance(i);
+      tokStream->push_back(Token(TokASSIGN, "=", location));
       return i;
     }
 
     i = advance(i);
     if (input[i] == '=') {
-      tokStream->push_back(Token(TokEQUAL, "==", location));
       i = advance(i);
+      tokStream->push_back(Token(TokEQUAL, "==", location));
       return i;
     }
 
@@ -507,8 +507,8 @@ size_t Lexer::handleOperatorsEqual(size_t i, const std::string &input) {
 
 size_t Lexer::handleOperatorsNot(size_t i, const std::string &input) {
   if (input[i] == '!') {
-    tokStream->push_back(Token(TokNOT, "!", location));
     i = advance(i);
+    tokStream->push_back(Token(TokNOT, "!", location));
   }
   return i;
 }
@@ -537,13 +537,13 @@ size_t Lexer::handleUtility(size_t i, const std::string &input) {
 
 size_t Lexer::handleUtilityPAREN(size_t i, const std::string &input) {
   if (input[i] == '(') {
-    tokStream->push_back(Token(TokLeftParen, "(", location));
     i = advance(i);
+    tokStream->push_back(Token(TokLeftParen, "(", location));
     return i;
   }
   if (input[i] == ')') {
-    tokStream->push_back(Token(TokRightParen, ")", location));
     i = advance(i);
+    tokStream->push_back(Token(TokRightParen, ")", location));
     return i;
   }
   return i;
@@ -551,13 +551,13 @@ size_t Lexer::handleUtilityPAREN(size_t i, const std::string &input) {
 
 size_t Lexer::handleUtilityCURLY(size_t i, const std::string &input) {
   if (input[i] == '{') {
-    tokStream->push_back(Token(TokLeftCurly, "{", location));
     i = advance(i);
+    tokStream->push_back(Token(TokLeftCurly, "{", location));
     return i;
   }
   if (input[i] == '}') {
-    tokStream->push_back(Token(TokRightCurly, "}", location));
     i = advance(i);
+    tokStream->push_back(Token(TokRightCurly, "}", location));
     return i;
   }
   return i;
@@ -575,8 +575,8 @@ size_t Lexer::handleUtilityCOMMENT(size_t i, const std::string &input) {
 
 size_t Lexer::handleUtilityCOMMA(size_t i, const std::string &input) {
   if (input[i] == ',') {
-    tokStream->push_back(Token(TokComma, ",", location));
     i = advance(i);
+    tokStream->push_back(Token(TokComma, ",", location));
   }
   return i;
 }
@@ -584,15 +584,15 @@ size_t Lexer::handleUtilityCOMMA(size_t i, const std::string &input) {
 size_t Lexer::handleUtilityCOLON(size_t i, const std::string &input) {
   if (input[i] == ':') {
     if (input.length() - 1 < i + 1 || (input[i + 1] != ':')) {
-      tokStream->push_back(Token(TokColon, ":", location));
       i = advance(i);
+      tokStream->push_back(Token(TokColon, ":", location));
       return i;
     }
     i = advance(i);
 
     if (input[i] == ':') {
-      tokStream->push_back(Token(TokDoubleColon, "::", location));
       i = advance(i);
+      tokStream->push_back(Token(TokDoubleColon, "::", location));
       return i;
     }
 
@@ -603,21 +603,21 @@ size_t Lexer::handleUtilityCOLON(size_t i, const std::string &input) {
 
 size_t Lexer::handleUtilitySemiColon(size_t i, const std::string &input) {
   if (input[i] == ';') {
-    tokStream->push_back(Token(TokSemiColon, ";", location));
     i = advance(i);
+    tokStream->push_back(Token(TokSemiColon, ";", location));
   }
   return i;
 }
 
 size_t Lexer::handleUtilityBRACKET(size_t i, const std::string &input) {
   if (input[i] == '[') {
-    tokStream->push_back(Token(TokLeftBracket, "[", location));
     i = advance(i);
+    tokStream->push_back(Token(TokLeftBracket, "[", location));
     return i;
   }
   if (input[i] == ']') {
-    tokStream->push_back(Token(TokRightBracket, "]", location));
     i = advance(i);
+    tokStream->push_back(Token(TokRightBracket, "]", location));
     return i;
   }
   return i;
