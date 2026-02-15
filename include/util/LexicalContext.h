@@ -39,11 +39,11 @@ public:
   NameQueryResult queryName(const std::string &name) const {
     return symbols.contains(name) ? nameFound : nameNotFound;
   }
-  T get_from_name(const std::string &name) { return symbols_to_t.at(name); }
+  T get_from_name(const std::string &name) const { return symbols_to_t.at(name); }
 
-  T recursive_get_from_name(const std::string &name) {
+  T recursive_get_from_name(const std::string &name) const {
     if (symbols.find(name) != symbols.end())
-      return symbols_to_t[name];
+      return symbols_to_t.at(name);
     else if (parent_scope == nullptr) {
       sammine_util::abort(fmt::format("name {} not found", name));
     } else

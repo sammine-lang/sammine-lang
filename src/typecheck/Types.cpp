@@ -70,7 +70,7 @@ bool Type::operator==(const Type &other) const {
   return true;
 }
 
-std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) {
+std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
   std::vector<Type> result{t};
   std::set<Type> visited{t};
   while (true) {
@@ -89,7 +89,7 @@ std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) {
 }
 
 std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
-                                                        const Type &b) {
+                                                        const Type &b) const {
   auto list_ancestors_of_a = visit_ancestor(a);
   auto list_ancestors_of_b = visit_ancestor(b);
   auto set_ancestors_of_b =
@@ -103,7 +103,7 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
   return std::nullopt;
 }
 
-bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) {
+bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
   // Never is compatible with any type (bottom type subtyping rule)
   // Since Never represents "no value is ever produced", it can be assigned
   // to any type because the assignment will never actually happen.

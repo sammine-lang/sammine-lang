@@ -182,13 +182,13 @@ public:
   Token() = delete;
   Token(TokenType type, std::string lexeme, Location location)
       : tok_type(type), lexeme(std::move(lexeme)), location(location) {}
-  bool is_comparison() {
+  bool is_comparison() const {
     return tok_type == TokLESS || tok_type == TokGreaterEqual ||
            tok_type == TokLessEqual || tok_type == TokGREATER ||
            tok_type == TokEQUAL;
   }
-  bool is_assign() { return tok_type == TokASSIGN; }
-  bool is_logical() { return tok_type == TokOR || tok_type == TokAND; }
+  bool is_assign() const { return tok_type == TokASSIGN; }
+  bool is_logical() const { return tok_type == TokOR || tok_type == TokAND; }
   Location get_location() const { return this->location; }
 };
 
@@ -216,7 +216,7 @@ public:
     }
   }
 
-  bool hasErrors() { return error; }
+  bool hasErrors() const { return error; }
 
   void push_back(const Token &token) {
     this->push_back(std::make_shared<Token>(token));
@@ -248,15 +248,15 @@ public:
     return TokStream.back();
   }
 
-  bool isEnd() { return current_index >= (TokStream.size() - 1); }
-  std::shared_ptr<Token> peek() { return TokStream[current_index]; };
+  bool isEnd() const { return current_index >= (TokStream.size() - 1); }
+  std::shared_ptr<Token> peek() const { return TokStream[current_index]; };
   std::shared_ptr<Token> consume() {
     auto token = peek();
     current_index = std::min(TokStream.size() - 1, current_index + 1);
     return token;
   }
 
-  sammine_util::Location currentLocation() {
+  sammine_util::Location currentLocation() const {
     if (!TokStream.empty()) {
       return TokStream[current_index]->get_location();
     }

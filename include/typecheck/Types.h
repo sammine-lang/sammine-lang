@@ -180,13 +180,13 @@ struct Type {
     }
   }
 
-  operator std::string() { return to_string(); }
+  operator std::string() const { return to_string(); }
 };
 
 struct TypeMapOrdering {
   std::map<Type, Type> type_map;
-  std::vector<Type> visit_ancestor(const Type &t);
-  std::optional<Type> lowest_common_type(const Type &a, const Type &b);
+  std::vector<Type> visit_ancestor(const Type &t) const;
+  std::optional<Type> lowest_common_type(const Type &a, const Type &b) const;
 
-  bool compatible_to_from(const Type &a, const Type &b);
+  bool compatible_to_from(const Type &a, const Type &b) const;
 };
