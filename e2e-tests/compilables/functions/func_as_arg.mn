@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 25
+
+let square(x: i32) -> i32 {
+  return x * x;
+}
+
+let apply(f: (i32) -> i32, x: i32) -> i32 {
+  return f(x);
+}
+
+let main() -> i32 {
+  printf("%d\n", apply(square, 5));
+  return 0;
+}

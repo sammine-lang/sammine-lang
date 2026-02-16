@@ -39,6 +39,57 @@ using llvm::BasicBlock;
 /// executed once, which makes analysis simpler.
 
 llvm::Function *CgVisitor::getCurrentFunction() { return this->current_func; }
+
+llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
+                                                     const FunctionType &ft) {
+  auto name = std::string(fn->getName());
+  auto it = closure_wrappers.find(name);
+  if (it != closure_wrappers.end()) {
+    LOG({
+      fmt::print(stderr, "[codegen] closure wrapper: cache hit for '{}'\n",
+                 name);
+    });
+    return it->second;
+  }
+
+  // Save current insert point
+  auto savedBB = resPtr->Builder->GetInsertBlock();
+  auto savedPt = resPtr->Builder->GetInsertPoint();
+
+  // Create wrapper function: ret_type @__wrap_<name>(ptr %env, params...)
+  auto *wrapperFT = type_converter.get_closure_function_type(ft);
+  auto wrapperName = "__wrap_" + name;
+  auto *wrapper = llvm::Function::Create(
+      wrapperFT, llvm::Function::InternalLinkage, wrapperName,
+      resPtr->Module.get());
+
+  auto *entry =
+      llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
+  resPtr->Builder->SetInsertPoint(entry);
+
+  // Forward all args except env to the original function
+  std::vector<llvm::Value *> args;
+  for (auto it = wrapper->arg_begin() + 1; it != wrapper->arg_end(); ++it)
+    args.push_back(&*it);
+
+  if (fn->getReturnType()->isVoidTy()) {
+    resPtr->Builder->CreateCall(fn, args);
+    resPtr->Builder->CreateRetVoid();
+  } else {
+    auto *result = resPtr->Builder->CreateCall(fn, args, "wrap_call");
+    resPtr->Builder->CreateRet(result);
+  }
+
+  // Restore insert point
+  if (savedBB)
+    resPtr->Builder->SetInsertPoint(savedBB, savedPt);
+
+  LOG({
+    fmt::print(stderr, "[codegen] closure wrapper: creating __wrap_{}\n", name);
+  });
+  closure_wrappers[name] = wrapper;
+  return wrapper;
+}
 void CgVisitor::enter_new_scope() {
   allocaValues.push(std::map<std::string, llvm::AllocaInst *>());
 }
@@ -59,15 +110,15 @@ void CgVisitor::visit(FuncDefAST *ast) {
 }
 
 void CgVisitor::preorder_walk(ProgramAST *ast) {
-  // TODO: In the future, we need to move both this function someplace else.
-  //
-  // INFO: To use for both function decl, malloc and printf
-  llvm::PointerType *int8ptr = llvm::PointerType::get(
-      *this->resPtr->Context, 0); // 0 stands for generic address space
-                                  //
+  // Create the named closure struct type: { ptr code, ptr env }
+  auto *ptrTy = llvm::PointerType::get(*this->resPtr->Context, 0);
+  llvm::StructType::create(*this->resPtr->Context, {ptrTy, ptrTy},
+                           "sammine.closure");
+
+  // Declare runtime functions
   CodegenUtils::declare_fn(*this->resPtr->Module, "printf",
                            llvm::Type::getInt32Ty(*this->resPtr->Context),
-                           int8ptr, true);
+                           ptrTy, true);
 
   CodegenUtils::declare_malloc(*this->resPtr->Module);
   CodegenUtils::declare_free(*this->resPtr->Module);
@@ -261,10 +312,40 @@ void CgVisitor::preorder_walk(BoolExprAST *ast) {
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
   auto *alloca = this->allocaValues.top()[ast->variableName];
 
-  this->abort_if_not(alloca, "Unknown variable name");
+  if (alloca) {
+    LOG({
+      fmt::print(stderr,
+                 "[codegen] VariableExprAST '{}': loaded from local alloca\n",
+                 ast->variableName);
+    });
+    ast->val = resPtr->Builder->CreateLoad(alloca->getAllocatedType(), alloca,
+                                           ast->variableName);
+    return;
+  }
 
-  ast->val = resPtr->Builder->CreateLoad(alloca->getAllocatedType(), alloca,
-                                         ast->variableName);
+  // Not a local variable — check if it's a module function used as a value
+  auto *fn = resPtr->Module->getFunction(ast->variableName);
+  if (fn && ast->type.type_kind == TypeKind::Function) {
+    LOG({
+      fmt::print(stderr,
+                 "[codegen] VariableExprAST '{}': wrapping module function as "
+                 "closure\n",
+                 ast->variableName);
+    });
+    auto ft = std::get<FunctionType>(ast->type.type_data);
+    auto *wrapper = getOrCreateClosureWrapper(fn, ft);
+    auto *closureTy =
+        llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
+    auto *nullEnv = llvm::ConstantPointerNull::get(
+        llvm::PointerType::get(*resPtr->Context, 0));
+    llvm::Value *closure = llvm::UndefValue::get(closureTy);
+    closure = resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "cls.code");
+    closure = resPtr->Builder->CreateInsertValue(closure, nullEnv, 1, "cls.env");
+    ast->val = closure;
+    return;
+  }
+
+  this->abort("Unknown variable name");
 }
 void CgVisitor::preorder_walk(UnitExprAST *ast) {}
 void CgVisitor::preorder_walk(IfExprAST *ast) {}

@@ -18,6 +18,7 @@ class TypeConverter {
 public:
   llvm::Type *get_type(Type t);
   llvm::Type *get_return_type(Type t);
+  llvm::FunctionType *get_closure_function_type(const FunctionType &ft);
   llvm::CmpInst::Predicate get_cmp_func(Type a, Type b, TokenType tok);
 
   TypeConverter(LLVMRes &resPtr) : context(*resPtr.Context.get()) {}

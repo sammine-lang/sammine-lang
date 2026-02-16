@@ -2,5 +2,6 @@
 # CHECK: Type mismatch in variable definition: Synthesized ptr<f64>, checked against ptr<i32>.
 let main() -> i32 {
   let p : ptr<f64> = alloc(42);
+  let p : ptr<arr<i32>> = alloc(42);
   return 0;
 }

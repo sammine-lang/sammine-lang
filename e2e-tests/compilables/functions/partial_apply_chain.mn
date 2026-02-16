@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 42
+
+let add(a: i32, b: i32) -> i32 {
+  return a + b;
+}
+
+let apply(f: (i32) -> i32, x: i32) -> i32 {
+  return f(x);
+}
+
+let main() -> i32 {
+  printf("%d\n", apply(add(10), 32));
+  return 0;
+}

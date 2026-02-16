@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 42
+
+let inc(x: i32) -> i32 {
+  return x + 1;
+}
+
+let main() -> i32 {
+  let f: (i32) -> i32 = inc;
+  printf("%d\n", f(41));
+  return 0;
+}

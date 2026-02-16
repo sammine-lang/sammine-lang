@@ -74,6 +74,14 @@ public:
     return typename_top.get_from_name(str);
   }
 
+  /// Try to find a name in current scope + parent scopes (non-aborting)
+  std::optional<Type> try_get_callee_type(const std::string &str) const {
+    const auto &top = id_to_type.top();
+    if (top.recursiveQueryName(str) == nameFound)
+      return top.recursive_get_from_name(str);
+    return std::nullopt;
+  }
+
   // visit overrides
   virtual void visit(ProgramAST *ast) override;
   virtual void visit(VarDefAST *ast) override;

@@ -32,7 +32,7 @@ llvm::Type *TypeConverter::get_type(Type t) {
     return llvm::ArrayType::get(get_type(arr.get_element()), arr.get_size());
   }
   case TypeKind::Function:
-    sammine_util::abort("Function is not first-class yet");
+    return llvm::StructType::getTypeByName(context, "sammine.closure");
   case TypeKind::Record:
     sammine_util::abort("Record not yet converted");
   case TypeKind::Never:
@@ -47,6 +47,20 @@ llvm::Type *TypeConverter::get_type(Type t) {
   }
   sammine_util::abort("Guarded by default case");
 }
+llvm::FunctionType *TypeConverter::get_closure_function_type(const FunctionType &ft) {
+  // Returns: ret_type (ptr, param_types...) — env pointer prepended
+  std::vector<llvm::Type *> params;
+  params.push_back(llvm::PointerType::get(context, 0)); // env ptr
+  for (auto &p : ft.get_params_types())
+    params.push_back(get_type(p));
+  auto ret = ft.get_return_type();
+  llvm::Type *ret_type =
+      ret.type_kind == TypeKind::Unit
+          ? llvm::Type::getVoidTy(context)
+          : get_type(ret);
+  return llvm::FunctionType::get(ret_type, params, false);
+}
+
 llvm::Type *TypeConverter::get_return_type(Type t) {
 
   switch (t.type_kind) {

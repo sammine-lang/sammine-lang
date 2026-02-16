@@ -6,6 +6,9 @@
 #include "util/Utilities.h"
 #include <ranges>
 
+#define DEBUG_TYPE "typecheck"
+#include "util/Logging.h"
+
 //! \file BiTypeChecker.cpp
 //! \brief Implementation of BiTypeCheckerVisitor, an ASTVisitor that
 //!        traverses the AST to synthesize node types, perform bidirectional
@@ -50,7 +53,10 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   ast->accept_synthesis(this);
   auto to = ast->type;
   auto from = ast->Expression->accept_synthesis(this);
-  if (!type_map_ordering.compatible_to_from(to, from)) {
+  if (to == Type::Poisoned() || from == Type::Poisoned()) {
+    ast->type = Type::Poisoned();
+  }
+  else if (!type_map_ordering.compatible_to_from(to, from)) {
     this->add_error(
         ast->get_location(),
         fmt::format("Type mismatch in variable definition: Synthesized {}, "
@@ -71,19 +77,48 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
   if (!pre_func.contains(ast->functionName)) {
-    auto ty = get_type_from_id_parent(ast->functionName);
-    auto func = std::get<FunctionType>(ty->type_data);
-    auto params = func.get_params_types();
-    if (ast->arguments.size() != params.size()) {
+    auto ty = try_get_callee_type(ast->functionName);
+    if (!ty.has_value()) {
       this->add_error(
           ast->get_location(),
-          fmt::format(
-              "Function '{}' params and arguments have a type mismatch",
-              ast->functionName));
+          fmt::format("Function '{}' not found", ast->functionName));
+      return;
     }
-    for (const auto &[arg, par] :
-         std::ranges::views::zip(ast->arguments, params)) {
-      if (!this->type_map_ordering.compatible_to_from(par, arg->type)) {
+    if (ty->type_kind != TypeKind::Function) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("'{}' is not a function", ast->functionName));
+      return;
+    }
+    ast->callee_func_type = ty;
+    auto func = std::get<FunctionType>(ty->type_data);
+    auto params = func.get_params_types();
+
+    LOG({
+      fmt::print(stderr,
+                 "[typecheck] visit CallExprAST: '{}' callee_func_type = {}, "
+                 "partial = {}\n",
+                 ast->functionName, ty->to_string(),
+                 ast->arguments.size() < params.size() ? "true" : "false");
+    });
+
+    if (ast->arguments.size() > params.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Function '{}' called with too many arguments",
+                      ast->functionName));
+      return;
+    }
+
+    // Partial application: fewer args than params
+    if (ast->arguments.size() < params.size()) {
+      ast->is_partial = true;
+    }
+
+    // Type-check the provided args against the first N params
+    for (size_t i = 0; i < ast->arguments.size(); i++) {
+      if (!this->type_map_ordering.compatible_to_from(params[i],
+                                                      ast->arguments[i]->type)) {
         this->add_error(
             ast->get_location(),
             fmt::format(
@@ -274,6 +309,11 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
 
   ast->type.is_mutable = ast->is_mutable;
   id_to_type.registerNameT(ast->TypedVar->name, ast->type);
+  LOG({
+    fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} ({})\n",
+               ast->TypedVar->name, ast->type.to_string(),
+               ast->is_mutable ? "mutable" : "immutable");
+  });
   return ast->type;
 }
 
@@ -301,16 +341,65 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
     v.push_back(resolve_type_expr(ast->return_type_expr.get()));
   ast->type = Type::Function(std::move(v));
 
+  LOG({
+    fmt::print(stderr, "[typecheck] synthesize PrototypeAST: '{}' -> {}\n",
+               ast->functionName, ast->type.to_string());
+  });
   return ast->type;
 }
 
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized() || pre_func.contains(ast->functionName))
     return ast->type;
-  auto ty = get_type_from_id_parent(ast->functionName);
+
+  // Search current scope + parent scopes for the callee
+  auto ty = try_get_callee_type(ast->functionName);
+  if (!ty.has_value()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Function '{}' not found", ast->functionName));
+    return ast->type = Type::Poisoned();
+  }
+
+  ast->callee_func_type = ty;
+
+  LOG({
+    fmt::print(stderr,
+               "[typecheck] synthesize CallExprAST: '{}' callee type: {}\n",
+               ast->functionName, ty->to_string());
+  });
+
   switch (ty->type_kind) {
-  case TypeKind::Function:
-    return ast->type = std::get<FunctionType>(ty->type_data).get_return_type();
+  case TypeKind::Function: {
+    auto func = std::get<FunctionType>(ty->type_data);
+    auto params = func.get_params_types();
+
+    // Detect partial application: fewer args than params
+    if (ast->arguments.size() < params.size()) {
+      ast->is_partial = true;
+      std::vector<Type> remaining;
+      for (size_t i = ast->arguments.size(); i < params.size(); i++)
+        remaining.push_back(params[i]);
+      remaining.push_back(func.get_return_type());
+      auto result = Type::Function(std::move(remaining));
+      LOG({
+        fmt::print(stderr,
+                   "[typecheck] synthesize CallExprAST: '{}' partial ({} of {} "
+                   "args) -> {}\n",
+                   ast->functionName, ast->arguments.size(), params.size(),
+                   result.to_string());
+      });
+      return ast->type = result;
+    }
+
+    // Full call: return the function's return type
+    LOG({
+      fmt::print(stderr,
+                 "[typecheck] synthesize CallExprAST: '{}' full call -> {}\n",
+                 ast->functionName, func.get_return_type().to_string());
+    });
+    return ast->type = func.get_return_type();
+  }
   case TypeKind::String:
     this->add_error(ast->get_location(),
                     "A string cannot be in place of a call expression");
@@ -427,7 +516,12 @@ Type BiTypeCheckerVisitor::synthesize(BoolExprAST *ast) {
   return ast->type = Type::Bool();
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  return ast->type = id_to_type.get_from_name(ast->variableName);
+  ast->type = id_to_type.recursive_get_from_name(ast->variableName);
+  LOG({
+    fmt::print(stderr, "[typecheck] synthesize VariableExprAST: '{}' -> {}\n",
+               ast->variableName, ast->type.to_string());
+  });
+  return ast->type;
 }
 Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
   // Block typing rule:

@@ -27,6 +27,11 @@ private:
 
   TypeConverter type_converter;
 
+  std::map<std::string, llvm::Function *> closure_wrappers;
+  size_t partial_counter = 0;
+  llvm::Function *getOrCreateClosureWrapper(llvm::Function *fn,
+                                            const FunctionType &ft);
+
   void emitBoundsCheck(llvm::Value *idx, size_t arr_size);
 
   // INFO: The collector is named Jasmine because she said on her discord status

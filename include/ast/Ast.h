@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -456,6 +457,8 @@ class CallExprAST : public ExprAST {
 public:
   std::string functionName;
   std::vector<std::unique_ptr<AST::ExprAST>> arguments;
+  std::optional<Type> callee_func_type;
+  bool is_partial = false;
   explicit CallExprAST(
       std::shared_ptr<Token> functionName,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {}) {
