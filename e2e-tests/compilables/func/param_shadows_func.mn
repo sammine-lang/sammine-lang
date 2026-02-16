@@ -1,0 +1,14 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: The name `g` has been introduced before
+
+let g() -> i32 {
+  return 42;
+}
+
+let foo(g: i32) -> i32 {
+  return g;
+}
+
+let main() -> i32 {
+  return 0;
+}

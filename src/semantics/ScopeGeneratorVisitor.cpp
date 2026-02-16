@@ -64,8 +64,18 @@ void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   if (can_see_parent(var_name) == nameNotFound)
     register_name_parent(var_name, ast->get_location());
 
-  for (auto &param : ast->parameterVectors)
-    register_name(param->name, param->get_location());
+  for (auto &param : ast->parameterVectors) {
+    if (can_see(param->name) == nameFound) {
+      add_error(param->get_location(),
+                fmt::format("[SCOPE1]: The name `{}` has been introduced before",
+                            param->name));
+      add_error(this->scope_stack.recursive_get_from_name(param->name),
+                fmt::format("[SCOPE1]: The firstly defined `{}` is here",
+                            param->name));
+    } else {
+      register_name(param->name, param->get_location());
+    }
+  }
 }
 void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -97,8 +107,7 @@ void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
 
   auto var_name = ast->functionName;
-  if (can_see_parent(var_name) ==
-      nameNotFound) {
+  if (can_see(var_name) == nameNotFound) {
     add_error(
         ast->get_location(),
         fmt::format(
