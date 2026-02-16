@@ -15,6 +15,7 @@ namespace sammine_lang {
 using namespace AST;
 //! \brief Holds the precedence of a binary operation
 static std::map<TokenType, int> binopPrecedence = {
+    {TokenType::TokPipe, 1},
     {TokenType::TokASSIGN, 2},
     {TokenType::TokOR, 3},
     {TokenType::TokAND, 5},
@@ -841,8 +842,34 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
     }
 
     // Combine LHS and RHS
-    LHS = std::make_unique<BinaryExprAST>(binOpToken, std::move(LHS),
-                                          std::move(RHS));
+    if (binOpToken->tok_type == TokenType::TokPipe) {
+      // x |> f  →  f(x)
+      if (auto *var = dynamic_cast<VariableExprAST *>(RHS.get())) {
+        auto tok = std::make_shared<Token>(TokenType::TokID, var->variableName,
+                                           var->get_location());
+        std::vector<std::unique_ptr<ExprAST>> args;
+        args.push_back(std::move(LHS));
+        LHS = std::make_unique<CallExprAST>(tok, std::move(args));
+      }
+      // x |> f(y, z)  →  f(x, y, z)
+      else if (auto *call = dynamic_cast<CallExprAST *>(RHS.get())) {
+        auto tok = std::make_shared<Token>(TokenType::TokID, call->functionName,
+                                           call->get_location());
+        std::vector<std::unique_ptr<ExprAST>> new_args;
+        new_args.push_back(std::move(LHS));
+        for (auto &arg : call->arguments)
+          new_args.push_back(std::move(arg));
+        LHS = std::make_unique<CallExprAST>(tok, std::move(new_args));
+      } else {
+        this->imm_error(
+            "Right-hand side of |> must be a function name or call",
+            binOpToken->get_location());
+        return {nullptr, COMMITTED_NO_MORE_ERROR};
+      }
+    } else {
+      LHS = std::make_unique<BinaryExprAST>(binOpToken, std::move(LHS),
+                                            std::move(RHS));
+    }
   }
 
   return {std::move(LHS), SUCCESS};
