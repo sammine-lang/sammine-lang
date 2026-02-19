@@ -23,11 +23,11 @@ auto get_string_from_file(const std::string &file_name) -> std::string {
   return input;
 }
 [[noreturn]] auto abort(const std::string &message) -> void {
-  fmt::print(stderr, fg(fmt::terminal_color::bright_red),
-             "[Internal Compiler Error] : {}\n", message);
-  fmt::print(stderr, fg(fmt::terminal_color::bright_red),
-             "[Generating stack traces]...\n");
-  fmt::print(stderr, fg(fmt::terminal_color::bright_red), "[Please wait]...\n");
+  auto style = stderr_is_tty() ? fg(fmt::terminal_color::bright_red)
+                                : fmt::text_style{};
+  fmt::print(stderr, style, "[Internal Compiler Error] : {}\n", message);
+  fmt::print(stderr, style, "[Generating stack traces]...\n");
+  fmt::print(stderr, style, "[Please wait]...\n");
   auto trace = cpptrace::generate_trace();
   trace.print_with_snippets();
   std::abort();
@@ -179,8 +179,12 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
 
   for (int64_t j = 0; j < col_start; j++)
     fmt::print(stderr, "{}", msg[j]);
-  for (int64_t j = col_start; j < col_end; j++)
-    fmt::print(stderr, fmt::emphasis::bold, "{}", msg[j]);
+  for (int64_t j = col_start; j < col_end; j++) {
+    if (sammine_util::stderr_is_tty())
+      fmt::print(stderr, fmt::emphasis::bold, "{}", msg[j]);
+    else
+      fmt::print(stderr, "{}", msg[j]);
+  }
   for (size_t j = col_end; j < msg.size(); j++)
     fmt::print(stderr, "{}", msg[j]);
 

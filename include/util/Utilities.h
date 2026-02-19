@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <unistd.h>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -18,6 +19,14 @@
 //! source locations caching & indexing
 
 namespace sammine_util {
+inline bool stderr_is_tty() {
+  static const bool is_tty = ::isatty(STDERR_FILENO);
+  return is_tty;
+}
+inline fmt::text_style styled(fmt::terminal_color c) {
+  return stderr_is_tty() ? fg(c) : fmt::text_style{};
+}
+
 auto get_string_from_file(const std::string &file_name) -> std::string;
 inline int64_t unique_ast_id = 0;
 
@@ -198,18 +207,27 @@ private:
   template <typename... T>
   static void print_fmt(fmt::terminal_color ts,
                         fmt::format_string<T...> format_str, T &&...args) {
-    fmt::print(stderr, fg(ts), format_str, std::forward<T>(args)...);
+    if (stderr_is_tty())
+      fmt::print(stderr, fg(ts), format_str, std::forward<T>(args)...);
+    else
+      fmt::print(stderr, format_str, std::forward<T>(args)...);
   }
   template <typename... T>
   static void print_fmt(fmt::color ts, fmt::format_string<T...> format_str,
                         T &&...args) {
-    fmt::print(stderr, fg(ts), format_str, std::forward<T>(args)...);
+    if (stderr_is_tty())
+      fmt::print(stderr, fg(ts), format_str, std::forward<T>(args)...);
+    else
+      fmt::print(stderr, format_str, std::forward<T>(args)...);
   }
   template <typename... T>
   static void print_fmt(const ReportKind report_kind,
                         fmt::format_string<T...> format_str, T &&...args) {
-    fmt::print(stderr, fg(get_color_from(report_kind)), format_str,
-               std::forward<T>(args)...);
+    if (stderr_is_tty())
+      fmt::print(stderr, fg(get_color_from(report_kind)), format_str,
+                 std::forward<T>(args)...);
+    else
+      fmt::print(stderr, format_str, std::forward<T>(args)...);
   }
 
   void indicate_singular_line(ReportKind report_kind, int64_t col_start,
