@@ -1,0 +1,36 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 76576500
+
+# Project Euler Problem 12: First triangle number with over 500 divisors
+
+let count_divs(n: i32, i: i32, count: i32) -> i32 {
+  if i * i > n {
+    count
+  } else if n % i == 0 {
+    if i * i == n {
+      count_divs(n, i + 1, count + 1)
+    } else {
+      count_divs(n, i + 1, count + 2)
+    }
+  } else {
+    count_divs(n, i + 1, count)
+  }
+}
+
+let has_over(threshold: i32, n: i32) -> i32 {
+  if count_divs(n, 1, 0) > threshold { 1 } else { 0 }
+}
+
+let find_tri(pred: (i32) -> i32, n: i32, tri: i32) -> i32 {
+  if pred(tri) > 0 {
+    tri
+  } else {
+    find_tri(pred, n + 1, tri + n + 1)
+  }
+}
+
+let main() -> i32 {
+  let result: i32 = has_over(500) |> find_tri(1, 1);
+  printf("%d\n", result);
+  return 0;
+}
