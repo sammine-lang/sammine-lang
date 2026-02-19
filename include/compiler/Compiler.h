@@ -15,6 +15,7 @@ enum compiler_option_enum {
   AST_IR,
   DIAGNOSTIC,
   CHECK,
+  TIME,
 };
 
 class CompilerRunner {

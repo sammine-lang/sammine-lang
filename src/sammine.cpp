@@ -6,6 +6,7 @@
 
 #include "compiler/Compiler.h"
 #include "fmt/color.h"
+#include "util/Utilities.h"
 #include <argparse/argparse.hpp>
 #include <cpptrace/basic.hpp>
 #include <cpptrace/cpptrace.hpp>
@@ -58,6 +59,10 @@ int main(int argc, char *argv[]) {
       .help("sammine compiler spits out diagnostics for "
             "sammine-lang developers. Use "
             "with value for logging: --diagnostics=stages;lexer;parser. Default value is none");
+  g_diag.add_argument("", "--time")
+      .default_value(std::string("false"))
+      .implicit_value(std::string("true"))
+      .help("Print per-phase timing breakdown to stderr");
 
   if (argc < 1) {
     std::cerr << program;
@@ -74,8 +79,9 @@ int main(int argc, char *argv[]) {
     compiler_options[DIAGNOSTIC] =
         program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");
+    compiler_options[TIME] = program.get("--time");
   } catch (const std::exception &err) {
-    fmt::print(stderr, fg(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "Error while parsing arguments\n");
     std::cerr << err.what() << std::endl;
     std::cerr << program;

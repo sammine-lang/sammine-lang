@@ -22,6 +22,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/raw_ostream.h"
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
@@ -50,7 +51,11 @@ class Compiler {
   void typecheck();
   void dump_ast();
   void codegen();
-  void produce_executable();
+  void optimize();
+  void emit_object();
+  void link();
+  void print_timing_table(
+      const std::vector<std::pair<const char *, double>> &timings);
   void set_error() { error = true; }
 
 public:
@@ -81,9 +86,9 @@ Compiler::Compiler(
   } else if (this->file_name != "") {
     this->input = sammine_util::get_string_from_file(this->file_name);
   } else {
-    fmt::print(stderr, fg(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "[Error during compiler initial phase]\n");
-    fmt::print(stderr, fg(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "[Both the file name and the string input is empty]\n");
 
     std::abort();
@@ -100,7 +105,7 @@ Compiler::Compiler(
 
 void Compiler::lex() {
   LOG({
-    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start lexing stage...\n");
   });
   Lexer lxr = Lexer(input);
@@ -110,7 +115,7 @@ void Compiler::lex() {
 
 void Compiler::parse() {
   LOG({
-    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start parsing stage...\n");
   });
   Parser psr = Parser(tokStream, reporter);
@@ -129,7 +134,7 @@ void Compiler::semantics() {
       return;
     }
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start scope checking stage...\n");
     });
     auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
@@ -144,7 +149,7 @@ void Compiler::semantics() {
     if (this->error)
       return;
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start general semantics stage...\n");
     });
     auto vs = sammine_lang::AST::GeneralSemanticsVisitor();
@@ -160,7 +165,7 @@ void Compiler::typecheck() {
     return;
   }
   LOG({
-    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start bi-direcitonal type checking stage...\n");
   });
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor(pre_func);
@@ -172,14 +177,14 @@ void Compiler::typecheck() {
 void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start dumping ast-ir stage...\n");
     });
     AST::ASTPrinter::print(programAST.get());
   }
   if (this->error) {
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "There were errors in previous stages. Aborting now\n");
     });
     std::exit(1);
@@ -191,14 +196,14 @@ void Compiler::codegen() {
   }
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "Finished checking. Stopping at codegen stage with compiler's "
                  "--check flag. \n");
     });
     std::exit(0);
   }
   LOG({
-    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start code-gen stage...\n");
   });
   auto vs = sammine_lang::AST::CgVisitor(resPtr);
@@ -208,43 +213,50 @@ void Compiler::codegen() {
   this->error = vs.has_errors();
 }
 
-void Compiler::produce_executable() {
+void Compiler::optimize() {
   if (this->error) {
     std::exit(1);
   }
 
   LOG({
-    fmt::print(stderr, fg(fmt::terminal_color::bright_green),
-               "Start executable/lib stage...\n");
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start optimize stage...\n");
   });
   if (compiler_options[compiler_option_enum::LLVM_IR] == "true") {
     LOG({
-      fmt::print(stderr, fg(fmt::terminal_color::bright_green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                  "Logging pre optimization llvm IR\n");
     });
     resPtr->Module->print(llvm::errs(), nullptr);
   }
 
-  // Run O2 optimization pipeline on the module
-  {
-    llvm::LoopAnalysisManager LAM;
-    llvm::FunctionAnalysisManager FAM;
-    llvm::CGSCCAnalysisManager CGAM;
-    llvm::ModuleAnalysisManager MAM;
+  llvm::LoopAnalysisManager LAM;
+  llvm::FunctionAnalysisManager FAM;
+  llvm::CGSCCAnalysisManager CGAM;
+  llvm::ModuleAnalysisManager MAM;
 
-    llvm::PassBuilder PB(resPtr->target_machine.get());
-    PB.registerModuleAnalyses(MAM);
-    PB.registerCGSCCAnalyses(CGAM);
-    PB.registerFunctionAnalyses(FAM);
-    PB.registerLoopAnalyses(LAM);
-    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+  llvm::PassBuilder PB(resPtr->target_machine.get());
+  PB.registerModuleAnalyses(MAM);
+  PB.registerCGSCCAnalyses(CGAM);
+  PB.registerFunctionAnalyses(FAM);
+  PB.registerLoopAnalyses(LAM);
+  PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-    llvm::ModulePassManager MPM =
-        PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
-    MPM.run(*resPtr->Module, MAM);
+  llvm::ModulePassManager MPM =
+      PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
+  MPM.run(*resPtr->Module, MAM);
+}
+
+void Compiler::emit_object() {
+  if (this->error) {
+    return;
   }
 
-  // Output .o and executable in current directory using just the stem
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start emit object stage...\n");
+  });
+
   std::string stem =
       std::filesystem::path(this->file_name).stem().string();
   llvm::raw_fd_ostream dest(
@@ -263,6 +275,20 @@ void Compiler::produce_executable() {
 
   resPtr->pass.run(*resPtr->Module);
   dest.flush();
+}
+
+void Compiler::link() {
+  if (this->error) {
+    return;
+  }
+
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start link stage...\n");
+  });
+
+  std::string stem =
+      std::filesystem::path(this->file_name).stem().string();
 
   auto try_compile_with = [&stem](const std::string &compiler) {
     std::string test_command =
@@ -279,7 +305,7 @@ void Compiler::produce_executable() {
     if (auto func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
       if (func_def->Prototype->functionName == "main") {
         if (try_compile_with("clang++") || try_compile_with("g++"))
-          std::exit(0);
+          return;
         else
           sammine_util::abort(
               "Neither clang++ nor g++ is available for final linkage\n");
@@ -287,24 +313,54 @@ void Compiler::produce_executable() {
     }
   }
 }
+void Compiler::print_timing_table(
+    const std::vector<std::pair<const char *, double>> &timings) {
+  double total = 0.0;
+  for (auto &[name, ms] : timings)
+    total += ms;
+
+  fmt::print(stderr, "{:<18} {:>10}  {:>6}\n", "Phase", "Time(ms)", "%");
+  fmt::print(stderr, "{:-<18} {:->10}  {:->6}\n", "", "", "");
+  for (auto &[name, ms] : timings) {
+    double pct = total > 0.0 ? (ms / total) * 100.0 : 0.0;
+    fmt::print(stderr, "{:<18} {:>10.2f}  {:>5.1f}%\n", name, ms, pct);
+  }
+  fmt::print(stderr, "{:-<18} {:->10}  {:->6}\n", "", "", "");
+  fmt::print(stderr, "{:<18} {:>10.2f}  {:>5.1f}%\n", "total", total, 100.0);
+}
+
 void Compiler::start() {
-  using CompilerStage = std::function<void(Compiler *)>;
-  std::vector<CompilerStage> CompilerStages = {
-      {&Compiler::lex},
-      {&Compiler::parse},
-      {&Compiler::semantics},
-      {&Compiler::typecheck},
-      {&Compiler::dump_ast},
-      {&Compiler::codegen},
-      {&Compiler::produce_executable},
+  struct Stage {
+    const char *name;
+    std::function<void(Compiler *)> fn;
+  };
+  std::vector<Stage> stages = {
+      {"lex", &Compiler::lex},
+      {"parse", &Compiler::parse},
+      {"semantics", &Compiler::semantics},
+      {"typecheck", &Compiler::typecheck},
+      {"dump_ast", &Compiler::dump_ast},
+      {"codegen", &Compiler::codegen},
+      {"optimize", &Compiler::optimize},
+      {"emit_obj", &Compiler::emit_object},
+      {"link", &Compiler::link},
   };
 
-  // no error, proceed with current stage
-  // error, skip current stage and go next
-  // error, compiler-ending stage
-  for (auto stage : CompilerStages) {
-    stage(this);
+  bool timing = compiler_options[compiler_option_enum::TIME] == "true";
+  std::vector<std::pair<const char *, double>> timings;
+
+  for (auto &[name, fn] : stages) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    fn(this);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    if (timing) {
+      double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+      timings.push_back({name, ms});
+    }
   }
+
+  if (timing)
+    print_timing_table(timings);
 }
 
 } // namespace sammine_lang
