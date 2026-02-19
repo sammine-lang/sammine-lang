@@ -236,7 +236,7 @@ class AstBase : public Visitable {
       this->location = loc;
       first_location = false;
     } else
-      this->get_location() |= loc;
+      this->location |= loc;
   }
 
   bool first_location = true;

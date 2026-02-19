@@ -91,12 +91,11 @@ llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
   return wrapper;
 }
 void CgVisitor::enter_new_scope() {
-  allocaValues.push(std::map<std::string, llvm::AllocaInst *>());
+  allocaValues.push({});
 }
 void CgVisitor::exit_new_scope() { allocaValues.pop(); }
 
 void CgVisitor::setCurrentFunction(llvm::Function *func) {
-
   this->current_func = func;
 }
 void CgVisitor::visit(FuncDefAST *ast) {
@@ -131,26 +130,23 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
 void CgVisitor::preorder_walk(VarDefAST *ast) {
   auto var_name = ast->TypedVar->name;
   LOG({
-    fmt::print("[CODEGEN] Codegen preorder_walk for VarDefAST for {}\n",
-               ast->TypedVar->name);
+    fmt::print(stderr, "[CODEGEN] Codegen preorder_walk for VarDefAST for {}\n",
+               var_name);
   });
-  auto alloca = CodegenUtils::CreateEntryBlockAlloca(
+  auto *alloca = CodegenUtils::CreateEntryBlockAlloca(
       getCurrentFunction(), var_name, type_converter.get_type(ast->type));
   this->allocaValues.top()[var_name] = alloca;
 }
 void CgVisitor::postorder_walk(VarDefAST *ast) {
   auto var_name = ast->TypedVar->name;
-  auto alloca = this->allocaValues.top()[var_name];
+  auto *alloca = this->allocaValues.top()[var_name];
 
   LOG({
-    fmt::print("[CODEGEN] Codegen postorder_walk for VarDefAST for {}\n",
-               ast->TypedVar->name);
+    fmt::print(stderr, "[CODEGEN] Codegen postorder_walk for VarDefAST for {}\n",
+               var_name);
   });
-  if (ast->Expression == nullptr) {
-    this->abort_if_not(ast->Expression, "is this legal?");
-  } else {
-    resPtr->Builder->CreateStore(ast->Expression->val, alloca);
-  }
+  this->abort_if_not(ast->Expression, "VarDefAST requires an initializer expression");
+  resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
 void CgVisitor::preorder_walk(ExternAST *ast) {}
 void CgVisitor::preorder_walk(RecordDefAST *ast) {
@@ -170,7 +166,7 @@ void CgVisitor::preorder_walk(BinaryExprAST *ast) {}
 
 void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   if (ast->Op->tok_type == TokenType::TokASSIGN) {
-    auto R = ast->RHS->val;
+    auto *R = ast->RHS->val;
     if (!R)
       this->abort("Failed to codegen RHS for tok assign");
 
@@ -198,9 +194,10 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       auto *alloca = this->allocaValues.top()[var_expr->variableName];
       this->abort_if_not(alloca, "Unknown array variable in index assignment");
 
-      auto arr_type = type_converter.get_type(var_expr->type);
-      auto idx = idx_expr->index_expr->val;
-      auto arr_size = std::get<ArrayType>(var_expr->type.type_data).get_size();
+      auto *arr_type = type_converter.get_type(var_expr->type);
+      auto *idx = idx_expr->index_expr->val;
+      auto &arr_data = std::get<ArrayType>(var_expr->type.type_data);
+      auto arr_size = arr_data.get_size();
       emitBoundsCheck(idx, arr_size);
       auto *gep = resPtr->Builder->CreateGEP(
           arr_type, alloca,
@@ -215,63 +212,54 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
                 "dereferenced pointer, or array index");
     return;
   }
-  auto L = ast->LHS->val;
-  auto R = ast->RHS->val;
+  auto *L = ast->LHS->val;
+  auto *R = ast->RHS->val;
+  auto &lhs_type = ast->LHS->type;
+  bool is_int = lhs_type == Type::I32_t() || lhs_type == Type::I64_t();
+  bool is_float = lhs_type == Type::F64_t();
 
-  if (ast->Op->tok_type == TokenType::TokADD) {
-    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
+  auto tok = ast->Op->tok_type;
+  if (tok == TokenType::TokADD) {
+    if (is_int)
       ast->val = resPtr->Builder->CreateAdd(L, R, "add_expr");
-    else if (ast->LHS->type == Type::F64_t())
+    else if (is_float)
       ast->val = resPtr->Builder->CreateFAdd(L, R, "add_expr");
     else
       this->abort();
-  }
-  if (ast->Op->tok_type == TokenType::TokSUB) {
-    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
+  } else if (tok == TokenType::TokSUB) {
+    if (is_int)
       ast->val = resPtr->Builder->CreateSub(L, R, "sub_expr");
-    else if (ast->LHS->type == Type::F64_t())
+    else if (is_float)
       ast->val = resPtr->Builder->CreateFSub(L, R, "sub_expr");
     else
       this->abort();
-  }
-  if (ast->Op->tok_type == TokenType::TokMUL) {
-    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
+  } else if (tok == TokenType::TokMUL) {
+    if (is_int)
       ast->val = resPtr->Builder->CreateMul(L, R, "mul_expr");
-    else if (ast->LHS->type == Type::F64_t())
+    else if (is_float)
       ast->val = resPtr->Builder->CreateFMul(L, R, "mul_expr");
     else
       this->abort();
-  }
-  if (ast->Op->tok_type == TokenType::TokDIV) {
-    if (ast->LHS->type == Type::I32_t() || ast->LHS->type == Type::I64_t())
+  } else if (tok == TokenType::TokDIV) {
+    if (is_int)
       ast->val = resPtr->Builder->CreateSDiv(L, R, "div_expr");
-    else if (ast->LHS->type == Type::F64_t())
+    else if (is_float)
       ast->val = resPtr->Builder->CreateFDiv(L, R, "div_expr");
     else
       this->abort();
-  }
-  if (ast->Op->tok_type == TokOR) {
-    ast->val = resPtr->Builder->CreateLogicalOr(ast->LHS->val, ast->RHS->val);
-  }
-  if (ast->Op->tok_type == TokAND) {
-    ast->val = resPtr->Builder->CreateLogicalAnd(ast->LHS->val, ast->RHS->val);
-  }
-  if (ast->Op->is_comparison()) {
-    /*auto cmp_int = resPtr->Builder->CreateFCmpULT(L, R, "less_cmp_expr");*/
+  } else if (tok == TokOR) {
+    ast->val = resPtr->Builder->CreateLogicalOr(L, R);
+  } else if (tok == TokAND) {
+    ast->val = resPtr->Builder->CreateLogicalAnd(L, R);
+  } else if (ast->Op->is_comparison()) {
     ast->val = resPtr->Builder->CreateCmp(
-        type_converter.get_cmp_func(ast->LHS->type, ast->RHS->type,
-                                    ast->Op->tok_type),
-        L, R);
-  }
-  if (ast->Op->tok_type == TokMOD) {
+        type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
+  } else if (tok == TokMOD) {
     ast->val = resPtr->Builder->CreateSRem(L, R);
-  }
-  if (!ast->val) {
-    LOG({ std::cout << ast->Op->lexeme << std::endl; });
+  } else {
+    LOG({ fmt::print(stderr, "{}\n", ast->Op->lexeme); });
     this->abort();
   }
-
-  return;
 }
 
 void CgVisitor::preorder_walk(StringExprAST *ast) {}
@@ -390,7 +378,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Integer:
   case TypeKind::Flt:
     LOG({
-      fmt::print("[CODEGEN] Logging IfExprAST's bool expr \n");
+      fmt::print(stderr, "[CODEGEN] Logging IfExprAST's bool expr \n");
       ASTPrinter::print(ast->bool_expr.get());
     });
     this->abort("Invalid syntax or broken typechecker for now\n");
@@ -460,10 +448,8 @@ void CgVisitor::visit(IfExprAST *ast) {
 void CgVisitor::preorder_walk(TypedVarAST *ast) {}
 
 void CgVisitor::postorder_walk(StringExprAST *ast) {
-  // Allocate memory for string using ref-counted malloc wrapper
-  std::string stringContent = ast->string_content;
-  ast->val = this->resPtr->Builder->CreateGlobalString(stringContent);
-  ast->type = Type::String(stringContent);
+  ast->val = resPtr->Builder->CreateGlobalString(ast->string_content);
+  ast->type = Type::String(ast->string_content);
 }
 
 void CgVisitor::visit(DerefExprAST *ast) {
@@ -479,8 +465,8 @@ void CgVisitor::postorder_walk(DerefExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(AllocExprAST *ast) {
-  auto operand_val = ast->operand->val;
-  auto operand_llvm_type = type_converter.get_type(ast->operand->type);
+  auto *operand_val = ast->operand->val;
+  auto *operand_llvm_type = type_converter.get_type(ast->operand->type);
 
   // Compute sizeof(T) using DataLayout
   auto &data_layout = resPtr->Module->getDataLayout();
@@ -518,7 +504,6 @@ void CgVisitor::visit(AddrOfExprAST *ast) {
   ast->val = alloca;
   ast->walk_with_postorder(this);
 }
-
 
 // Taken from
 // echo 'void f(int *out) { int a[] = {10,20,30}; }' | clang -xc - -emit-llvm -S -o -
@@ -563,31 +548,28 @@ void CgVisitor::visit(IndexExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(IndexExprAST *ast) {
-  // Get the alloca for the array variable
   auto *var_expr = dynamic_cast<VariableExprAST *>(ast->array_expr.get());
   this->abort_if_not(var_expr, "Array indexing requires a variable");
   auto *alloca = this->allocaValues.top()[var_expr->variableName];
   this->abort_if_not(alloca, "Unknown array variable");
 
-  auto arr_type = type_converter.get_type(var_expr->type);
-  auto idx = ast->index_expr->val;
-  auto arr_size = std::get<ArrayType>(var_expr->type.type_data).get_size();
+  auto &arr_data = std::get<ArrayType>(var_expr->type.type_data);
+  auto *arr_type = type_converter.get_type(var_expr->type);
+  auto *idx = ast->index_expr->val;
 
-  emitBoundsCheck(idx, arr_size);
+  emitBoundsCheck(idx, arr_data.get_size());
 
   auto *gep = resPtr->Builder->CreateGEP(
       arr_type, alloca,
       {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
       "arr_idx");
-  auto elem_type = std::get<ArrayType>(var_expr->type.type_data).get_element();
-  ast->val = resPtr->Builder->CreateLoad(type_converter.get_type(elem_type), gep, "arr_elem");
+  ast->val = resPtr->Builder->CreateLoad(
+      type_converter.get_type(arr_data.get_element()), gep, "arr_elem");
 }
 
 void CgVisitor::postorder_walk(LenExprAST *ast) {
-  auto operand_type = ast->operand->type;
-  auto arr_size = std::get<ArrayType>(operand_type.type_data).get_size();
-  ast->val = llvm::ConstantInt::get(
-      llvm::Type::getInt32Ty(*resPtr->Context), arr_size);
+  auto arr_size = std::get<ArrayType>(ast->operand->type.type_data).get_size();
+  ast->val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), arr_size);
 }
 
 void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
@@ -619,7 +601,7 @@ void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
 }
 
 void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
-  auto operand_val = ast->operand->val;
+  auto *operand_val = ast->operand->val;
   if (ast->operand->type == Type::I32_t() || ast->operand->type == Type::I64_t())
     ast->val = resPtr->Builder->CreateNeg(operand_val, "neg");
   else if (ast->operand->type == Type::F64_t())

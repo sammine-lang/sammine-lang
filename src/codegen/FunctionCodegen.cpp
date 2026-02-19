@@ -1,4 +1,3 @@
-
 #include "ast/Ast.h"
 #include "codegen/CodegenUtils.h"
 #include "codegen/CodegenVisitor.h"
@@ -12,16 +11,12 @@ namespace sammine_lang::AST {
 void CgVisitor::preorder_walk(BlockAST *ast) {}
 void CgVisitor::postorder_walk(BlockAST *ast) {}
 void CgVisitor::preorder_walk(FuncDefAST *ast) {
-  auto name = ast->Prototype->functionName;
-
   auto *Function = this->getCurrentFunction();
   llvm::BasicBlock *mainblock =
       llvm::BasicBlock::Create(*(resPtr->Context), "entry", Function);
 
   resPtr->Builder->SetInsertPoint(mainblock);
 
-  //
-  // INFO:: Copy all the arguments to the entry block
   for (auto &Arg : Function->args()) {
     auto *Alloca = CodegenUtils::CreateEntryBlockAlloca(
         Function, std::string(Arg.getName()), Arg.getType());
@@ -29,8 +24,6 @@ void CgVisitor::preorder_walk(FuncDefAST *ast) {
 
     this->allocaValues.top()[std::string(Arg.getName())] = Alloca;
   }
-
-  return;
 }
 /// INFO: Register the function with its arguments, put it in the module
 /// this comes before visiting a function
@@ -62,11 +55,6 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
 
 void CgVisitor::postorder_walk(FuncDefAST *ast) {
   auto not_verified = verifyFunction(*getCurrentFunction(), &llvm::errs());
-  // if (llvm::Value *RetVal = ast->Block->val) {
-  //   // Finish off the function.
-  // }
-
-  // Error reading body, remove function.
   if (not_verified) {
     resPtr->Module->print(llvm::errs(), nullptr);
     this->abort("ICE: Abort from creating a function");

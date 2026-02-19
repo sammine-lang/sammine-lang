@@ -62,7 +62,6 @@ llvm::FunctionType *TypeConverter::get_closure_function_type(const FunctionType 
 }
 
 llvm::Type *TypeConverter::get_return_type(Type t) {
-
   switch (t.type_kind) {
   case TypeKind::Function:
     return get_type(std::get<FunctionType>(t.type_data).get_return_type());
@@ -136,16 +135,6 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::Record:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
-    break;
-    sammine_util::abort(
-        fmt::format("Cannot compare values of this type: {}", a.to_string()));
-    break;
   }
   sammine_util::abort("End of get_cmp_func reached");
 }
