@@ -39,6 +39,7 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `ptr/`      | Pointer & alloc/free tests (`ptr_basic`, `alloc_basic`, etc.) |
 | `arith/`    | Arithmetic & integer type tests (`arith`, `i32_*`) |
 | `func/`     | Function calls, recursion, naming (`call_func`, `fib`, `even`, etc.) |
+| `functions/`| First-class functions & partial application (`func_as_arg`, `partial_basic`, etc.) |
 | `control/`  | Control flow (`if`)                              |
 | `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
 | `misc/`     | General tests (`hello`, `main`, `print`, `str`, etc.) |

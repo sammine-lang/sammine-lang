@@ -1,8 +1,8 @@
 # Type Checking Patterns
 
 ## Type System (`include/typecheck/Types.h`)
-- `TypeKind` enum: `I32_t`, `I64_t`, `F64_t`, `Unit`, `Bool`, `String`, `Function`, `Pointer`, `Record`, `Never`, `NonExistent`, `Poisoned`
-- `TypeData` variant: `std::variant<FunctionType, PointerType, std::string, std::monostate>`
+- `TypeKind` enum: `I32_t`, `I64_t`, `F64_t`, `Unit`, `Bool`, `String`, `Function`, `Pointer`, `Array`, `Record`, `Never`, `NonExistent`, `Poisoned`, `Integer`, `Flt`
+- `TypeData` variant: `std::variant<FunctionType, PointerType, ArrayType, std::string, std::monostate>`
 - Factory methods: `Type::I32_t()`, `Type::Pointer(pointee)`, `Type::Function(params)`, etc.
 - `PointerType` stores pointee as `std::shared_ptr<Type>` (not by value) because `Type` is forward-declared when `PointerType` is defined. `FunctionType` avoids this with `std::vector<Type>` (heap-allocated internally).
 
@@ -28,9 +28,24 @@
   - `nullptr` → `Type::NonExistent()`
   - `SimpleTypeExprAST` → lookup in `typename_to_type`
   - `PointerTypeExprAST` → recursive resolve, wrap in `Type::Pointer()`
+  - `ArrayTypeExprAST` → recursive resolve, wrap in `Type::Array()`
+  - `FunctionTypeExprAST` → recursive resolve params + return, wrap in `Type::Function()`
 - Default integer (no decimal point) synthesizes as `I32_t`; with decimal → `F64_t`
 - Number literal type suffixes (`i32`, `i64`, `f64`) override the default: `synthesize(NumberExprAST*)` finds the first alpha char, extracts the suffix, strips it from `ast->number`, and sets the type — invalid suffixes abort with an error
 - `main` function must return `i32` (checked in `postorder_walk(PrototypeAST*)`)
+
+## Scope Lookup Helpers
+- `get_type_from_id(str)`: current scope only (aborts if not found)
+- `get_type_from_id_parent(str)`: parent scope only (aborts if not found)
+- `try_get_callee_type(str)`: recursive search through current + all parent scopes (returns `nullopt` if not found) — used for call expressions and variable references
+- `synthesize(VariableExprAST*)` uses `recursive_get_from_name()` to find names in any ancestor scope
+
+## First-Class Functions & Partial Application
+- `CallExprAST` has `callee_func_type` (the resolved `Type` of the callee) and `is_partial` flag
+- **Partial detection** happens in `synthesize(CallExprAST*)`: if `args.size() < params.size()`, set `is_partial = true`
+- **Partial type**: `Type::Function(remaining_params..., return_type)` — e.g. `add(5)` where `add: (i32, i32) -> i32` → type is `(i32) -> i32`
+- **Full call type**: just the function's return type (existing behavior)
+- `visit(CallExprAST*)` uses `try_get_callee_type()` to search all scopes — fixes lookup for function-typed parameters in current scope
 
 ## Alloc/Free Type Rules
 - `alloc(expr)`: operand type T synthesized first, result type = `ptr<T>`

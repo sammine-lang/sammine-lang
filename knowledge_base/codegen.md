@@ -26,8 +26,43 @@ The `TokASSIGN` branch supports two LHS forms:
 
 Any future LHS pattern (e.g. struct field access) would add another `dynamic_cast` branch here.
 
+## First-Class Functions & Closures
+
+### Closure Representation
+- All function values use a fat pointer: `%sammine.closure = type { ptr, ptr }` (code_ptr, env_ptr)
+- Named struct created once in `CgVisitor::preorder_walk(ProgramAST*)`
+- `TypeConverter::get_type(TypeKind::Function)` returns `%sammine.closure`
+- `TypeConverter::get_closure_function_type(FunctionType)` returns `llvm::FunctionType` with env ptr prepended: `ret(ptr, params...)`
+
+### Wrapper Generation (`getOrCreateClosureWrapper`)
+- When a named function is used as a value (e.g. `let f = square`), a wrapper is generated:
+  ```llvm
+  define i32 @__wrap_square(ptr %env, i32 %x) {
+    %r = call i32 @square(i32 %x)
+    ret i32 %r
+  }
+  ```
+- Wrappers cached in `CgVisitor::closure_wrappers` map to avoid duplicates
+- Wrapper accepts-and-ignores the env pointer, forwards remaining args to original function
+
+### Three Call Paths (`postorder_walk(CallExprAST*)` in `FunctionCodegen.cpp`)
+1. **Direct call**: `Module->getFunction(name)` found + not partial → `CreateCall(callee, args)` (zero overhead, existing path)
+2. **Partial application**: `Module->getFunction(name)` found + `is_partial` → generate `@__partial_N` wrapper with env struct for bound args, return `%sammine.closure`
+3. **Indirect call**: callee not in Module (it's a local variable) → load `%sammine.closure` from alloca, `ExtractValue` code/env, `CreateCall(funcType, codePtr, {envPtr, args...})`
+
+### VariableExprAST Function References (`preorder_walk(VariableExprAST*)`)
+- If not in `allocaValues` but `Module->getFunction(name)` found + type is Function:
+  - Create wrapper via `getOrCreateClosureWrapper()`
+  - Build `%sammine.closure { wrapper, null }` via `InsertValue`
+
+### Partial Application Codegen
+- Bound args stored in stack-allocated env struct: `alloca { bound_types... }`
+- `@__partial_N` wrapper loads bound args from env via GEP+Load, then calls original function
+- Unique names via `CgVisitor::partial_counter`
+- **Stack limitation**: partial closures cannot escape their defining scope (env is on the stack)
+
 ## Runtime Function Declarations
-- `malloc` and `free` are declared in `preorder_walk(ProgramAST*)` alongside `printf`
+- `malloc`, `free`, `printf`, and `exit` are declared in `preorder_walk(ProgramAST*)` alongside the `%sammine.closure` struct type
 - `CodegenUtils::declare_malloc()` and `CodegenUtils::declare_free()` in `src/codegen/CodegenUtils.cpp`
 - `declare_fn()` is the shared helper for declaring external C functions
 
