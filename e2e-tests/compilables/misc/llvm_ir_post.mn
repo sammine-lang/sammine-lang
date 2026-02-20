@@ -1,0 +1,11 @@
+# RUN: %sammine --file %full --llvm-ir post 2>&1 | %check %full
+
+# Post-optimization IR should have the alloca optimized away
+# CHECK: define {{.*}}i32 @main()
+# CHECK: ret i32 42
+# CHECK-NOT: alloca
+
+let main() -> i32 {
+  let x: i32 = 42;
+  return x;
+}

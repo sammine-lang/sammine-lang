@@ -30,6 +30,21 @@ Key details:
 - `--diagnostics` enables error reporting output
 - `2>&1` captures stderr into the pipe so `SammineCheck` can match it
 
+### Stderr diagnostic test (compiler flag output)
+```
+# RUN: %sammine --file %full --llvm-ir pre 2>&1 | %check %full
+# CHECK: define i32 @main()
+# CHECK: alloca i32
+```
+Use this pattern when testing compiler flags that emit to stderr (e.g. `--llvm-ir pre/post/diff`).
+The compiler still succeeds (exit 0), but `2>&1` captures the diagnostic stderr output for CHECK matching.
+
+For flags that should reject invalid values:
+```
+# RUN: ! %sammine --file %full --llvm-ir invalid 2>&1 | %check %full
+# CHECK: --llvm-ir requires a value: pre, post, or diff
+```
+
 ## File Organization
 Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 
@@ -42,7 +57,7 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `functions/`| First-class functions & partial application (`func_as_arg`, `partial_basic`, etc.) |
 | `control/`  | Control flow (`if`)                              |
 | `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
-| `misc/`     | General tests (`hello`, `main`, `print`, `str`, etc.) |
+| `misc/`     | General tests, compiler flag tests (`hello`, `llvm_ir_pre`, etc.) |
 
 Other directories:
 - `e2e-tests/euler/` — Project Euler solutions used as integration tests

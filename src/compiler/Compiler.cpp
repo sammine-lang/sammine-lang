@@ -23,6 +23,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 
 #define DEBUG_TYPE "stages"
 
@@ -218,12 +219,16 @@ void Compiler::optimize() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start optimize stage...\n");
   });
-  if (compiler_options[compiler_option_enum::LLVM_IR] == "true") {
-    LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
-                 "Logging pre optimization llvm IR\n");
-    });
-    resPtr->Module->print(llvm::errs(), nullptr);
+  std::string llvm_ir_mode = compiler_options[compiler_option_enum::LLVM_IR];
+
+  std::string pre_ir;
+  if (llvm_ir_mode == "pre" || llvm_ir_mode == "diff") {
+    llvm::raw_string_ostream pre_stream(pre_ir);
+    resPtr->Module->print(pre_stream, nullptr);
+  }
+
+  if (llvm_ir_mode == "pre") {
+    llvm::errs() << pre_ir;
   }
 
   llvm::LoopAnalysisManager LAM;
@@ -241,6 +246,32 @@ void Compiler::optimize() {
   llvm::ModulePassManager MPM =
       PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
   MPM.run(*resPtr->Module, MAM);
+
+  if (llvm_ir_mode == "post") {
+    resPtr->Module->print(llvm::errs(), nullptr);
+  } else if (llvm_ir_mode == "diff") {
+    std::string post_ir;
+    llvm::raw_string_ostream post_stream(post_ir);
+    resPtr->Module->print(post_stream, nullptr);
+
+    auto pre_path = std::filesystem::temp_directory_path() / "sammine_pre.ll";
+    auto post_path = std::filesystem::temp_directory_path() / "sammine_post.ll";
+    {
+      std::ofstream pre_file(pre_path);
+      pre_file << pre_ir;
+    }
+    {
+      std::ofstream post_file(post_path);
+      post_file << post_ir;
+    }
+
+    std::string diff_cmd = fmt::format("diff --color -u {} {} 1>&2",
+                                       pre_path.string(), post_path.string());
+    std::system(diff_cmd.c_str());
+
+    std::filesystem::remove(pre_path);
+    std::filesystem::remove(post_path);
+  }
 }
 
 void Compiler::emit_object() {

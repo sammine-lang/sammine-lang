@@ -43,10 +43,10 @@ int main(int argc, char *argv[]) {
 
   auto &g_diag = program.add_group("Diagnostics related options");
   g_diag
-      .add_argument("", "--llvm-ir") // TODO: Somehow make the internal compiler
+      .add_argument("", "--llvm-ir")
       .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out LLVM-IR to stdout");
+      .nargs(1)
+      .help("Emit LLVM IR. Required value: pre, post, or diff");
   g_diag.add_argument("", "--ast-ir")
       .default_value(std::string("false"))
       .implicit_value(std::string("true"))
@@ -76,7 +76,18 @@ int main(int argc, char *argv[]) {
         program.present("-f") ? program.get("-f") : "";
     compiler_options[STR] =
         program.present("-s") ? program.get("-s") : "";
-    compiler_options[LLVM_IR] = program.get("--llvm-ir");
+    if (program.is_used("--llvm-ir")) {
+      auto val = program.get("--llvm-ir");
+      if (val != "pre" && val != "post" && val != "diff") {
+        fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+                   "Error: --llvm-ir requires a value: pre, post, or diff\n");
+        std::cerr << program;
+        return 1;
+      }
+      compiler_options[LLVM_IR] = val;
+    } else {
+      compiler_options[LLVM_IR] = "false";
+    }
     compiler_options[AST_IR] = program.get("--ast-ir");
     compiler_options[DIAGNOSTIC] =
         program.get("--diagnostics");

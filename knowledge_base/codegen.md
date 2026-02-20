@@ -20,11 +20,20 @@
   - **Free (`free(expr)`)**: `postorder_walk` calls `free(operand_val)`, sets `ast->val = nullptr`
 
 ## Assignment Codegen (`postorder_walk(BinaryExprAST*)`)
-The `TokASSIGN` branch supports two LHS forms:
+The `TokASSIGN` branch supports three LHS forms:
 - **`VariableExprAST`** — look up alloca by name, `CreateStore(RHS, alloca)`
 - **`DerefExprAST`** — use `operand->val` (the pointer), `CreateStore(RHS, pointer)`
+- **`IndexExprAST` with `DerefExprAST` array** — `(*ptr)[i] = val`: GEP through pointer into array element, `CreateStore(RHS, gep)`
+- **`IndexExprAST` with `VariableExprAST` array** — `arr[i] = val`: GEP into alloca, `CreateStore(RHS, gep)`
 
 Any future LHS pattern (e.g. struct field access) would add another `dynamic_cast` branch here.
+
+## Pointer-to-Array Indexing (`(*ptr)[i]`)
+Both read and assignment through dereferenced pointers to arrays are supported:
+- **`visit(IndexExprAST*)`**: if `array_expr` is a `DerefExprAST`, visits only `deref->operand` (to get the pointer value) — does NOT load the whole array
+- **`postorder_walk(IndexExprAST*)`**: if `array_expr` is `DerefExprAST`, uses `GEP(arr_type, ptr_val, {0, idx})` + `CreateLoad` for element access
+- Bounds checking via `emitBoundsCheck()` applies in both direct and pointer-to-array cases
+- Immutable pointer params get `readonly nocapture` LLVM attributes for optimization (`FunctionCodegen.cpp`)
 
 ## First-Class Functions & Closures
 

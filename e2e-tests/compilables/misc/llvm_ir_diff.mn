@@ -1,0 +1,11 @@
+# RUN: %sammine --file %full --llvm-ir diff 2>&1 | %check %full
+
+# diff mode should show unified diff between pre and post optimization
+# CHECK: ---
+# CHECK: +++
+# CHECK: @@
+
+let main() -> i32 {
+  let x: i32 = 42;
+  return x;
+}
