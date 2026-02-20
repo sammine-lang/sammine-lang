@@ -4,7 +4,6 @@
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
-#include <ranges>
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -103,10 +102,10 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   }
   else if (!type_map_ordering.compatible_to_from(to, from)) {
     this->add_error(
-        ast->get_location(),
-        fmt::format("Type mismatch in variable definition: Synthesized {}, "
-                    "checked against {}.",
-                    to.to_string(), from.to_string()));
+        ast->Expression->get_location(),
+        fmt::format("Type mismatch: expression has type {}, "
+                    "but variable declared as {}",
+                    from.to_string(), to.to_string()));
     ast->type = Type::Poisoned();
   }
 }
@@ -150,8 +149,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     if (ast->arguments.size() > params.size()) {
       this->add_error(
           ast->get_location(),
-          fmt::format("Function '{}' called with too many arguments",
-                      ast->functionName));
+          fmt::format("Function '{}' expects {} arguments, got {}",
+                      ast->functionName, params.size(), ast->arguments.size()));
       return;
     }
 
@@ -165,10 +164,11 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
       if (!this->type_map_ordering.compatible_to_from(params[i],
                                                       ast->arguments[i]->type)) {
         this->add_error(
-            ast->get_location(),
+            ast->arguments[i]->get_location(),
             fmt::format(
-                "Function '{}' params and arguments have a type mismatch",
-                ast->functionName));
+                "Argument {} to '{}': expected {}, got {}",
+                i + 1, ast->functionName, params[i].to_string(),
+                ast->arguments[i]->type.to_string()));
       }
     }
   }
@@ -464,9 +464,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Flt:
     this->abort(fmt::format("should not happen here with function {}",
                             ast->functionName));
-    break;
   }
-  return Type::NonExistent();
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
@@ -604,7 +602,7 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
 
   auto cond_type = ast->bool_expr->accept_synthesis(this);
   if (cond_type.type_kind != TypeKind::Bool) {
-    this->add_error(ast->get_location(),
+    this->add_error(ast->bool_expr->get_location(),
                     fmt::format("If condition must be bool, got {}",
                                 cond_type.to_string()));
   }
@@ -629,7 +627,7 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
   // Both branches must have compatible types
   if (then_type != else_type) {
     this->add_error(
-        ast->get_location(),
+        ast->elseBlockAST->get_location(),
         fmt::format("If branches have incompatible types: then has {}, else "
                     "has {}",
                     then_type.to_string(), else_type.to_string()));
@@ -705,9 +703,9 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
   for (size_t i = 1; i < ast->elements.size(); i++) {
     auto elem_type = ast->elements[i]->accept_synthesis(this);
     if (elem_type != first_type) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Array literal element type mismatch: expected {}, got {}",
-                                  first_type.to_string(), elem_type.to_string()));
+      this->add_error(ast->elements[i]->get_location(),
+                      fmt::format("Array element {}: expected {}, got {}",
+                                  i, first_type.to_string(), elem_type.to_string()));
       return ast->type = Type::Poisoned();
     }
   }
