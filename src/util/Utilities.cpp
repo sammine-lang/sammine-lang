@@ -164,15 +164,14 @@ void Reporter::indicate_singular_line(ReportKind report_kind, int64_t col_start,
 }
 
 void Reporter::report_singular_line(ReportKind report_kind,
-                                    const std::string &msg, int64_t col_start,
-                                    int64_t col_end) {
-  print_fmt(LINE_COLOR, "    |");
-  int64_t j = 0;
-  for (; j < col_start; j++)
-    print_fmt(report_kind, " ");
-
-  print_fmt(report_kind, "{}", msg);
-  print_fmt(report_kind, "\n");
+                                    const std::vector<std::string> &msgs,
+                                    int64_t col_start, int64_t col_end) {
+  for (const auto &msg : msgs) {
+    print_fmt(LINE_COLOR, "    |");
+    for (int64_t j = 0; j < col_start; j++)
+      print_fmt(report_kind, " ");
+    print_fmt(report_kind, "{}\n", msg);
+  }
 }
 void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
                                         int64_t col_end) const {
@@ -191,7 +190,7 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
   fmt::print(stderr, "\n");
 }
 void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
-                                 const std::string &format_str,
+                                 const std::vector<std::string> &format_strs,
                                  const ReportKind report_kind) const {
   Locator locator(index_pair, context_radius, diagnostic_data);
   auto [new_start, new_end] = locator.get_lines_indices_with_radius();
@@ -202,8 +201,10 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
   print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name,
             row_num + 1, col_start);
   if (!locator.is_on_singular_line()) {
-    print_fmt(LINE_COLOR, "    |");
-    fmt::print(stderr, "{}\n", format_str);
+    for (const auto &s : format_strs) {
+      print_fmt(LINE_COLOR, "    |");
+      fmt::print(stderr, "{}\n", s);
+    }
   }
   for (auto i = new_start; i <= new_end; i++) {
     print_fmt(LINE_COLOR, "{:>4}|", i + 1);
@@ -212,7 +213,7 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
     if (locator.is_on_singular_line(i)) {
       print_data_singular_line(str, col_start, col_end);
       indicate_singular_line(report_kind, col_start, col_end);
-      report_singular_line(report_kind, format_str, col_start, col_end);
+      report_singular_line(report_kind, format_strs, col_start, col_end);
     } else {
       fmt::print(stderr, "{}\n", str);
     }
@@ -225,7 +226,8 @@ void Reporter::report(const Reportee &reports) const {
   for (const auto &[loc, report_msg, report_kind] : reports) {
 
     for (int64_t i = 1; i <= 1 && !begin; i++)
-      print_fmt(LINE_COLOR, "----|--------------------------------------------\n");
+      print_fmt(LINE_COLOR, "----------------------------------------------------------------"
+                                "----------\n");
 
     begin = false;
     report_single_msg(loc, report_msg, report_kind);

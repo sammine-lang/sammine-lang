@@ -69,7 +69,6 @@ enum TokenType {
   TokPtr,    // ptr
   TokAlloc,  // alloc
   TokFree,   // free
-  TokArr,    // arr
   TokLen,    // len
   TokArrow,  // ->
   TokLet,    // let
@@ -152,7 +151,6 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokPtr, "ptr"},
     {TokAlloc, "alloc"},
     {TokFree, "free"},
-    {TokArr, "arr"},
     {TokLen, "len"},
     {TokID, "identifier"},
 

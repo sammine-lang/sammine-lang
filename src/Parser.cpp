@@ -389,32 +389,28 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     result->location = ptr_tok->get_location();
     return result;
   }
-  if (auto arr_tok = expect(TokenType::TokArr)) {
-    if (!expect(TokenType::TokLESS)) {
-      this->imm_error("Expected '<' after 'arr'", arr_tok->get_location());
-      return nullptr;
-    }
+  if (auto lbracket = expect(TokenType::TokLeftBracket)) {
     auto elem = ParseTypeExpr();
     if (!elem) {
-      this->imm_error("Expected element type inside 'arr<...>'", arr_tok->get_location());
+      this->imm_error("Expected element type in '[TYPE;SIZE]'", lbracket->get_location());
       return nullptr;
     }
-    if (!expect(TokenType::TokComma)) {
-      this->imm_error("Expected ',' after element type in 'arr<TYPE, SIZE>'", arr_tok->get_location());
+    if (!expect(TokenType::TokSemiColon)) {
+      this->imm_error("Expected ';' after element type in '[TYPE;SIZE]'", lbracket->get_location());
       return nullptr;
     }
     auto size_tok = expect(TokenType::TokNum);
     if (!size_tok) {
-      this->imm_error("Expected integer size in 'arr<TYPE, SIZE>'", arr_tok->get_location());
+      this->imm_error("Expected integer size in '[TYPE;SIZE]'", lbracket->get_location());
       return nullptr;
     }
     size_t arr_size = std::stoul(size_tok->lexeme);
-    if (!consumeClosingAngleBracket()) {
-      this->imm_error("Expected '>' to close 'arr<...>'", arr_tok->get_location());
+    if (!expect(TokenType::TokRightBracket)) {
+      this->imm_error("Expected ']' to close '[TYPE;SIZE]'", lbracket->get_location());
       return nullptr;
     }
     auto result = std::make_unique<ArrayTypeExprAST>(std::move(elem), arr_size);
-    result->location = arr_tok->get_location();
+    result->location = lbracket->get_location();
     return result;
   }
   if (auto lparen = expect(TokenType::TokLeftParen)) {

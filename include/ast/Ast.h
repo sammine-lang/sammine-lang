@@ -56,7 +56,7 @@ public:
   ArrayTypeExprAST(std::unique_ptr<TypeExprAST> element, size_t size)
       : element(std::move(element)), size(size) {}
   std::string to_string() const override {
-    return "arr<" + element->to_string() + ", " + std::to_string(size) + ">";
+    return "[" + element->to_string() + ";" + std::to_string(size) + "]";
   }
 };
 

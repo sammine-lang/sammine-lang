@@ -120,7 +120,7 @@ public:
     warn,
     diag,
   };
-  using Report = std::tuple<Location, std::string, ReportKind>;
+  using Report = std::tuple<Location, std::vector<std::string>, ReportKind>;
 
   using iterator = std::vector<Report>::iterator;
   using const_iterator = std::vector<Report>::const_iterator;
@@ -151,15 +151,19 @@ public:
     }
   }
   void add_error(Location loc, std::string msg) {
-    reports.push_back({loc, msg, ReportKind::error});
+    reports.push_back({loc, {std::move(msg)}, ReportKind::error});
+    error_count++;
+  }
+  void add_error(Location loc, std::vector<std::string> msgs) {
+    reports.push_back({loc, std::move(msgs), ReportKind::error});
     error_count++;
   }
   void add_warn(Location loc, std::string msg) {
-    reports.push_back({loc, msg, ReportKind::warn});
+    reports.push_back({loc, {std::move(msg)}, ReportKind::warn});
     warn_count++;
   }
   void add_diagnostics(Location loc, std::string msg) {
-    reports.push_back({loc, msg, ReportKind::diag});
+    reports.push_back({loc, {std::move(msg)}, ReportKind::diag});
     diag_count++;
   }
 
@@ -201,7 +205,7 @@ private:
   static fmt::terminal_color get_color_from(ReportKind report_kind);
 
   void report_single_msg(std::pair<int64_t, int64_t> index_pair,
-                         const std::string &format_str,
+                         const std::vector<std::string> &format_strs,
                          const ReportKind report_kind) const;
 
   template <typename... T>
@@ -234,8 +238,8 @@ private:
                               int64_t col_end) const;
 
   static void report_singular_line(ReportKind report_kind,
-                                   const std::string &msg, int64_t col_start,
-                                   int64_t col_end);
+                                   const std::vector<std::string> &msgs,
+                                   int64_t col_start, int64_t col_end);
 
   void print_data_singular_line(std::string_view msg, int64_t col_start,
                                 int64_t col_end) const;
@@ -246,19 +250,19 @@ public:
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
-      report_singular_line(ReportKind::error, str, 0, 0);
+      report_singular_line(ReportKind::error, {str}, 0, 0);
 
     } else {
-      report_single_msg(l, str, ReportKind::error);
+      report_single_msg(l, {str}, ReportKind::error);
     }
   }
   void immediate_diag(const std::string &str, Location l = Location(-1, -1)) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
-      report_singular_line(ReportKind::diag, str, 0, 0);
+      report_singular_line(ReportKind::diag, {str}, 0, 0);
     } else {
-      report_single_msg(l, str, ReportKind::diag);
+      report_single_msg(l, {str}, ReportKind::diag);
     }
   }
   Reporter() {}

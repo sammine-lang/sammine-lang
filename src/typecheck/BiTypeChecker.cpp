@@ -49,6 +49,51 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
+  // Special case: array type annotation + array literal RHS
+  // Check each element against the declared element type before synthesis
+  // runs its own consistency check.
+  if (ast->TypedVar->type_expr != nullptr) {
+    auto *arr_lit = dynamic_cast<ArrayLiteralExprAST *>(ast->Expression.get());
+    if (arr_lit) {
+      ast->accept_synthesis(this);
+      auto to = ast->type;
+      if (to.type_kind == TypeKind::Array) {
+        auto expected_elem = std::get<ArrayType>(to.type_data).get_element();
+        // Visit each element to type-check sub-expressions
+        for (auto &elem : arr_lit->elements)
+          elem->accept_vis(this);
+        // Check each element against declared element type
+        size_t first_error_idx = 0;
+        size_t error_count = 0;
+        for (size_t i = 0; i < arr_lit->elements.size(); i++) {
+          auto elem_type = arr_lit->elements[i]->accept_synthesis(this);
+          if (!type_map_ordering.compatible_to_from(expected_elem, elem_type)) {
+            if (error_count == 0)
+              first_error_idx = i;
+            error_count++;
+          }
+        }
+        if (error_count > 0) {
+          std::vector<std::string> msgs;
+          msgs.push_back(fmt::format("Array element type mismatch: expected {}, got {}",
+                                     expected_elem.to_string(),
+                                     arr_lit->elements[first_error_idx]->accept_synthesis(this).to_string()));
+          if (error_count > 1)
+            msgs.push_back(fmt::format("{} more type mismatch {} in this array",
+                                       error_count - 1, (error_count - 1 == 1) ? "error" : "errors"));
+          this->add_error(arr_lit->elements[first_error_idx]->get_location(), msgs);
+          ast->type = Type::Poisoned();
+          arr_lit->type = Type::Poisoned();
+          return;
+        }
+        // Set the array literal's type to the declared type
+        arr_lit->type = to;
+        return;
+      }
+    }
+  }
+
+  // Normal case
   ast->Expression->accept_vis(this);
   ast->accept_synthesis(this);
   auto to = ast->type;

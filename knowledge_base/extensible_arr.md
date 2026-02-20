@@ -1,23 +1,23 @@
-# Dynamic Heap Arrays via Fat Pointers (`ptr<arr<T>>`)
+# Dynamic Heap Arrays via Fat Pointers (`ptr<[T]>`)
 
 ## Context
 
 Currently sammine-lang has:
 - `alloc(value)` → `ptr<T>` — heap-allocates a single value
-- `arr<T, N>` — fixed-size stack arrays with bounds checking
+- `[T;N]` — fixed-size stack arrays with bounds checking
 - No way to heap-allocate dynamically-sized arrays
 
-The goal is to add `ptr<arr<T>>` (no size parameter) as a **fat pointer** type — a `{data_ptr, length}` pair that carries its length at runtime, enabling bounds-checked indexing on heap arrays.
+The goal is to add `ptr<[T]>` (no size parameter) as a **fat pointer** type — a `{data_ptr, length}` pair that carries its length at runtime, enabling bounds-checked indexing on heap arrays.
 
 ### Syntax (driven by type annotation)
 
 ```
-let p : ptr<arr<i32>> = alloc(32);       # 32 zero-initialized i32s
-let p : ptr<arr<i32>> = alloc(n);        # n zero-initialized i32s (runtime size)
-let p : ptr<arr<i32>> = alloc([1,2,3]);  # 3 i32s from literal
-p[1] = 42;                                # bounds-checked index assignment
-printf("%d\n", p[2]);                     # bounds-checked index read
-free(p);                                  # frees the heap array
+let p : ptr<[i32]> = alloc(32);       # 32 zero-initialized i32s
+let p : ptr<[i32]> = alloc(n);        # n zero-initialized i32s (runtime size)
+let p : ptr<[i32]> = alloc([1,2,3]);  # 3 i32s from literal
+p[1] = 42;                             # bounds-checked index assignment
+printf("%d\n", p[2]);                  # bounds-checked index read
+free(p);                               # frees the heap array
 ```
 
 ### Type distinction
@@ -25,21 +25,21 @@ free(p);                                  # frees the heap array
 | Type | Representation | Bounds checking |
 |------|---------------|-----------------|
 | `ptr<i32>` | thin pointer (opaque `ptr`) | none |
-| `ptr<arr<i32, 3>>` | thin pointer (opaque `ptr`) | compile-time size known |
-| `ptr<arr<i32>>` | **fat pointer** (`{ ptr, i64 }`) | runtime length stored |
-| `arr<i32, 3>` | stack `[3 x i32]` | compile-time size known |
+| `ptr<[i32;3]>` | thin pointer (opaque `ptr`) | compile-time size known |
+| `ptr<[i32]>` | **fat pointer** (`{ ptr, i64 }`) | runtime length stored |
+| `[i32;3]` | stack `[3 x i32]` | compile-time size known |
 
 ---
 
-## Phase 1: Parser — Allow `arr<T>` without size
+## Phase 1: Parser — Allow `[T]` without size
 
 **File: `src/Parser.cpp` — `ParseTypeExpr()` (~line 391)**
 
-Currently `arr<T, SIZE>` requires both element type and integer size. Modify to also accept `arr<T>` (no comma, no size):
+Currently `[T;SIZE]` requires both element type and integer size. Modify to also accept `[T]` (no semicolon, no size):
 
-- After parsing element type, check for `,` vs `>`
-- If `,` → parse size as before → `ArrayTypeExprAST(element, size)`
-- If `>` directly → dynamic array → `ArrayTypeExprAST(element, std::nullopt)`
+- After parsing element type, check for `;` vs `]`
+- If `;` → parse size as before → `ArrayTypeExprAST(element, size)`
+- If `]` directly → dynamic array → `ArrayTypeExprAST(element, std::nullopt)`
 
 **File: `include/ast/Ast.h` — `ArrayTypeExprAST` (~line 51)**
 
@@ -110,17 +110,17 @@ Consider adding a helper: `TypeConverter::is_fat_pointer(Type t)` and `TypeConve
 
 ### 4a: Update `visit(VarDefAST*)` (~line 48)
 
-Add special handling when RHS is `AllocExprAST` and declared type is `ptr<arr<T>>` (dynamic):
+Add special handling when RHS is `AllocExprAST` and declared type is `ptr<[T]>` (dynamic):
 
 ```
 - Synthesize declared type from annotation
-- If declared type is ptr<arr<T>> where arr is dynamic:
+- If declared type is ptr<[T]> where arr is dynamic:
   - If alloc operand is ArrayLiteralExprAST:
     → synthesize literal, check element types match T
-    → set alloc type to ptr<arr<T>> with dynamic length
+    → set alloc type to ptr<[T]> with dynamic length
   - Else (operand is count expression):
     → synthesize operand, verify it's integer (i32 or i64)
-    → set alloc type to ptr<arr<T>> with dynamic length
+    → set alloc type to ptr<[T]> with dynamic length
 - Else: existing behavior (alloc(value) → ptr<typeof(value)>)
 ```
 
@@ -130,25 +130,25 @@ Keep existing behavior for the synthesis direction. The check direction is handl
 
 ### 4c: Update `synthesize(IndexExprAST*)` (~line 578)
 
-Currently only allows `TypeKind::Array`. Add support for `ptr<arr<T>>`:
+Currently only allows `TypeKind::Array`. Add support for `ptr<[T]>`:
 
 ```
-- If array_expr type is ptr<arr<T>> (pointer to dynamic array):
+- If array_expr type is ptr<[T]> (pointer to dynamic array):
   → validate index is integer
   → return element type T
-- If array_expr type is arr<T, N> (existing):
+- If array_expr type is [T;N] (existing):
   → existing behavior with static bounds check
 ```
 
 ### 4d: Update `synthesize(LenExprAST*)` (~line 612)
 
-Currently only allows `TypeKind::Array`. Add support for `ptr<arr<T>>`:
+Currently only allows `TypeKind::Array`. Add support for `ptr<[T]>`:
 - Extract element type from the pointee array type
 - Return `Type::I64_t()` for dynamic arrays (length is i64)
 
 ### 4e: Update `synthesize(FreeExprAST*)` (~line 542)
 
-Should already work — `ptr<arr<T>>` has `TypeKind::Pointer`. No change needed.
+Should already work — `ptr<[T]>` has `TypeKind::Pointer`. No change needed.
 
 **Build & test after this phase.**
 
@@ -160,7 +160,7 @@ Should already work — `ptr<arr<T>>` has `TypeKind::Pointer`. No change needed.
 
 ### 5a: Alloc codegen — `postorder_walk(AllocExprAST*)` (~line 400)
 
-Add a branch for when `ast->type` is `ptr<arr<T>>` (fat pointer):
+Add a branch for when `ast->type` is `ptr<[T]>` (fat pointer):
 
 **Count-based allocation:**
 ```
@@ -189,7 +189,7 @@ Need helper to declare `memset` in `CodegenUtils` (alongside malloc/free).
 
 Currently hardcoded for stack arrays (looks up alloca by variable name).
 
-Add branch for `ptr<arr<T>>`:
+Add branch for `ptr<[T]>`:
 ```
 1. Visit array_expr normally (get the fat pointer value)
 2. Extract data pointer: CreateExtractValue(fat_ptr, 0)
@@ -204,9 +204,9 @@ Note: single-index GEP for pointer arithmetic (not `{0, idx}` form used for arra
 
 ### 5c: Index assignment — `postorder_walk(BinaryExprAST*)` (~line 144)
 
-Currently handles `arr[idx] = value`. Add branch for `ptr<arr<T>>`:
+Currently handles `arr[idx] = value`. Add branch for `ptr<[T]>`:
 ```
-1. Detect LHS is IndexExprAST on a ptr<arr<T>>
+1. Detect LHS is IndexExprAST on a ptr<[T]>
 2. Get fat pointer, extract data_ptr and length
 3. Bounds check
 4. GEP into data_ptr
@@ -260,9 +260,9 @@ Currently returns compile-time constant for fixed arrays. For fat pointer:
 |------|---------|
 | `include/ast/Ast.h` | `ArrayTypeExprAST`: size → `optional<size_t>` |
 | `include/typecheck/Types.h` | `ArrayType`: size → `optional<size_t>`, add `is_dynamic()`, add `Type::DynArray()` |
-| `src/Parser.cpp` | `ParseTypeExpr()`: allow `arr<T>` without size |
-| `src/typecheck/BiTypeChecker.cpp` | `visit(VarDefAST*)`: bidirectional alloc checking; `synthesize(IndexExprAST*)`: ptr<arr<T>> support; `synthesize(LenExprAST*)`: ptr<arr<T>> support |
-| `src/codegen/TypeConverter.cpp` | `get_type()`: fat pointer struct for `ptr<arr<T>>` |
+| `src/Parser.cpp` | `ParseTypeExpr()`: allow `[T]` without size |
+| `src/typecheck/BiTypeChecker.cpp` | `visit(VarDefAST*)`: bidirectional alloc checking; `synthesize(IndexExprAST*)`: ptr<[T]> support; `synthesize(LenExprAST*)`: ptr<[T]> support |
+| `src/codegen/TypeConverter.cpp` | `get_type()`: fat pointer struct for `ptr<[T]>` |
 | `src/codegen/CodegenVisitor.cpp` | Alloc, index, index-assign, free, len for fat pointers |
 | `src/codegen/CodegenUtils.cpp` | Declare `memset` |
 | `src/ast/AstPrinterVisitor.cpp` | Update printer for dynamic array types |
@@ -277,7 +277,7 @@ When traits/interfaces are added to the language, `alloc`/`free` can be extended
 ```
 # Option A: explicit allocator argument (no traits needed)
 let arena = Arena::new(4096);
-let p : ptr<arr<i32>> = alloc(32, arena);
+let p : ptr<[i32]> = alloc(32, arena);
 free(p, arena);
 
 # Option B: allocator trait (requires trait system)
