@@ -2,7 +2,7 @@
 
 # this is a function
 let f(x : f64) {
-    let x : f64 = 1 + 1 ;
+    let x : f64 = 1 + 1;
     let x : f64 = 1;
      x + 2 + 3 +1;
     # x;

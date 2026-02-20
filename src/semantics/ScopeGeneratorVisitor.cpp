@@ -30,10 +30,10 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
         register_name(fn_name, loc);
       else if (can_see(fn_name) == nameFound) {
         add_error(loc, fmt::format(
-                           "[SCOPE1]: The name `{}` has been introduced before",
+                           "[SCOPE]: The name `{}` has been introduced before",
                            fn_name));
         add_error(this->scope_stack.get_from_name(fn_name),
-                  fmt::format("[SCOPE1]: Most recently defined `{}` is here",
+                  fmt::format("[SCOPE]: Most recently defined `{}` is here",
                               fn_name));
       }
     }
@@ -45,12 +45,12 @@ void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
   if (can_see(var_name) == nameNotFound) {
     register_name(var_name, ast->TypedVar->get_location());
   } else if (can_see(var_name) == nameFound) {
-    add_error(ast->get_location(),
-              fmt::format("[SCOPE1]: The name `{}` has been introduced before",
+    add_error(ast->TypedVar->get_location(),
+              fmt::format("[SCOPE]: The name `{}` has been introduced before",
                           var_name));
     add_error(
         this->scope_stack.recursive_get_from_name(var_name),
-        fmt::format("[SCOPE1]: The firstly defined `{}` is here", var_name));
+        fmt::format("[SCOPE]: The firstly defined `{}` is here", var_name));
   }
 }
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
@@ -65,10 +65,10 @@ void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   for (auto &param : ast->parameterVectors) {
     if (can_see(param->name) == nameFound) {
       add_error(param->get_location(),
-                fmt::format("[SCOPE1]: The name `{}` has been introduced before",
+                fmt::format("[SCOPE]: The name `{}` has been introduced before",
                             param->name));
       add_error(this->scope_stack.recursive_get_from_name(param->name),
-                fmt::format("[SCOPE1]: The firstly defined `{}` is here",
+                fmt::format("[SCOPE]: The firstly defined `{}` is here",
                             param->name));
     } else {
       register_name(param->name, param->get_location());
