@@ -98,7 +98,8 @@ Compiler::Compiler(
   this->resPtr = std::make_shared<LLVMRes>();
 
   *this->resPtr;
-  this->reporter = sammine_util::Reporter(file_name, input, context_radius);
+  bool dev_mode = compiler_options[compiler_option_enum::DEV] == "true";
+  this->reporter = sammine_util::Reporter(file_name, input, context_radius, dev_mode);
 
   // Initialize debug logging from --diagnostics flag
   std::string diagnostic_value = compiler_options[compiler_option_enum::DIAGNOSTIC];

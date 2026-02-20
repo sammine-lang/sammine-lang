@@ -12,6 +12,7 @@
 #include <string_view>
 #include <tuple>
 #include <utility>
+#include <source_location>
 #include <vector>
 
 //! \file Utilities.h
@@ -120,7 +121,9 @@ public:
     warn,
     diag,
   };
-  using Report = std::tuple<Location, std::vector<std::string>, ReportKind>;
+  using Report =
+      std::tuple<Location, std::vector<std::string>, ReportKind,
+                 std::source_location>;
 
   using iterator = std::vector<Report>::iterator;
   using const_iterator = std::vector<Report>::const_iterator;
@@ -150,20 +153,24 @@ public:
       this->abort(message);
     }
   }
-  void add_error(Location loc, std::string msg) {
-    reports.push_back({loc, {std::move(msg)}, ReportKind::error});
+  void add_error(Location loc, std::string msg,
+                 std::source_location src = std::source_location::current()) {
+    reports.push_back({loc, {std::move(msg)}, ReportKind::error, src});
     error_count++;
   }
-  void add_error(Location loc, std::vector<std::string> msgs) {
-    reports.push_back({loc, std::move(msgs), ReportKind::error});
+  void add_error(Location loc, std::vector<std::string> msgs,
+                 std::source_location src = std::source_location::current()) {
+    reports.push_back({loc, std::move(msgs), ReportKind::error, src});
     error_count++;
   }
-  void add_warn(Location loc, std::string msg) {
-    reports.push_back({loc, {std::move(msg)}, ReportKind::warn});
+  void add_warn(Location loc, std::string msg,
+                std::source_location src = std::source_location::current()) {
+    reports.push_back({loc, {std::move(msg)}, ReportKind::warn, src});
     warn_count++;
   }
-  void add_diagnostics(Location loc, std::string msg) {
-    reports.push_back({loc, {std::move(msg)}, ReportKind::diag});
+  void add_diagnostics(Location loc, std::string msg,
+                       std::source_location src = std::source_location::current()) {
+    reports.push_back({loc, {std::move(msg)}, ReportKind::diag, src});
     diag_count++;
   }
 
@@ -202,6 +209,7 @@ private:
   std::string input;
   std::vector<std::pair<std::int64_t, std::string_view>> diagnostic_data;
   int64_t context_radius;
+  bool dev_mode = false;
   static fmt::terminal_color get_color_from(ReportKind report_kind);
 
   void report_single_msg(std::pair<int64_t, int64_t> index_pair,
@@ -266,9 +274,10 @@ public:
     }
   }
   Reporter() {}
-  Reporter(std::string file_name, std::string input, int64_t context_radius)
+  Reporter(std::string file_name, std::string input, int64_t context_radius,
+           bool dev_mode = false)
       : file_name(file_name), input(input),
         diagnostic_data(get_diagnostic_data(this->input)),
-        context_radius(context_radius) {}
+        context_radius(context_radius), dev_mode(dev_mode) {}
 };
 } // namespace sammine_util

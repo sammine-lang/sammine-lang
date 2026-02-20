@@ -4,6 +4,7 @@
 #include "fmt/core.h"
 #include "util/FileRAII.h"
 #include <cassert>
+#include <filesystem>
 #include <cctype>
 #include <cpptrace/cpptrace.hpp>
 #include <cpptrace/from_current.hpp>
@@ -223,14 +224,21 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
 void Reporter::report(const Reportee &reports) const {
 
   bool begin = true;
-  for (const auto &[loc, report_msg, report_kind] : reports) {
+  for (const auto &[loc, report_msg, report_kind, src] : reports) {
 
     for (int64_t i = 1; i <= 1 && !begin; i++)
       print_fmt(LINE_COLOR, "----------------------------------------------------------------"
                                 "----------\n");
 
     begin = false;
-    report_single_msg(loc, report_msg, report_kind);
+    if (dev_mode) {
+      auto msgs = report_msg;
+      auto src_file = std::filesystem::path(src.file_name()).filename().string();
+      msgs.push_back(fmt::format("[Error-borne --dev location is {}:{}]", src_file, src.line()));
+      report_single_msg(loc, msgs, report_kind);
+    } else {
+      report_single_msg(loc, report_msg, report_kind);
+    }
   }
 
   if (reports.has_message()) {

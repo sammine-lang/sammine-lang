@@ -64,6 +64,8 @@ Diagnostics related options (detailed usage):
    --ast-ir       sammine compiler spits out the internal AST to stdout
    --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers.
                   Use with value for logging: --diagnostics=stages;lexer;parser. Default value is none
+   --time         Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes)
+   --dev          Show compiler source locations in error messages (for developers)
 ```
 
 Fibonacci — `e2e-tests/compilables/func/fib.mn`:
@@ -117,7 +119,7 @@ Arrays — `e2e-tests/compilables/array/arr_basic.mn`:
 # CHECK: 20
 # CHECK: 30
 let main() -> i32 {
-  let a : arr<i32, 3> = [10, 20, 30];
+  let a : [i32;3] = [10, 20, 30];
   printf("%d\n", a[0]);
   printf("%d\n", a[1]);
   printf("%d\n", a[2]);
