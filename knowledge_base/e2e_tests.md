@@ -48,3 +48,6 @@ Other directories:
 - `e2e-tests/euler/` — Project Euler solutions used as integration tests
 
 Naming convention: `feature_variant.mn` (e.g. `ptr_nested.mn`, `alloc_type_mismatch.mn`)
+
+## Gotchas
+- `if/else` blocks used as **statements** (not the last expression in a block) need a trailing semicolon: `if cond { ... } else { ... };` — without it, the parser errors on the next token
