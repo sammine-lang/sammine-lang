@@ -2,11 +2,13 @@
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "util/FileRAII.h"
+#include <algorithm>
 #include <cassert>
 #include <cpptrace/cpptrace.hpp>
 #include <cpptrace/from_current.hpp>
 #include <cstdlib>
 #include <filesystem>
+#include <map>
 #include <string_view>
 namespace sammine_util {
 auto get_string_from_file(const std::string &file_name) -> std::string {
@@ -20,8 +22,8 @@ auto get_string_from_file(const std::string &file_name) -> std::string {
   return input;
 }
 [[noreturn]] auto abort(const std::string &message) -> void {
-  auto style = stderr_is_tty() ? fg(fmt::terminal_color::bright_red)
-                                : fmt::text_style{};
+  auto style =
+      stderr_is_tty() ? fg(fmt::terminal_color::bright_red) : fmt::text_style{};
   fmt::print(stderr, style, "[Internal Compiler Error] : {}\n", message);
   fmt::print(stderr, style, "[Generating stack traces]...\n");
   fmt::print(stderr, style, "[Please wait]...\n");
@@ -92,6 +94,79 @@ public:
     return og_start == og_end;
   }
 };
+
+// A report after merging: multiple add_error() calls at the same location
+// become one GroupedReport with all their messages combined.
+struct GroupedReport {
+  Location loc;
+  std::vector<std::string> msgs;
+  Reportee::ReportKind kind;
+  std::vector<std::source_location> srcs; // C++ source locs for --dev mode
+};
+
+// A set of GroupedReports whose displayed line ranges overlap, so they can
+// share a single source code snippet instead of repeating the same lines.
+struct Cluster {
+  std::vector<size_t> group_indices; // indices into the GroupedReport vector
+  int64_t line_start, line_end;      // overall display range (with context)
+};
+
+// Step 1 of error rendering: merge reports that share the same (Location,
+// ReportKind) into one GroupedReport, deduplicating identical message strings.
+// e.g. two add_error(loc_4_6, "firstly defined x") → one group, one message.
+std::vector<GroupedReport> group_reports(const Reportee &reports) {
+  std::vector<GroupedReport> groups;
+  for (const auto &[loc, report_msg, report_kind, src] : reports) {
+    auto it =
+        std::find_if(groups.begin(), groups.end(), [&](const GroupedReport &g) {
+          return g.loc == loc && g.kind == report_kind;
+        });
+    if (it != groups.end()) {
+      // Merge into existing group, skipping duplicate messages.
+      for (const auto &msg : report_msg) {
+        if (std::find(it->msgs.begin(), it->msgs.end(), msg) == it->msgs.end())
+          it->msgs.push_back(msg);
+      }
+      it->srcs.push_back(src);
+    } else {
+      groups.push_back({loc, report_msg, report_kind, {src}});
+    }
+  }
+  return groups;
+}
+
+// Step 2 of error rendering: cluster groups whose displayed line ranges
+// (error line ± context_radius) overlap. Groups are sorted by source line,
+// then greedily merged — if a group's range overlaps the previous cluster's,
+// it joins that cluster and extends its range.
+// e.g. errors on lines 4, 5, 6 with radius=2 all overlap → one cluster.
+std::vector<Cluster>
+cluster_groups(const std::vector<GroupedReport> &groups, int64_t context_radius,
+               const Reporter::DiagnosticData &diagnostic_data) {
+  std::vector<size_t> sorted(groups.size());
+  for (size_t i = 0; i < sorted.size(); i++)
+    sorted[i] = i;
+  std::sort(sorted.begin(), sorted.end(), [&](size_t a, size_t b) {
+    Locator la(groups[a].loc, context_radius, diagnostic_data);
+    Locator lb(groups[b].loc, context_radius, diagnostic_data);
+    return la.get_lines_indices().first < lb.get_lines_indices().first;
+  });
+
+  std::vector<Cluster> clusters;
+  for (size_t si : sorted) {
+    Locator locator(groups[si].loc, context_radius, diagnostic_data);
+    auto [ls, le] = locator.get_lines_indices_with_radius();
+    if (!clusters.empty() && ls <= clusters.back().line_end) {
+      // Overlaps with previous cluster — merge.
+      clusters.back().group_indices.push_back(si);
+      clusters.back().line_end = std::max(clusters.back().line_end, le);
+    } else {
+      clusters.push_back({{si}, ls, le});
+    }
+  }
+  return clusters;
+}
+
 } // namespace
 
 DiagnosticData Reporter::get_diagnostic_data(std::string_view str) {
@@ -162,8 +237,8 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
       locator.get_start_end_of_singular_line_token();
 
   print_fmt(LINE_COLOR, "    |");
-  print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name,
-            row_num + 1, col_start);
+  print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name, row_num + 1,
+            col_start);
   if (!locator.is_on_singular_line()) {
     for (const auto &s : format_strs) {
       print_fmt(LINE_COLOR, "    |");
@@ -186,21 +261,75 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
 
 void Reporter::report(const Reportee &reports) const {
 
+  auto groups = group_reports(reports);
+  auto clusters = cluster_groups(groups, context_radius, diagnostic_data);
+
+  // Step 3: render each cluster as a single source snippet with
+  // carets (^^^) and messages interleaved under annotated lines.
   bool first = true;
-  for (const auto &[loc, report_msg, report_kind, src] : reports) {
-
+  for (const auto &cluster : clusters) {
     if (!first)
-      print_fmt(LINE_COLOR, "----------------------------------------------------------------"
-                                "----------\n");
-
+      print_fmt(
+          LINE_COLOR,
+          "----------------------------------------------------------------"
+          "----------\n");
     first = false;
-    if (dev_mode) {
-      auto msgs = report_msg;
-      auto src_file = std::filesystem::path(src.file_name()).filename().string();
-      msgs.push_back(fmt::format("[Error-borne --dev location is {}:{}]", src_file, src.line()));
-      report_single_msg(loc, msgs, report_kind);
+
+    // Map each source line number to the annotations that target it.
+    struct LineAnnotation {
+      int64_t col_start, col_end;
+      std::vector<std::string> msgs;
+      Reportee::ReportKind kind;
+    };
+    std::map<int64_t, std::vector<LineAnnotation>> line_anns;
+
+    for (size_t gi : cluster.group_indices) {
+      const auto &g = groups[gi];
+      Locator locator(g.loc, context_radius, diagnostic_data);
+      if (!locator.is_on_singular_line())
+        continue;
+      auto [row, cs, ce] = locator.get_start_end_of_singular_line_token();
+      auto msgs = g.msgs;
+      if (dev_mode) {
+        for (const auto &src : g.srcs) {
+          auto sf =
+              std::filesystem::path(src.file_name()).filename().string();
+          msgs.push_back(fmt::format("[Error-borne --dev location is {}:{}]",
+                                     sf, src.line()));
+        }
+      }
+      line_anns[row].push_back({cs, ce, std::move(msgs), g.kind});
+    }
+
+    // Single error → "file:line:col", multiple errors → just "file".
+    print_fmt(LINE_COLOR, "    |");
+    if (cluster.group_indices.size() == 1) {
+      Locator locator(groups[cluster.group_indices[0]].loc, context_radius,
+                       diagnostic_data);
+      auto [row, col] = locator.get_row_col();
+      print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name, row + 1,
+                col);
     } else {
-      report_single_msg(loc, report_msg, report_kind);
+      print_fmt(fmt::terminal_color::blue, "{}\n", file_name);
+    }
+
+    // Walk the line range top-to-bottom. Plain lines print as-is;
+    // annotated lines get bold highlighting, carets, and messages.
+    for (int64_t i = cluster.line_start; i <= cluster.line_end; i++) {
+      print_fmt(LINE_COLOR, "{:>4}|", i + 1);
+      std::string_view str = diagnostic_data[i].second;
+      auto it = line_anns.find(i);
+      if (it == line_anns.end() || it->second.empty()) {
+        fmt::print(stderr, "{}\n", str);
+        continue;
+      }
+      print_data_singular_line(str, it->second[0].col_start,
+                               it->second[0].col_end);
+      for (const auto &ann : it->second) {
+        indicate_singular_line(ann.kind, ann.col_start, ann.col_end);
+        report_singular_line(ann.kind, ann.msgs, ann.col_start,
+                             ann.col_end);
+      }
     }
   }
 
