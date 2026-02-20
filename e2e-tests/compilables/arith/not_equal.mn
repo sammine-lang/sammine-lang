@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: not equal
+# CHECK: equal
+
+let main() -> i32 {
+  let a : i32 = 5;
+  let b : i32 = 10;
+  if a != b {
+    printf("not equal\n");
+  } else {
+    printf("equal\n");
+  };
+
+  let c : i32 = 7;
+  let d : i32 = 7;
+  if c != d {
+    printf("not equal\n");
+  } else {
+    printf("equal\n");
+  };
+
+  return 0;
+}

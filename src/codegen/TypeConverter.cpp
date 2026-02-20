@@ -68,9 +68,7 @@ llvm::Type *TypeConverter::get_return_type(Type t) {
   default:
     sammine_util::abort(
         "Jasmine passed in something that is not a function type");
-    break;
   }
-  sammine_util::abort("Guarded by default case");
 }
 llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
                                                      TokenType tok) {
@@ -87,8 +85,8 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     switch (tok) {
     case TokenType::TokEQUAL:
       return CmpInst::ICMP_EQ;
-    // case TokenType::TokNOTEqual:
-    //   return CmpInst::ICMP_ONE;
+    case TokenType::TokNOTEqual:
+      return CmpInst::ICMP_NE;
     case TokenType::TokLESS:
       return CmpInst::ICMP_SLT;
     case TokenType::TokLessEqual:
@@ -100,15 +98,13 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     default:
       sammine_util::abort("Invalid token for integer comparison");
     }
-    break;
   }
   case TypeKind::F64_t: {
-    // Ordered floating-point comparisons
     switch (tok) {
     case TokenType::TokEQUAL:
       return CmpInst::FCMP_OEQ;
-    // case TokenType::TokNOTEqual:
-    //   return CmpInst::FCMP_ONE;
+    case TokenType::TokNOTEqual:
+      return CmpInst::FCMP_ONE;
     case TokenType::TokLESS:
       return CmpInst::FCMP_OLT;
     case TokenType::TokLessEqual:
@@ -120,7 +116,6 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
     default:
       sammine_util::abort("Invalid token for float comparison");
     }
-    break;
   }
   case TypeKind::Unit:
   case TypeKind::Function:

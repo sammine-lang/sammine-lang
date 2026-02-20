@@ -505,6 +505,12 @@ size_t Lexer::handleOperatorsEqual(size_t i, const std::string &input) {
 
 size_t Lexer::handleOperatorsNot(size_t i, const std::string &input) {
   if (input[i] == '!') {
+    if (input.length() - 1 >= i + 1 && input[i + 1] == '=') {
+      i = advance(i);
+      i = advance(i);
+      tokStream->push_back(Token(TokNOTEqual, "!=", location));
+      return i;
+    }
     i = advance(i);
     tokStream->push_back(Token(TokNOT, "!", location));
   }

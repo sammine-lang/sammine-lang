@@ -39,8 +39,9 @@ enum TokenType {
   TokGREATER,      // >
   TokGreaterEqual, // >=
 
-  TokASSIGN, // =
-  TokNOT,    // !
+  TokASSIGN,   // =
+  TokNOT,      // !
+  TokNOTEqual, // !=
 
   // TokEXP AND FloorDiv
   TokEXP,      // **
@@ -124,6 +125,7 @@ static const std::map<TokenType, std::string> TokenMap = {
 
     {TokASSIGN, "="},
     {TokNOT, "!"},
+    {TokNOTEqual, "!="},
     {TokEXP, "**"},
     {TokFloorDiv, "/_"},
     {TokCeilDiv, "/^"},
@@ -183,7 +185,7 @@ public:
   bool is_comparison() const {
     return tok_type == TokLESS || tok_type == TokGreaterEqual ||
            tok_type == TokLessEqual || tok_type == TokGREATER ||
-           tok_type == TokEQUAL;
+           tok_type == TokEQUAL || tok_type == TokNOTEqual;
   }
   bool is_assign() const { return tok_type == TokASSIGN; }
   bool is_logical() const { return tok_type == TokOR || tok_type == TokAND; }
