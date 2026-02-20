@@ -9,12 +9,12 @@ let max2(a: i32, b: i32) -> i32 {
   if a > b { a } else { b }
 }
 
-let at(grid: [i32;400], r: i32, c: i32) -> i32 {
-  return grid[r * 20 + c];
+let at(grid: ptr<[i32;400]>, r: i32, c: i32) -> i32 {
+  return (*grid)[r * 20 + c];
 }
 
 # Generic product — dr/dc are the row/col step offsets
-let prod(dr: i32, dc: i32, grid: [i32;400], r: i32, c: i32) -> i32 {
+let prod(dr: i32, dc: i32, grid: ptr<[i32;400]>, r: i32, c: i32) -> i32 {
   return at(grid, r, c)
        * at(grid, r + dr, c + dc)
        * at(grid, r + dr * 2, c + dc * 2)
@@ -51,10 +51,10 @@ let grid_max(acc: i32,
 let main() -> i32 {
   let grid: [i32;400] = g();
   let best: i32 = 0
-    |> grid_max(prod(0, 1, grid),  guard(0, 1),  0, 0)
-    |> grid_max(prod(1, 0, grid),  guard(1, 0),  0, 0)
-    |> grid_max(prod(1, 1, grid),  guard(1, 1),  0, 0)
-    |> grid_max(prod(1, -1, grid), guard(1, -1), 0, 0);
+    |> grid_max(prod(0, 1, &grid),  guard(0, 1),  0, 0)
+    |> grid_max(prod(1, 0, &grid),  guard(1, 0),  0, 0)
+    |> grid_max(prod(1, 1, &grid),  guard(1, 1),  0, 0)
+    |> grid_max(prod(1, -1, &grid), guard(1, -1), 0, 0);
   printf("%d\n", best);
   return 0;
 }

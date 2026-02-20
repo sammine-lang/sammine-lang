@@ -41,8 +41,16 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
   size_t param_index = 0;
   auto &vect = ast->parameterVectors;
   for (auto &arg : F->args()) {
-    auto &typed_var = vect[param_index++];
+    auto &typed_var = vect[param_index];
     arg.setName(typed_var->name);
+    // Mark immutable pointer params as readonly nocapture so LLVM can optimize
+    if (typed_var->type.type_kind == TypeKind::Pointer && !typed_var->is_mutable) {
+      F->addParamAttr(param_index, llvm::Attribute::ReadOnly);
+      F->addParamAttr(param_index,
+                      llvm::Attribute::getWithCaptureInfo(
+                          *resPtr->Context, llvm::CaptureInfo::none()));
+    }
+    param_index++;
   }
   ast->function = F;
   current_func = F;

@@ -1,0 +1,21 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 10
+# CHECK: 30
+# CHECK: 99
+
+let read_elem(arr: ptr<[i32;3]>, i: i32) -> i32 {
+  (*arr)[i]
+}
+
+let write_elem(arr: ptr<[i32;3]>, i: i32, val: i32) -> i32 {
+  (*arr)[i] = val;
+  (*arr)[i]
+}
+
+let main() -> i32 {
+  let a : [i32;3] = [10, 20, 30];
+  printf("%d\n", read_elem(&a, 0));
+  printf("%d\n", read_elem(&a, 2));
+  printf("%d\n", write_elem(&a, 1, 99));
+  return 0;
+}

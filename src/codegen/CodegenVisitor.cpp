@@ -141,6 +141,7 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
                var_name);
   });
   this->abort_if_not(ast->Expression, "VarDefAST requires an initializer expression");
+
   resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
 void CgVisitor::preorder_walk(ExternAST *ast) {}
@@ -184,6 +185,28 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
     }
 
     if (auto *idx_expr = dynamic_cast<IndexExprAST *>(ast->LHS.get())) {
+      // Handle (*ptr)[i] = val — assignment through dereferenced pointer
+      if (auto *deref =
+              dynamic_cast<DerefExprAST *>(idx_expr->array_expr.get())) {
+        auto *ptr_val = deref->operand->val;
+        auto &arr_data = std::get<ArrayType>(deref->type.type_data);
+        auto *arr_llvm_type = type_converter.get_type(deref->type);
+        auto *idx = idx_expr->index_expr->val;
+
+        emitBoundsCheck(idx, arr_data.get_size());
+
+        auto *gep = resPtr->Builder->CreateGEP(
+            arr_llvm_type, ptr_val,
+            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
+                                    0),
+             idx},
+            "arr_idx_assign");
+        resPtr->Builder->CreateStore(R, gep);
+        ast->val = R;
+        return;
+      }
+
+      // Direct variable case: arr[i] = val
       auto *var_expr = dynamic_cast<VariableExprAST *>(idx_expr->array_expr.get());
       this->abort_if_not(var_expr, "Array index assignment requires a variable");
       auto *alloca = this->allocaValues.top()[var_expr->variableName];
@@ -537,12 +560,40 @@ void CgVisitor::postorder_walk(ArrayLiteralExprAST *ast) {
 void CgVisitor::visit(IndexExprAST *ast) {
   // Don't visit array_expr normally — we need the alloca, not the loaded value
   ast->walk_with_preorder(this);
+  // If array_expr is (*ptr), visit only the operand to get the pointer value.
+  // We skip the deref itself — we don't want to load the whole array,
+  // we just need the pointer so postorder_walk can GEP into it.
+  if (auto *deref = dynamic_cast<DerefExprAST *>(ast->array_expr.get())) {
+    deref->operand->accept_vis(this);
+  }
   // Only visit index_expr to get the index value
   ast->index_expr->accept_vis(this);
   ast->walk_with_postorder(this);
 }
 
 void CgVisitor::postorder_walk(IndexExprAST *ast) {
+  // Handle (*ptr)[i] — array indexing through dereferenced pointer
+  if (auto *deref = dynamic_cast<DerefExprAST *>(ast->array_expr.get())) {
+    auto *ptr_val = deref->operand->val; // pointer to the array (loaded by visit())
+    // deref->type is the pointee type = the array type
+    auto &arr_data = std::get<ArrayType>(deref->type.type_data);
+    auto *arr_llvm_type = type_converter.get_type(deref->type);
+    auto *idx = ast->index_expr->val;
+
+    emitBoundsCheck(idx, arr_data.get_size());
+
+    // GEP into the array through the pointer — same as the alloca case
+    auto *gep = resPtr->Builder->CreateGEP(
+        arr_llvm_type, ptr_val,
+        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
+         idx},
+        "arr_idx");
+    ast->val = resPtr->Builder->CreateLoad(
+        type_converter.get_type(arr_data.get_element()), gep, "arr_elem");
+    return;
+  }
+
+  // Direct variable case: arr[i]
   auto *var_expr = dynamic_cast<VariableExprAST *>(ast->array_expr.get());
   this->abort_if_not(var_expr, "Array indexing requires a variable");
   auto *alloca = this->allocaValues.top()[var_expr->variableName];
