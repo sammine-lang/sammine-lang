@@ -167,6 +167,15 @@ void Compiler::typecheck() {
   });
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor(pre_func);
   programAST->accept_vis(&vs);
+
+  // Inject monomorphized generic function definitions at the front
+  // so they are codegen'd before call sites that reference them
+  for (auto it = vs.monomorphized_defs.rbegin();
+       it != vs.monomorphized_defs.rend(); ++it) {
+    programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                     std::move(*it));
+  }
+
   reporter.report(vs);
   this->error = vs.has_errors();
 }

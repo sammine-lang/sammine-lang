@@ -94,6 +94,9 @@ void CgVisitor::setCurrentFunction(llvm::Function *func) {
   this->current_func = func;
 }
 void CgVisitor::visit(FuncDefAST *ast) {
+  // Skip generic templates — only monomorphized copies get codegen'd
+  if (ast->Prototype->is_generic())
+    return;
 
   this->enter_new_scope();
   ast->Prototype->accept_vis(this);
@@ -307,6 +310,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::Record:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::TypeParam:
     this->abort("NumberExprAST has invalid type kind");
   }
   this->abort_if_not(ast->val, "cannot generate number");
@@ -395,6 +399,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::String:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::TypeParam:
     LOG({
       fmt::print(stderr, "[CODEGEN] Logging IfExprAST's bool expr \n");
       ASTPrinter::print(ast->bool_expr.get());

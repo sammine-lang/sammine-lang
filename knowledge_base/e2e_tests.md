@@ -59,6 +59,8 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
 | `misc/`     | General tests, compiler flag tests (`hello`, `llvm_ir_pre`, etc.) |
 
+| `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, etc.) |
+
 Other directories:
 - `e2e-tests/euler/` — Project Euler solutions used as integration tests
 

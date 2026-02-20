@@ -1,0 +1,11 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 42 3.14
+
+let identity(x: T) -> T { x }
+
+let main() -> i32 {
+  let a = identity(42);
+  let b = identity(3.14);
+  printf("%d %.2f", a, b);
+  return 0;
+}

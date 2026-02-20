@@ -24,7 +24,8 @@ enum class TypeKind {
   NonExistent,
   Poisoned,
   Integer,
-  Flt
+  Flt,
+  TypeParam
 };
 
 struct Type;
@@ -86,6 +87,9 @@ struct Type {
   }
   static Type NonExistent() {
     return Type{TypeKind::NonExistent, std::monostate()};
+  }
+  static Type TypeParam(const std::string &name) {
+    return Type{TypeKind::TypeParam, name};
   }
   static Type Pointer(Type pointee) {
     return Type{TypeKind::Pointer, PointerType(pointee)};
@@ -155,6 +159,8 @@ struct Type {
       return "Integer";
     case TypeKind::Flt:
       return "Flt";
+    case TypeKind::TypeParam:
+      return std::get<std::string>(type_data);
     }
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
@@ -171,6 +177,8 @@ struct Type {
     case TypeKind::Integer:
     case TypeKind::Flt:
       return true;
+    case TypeKind::TypeParam:
+      return false;
     default:
       return false;
     }

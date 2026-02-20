@@ -62,7 +62,8 @@ bool Type::operator==(const Type &other) const {
     return false;
   if (this->type_kind == TypeKind::Function ||
       this->type_kind == TypeKind::Pointer ||
-      this->type_kind == TypeKind::Array)
+      this->type_kind == TypeKind::Array ||
+      this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 
   return true;

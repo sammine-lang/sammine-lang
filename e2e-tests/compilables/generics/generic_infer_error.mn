@@ -1,0 +1,7 @@
+# RUN: ! %sammine --file %full --diagnostics
+let use_t(x: i32) -> T { x }
+
+let main() -> i32 {
+  let a = use_t(42);
+  return 0;
+}

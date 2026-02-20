@@ -1,6 +1,8 @@
 #include "typecheck/BiTypeChecker.h"
 #include "ast/Ast.h"
 #include "fmt/format.h"
+#include "semantics/GeneralSemanticsVisitor.h"
+#include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
@@ -25,7 +27,22 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   enter_new_scope();
   id_to_type.top().setScope(ast);
   typename_to_type.top().setScope(ast);
+
+  // Enable type param discovery during prototype resolution
+  in_prototype_context = true;
+  discovered_type_params.clear();
   ast->Prototype->accept_vis(this);
+  in_prototype_context = false;
+
+  if (!discovered_type_params.empty()) {
+    // This is a generic function — store type params and skip body
+    ast->Prototype->type_params = discovered_type_params;
+    ast->accept_synthesis(this);
+    generic_func_defs[ast->Prototype->functionName] = ast;
+    exit_new_scope();
+    return;
+  }
+
   ast->accept_synthesis(this);
   ast->Block->accept_vis(this);
   exit_new_scope();
@@ -120,6 +137,33 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
+
+  // If this is a generic call (successful or failed), skip normal arg checking
+  if (generic_func_defs.contains(ast->functionName)) {
+    // Trigger monomorphization only if synthesis succeeded
+    if (ast->resolved_generic_name.has_value()) {
+      auto &mangled = ast->resolved_generic_name.value();
+      if (!instantiated_functions.contains(mangled)) {
+        auto *generic_def = generic_func_defs[ast->functionName];
+        auto cloned = Monomorphizer::instantiate(generic_def, mangled,
+                                                 ast->type_bindings);
+
+        // Run GeneralSemantics on the cloned def (for implicit return wrapping)
+        auto sem = GeneralSemanticsVisitor();
+        cloned->accept_vis(&sem);
+
+        // Type-check the cloned def
+        cloned->accept_vis(this);
+
+        instantiated_functions.insert(mangled);
+        monomorphized_defs.push_back(std::move(cloned));
+      }
+      // Rewrite call to use mangled name
+      ast->functionName = mangled;
+    }
+    return;
+  }
+
   if (!pre_func.contains(ast->functionName)) {
     auto ty = try_get_callee_type(ast->functionName);
     if (!ty.has_value()) {
@@ -397,6 +441,67 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized() || pre_func.contains(ast->functionName))
     return ast->type;
 
+  // Check if this is a generic function call
+  auto gen_it = generic_func_defs.find(ast->functionName);
+  if (gen_it != generic_func_defs.end()) {
+    auto *generic_def = gen_it->second;
+    auto generic_type = generic_def->type;
+    auto func = std::get<FunctionType>(generic_type.type_data);
+    auto params = func.get_params_types();
+
+    if (ast->arguments.size() != params.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Generic function '{}' expects {} arguments, got {}",
+                      ast->functionName, params.size(),
+                      ast->arguments.size()));
+      return ast->type = Type::Poisoned();
+    }
+
+    // Synthesize each argument type
+    std::unordered_map<std::string, Type> bindings;
+    for (size_t i = 0; i < ast->arguments.size(); i++) {
+      auto arg_type = ast->arguments[i]->accept_synthesis(this);
+      if (arg_type.type_kind == TypeKind::Poisoned)
+        return ast->type = Type::Poisoned();
+      if (!unify(params[i], arg_type, bindings)) {
+        // Show the expected type with any bindings resolved so far
+        auto expected = substitute(params[i], bindings);
+        this->add_error(
+            ast->arguments[i]->get_location(),
+            fmt::format("Type mismatch in argument {} of '{}': "
+                        "expected {}, got {}",
+                        i + 1, ast->functionName, expected.to_string(),
+                        arg_type.to_string()));
+        return ast->type = Type::Poisoned();
+      }
+    }
+
+    // Check all type params resolved
+    for (auto &tp : generic_def->Prototype->type_params) {
+      if (bindings.find(tp) == bindings.end()) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Type parameter '{}' could not be inferred for '{}'",
+                        tp, ast->functionName));
+        return ast->type = Type::Poisoned();
+      }
+    }
+
+    // Compute mangled name
+    std::string mangled = ast->functionName;
+    for (auto &tp : generic_def->Prototype->type_params)
+      mangled += "." + bindings[tp].to_string();
+
+    // Substitute return type
+    auto ret_type = substitute(func.get_return_type(), bindings);
+    ast->resolved_generic_name = mangled;
+    ast->type_bindings = bindings;
+    ast->callee_func_type = generic_type;
+
+    return ast->type = ret_type;
+  }
+
   // Search current scope + parent scopes for the callee
   auto ty = try_get_callee_type(ast->functionName);
   if (!ty.has_value()) {
@@ -462,6 +567,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::TypeParam:
     this->abort(fmt::format("should not happen here with function {}",
                             ast->functionName));
   }
@@ -775,6 +881,107 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
     return ast->type = Type::Poisoned();
   }
   return ast->type = operand_type;
+}
+
+// --- Generic support: unification, substitution ---
+
+bool BiTypeCheckerVisitor::contains_type_param(const Type &type,
+                                                const std::string &param_name) {
+  if (type.type_kind == TypeKind::TypeParam)
+    return std::get<std::string>(type.type_data) == param_name;
+
+  if (type.type_kind == TypeKind::Pointer) {
+    auto pointee = std::get<PointerType>(type.type_data).get_pointee();
+    return contains_type_param(pointee, param_name);
+  }
+  if (type.type_kind == TypeKind::Array) {
+    auto elem = std::get<ArrayType>(type.type_data).get_element();
+    return contains_type_param(elem, param_name);
+  }
+  if (type.type_kind == TypeKind::Function) {
+    auto fn = std::get<FunctionType>(type.type_data);
+    for (auto &p : fn.get_params_types())
+      if (contains_type_param(p, param_name))
+        return true;
+    return contains_type_param(fn.get_return_type(), param_name);
+  }
+  return false;
+}
+
+bool BiTypeCheckerVisitor::unify(
+    const Type &pattern, const Type &concrete,
+    std::unordered_map<std::string, Type> &bindings) {
+  if (pattern.type_kind == TypeKind::TypeParam) {
+    auto name = std::get<std::string>(pattern.type_data);
+    // Occurs check
+    if (contains_type_param(concrete, name))
+      return false;
+    auto it = bindings.find(name);
+    if (it != bindings.end()) {
+      return it->second == concrete;
+    }
+    bindings[name] = concrete;
+    return true;
+  }
+
+  if (pattern.type_kind != concrete.type_kind)
+    return false;
+
+  if (pattern.type_kind == TypeKind::Pointer) {
+    auto pp = std::get<PointerType>(pattern.type_data).get_pointee();
+    auto cp = std::get<PointerType>(concrete.type_data).get_pointee();
+    return unify(pp, cp, bindings);
+  }
+  if (pattern.type_kind == TypeKind::Array) {
+    auto pa = std::get<ArrayType>(pattern.type_data);
+    auto ca = std::get<ArrayType>(concrete.type_data);
+    if (pa.get_size() != ca.get_size())
+      return false;
+    return unify(pa.get_element(), ca.get_element(), bindings);
+  }
+  if (pattern.type_kind == TypeKind::Function) {
+    auto pf = std::get<FunctionType>(pattern.type_data);
+    auto cf = std::get<FunctionType>(concrete.type_data);
+    auto pp = pf.get_params_types();
+    auto cp = cf.get_params_types();
+    if (pp.size() != cp.size())
+      return false;
+    for (size_t i = 0; i < pp.size(); i++)
+      if (!unify(pp[i], cp[i], bindings))
+        return false;
+    return unify(pf.get_return_type(), cf.get_return_type(), bindings);
+  }
+
+  return true;
+}
+
+Type BiTypeCheckerVisitor::substitute(
+    const Type &type,
+    const std::unordered_map<std::string, Type> &bindings) {
+  if (type.type_kind == TypeKind::TypeParam) {
+    auto name = std::get<std::string>(type.type_data);
+    auto it = bindings.find(name);
+    if (it != bindings.end())
+      return it->second;
+    return type;
+  }
+  if (type.type_kind == TypeKind::Pointer) {
+    auto pointee = std::get<PointerType>(type.type_data).get_pointee();
+    return Type::Pointer(substitute(pointee, bindings));
+  }
+  if (type.type_kind == TypeKind::Array) {
+    auto arr = std::get<ArrayType>(type.type_data);
+    return Type::Array(substitute(arr.get_element(), bindings), arr.get_size());
+  }
+  if (type.type_kind == TypeKind::Function) {
+    auto fn = std::get<FunctionType>(type.type_data);
+    std::vector<Type> total;
+    for (auto &p : fn.get_params_types())
+      total.push_back(substitute(p, bindings));
+    total.push_back(substitute(fn.get_return_type(), bindings));
+    return Type::Function(std::move(total));
+  }
+  return type;
 }
 
 } // namespace sammine_lang::AST

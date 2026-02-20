@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 //! \file Ast.h
@@ -142,6 +143,8 @@ public:
   std::string functionName;
   std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
+  std::vector<std::string> type_params;
+  bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(
       std::shared_ptr<Token> functionName,
@@ -458,6 +461,8 @@ public:
   std::vector<std::unique_ptr<AST::ExprAST>> arguments;
   std::optional<Type> callee_func_type;
   bool is_partial = false;
+  std::optional<std::string> resolved_generic_name;
+  std::unordered_map<std::string, Type> type_bindings;
   explicit CallExprAST(
       std::shared_ptr<Token> functionName,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {}) {

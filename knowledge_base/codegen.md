@@ -75,6 +75,13 @@ Both read and assignment through dereferenced pointers to arrays are supported:
 - `CodegenUtils::declare_malloc()` and `CodegenUtils::declare_free()` in `src/codegen/CodegenUtils.cpp`
 - `declare_fn()` is the shared helper for declaring external C functions
 
+## Generics / Monomorphization in Codegen
+- `CgVisitor::visit(FuncDefAST*)`: if `ast->Prototype->is_generic()`, return immediately (skip generic templates)
+- Monomorphized copies have `type_params` empty and concrete types → normal codegen path
+- `TypeKind::TypeParam` → abort in `get_type()` and `get_cmp_func()` (should never reach codegen)
+- Monomorphized functions are injected at the **front** of `DefinitionVec` by `Compiler::typecheck()` so they're codegen'd before call sites
+- Monomorphizer (`src/typecheck/Monomorphizer.cpp`) deep-clones AST with type substitution; must handle all ExprAST subtypes
+
 ## 5 Visitors That Need Updating for Each New AST Node
 1. `AstPrinterVisitor` (`src/ast/AstPrinterVisitor.cpp`) — visit + pre/post stubs
 2. `BiTypeCheckerVisitor` (`src/typecheck/BiTypeChecker.cpp`) — synthesize + pre/post

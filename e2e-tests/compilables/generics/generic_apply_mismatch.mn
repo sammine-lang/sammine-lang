@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full --diagnostics
+let double(x: i32) -> i32 { x + x }
+
+let apply(f: (T) -> f64, x: T) -> f64 { f(x) }
+
+let main() -> i32 {
+  let result = apply(double, 5);
+  return 0;
+}

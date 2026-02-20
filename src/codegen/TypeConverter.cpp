@@ -44,6 +44,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
   case TypeKind::Integer:
   case TypeKind::Flt:
     sammine_util::abort("Polymorphic literal type should not reach codegen");
+  case TypeKind::TypeParam:
+    sammine_util::abort("TypeParam should not reach codegen");
   }
   sammine_util::abort("Guarded by default case");
 }
@@ -128,6 +130,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::Integer:
   case TypeKind::Flt:
   case TypeKind::Record:
+  case TypeKind::TypeParam:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));
   }

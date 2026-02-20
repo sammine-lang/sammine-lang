@@ -4,6 +4,8 @@
 #include "ast/AstBase.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
+#include <set>
+#include <unordered_map>
 
 //! \file BiTypeChecker.h
 //! \brief Defines the BiTypeCheckerVisitor, consist of the flow for
@@ -30,6 +32,21 @@ public:
   LexicalStack<Type, AST::FuncDefAST*> typename_to_type;
   TypeMapOrdering type_map_ordering;
   const std::set<std::string> &pre_func;
+
+  // Generic function support
+  bool in_prototype_context = false;
+  std::vector<std::string> discovered_type_params;
+  std::unordered_map<std::string, FuncDefAST*> generic_func_defs;
+  std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
+  std::set<std::string> instantiated_functions;
+
+  // Unification and substitution helpers
+  bool unify(const Type &pattern, const Type &concrete,
+             std::unordered_map<std::string, Type> &bindings);
+  Type substitute(const Type &type,
+                  const std::unordered_map<std::string, Type> &bindings);
+  bool contains_type_param(const Type &type, const std::string &param_name);
+
   virtual void enter_new_scope() override {
     id_to_type.push_context();
     typename_to_type.push_context();
@@ -197,6 +214,18 @@ public:
     if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(type_expr)) {
       auto get_type_opt = this->get_typename_type(simple->name);
       if (!get_type_opt.has_value()) {
+        if (in_prototype_context) {
+          // Auto-discover as type parameter
+          auto tp = Type::TypeParam(simple->name);
+          typename_to_type.registerNameT(simple->name, tp);
+          // Only add if not already discovered
+          if (std::find(discovered_type_params.begin(),
+                        discovered_type_params.end(),
+                        simple->name) == discovered_type_params.end()) {
+            discovered_type_params.push_back(simple->name);
+          }
+          return tp;
+        }
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",
                                     simple->name));

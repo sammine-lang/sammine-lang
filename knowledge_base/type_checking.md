@@ -60,6 +60,44 @@
 6. Handle in all `switch(type_kind)` statements (compiler warns via `-Wswitch`)
 7. Add `case` to `TypeConverter::get_type()` and `get_cmp_func()`
 
+## Monomorphized Generics
+
+### Overview
+Generic functions use **implicit type parameter discovery** (no `<T>` syntax) and **monomorphization** (concrete copies per type combination). Unknown type names in function signatures are auto-discovered as type parameters.
+
+### Key Types & Fields
+- `TypeKind::TypeParam`: represents an unresolved type parameter; uses `std::string` variant of `TypeData`
+- `PrototypeAST::type_params`: populated during type checking (not parsing); `is_generic()` checks if non-empty
+- `CallExprAST::resolved_generic_name`: mangled name (e.g. `"identity.i32"`)
+- `CallExprAST::type_bindings`: e.g. `{"T": i32}`
+
+### Type Checker Flow
+1. **Discovery** (`visit(FuncDefAST*)`): sets `in_prototype_context = true`, resolves prototype. In `resolve_type_expr()`, unknown `SimpleTypeExprAST` names are auto-registered as `TypeParam` and added to `discovered_type_params`. If any found → store in `generic_func_defs`, skip body.
+2. **Generic call** (`synthesize(CallExprAST*)`): checks `generic_func_defs` first. If found: synthesize arg types, `unify()` each against generic param types to build bindings, compute mangled name, `substitute()` return type.
+3. **Monomorphization** (`visit(CallExprAST*)`): if `resolved_generic_name` set and not yet instantiated: `Monomorphizer::instantiate()` deep-clones AST with type substitution, runs `GeneralSemanticsVisitor` (implicit return wrapping), then type-checks the clone as a normal function. Stores in `monomorphized_defs`.
+4. **Injection** (`Compiler::typecheck()`): moves `monomorphized_defs` to front of `DefinitionVec` so they're codegen'd before call sites.
+5. **Codegen skip** (`CgVisitor::visit(FuncDefAST*)`): if `is_generic()`, return immediately.
+
+### Unification (`unify(pattern, concrete, bindings)`)
+- `TypeParam` vs concrete → bind (with occurs check and consistency check)
+- Same `TypeKind` → recurse into children (Pointer pointee, Array element+size, Function params+return)
+- Different `TypeKind` → return false
+
+### Substitution (`substitute(type, bindings)`)
+- `TypeParam` → look up in bindings, return concrete type
+- Compound types → recurse into children
+- Concrete types → return as-is
+
+### Monomorphizer (`include/typecheck/Monomorphizer.h`)
+- `Monomorphizer::instantiate(generic, mangled_name, bindings)` → deep-clones `FuncDefAST`
+- Replaces `SimpleTypeExprAST` names according to bindings (e.g. `"T"` → `"i32"`)
+- Sets cloned prototype's `functionName` to `mangled_name`, leaves `type_params` empty
+
+### Limitations
+- Generic functions only (not records/structs)
+- Type parameters only (no const generics — array sizes must be concrete)
+- No partial application of generic functions (all args must be provided)
+
 ## Adding a New AST Node to Type Checker
 1. Add `synthesize()` declaration in `BiTypeChecker.h`
 2. Add `preorder_walk()` and `postorder_walk()` declarations in `BiTypeChecker.h`
