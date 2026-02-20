@@ -1,16 +1,12 @@
 #include "util/Utilities.h"
-#include "fmt/base.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "util/FileRAII.h"
 #include <cassert>
-#include <filesystem>
-#include <cctype>
 #include <cpptrace/cpptrace.hpp>
 #include <cpptrace/from_current.hpp>
-#include <cstdio>
 #include <cstdlib>
-#include <llvm/Support/ConvertUTF.h>
+#include <filesystem>
 #include <string_view>
 namespace sammine_util {
 auto get_string_from_file(const std::string &file_name) -> std::string {
@@ -42,31 +38,26 @@ class Locator {
   int64_t context_radius;
   const Reporter::DiagnosticData &data;
 
+  int64_t source_index_to_line(int64_t source_index) const {
+    auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
+    auto idx =
+        std::ranges::lower_bound(
+            data, std::make_pair(source_index, std::string_view("")), cmp) -
+        data.begin();
+    return idx + (idx == 0);
+  }
+
 public:
   Locator(IndexPair source_start_end, int64_t context_radius,
           const Reporter::DiagnosticData &data)
       : source_start_end(source_start_end), context_radius(context_radius),
         data(data) {}
 
-  // INFO: Given the source start and source end, get the line index of them.
   IndexPair get_lines_indices() const {
     auto [start, end] = source_start_end;
-    // INFO: Helper function
-    auto get_line_ite = [this](int64_t source_index) -> int64_t {
-      auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
-
-      auto idx =
-          std::ranges::lower_bound(
-              data, std::make_pair(source_index, std::string_view("")), cmp) -
-          data.begin();
-      return idx + (idx == 0);
-    };
-
-    return {get_line_ite(start) - 1, get_line_ite(end) - 1};
+    return {source_index_to_line(start) - 1, source_index_to_line(end) - 1};
   }
 
-  // INFO: Given the line index start and end, get the line index of them,
-  // modified to accompany for context radius.
   IndexPair get_lines_indices_with_radius() const {
     auto [line_start, line_end] = get_lines_indices();
     line_start = line_start > context_radius ? line_start - context_radius : 0;
@@ -77,46 +68,18 @@ public:
     return {line_start, line_end};
   }
 
-  // INFO: Given the source start and source end and knowing that they fit on a
-  // singular line, recalibrate source start and end so that they start indexing
-  // from 0 at the singular line.
   std::tuple<int64_t, int64_t, int64_t>
   get_start_end_of_singular_line_token() const {
-
     auto [start, end] = source_start_end;
-    // INFO: Helper function
-    auto get_line_ite = [this](int64_t source_index) -> int64_t {
-      auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
-
-      auto idx =
-          std::ranges::lower_bound(
-              data, std::make_pair(source_index, std::string_view("")), cmp) -
-          data.begin();
-      return idx + (idx == 0);
-    };
-
-    auto num_row = get_line_ite(start) - 1;
+    auto num_row = source_index_to_line(start) - 1;
     auto num_col = start - data[num_row].first;
-
     return {num_row, num_col, num_col + end - start};
   }
 
   IndexPair get_row_col() const {
     auto [start, end] = source_start_end;
-    // INFO: Helper function
-    auto get_line_ite = [this](int64_t source_index) -> int64_t {
-      auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
-
-      auto idx =
-          std::ranges::lower_bound(
-              data, std::make_pair(source_index, std::string_view("")), cmp) -
-          data.begin();
-      return idx + (idx == 0);
-    };
-
-    auto num_row = get_line_ite(start) - 1;
+    auto num_row = source_index_to_line(start) - 1;
     auto num_col = start - data[num_row].first;
-
     return {num_row, num_col};
   }
 
@@ -223,14 +186,14 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
 
 void Reporter::report(const Reportee &reports) const {
 
-  bool begin = true;
+  bool first = true;
   for (const auto &[loc, report_msg, report_kind, src] : reports) {
 
-    for (int64_t i = 1; i <= 1 && !begin; i++)
+    if (!first)
       print_fmt(LINE_COLOR, "----------------------------------------------------------------"
                                 "----------\n");
 
-    begin = false;
+    first = false;
     if (dev_mode) {
       auto msgs = report_msg;
       auto src_file = std::filesystem::path(src.file_name()).filename().string();
@@ -257,16 +220,12 @@ fmt::terminal_color Reporter::get_color_from(ReportKind report_kind) {
   switch (report_kind) {
   case Reportee::error:
     return fmt::terminal_color::bright_red;
-    break;
   case Reportee::warn:
     return fmt::terminal_color::bright_yellow;
-    break;
   case Reportee::diag:
     return fmt::terminal_color::green;
-    break;
   }
   abort("fail to get color");
 }
 
-int64_t get_unique_ast_id() { return unique_ast_id; }
 } // namespace sammine_util

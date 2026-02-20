@@ -4,12 +4,10 @@
 
 #include "compiler/Compiler.h"
 #include "ast/Ast.h"
-#include "ast/AstBase.h"
 #include "codegen/CodegenVisitor.h"
 #include "codegen/LLVMRes.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
-#include "lex/Token.h"
 #include "parser/Parser.h"
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
@@ -23,12 +21,8 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Pass.h"
 #include <chrono>
-#include <cstdlib>
 #include <filesystem>
-#include <memory>
-#include <system_error>
 
 #define DEBUG_TYPE "stages"
 
@@ -83,9 +77,9 @@ Compiler::Compiler(
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
 
-  if (this->input != "") {
+  if (!this->input.empty()) {
     this->file_name = "From string input";
-  } else if (this->file_name != "") {
+  } else if (!this->file_name.empty()) {
     this->input = sammine_util::get_string_from_file(this->file_name);
   } else {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
@@ -97,7 +91,6 @@ Compiler::Compiler(
   }
   this->resPtr = std::make_shared<LLVMRes>();
 
-  *this->resPtr;
   bool dev_mode = compiler_options[compiler_option_enum::DEV] == "true";
   this->reporter = sammine_util::Reporter(file_name, input, context_radius, dev_mode);
 

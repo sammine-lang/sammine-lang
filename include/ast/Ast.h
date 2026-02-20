@@ -17,7 +17,6 @@ namespace sammine_lang {
 
 namespace AST {
 
-using Identifier = std::string;
 class Printable {};
 
 class TypeExprAST {

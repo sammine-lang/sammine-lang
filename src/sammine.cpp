@@ -8,12 +8,9 @@
 #include "fmt/color.h"
 #include "util/Utilities.h"
 #include <argparse/argparse.hpp>
-#include <cpptrace/basic.hpp>
 #include <cpptrace/cpptrace.hpp>
 #include <csignal>
 #include <cstdlib>
-#include <unistd.h>
-#include <utility>
 using sammine_lang::compiler_option_enum;
 
 void handler(int sig) {

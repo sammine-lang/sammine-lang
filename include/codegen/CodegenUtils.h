@@ -28,9 +28,4 @@ public:
                                          bool is_vararg = false);
 };
 
-class CodegenCommenter {
-
-public:
-  CodegenCommenter(LLVMRes &resPtr) {}
-};
 } // namespace sammine_lang

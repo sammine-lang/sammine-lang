@@ -4,9 +4,7 @@
 
 #include "codegen/CodegenVisitor.h"
 #include "ast/Ast.h"
-#include "ast/AstBase.h"
 #include "codegen/CodegenUtils.h"
-#include "lex/Token.h"
 #include "util/Logging.h"
 #include "util/Utilities.h"
 #include "llvm/IR/Constants.h"
@@ -15,9 +13,6 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include <cstddef>
-#include <cstdio>
-#include <cstdlib>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/Support/raw_ostream.h>
 

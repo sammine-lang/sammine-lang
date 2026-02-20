@@ -1,18 +1,16 @@
 #pragma once
-#include "fmt/base.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include <algorithm>
 #include <cassert>
-#include <cstddef>
 #include <cstdlib>
 #include <iostream>
+#include <source_location>
 #include <string>
-#include <unistd.h>
 #include <string_view>
 #include <tuple>
+#include <unistd.h>
 #include <utility>
-#include <source_location>
 #include <vector>
 
 //! \file Utilities.h
@@ -29,7 +27,6 @@ inline fmt::text_style styled(fmt::terminal_color c) {
 }
 
 auto get_string_from_file(const std::string &file_name) -> std::string;
-inline int64_t unique_ast_id = 0;
 
 template <typename T>
 concept explicitly_bool_like = requires(T t) {

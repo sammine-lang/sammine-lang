@@ -1,7 +1,6 @@
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "ast/Ast.h"
 #include "util/Utilities.h"
-#include <memory>
 //! \file GeneralSemanticsVisitor.cpp
 //! \brief Implementation for GeneralSemanticsVisitor
 namespace sammine_lang::AST {

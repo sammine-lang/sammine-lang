@@ -58,7 +58,6 @@ void CgVisitor::postorder_walk(FuncDefAST *ast) {
   if (not_verified) {
     resPtr->Module->print(llvm::errs(), nullptr);
     this->abort("ICE: Abort from creating a function");
-    getCurrentFunction()->eraseFromParent();
   }
 }
 

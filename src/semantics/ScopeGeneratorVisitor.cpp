@@ -3,8 +3,6 @@
 #include "fmt/format.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
-#include <ctime>
-#include <memory>
 //! \file ScopeGeneratorVisitor.cpp
 //! \brief Implements ScopeGeneratorVisitor, an ASTVisitor that traverses the
 //! AST to populate a lexical symbol table
@@ -12,7 +10,7 @@ namespace sammine_lang::AST {
 // pre order
 void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
 
-  std::string fn_name = "";
+  std::string fn_name;
   sammine_util::Location loc;
   for (auto &def : ast->DefinitionVec) {
     if (auto fn_def = dynamic_cast<FuncDefAST *>(def.get())) {
@@ -27,7 +25,7 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
     } else
       this->abort("Should not be any other def");
 
-    if (fn_name != "") {
+    if (!fn_name.empty()) {
       if (can_see(fn_name) == nameNotFound)
         register_name(fn_name, loc);
       else if (can_see(fn_name) == nameFound) {

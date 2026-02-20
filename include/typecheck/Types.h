@@ -1,13 +1,10 @@
 #pragma once
 #include "util/Utilities.h"
-#include <cmath>
-#include <execution>
 #include <map>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <variant>
 #include <vector>
 //! \file Types.h
@@ -161,7 +158,6 @@ struct Type {
     }
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
-    return "";
   }
 
   bool is_literal() const {
