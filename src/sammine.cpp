@@ -61,8 +61,9 @@ int main(int argc, char *argv[]) {
             "with value for logging: --diagnostics=stages;lexer;parser. Default value is none");
   g_diag.add_argument("", "--time")
       .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("Print per-phase timing breakdown to stderr");
+      .implicit_value(std::string("simple"))
+      .nargs(0, 1)
+      .help("Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes)");
 
   if (argc < 1) {
     std::cerr << program;
@@ -79,7 +80,12 @@ int main(int argc, char *argv[]) {
     compiler_options[DIAGNOSTIC] =
         program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");
-    compiler_options[TIME] = program.get("--time");
+    if (program.is_used("--time")) {
+      auto val = program.get("--time");
+      compiler_options[TIME] = (val == "false") ? "simple" : val;
+    } else {
+      compiler_options[TIME] = "false";
+    }
   } catch (const std::exception &err) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "Error while parsing arguments\n");

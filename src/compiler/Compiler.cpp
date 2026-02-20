@@ -21,7 +21,9 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Pass.h"
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -346,8 +348,12 @@ void Compiler::start() {
       {"link", &Compiler::link},
   };
 
-  bool timing = compiler_options[compiler_option_enum::TIME] == "true";
+  std::string time_level = compiler_options[compiler_option_enum::TIME];
+  bool timing = time_level != "false";
   std::vector<std::pair<const char *, double>> timings;
+
+  if (time_level == "coarse")
+    llvm::TimePassesIsEnabled = true;
 
   for (auto &[name, fn] : stages) {
     auto t0 = std::chrono::high_resolution_clock::now();
@@ -359,8 +365,18 @@ void Compiler::start() {
     }
   }
 
-  if (timing)
-    print_timing_table(timings);
+  if (timing) {
+    if (time_level == "simple") {
+      double total = 0.0;
+      for (auto &[name, ms] : timings)
+        total += ms;
+      fmt::print(stderr, "total: {:.2f}ms\n", total);
+    } else {
+      print_timing_table(timings);
+      if (time_level == "coarse")
+        llvm::TimerGroup::printAll(llvm::errs());
+    }
+  }
 }
 
 } // namespace sammine_lang
