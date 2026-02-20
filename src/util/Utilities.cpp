@@ -127,7 +127,16 @@ std::vector<GroupedReport> group_reports(const Reportee &reports) {
         if (std::find(it->msgs.begin(), it->msgs.end(), msg) == it->msgs.end())
           it->msgs.push_back(msg);
       }
-      it->srcs.push_back(src);
+      // Deduplicate source locations (same file + line) so --dev mode
+      // doesn't print the same origin twice.
+      bool dup = std::any_of(it->srcs.begin(), it->srcs.end(),
+                             [&](const std::source_location &s) {
+                               return s.line() == src.line() &&
+                                      std::string_view(s.file_name()) ==
+                                          src.file_name();
+                             });
+      if (!dup)
+        it->srcs.push_back(src);
     } else {
       groups.push_back({loc, report_msg, report_kind, {src}});
     }
@@ -294,7 +303,7 @@ void Reporter::report(const Reportee &reports) const {
         for (const auto &src : g.srcs) {
           auto sf =
               std::filesystem::path(src.file_name()).filename().string();
-          msgs.push_back(fmt::format("[Error-borne --dev location is {}:{}]",
+          msgs.push_back(fmt::format("[Error-borne --dev location: {}:{}]",
                                      sf, src.line()));
         }
       }
