@@ -1,0 +1,5 @@
+# RUN: ! %sammine --file %full --diagnostics=dev 2>&1 | %check %full
+# CHECK: Error-borne --dev location
+let main() -> i64 {
+  return 0;
+}

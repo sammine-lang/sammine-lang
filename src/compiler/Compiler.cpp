@@ -92,14 +92,14 @@ Compiler::Compiler(
   }
   this->resPtr = std::make_shared<LLVMRes>();
 
-  bool dev_mode = compiler_options[compiler_option_enum::DEV] == "true";
-  this->reporter =
-      sammine_util::Reporter(file_name, input, context_radius, dev_mode);
-
   // Initialize debug logging from --diagnostics flag
   std::string diagnostic_value =
       compiler_options[compiler_option_enum::DIAGNOSTIC];
   sammine_log::set_enabled_types(diagnostic_value);
+
+  bool dev_mode = sammine_log::is_type_in_list("dev", diagnostic_value);
+  this->reporter =
+      sammine_util::Reporter(file_name, input, context_radius, dev_mode);
 }
 
 void Compiler::lex() {

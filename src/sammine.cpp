@@ -55,6 +55,7 @@ int main(int argc, char *argv[]) {
       .help("sammine compiler spits out diagnostics for "
             "sammine-lang developers. Use "
             "with value for logging: --diagnostics=stages;lexer;parser. "
+            "Use 'dev' to show compiler source locations in error messages. "
             "Default value is none");
   g_diag.add_argument("", "--time")
       .default_value(std::string("false"))
@@ -62,11 +63,6 @@ int main(int argc, char *argv[]) {
       .nargs(0, 1)
       .help("Print compilation timing. Also accepts: sparse (per-phase table), "
             "coarse (per-phase + all LLVM passes)");
-  g_diag.add_argument("", "--dev")
-      .default_value(false)
-      .implicit_value(true)
-      .help(
-          "Show compiler source locations in error messages (for developers)");
 
   if (argc < 1) {
     std::cerr << program;
@@ -93,7 +89,6 @@ int main(int argc, char *argv[]) {
     compiler_options[AST_IR] = program.get("--ast-ir");
     compiler_options[DIAGNOSTIC] = program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");
-    compiler_options[DEV] = program.get<bool>("--dev") ? "true" : "false";
     if (program.is_used("--time")) {
       auto val = program.get("--time");
       compiler_options[TIME] = (val == "false") ? "simple" : val;

@@ -16,7 +16,6 @@ enum compiler_option_enum {
   DIAGNOSTIC,
   CHECK,
   TIME,
-  DEV,
 };
 
 class CompilerRunner {

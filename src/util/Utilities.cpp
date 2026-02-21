@@ -301,7 +301,7 @@ void Reporter::report(const Reportee &reports) const {
       if (dev_mode) {
         for (const auto &src : g.srcs) {
           auto sf = std::filesystem::path(src.file_name()).filename().string();
-          msgs.push_back(fmt::format("[Error-borne --dev location: {}:{}]", sf,
+          msgs.push_back(fmt::format("[Error-borne `dev` location: {}:{}]", sf,
                                      src.line()));
         }
       }
