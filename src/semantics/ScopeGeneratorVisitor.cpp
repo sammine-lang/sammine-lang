@@ -53,6 +53,13 @@ void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
         fmt::format("[SCOPE]: The firstly defined `{}` is here", var_name));
   }
 }
+void ScopeGeneratorVisitor::visit(ExternAST *ast) {
+  scope_stack.push_context();
+  ast->walk_with_preorder(this);
+  ast->Prototype->accept_vis(this);
+  ast->walk_with_postorder(this);
+  scope_stack.pop_context();
+}
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(RecordDefAST *ast) {}

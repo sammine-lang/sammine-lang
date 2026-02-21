@@ -31,7 +31,6 @@ public:
   // INFO: i64, f64 bla bla bla
   LexicalStack<Type, AST::FuncDefAST *> typename_to_type;
   TypeMapOrdering type_map_ordering;
-  const std::set<std::string> &pre_func;
 
   // Generic function support
   bool in_prototype_context = false;
@@ -69,8 +68,7 @@ public:
     id_to_type.pop();
     typename_to_type.pop();
   }
-  BiTypeCheckerVisitor(const std::set<std::string> &pre_func)
-      : pre_func(pre_func) {
+  BiTypeCheckerVisitor() {
     this->enter_new_scope();
   }
 

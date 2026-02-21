@@ -141,6 +141,10 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       tokStream->push_back(Token(TokFree, "free", location));
     else if (IdentifierStr == "len")
       tokStream->push_back(Token(TokLen, "len", location));
+    else if (IdentifierStr == "import")
+      tokStream->push_back(Token(TokImport, "import", location));
+    else if (IdentifierStr == "as")
+      tokStream->push_back(Token(TokAs, "as", location));
     else
       tokStream->push_back(Token(TokID, IdentifierStr, location));
   }
@@ -177,6 +181,15 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
     tokStream->push_back(Token(TokNum, NumStr, location));
 
   } else if (input[i] == '.') {
+    // Check for ellipsis (...)
+    if (i + 2 < input.length() && input[i + 1] == '.' && input[i + 2] == '.') {
+      i = advance(i);
+      i = advance(i);
+      i = advance(i);
+      tokStream->push_back(Token(TokEllipsis, "...", location));
+      return i;
+    }
+
     auto i_0 = i;
     NumStr += input[i];
     i = advance(i);

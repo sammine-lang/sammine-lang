@@ -41,8 +41,57 @@ int GetTokPrecedence(TokenType tokType) {
 
 auto Parser::Parse() -> u<ProgramAST> { return ParseProgram(); }
 
+auto Parser::ParseImport() -> std::optional<AST::ImportDecl> {
+  auto import_tok = expect(TokImport);
+  if (!import_tok)
+    return std::nullopt;
+
+  auto module_id = expect(TokID);
+  if (!module_id) {
+    this->imm_error("Expected module name after 'import'",
+                    import_tok->get_location());
+    return std::nullopt;
+  }
+
+  AST::ImportDecl decl;
+  decl.module_name = module_id->lexeme;
+
+  // 'as <alias>' is optional; when omitted, externs are injected directly
+  auto as_tok = expect(TokAs);
+  if (as_tok) {
+    auto alias_id = expect(TokID);
+    if (!alias_id) {
+      this->imm_error("Expected alias after 'as' in import",
+                      as_tok->get_location());
+      return std::nullopt;
+    }
+    decl.alias = alias_id->lexeme;
+    decl.location = import_tok->get_location() | alias_id->get_location();
+    alias_to_module[decl.alias] = decl.module_name;
+  } else {
+    decl.alias = "";
+    decl.location = import_tok->get_location() | module_id->get_location();
+  }
+
+  auto semi = expect(TokSemiColon);
+  if (!semi) {
+    this->imm_error("Expected ';' after import statement",
+                    decl.location);
+  }
+
+  return decl;
+}
+
 auto Parser::ParseProgram() -> u<ProgramAST> {
   auto programAST = std::make_unique<ProgramAST>();
+
+  // Parse imports at the top of the file
+  while (!tokStream->isEnd() && tokStream->peek()->tok_type == TokImport) {
+    auto import_decl = ParseImport();
+    if (import_decl)
+      programAST->imports.push_back(std::move(*import_decl));
+  }
+
   while (!tokStream->isEnd()) {
     auto [def, result] = ParseDefinition();
     switch (result) {
@@ -477,6 +526,21 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto id = expect(TokenType::TokID)) {
+    // Handle qualified type names: alias.TypeName (e.g. m.Point)
+    if (tokStream->peek()->tok_type == TokDot) {
+      auto it = alias_to_module.find(id->lexeme);
+      if (it != alias_to_module.end()) {
+        tokStream->consume(); // consume the dot
+        auto member_id = expect(TokID);
+        if (!member_id) {
+          this->imm_error(
+              fmt::format("Expected type name after '{}.`", id->lexeme),
+              id->get_location());
+          return nullptr;
+        }
+        return std::make_unique<SimpleTypeExprAST>(member_id);
+      }
+    }
     return std::make_unique<SimpleTypeExprAST>(id);
   }
   return nullptr;
@@ -969,6 +1033,23 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (!id)
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
+  // Handle qualified names: alias.member (e.g. m.add)
+  if (tokStream->peek()->tok_type == TokDot) {
+    auto it = alias_to_module.find(id->lexeme);
+    if (it != alias_to_module.end()) {
+      tokStream->consume(); // consume the dot
+      auto member_id = expect(TokID);
+      if (!member_id) {
+        this->imm_error(
+            fmt::format("Expected member name after '{}.`", id->lexeme),
+            id->get_location());
+        return {nullptr, COMMITTED_NO_MORE_ERROR};
+      }
+      // Replace id with the member name (desugar m.add → add)
+      id = member_id;
+    }
+  }
+
   auto [args, result] = ParseArguments();
   switch (result) {
   case SUCCESS:
@@ -1124,21 +1205,28 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   case COMMITTED_NO_MORE_ERROR:
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
+  bool var_arg = parsed_var_arg;
+
   auto arrow = expect(TokArrow);
-  if (!arrow)
-    return {std::make_unique<PrototypeAST>(id, std::move(params)), SUCCESS};
+  if (!arrow) {
+    auto proto = std::make_unique<PrototypeAST>(id, std::move(params));
+    proto->is_var_arg = var_arg;
+    return {std::move(proto), SUCCESS};
+  }
 
   auto return_type_expr = ParseTypeExprTopLevel();
-  if (return_type_expr)
-    return {std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
-                                           std::move(params)),
-            SUCCESS};
-  else {
+  if (return_type_expr) {
+    auto proto = std::make_unique<PrototypeAST>(
+        id, std::move(return_type_expr), std::move(params));
+    proto->is_var_arg = var_arg;
+    return {std::move(proto), SUCCESS};
+  } else {
     this->imm_error("Failed to parse the return type after the token `->`",
                     arrow->get_location());
-    return {std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
-                                           std::move(params)),
-            COMMITTED_EMIT_MORE_ERROR};
+    auto proto = std::make_unique<PrototypeAST>(
+        id, std::move(return_type_expr), std::move(params));
+    proto->is_var_arg = var_arg;
+    return {std::move(proto), COMMITTED_EMIT_MORE_ERROR};
   }
 }
 
@@ -1285,6 +1373,22 @@ auto Parser::ParseParams()
 
   // COMMITMENT POINT
   bool error = false;
+  parsed_var_arg = false;
+
+  // Check for leading ellipsis: (...)
+  if (tokStream->peek()->tok_type == TokEllipsis) {
+    tokStream->consume();
+    parsed_var_arg = true;
+    auto rightParen = expect(TokRightParen, true);
+    if (!rightParen) {
+      this->imm_error(
+          "Expected ')' after '...'",
+          leftParen->get_location());
+      return {std::vector<u<TypedVarAST>>(), COMMITTED_NO_MORE_ERROR};
+    }
+    return {std::vector<u<TypedVarAST>>(), SUCCESS};
+  }
+
   auto [tv, tv_result] = ParseTypedVar();
 
   std::vector<u<TypedVarAST>> vec;
@@ -1316,6 +1420,13 @@ auto Parser::ParseParams()
     auto comma = expect(TokComma);
     if (comma == nullptr)
       break;
+
+    // Check for trailing ellipsis: (x : i32, ...)
+    if (tokStream->peek()->tok_type == TokEllipsis) {
+      tokStream->consume();
+      parsed_var_arg = true;
+      break;
+    }
 
     // Report error if we find comma but cannot find typeVar
     auto [nvt, nvt_result] = ParseTypedVar();

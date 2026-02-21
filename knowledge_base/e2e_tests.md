@@ -8,6 +8,7 @@ Tests use LLVM's `lit` framework. Config lives in `e2e-tests/lit.cfg.py`.
 |-------------|-----------------------------------|
 | `%sammine`  | Path to the `sammine` binary       |
 | `%check`    | Path to the `SammineCheck` binary  |
+| `%dir`      | Directory containing the current `.mn` file |
 | `%full`     | Full path to the current `.mn` file (`%s`) |
 | `%base`     | Basename without `.mn` extension   |
 
@@ -60,11 +61,22 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `misc/`     | General tests, compiler flag tests (`hello`, `llvm_ir_pre`, etc.) |
 
 | `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, etc.) |
+| `import/`   | Module import tests (`import_basic`, `import_missing`); library sources in `Inputs/` |
 
 Other directories:
 - `e2e-tests/euler/` — Project Euler solutions used as integration tests
 
 Naming convention: `feature_variant.mn` (e.g. `ptr_nested.mn`, `alloc_type_mismatch.mn`)
 
+### Multi-file import test
+```
+# RUN: %sammine --file %dir/Inputs/math.mn && %sammine --file %full && ./import_basic.exe | %check %full
+# CHECK: 7
+```
+- Compile the library first (produces `.o` + `.mni` in CWD), then compile the importing file
+- Library sources go in `Inputs/` subdirectory (excluded from lit discovery via `config.excludes`)
+- Use `%dir` to locate sibling files relative to the test
+
 ## Gotchas
 - `if/else` blocks used as **statements** (not the last expression in a block) need a trailing semicolon: `if cond { ... } else { ... };` — without it, the parser errors on the next token
+- Auxiliary test inputs in `Inputs/` directories are excluded from lit discovery

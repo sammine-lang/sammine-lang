@@ -12,6 +12,8 @@ config.test_format = lit.formats.ShTest(True)
 
 config.substitutions.append(('%sammine', sammine_exe))
 config.substitutions.append(('%check', sammine_check))
+config.substitutions.append(('%dir', '$(dirname %s)'))
 config.substitutions.append(('%full', '%s'))
 config.substitutions.append(('%base', '$(basename %s .mn)'))
 config.suffixes = ['.c', '.mn']
+config.excludes = ['Inputs']

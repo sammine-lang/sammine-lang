@@ -28,12 +28,27 @@ void CgVisitor::preorder_walk(FuncDefAST *ast) {
 /// INFO: Register the function with its arguments, put it in the module
 /// this comes before visiting a function
 void CgVisitor::preorder_walk(PrototypeAST *ast) {
+  // If the function is already declared in the module (e.g. runtime builtins
+  // like printf), reuse the existing declaration instead of creating a
+  // duplicate with a potentially different signature.
+  if (auto *existing = resPtr->Module->getFunction(ast->functionName)) {
+    ast->function = existing;
+    current_func = existing;
+    LOG({
+      fmt::print(stderr,
+                 "[codegen] reusing existing declaration for '{}'\n",
+                 ast->functionName);
+    });
+    return;
+  }
+
   std::vector<llvm::Type *> param_types;
   for (auto &p : ast->parameterVectors)
     param_types.push_back(type_converter.get_type(p->type));
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
-      this->type_converter.get_return_type(ast->type), param_types, false);
+      this->type_converter.get_return_type(ast->type), param_types,
+      ast->is_var_arg);
   llvm::Function *F =
       llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
                              ast->functionName, resPtr->Module.get());

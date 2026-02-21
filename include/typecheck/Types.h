@@ -34,6 +34,7 @@ class FunctionType;
 using TypePtr = std::shared_ptr<Type>;
 class FunctionType {
   std::vector<Type> total_types;
+  bool var_arg = false;
 
 public:
   bool operator==(const FunctionType &t) const;
@@ -42,8 +43,9 @@ public:
 
   std::span<const Type> get_params_types() const;
   Type get_return_type() const;
+  bool is_var_arg() const { return var_arg; }
 
-  FunctionType(const std::vector<Type> &total_types);
+  FunctionType(const std::vector<Type> &total_types, bool var_arg = false);
 };
 class PointerType {
   TypePtr pointee;
@@ -98,7 +100,7 @@ struct Type {
   static Type Array(Type element, size_t size) {
     return Type{TypeKind::Array, ArrayType(element, size)};
   }
-  static Type Function(std::vector<Type> params);
+  static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
     return this->type_kind != TypeKind::Poisoned;
   }

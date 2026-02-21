@@ -10,12 +10,11 @@ namespace sammine_lang::AST {
 //! lexical scope by registration and reporting if there's been redefinitions
 class ScopeGeneratorVisitor : public ScopedASTVisitor {
 public:
+  using ScopedASTVisitor::visit;
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
-  std::set<std::string> pre_func;
   ScopeGeneratorVisitor() {
-    pre_func.insert("printf");
     scope_stack.push_context();
   }
 
@@ -25,17 +24,11 @@ public:
   virtual void enter_new_scope() override { this->scope_stack.push_context(); }
   virtual void exit_new_scope() override { this->scope_stack.pop_context(); }
   NameQueryResult can_see(const std::string &symbol) const {
-    auto result = this->scope_stack.recursiveQueryName(symbol);
-    if (result == nameNotFound)
-      return pre_func.contains(symbol) ? nameFound : nameNotFound;
-    return result;
+    return this->scope_stack.recursiveQueryName(symbol);
   }
   NameQueryResult can_see_parent(const std::string &symbol) const {
     const auto *parent_scope = this->scope_stack.parent_scope();
-    auto result = parent_scope->recursiveQueryName(symbol);
-    if (result == nameNotFound)
-      return pre_func.contains(symbol) ? nameFound : nameNotFound;
-    return result;
+    return parent_scope->recursiveQueryName(symbol);
   }
   void register_name_parent(const std::string &symbol,
                             sammine_util::Location loc) {
@@ -54,6 +47,7 @@ public:
   virtual void preorder_walk(VarDefAST *ast) override;
 
   // INFO: CheckAndReg extern name
+  virtual void visit(ExternAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
   // INFO: CheckAndReg function name, enter new block
   virtual void preorder_walk(FuncDefAST *ast) override;

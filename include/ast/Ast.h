@@ -81,8 +81,15 @@ public:
 
 class DefinitionAST : public AstBase, public Printable {};
 
+struct ImportDecl {
+  std::string module_name;
+  std::string alias;
+  sammine_util::Location location;
+};
+
 class ProgramAST : public AstBase, public Printable {
 public:
+  std::vector<ImportDecl> imports;
   std::vector<std::unique_ptr<DefinitionAST>> DefinitionVec;
   virtual std::string getTreeName() const override { return "ProgramAST"; }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
@@ -144,6 +151,7 @@ public:
   std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
   std::vector<std::string> type_params;
+  bool is_var_arg = false;
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(

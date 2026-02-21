@@ -3,6 +3,7 @@
 #include "ast/AstDecl.h"
 #include "lex/Token.h"
 #include "util/Utilities.h"
+#include <map>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -43,6 +44,8 @@ public:
   template <class T> using u = std::unique_ptr<T>;
   std::optional<std::reference_wrapper<Reporter>> reporter;
   std::shared_ptr<TokenStream> tokStream;
+  std::map<std::string, std::string> alias_to_module;
+  [[nodiscard]] auto ParseImport() -> std::optional<AST::ImportDecl>;
   [[nodiscard]] auto ParseProgram() -> u<ProgramAST>;
 
   // Parse definition
@@ -101,6 +104,7 @@ public:
   int split_greater_depth = 0;
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
+  bool parsed_var_arg = false;
   int pending_deref = 0;
   std::shared_ptr<Token> pending_deref_tok;
 

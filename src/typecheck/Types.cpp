@@ -18,8 +18,8 @@ bool FunctionType::operator<(const FunctionType &t) const {
 bool FunctionType::operator==(const FunctionType &t) const {
   return total_types == t.total_types;
 }
-FunctionType::FunctionType(const std::vector<Type> &total_types)
-    : total_types(total_types) {}
+FunctionType::FunctionType(const std::vector<Type> &total_types, bool var_arg)
+    : total_types(total_types), var_arg(var_arg) {}
 
 std::span<const Type> FunctionType::get_params_types() const {
   return std::span<const Type>(total_types.data(), total_types.size() - 1);
@@ -48,8 +48,8 @@ bool ArrayType::operator<(const ArrayType &t) const {
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
-Type Type::Function(std::vector<Type> params) {
-  return Type{TypeKind::Function, FunctionType{params}};
+Type Type::Function(std::vector<Type> params, bool var_arg) {
+  return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
 bool Type::operator!=(const Type &other) const { return !(operator==(other)); }
 bool Type::operator<(const Type &t) const { return this->operator==(t); }

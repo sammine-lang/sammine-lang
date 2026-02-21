@@ -28,6 +28,13 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   id_to_type.top().setScope(ast);
   typename_to_type.top().setScope(ast);
 
+  if (ast->Prototype->is_var_arg) {
+    this->add_error(
+        ast->Prototype->get_location(),
+        "Variadic arguments ('...') are only supported on extern declarations "
+        "for C interop, not on function definitions");
+  }
+
   bool is_generic = discover_type_params(ast->Prototype.get());
   ast->accept_synthesis(this);
 
@@ -123,7 +130,9 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(ExternAST *ast) {
+  enter_new_scope();
   ast->Prototype->accept_vis(this);
+  exit_new_scope();
 }
 
 void BiTypeCheckerVisitor::visit(RecordDefAST *ast) {}
@@ -159,54 +168,56 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     return;
   }
 
-  if (!pre_func.contains(ast->functionName)) {
-    auto ty = try_get_callee_type(ast->functionName);
-    if (!ty.has_value()) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Function '{}' not found", ast->functionName));
-      return;
-    }
-    if (ty->type_kind != TypeKind::Function) {
-      this->add_error(ast->get_location(),
-                      fmt::format("'{}' is not a function", ast->functionName));
-      return;
-    }
-    ast->callee_func_type = ty;
-    auto func = std::get<FunctionType>(ty->type_data);
-    auto params = func.get_params_types();
+  auto ty = try_get_callee_type(ast->functionName);
+  if (!ty.has_value()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Function '{}' not found", ast->functionName));
+    return;
+  }
+  if (ty->type_kind != TypeKind::Function) {
+    this->add_error(ast->get_location(),
+                    fmt::format("'{}' is not a function", ast->functionName));
+    return;
+  }
+  ast->callee_func_type = ty;
+  auto func = std::get<FunctionType>(ty->type_data);
+  auto params = func.get_params_types();
 
-    LOG({
-      fmt::print(stderr,
-                 "[typecheck] visit CallExprAST: '{}' callee_func_type = {}, "
-                 "partial = {}\n",
-                 ast->functionName, ty->to_string(),
-                 ast->arguments.size() < params.size() ? "true" : "false");
-    });
+  // Skip arg count/type checking for variadic functions
+  if (func.is_var_arg())
+    return;
 
-    if (ast->arguments.size() > params.size()) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Function '{}' expects {} arguments, got {}",
-                                  ast->functionName, params.size(),
-                                  ast->arguments.size()));
-      return;
-    }
+  LOG({
+    fmt::print(stderr,
+               "[typecheck] visit CallExprAST: '{}' callee_func_type = {}, "
+               "partial = {}\n",
+               ast->functionName, ty->to_string(),
+               ast->arguments.size() < params.size() ? "true" : "false");
+  });
 
-    // Partial application: fewer args than params
-    if (ast->arguments.size() < params.size()) {
-      ast->is_partial = true;
-    }
+  if (ast->arguments.size() > params.size()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Function '{}' expects {} arguments, got {}",
+                                ast->functionName, params.size(),
+                                ast->arguments.size()));
+    return;
+  }
 
-    // Type-check the provided args against the first N params
-    for (size_t i = 0; i < ast->arguments.size(); i++) {
-      if (!this->type_map_ordering.compatible_to_from(
-              params[i], ast->arguments[i]->type)) {
-        this->add_error(ast->arguments[i]->get_location(),
-                        fmt::format("Argument {} to '{}': expected {}, got {}",
-                                    i + 1, ast->functionName,
-                                    params[i].to_string(),
-                                    ast->arguments[i]->type.to_string()));
-      }
+  // Partial application: fewer args than params
+  if (ast->arguments.size() < params.size()) {
+    ast->is_partial = true;
+  }
+
+  // Type-check the provided args against the first N params
+  for (size_t i = 0; i < ast->arguments.size(); i++) {
+    if (!this->type_map_ordering.compatible_to_from(
+            params[i], ast->arguments[i]->type)) {
+      this->add_error(ast->arguments[i]->get_location(),
+                      fmt::format("Argument {} to '{}': expected {}, got {}",
+                                  i + 1, ast->functionName,
+                                  params[i].to_string(),
+                                  ast->arguments[i]->type.to_string()));
     }
   }
 }
@@ -421,7 +432,7 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
     v.push_back(Type::Unit());
   else
     v.push_back(resolve_type_expr(ast->return_type_expr.get()));
-  ast->type = Type::Function(std::move(v));
+  ast->type = Type::Function(std::move(v), ast->is_var_arg);
 
   LOG({
     fmt::print(stderr, "[typecheck] synthesize PrototypeAST: '{}' -> {}\n",
@@ -431,7 +442,7 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
-  if (ast->synthesized() || pre_func.contains(ast->functionName))
+  if (ast->synthesized())
     return ast->type;
 
   // Check if this is a generic function call
@@ -514,6 +525,20 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Function: {
     auto func = std::get<FunctionType>(ty->type_data);
     auto params = func.get_params_types();
+
+    // Variadic functions: accept any number of args >= fixed params
+    if (func.is_var_arg()) {
+      if (ast->arguments.size() < params.size()) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Variadic function '{}' requires at least {} "
+                        "arguments, got {}",
+                        ast->functionName, params.size(),
+                        ast->arguments.size()));
+        return ast->type = Type::Poisoned();
+      }
+      return ast->type = func.get_return_type();
+    }
 
     // Detect partial application: fewer args than params
     if (ast->arguments.size() < params.size()) {
