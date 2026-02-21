@@ -15,7 +15,7 @@ namespace sammine_lang {
 
 namespace AST {
 
-class TypingContext : public LexicalContext<Type, AST::FuncDefAST*> {};
+class TypingContext : public LexicalContext<Type, AST::FuncDefAST *> {};
 class BiTypeCheckerVisitor : public ScopedASTVisitor,
                              public TypeCheckerVisitor {
   /// INFO: Ok let's talk about error propagation in this checker.
@@ -26,17 +26,25 @@ class BiTypeCheckerVisitor : public ScopedASTVisitor,
 
 public:
   // INFO: x, y, z
-  LexicalStack<Type, AST::FuncDefAST*> id_to_type;
+  LexicalStack<Type, AST::FuncDefAST *> id_to_type;
 
   // INFO: i64, f64 bla bla bla
-  LexicalStack<Type, AST::FuncDefAST*> typename_to_type;
+  LexicalStack<Type, AST::FuncDefAST *> typename_to_type;
   TypeMapOrdering type_map_ordering;
   const std::set<std::string> &pre_func;
 
   // Generic function support
   bool in_prototype_context = false;
   std::vector<std::string> discovered_type_params;
-  std::unordered_map<std::string, FuncDefAST*> generic_func_defs;
+  bool discover_type_params(PrototypeAST *proto) {
+    in_prototype_context = true;
+    discovered_type_params.clear();
+    proto->accept_vis(this);
+    in_prototype_context = false;
+    proto->type_params = std::move(discovered_type_params);
+    return !proto->type_params.empty();
+  }
+  std::unordered_map<std::string, FuncDefAST *> generic_func_defs;
   std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
   std::set<std::string> instantiated_functions;
 
@@ -61,7 +69,10 @@ public:
     id_to_type.pop();
     typename_to_type.pop();
   }
-  BiTypeCheckerVisitor(const std::set<std::string> &pre_func) : pre_func(pre_func) { this->enter_new_scope(); }
+  BiTypeCheckerVisitor(const std::set<std::string> &pre_func)
+      : pre_func(pre_func) {
+    this->enter_new_scope();
+  }
 
   std::optional<Type> get_type_from_id(const std::string &str) const {
 

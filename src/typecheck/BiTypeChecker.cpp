@@ -28,23 +28,15 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   id_to_type.top().setScope(ast);
   typename_to_type.top().setScope(ast);
 
-  // Enable type param discovery during prototype resolution
-  in_prototype_context = true;
-  discovered_type_params.clear();
-  ast->Prototype->accept_vis(this);
-  in_prototype_context = false;
+  bool is_generic = discover_type_params(ast->Prototype.get());
+  ast->accept_synthesis(this);
 
-  if (!discovered_type_params.empty()) {
-    // This is a generic function — store type params and skip body
-    ast->Prototype->type_params = discovered_type_params;
-    ast->accept_synthesis(this);
+  if (is_generic) {
     generic_func_defs[ast->Prototype->functionName] = ast;
-    exit_new_scope();
-    return;
+  } else {
+    ast->Block->accept_vis(this);
   }
 
-  ast->accept_synthesis(this);
-  ast->Block->accept_vis(this);
   exit_new_scope();
 }
 
@@ -91,13 +83,18 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
         }
         if (error_count > 0) {
           std::vector<std::string> msgs;
-          msgs.push_back(fmt::format("Array element type mismatch: expected {}, got {}",
-                                     expected_elem.to_string(),
-                                     arr_lit->elements[first_error_idx]->accept_synthesis(this).to_string()));
+          msgs.push_back(
+              fmt::format("Array element type mismatch: expected {}, got {}",
+                          expected_elem.to_string(),
+                          arr_lit->elements[first_error_idx]
+                              ->accept_synthesis(this)
+                              .to_string()));
           if (error_count > 1)
-            msgs.push_back(fmt::format("{} more type mismatch {} in this array",
-                                       error_count - 1, (error_count - 1 == 1) ? "error" : "errors"));
-          this->add_error(arr_lit->elements[first_error_idx]->get_location(), msgs);
+            msgs.push_back(fmt::format(
+                "{} more type mismatch {} in this array", error_count - 1,
+                (error_count - 1 == 1) ? "error" : "errors"));
+          this->add_error(arr_lit->elements[first_error_idx]->get_location(),
+                          msgs);
           ast->type = Type::Poisoned();
           arr_lit->type = Type::Poisoned();
           return;
@@ -116,13 +113,11 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   auto from = ast->Expression->accept_synthesis(this);
   if (to == Type::Poisoned() || from == Type::Poisoned()) {
     ast->type = Type::Poisoned();
-  }
-  else if (!type_map_ordering.compatible_to_from(to, from)) {
-    this->add_error(
-        ast->Expression->get_location(),
-        fmt::format("Type mismatch: expression has type {}, "
-                    "but variable declared as {}",
-                    from.to_string(), to.to_string()));
+  } else if (!type_map_ordering.compatible_to_from(to, from)) {
+    this->add_error(ast->Expression->get_location(),
+                    fmt::format("Type mismatch: expression has type {}, "
+                                "but variable declared as {}",
+                                from.to_string(), to.to_string()));
     ast->type = Type::Poisoned();
   }
 }
@@ -173,9 +168,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
       return;
     }
     if (ty->type_kind != TypeKind::Function) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("'{}' is not a function", ast->functionName));
+      this->add_error(ast->get_location(),
+                      fmt::format("'{}' is not a function", ast->functionName));
       return;
     }
     ast->callee_func_type = ty;
@@ -191,10 +185,10 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     });
 
     if (ast->arguments.size() > params.size()) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Function '{}' expects {} arguments, got {}",
-                      ast->functionName, params.size(), ast->arguments.size()));
+      this->add_error(ast->get_location(),
+                      fmt::format("Function '{}' expects {} arguments, got {}",
+                                  ast->functionName, params.size(),
+                                  ast->arguments.size()));
       return;
     }
 
@@ -205,14 +199,13 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 
     // Type-check the provided args against the first N params
     for (size_t i = 0; i < ast->arguments.size(); i++) {
-      if (!this->type_map_ordering.compatible_to_from(params[i],
-                                                      ast->arguments[i]->type)) {
-        this->add_error(
-            ast->arguments[i]->get_location(),
-            fmt::format(
-                "Argument {} to '{}': expected {}, got {}",
-                i + 1, ast->functionName, params[i].to_string(),
-                ast->arguments[i]->type.to_string()));
+      if (!this->type_map_ordering.compatible_to_from(
+              params[i], ast->arguments[i]->type)) {
+        this->add_error(ast->arguments[i]->get_location(),
+                        fmt::format("Argument {} to '{}': expected {}, got {}",
+                                    i + 1, ast->functionName,
+                                    params[i].to_string(),
+                                    ast->arguments[i]->type.to_string()));
       }
     }
   }
@@ -453,8 +446,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       this->add_error(
           ast->get_location(),
           fmt::format("Generic function '{}' expects {} arguments, got {}",
-                      ast->functionName, params.size(),
-                      ast->arguments.size()));
+                      ast->functionName, params.size(), ast->arguments.size()));
       return ast->type = Type::Poisoned();
     }
 
@@ -467,12 +459,12 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       if (!unify(params[i], arg_type, bindings)) {
         // Show the expected type with any bindings resolved so far
         auto expected = substitute(params[i], bindings);
-        this->add_error(
-            ast->arguments[i]->get_location(),
-            fmt::format("Type mismatch in argument {} of '{}': "
-                        "expected {}, got {}",
-                        i + 1, ast->functionName, expected.to_string(),
-                        arg_type.to_string()));
+        this->add_error(ast->arguments[i]->get_location(),
+                        fmt::format("Type mismatch in argument {} of '{}': "
+                                    "expected {}, got {}",
+                                    i + 1, ast->functionName,
+                                    expected.to_string(),
+                                    arg_type.to_string()));
         return ast->type = Type::Poisoned();
       }
     }
@@ -505,9 +497,8 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   // Search current scope + parent scopes for the callee
   auto ty = try_get_callee_type(ast->functionName);
   if (!ty.has_value()) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Function '{}' not found", ast->functionName));
+    this->add_error(ast->get_location(),
+                    fmt::format("Function '{}' not found", ast->functionName));
     return ast->type = Type::Poisoned();
   }
 
@@ -603,10 +594,9 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
       if (!var->type.is_mutable) {
         this->add_error(
             ast->Op->get_location(),
-            fmt::format(
-                "Cannot reassign immutable variable '{}'. "
-                "Use 'let mut' or 'mut' to declare it as mutable",
-                var->variableName));
+            fmt::format("Cannot reassign immutable variable '{}'. "
+                        "Use 'let mut' or 'mut' to declare it as mutable",
+                        var->variableName));
       }
     }
     return ast->type = Type::Unit();
@@ -651,9 +641,9 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
     else if (suffix == "f64")
       ast->type = Type::F64_t();
     else
-      this->abort_on(true,
-                     fmt::format("invalid type suffix '{}' on number literal",
-                                 suffix));
+      this->abort_on(
+          true,
+          fmt::format("invalid type suffix '{}' on number literal", suffix));
   } else if (ast->number.find('.') == std::string::npos)
     ast->type = Type::I32_t();
   else
@@ -763,7 +753,8 @@ Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
                                 operand_type.to_string()));
     return ast->type = Type::Poisoned();
   }
-  return ast->type = std::get<PointerType>(operand_type.type_data).get_pointee();
+  return ast->type =
+             std::get<PointerType>(operand_type.type_data).get_pointee();
 }
 
 Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
@@ -801,7 +792,8 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
     return ast->type;
 
   if (ast->elements.empty()) {
-    this->add_error(ast->get_location(), "Array literal must have at least one element");
+    this->add_error(ast->get_location(),
+                    "Array literal must have at least one element");
     return ast->type = Type::Poisoned();
   }
 
@@ -810,8 +802,9 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
     auto elem_type = ast->elements[i]->accept_synthesis(this);
     if (elem_type != first_type) {
       this->add_error(ast->elements[i]->get_location(),
-                      fmt::format("Array element {}: expected {}, got {}",
-                                  i, first_type.to_string(), elem_type.to_string()));
+                      fmt::format("Array element {}: expected {}, got {}", i,
+                                  first_type.to_string(),
+                                  elem_type.to_string()));
       return ast->type = Type::Poisoned();
     }
   }
@@ -824,14 +817,15 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
 
   auto arr_type = ast->array_expr->accept_synthesis(this);
   if (arr_type.type_kind != TypeKind::Array) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Cannot index non-array type '{}'",
-                                arr_type.to_string()));
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Cannot index non-array type '{}'", arr_type.to_string()));
     return ast->type = Type::Poisoned();
   }
 
   auto idx_type = ast->index_expr->accept_synthesis(this);
-  if (idx_type.type_kind != TypeKind::I32_t && idx_type.type_kind != TypeKind::I64_t) {
+  if (idx_type.type_kind != TypeKind::I32_t &&
+      idx_type.type_kind != TypeKind::I64_t) {
     this->add_error(ast->get_location(),
                     fmt::format("Array index must be integer, got '{}'",
                                 idx_type.to_string()));
@@ -843,9 +837,10 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     int idx = std::stoi(num->number);
     int size = static_cast<int>(arr_data.get_size());
     if (idx < 0 || idx >= size) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Array index out of bounds: index {} on array of size {}",
-                                  idx, size));
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Array index out of bounds: index {} on array of size {}",
+                      idx, size));
       return ast->type = Type::Poisoned();
     }
   }
@@ -886,7 +881,7 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
 // --- Generic support: unification, substitution ---
 
 bool BiTypeCheckerVisitor::contains_type_param(const Type &type,
-                                                const std::string &param_name) {
+                                               const std::string &param_name) {
   if (type.type_kind == TypeKind::TypeParam)
     return std::get<std::string>(type.type_data) == param_name;
 
@@ -956,8 +951,7 @@ bool BiTypeCheckerVisitor::unify(
 }
 
 Type BiTypeCheckerVisitor::substitute(
-    const Type &type,
-    const std::unordered_map<std::string, Type> &bindings) {
+    const Type &type, const std::unordered_map<std::string, Type> &bindings) {
   if (type.type_kind == TypeKind::TypeParam) {
     auto name = std::get<std::string>(type.type_data);
     auto it = bindings.find(name);
