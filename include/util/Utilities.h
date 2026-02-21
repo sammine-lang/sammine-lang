@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <filesystem>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -209,7 +210,8 @@ private:
 
   void report_single_msg(std::pair<int64_t, int64_t> index_pair,
                          const std::vector<std::string> &format_strs,
-                         const ReportKind report_kind) const;
+                         const ReportKind report_kind,
+                         std::source_location src = std::source_location::current()) const;
 
   template <typename... T>
   static void print_fmt(fmt::terminal_color ts,
@@ -249,23 +251,25 @@ private:
 
 public:
   void report(const Reportee &reports) const;
-  void immediate_error(const std::string &str, Location l = Location(-1, -1)) {
+  void immediate_error(const std::string &str, Location l = Location(-1, -1),
+                       std::source_location src = std::source_location::current()) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
       report_singular_line(ReportKind::error, {str}, 0, 0);
 
     } else {
-      report_single_msg(l, {str}, ReportKind::error);
+      report_single_msg(l, {str}, ReportKind::error, src);
     }
   }
-  void immediate_diag(const std::string &str, Location l = Location(-1, -1)) {
+  void immediate_diag(const std::string &str, Location l = Location(-1, -1),
+                      std::source_location src = std::source_location::current()) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
       report_singular_line(ReportKind::diag, {str}, 0, 0);
     } else {
-      report_single_msg(l, {str}, ReportKind::diag);
+      report_single_msg(l, {str}, ReportKind::diag, src);
     }
   }
   Reporter() {}

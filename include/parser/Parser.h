@@ -22,20 +22,22 @@ using namespace sammine_util;
 class Parser : public Reportee {
   Location last_exhaustible_loc = Location::NonPrintable();
   void imm_error(const std::string &msg,
-                 Location loc = Location::NonPrintable()) {
+                 Location loc = Location::NonPrintable(),
+                 std::source_location src = std::source_location::current()) {
     if (loc == Location::NonPrintable())
       loc = last_exhaustible_loc;
     if (reporter.has_value()) {
-      reporter->get().immediate_error(msg, loc);
+      reporter->get().immediate_error(msg, loc, src);
     }
     this->error_count++;
   }
   void imm_diag(const std::string &msg,
-                Location loc = Location::NonPrintable()) {
+                Location loc = Location::NonPrintable(),
+                std::source_location src = std::source_location::current()) {
     if (loc == Location::NonPrintable())
       loc = last_exhaustible_loc;
     if (reporter.has_value()) {
-      reporter->get().immediate_diag(msg, loc);
+      reporter->get().immediate_diag(msg, loc, src);
     }
   }
 

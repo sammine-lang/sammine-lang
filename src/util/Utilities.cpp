@@ -238,7 +238,8 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
 }
 void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
                                  const std::vector<std::string> &format_strs,
-                                 const ReportKind report_kind) const {
+                                 const ReportKind report_kind,
+                                 std::source_location src) const {
   Locator locator(index_pair, context_radius, diagnostic_data);
   auto [new_start, new_end] = locator.get_lines_indices_with_radius();
   auto [row_num, col_start, col_end] =
@@ -264,6 +265,11 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
     } else {
       fmt::print(stderr, "{}\n", str);
     }
+  }
+  if (dev_mode) {
+    auto sf = std::filesystem::path(src.file_name()).filename().string();
+    print_fmt(LINE_COLOR, "    |");
+    print_fmt(report_kind, "[Error-borne `dev` location: {}:{}]\n", sf, src.line());
   }
 }
 
