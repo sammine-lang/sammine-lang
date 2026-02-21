@@ -19,7 +19,7 @@ class GeneralSemanticsVisitor : public ScopedASTVisitor {
 public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
-  LexicalStack<sammine_util::Location, AST::FuncDefAST*> scope_stack;
+  LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
   GeneralSemanticsVisitor() { scope_stack.push_context(); }
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register

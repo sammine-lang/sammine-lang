@@ -65,7 +65,8 @@ public:
   size_t get_size() const;
   ArrayType(Type element, size_t size);
 };
-using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string, std::monostate>;
+using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string,
+                              std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -129,10 +130,12 @@ struct Type {
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Pointer:
-      return "ptr<" + std::get<PointerType>(type_data).get_pointee().to_string() + ">";
+      return "ptr<" +
+             std::get<PointerType>(type_data).get_pointee().to_string() + ">";
     case TypeKind::Array:
-      return "[" + std::get<ArrayType>(type_data).get_element().to_string() + ";" +
-             std::to_string(std::get<ArrayType>(type_data).get_size()) + "]";
+      return "[" + std::get<ArrayType>(type_data).get_element().to_string() +
+             ";" + std::to_string(std::get<ArrayType>(type_data).get_size()) +
+             "]";
     case TypeKind::Function: {
       std::string res = "(";
       auto fn_type = std::get<FunctionType>(type_data);

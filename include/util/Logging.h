@@ -38,8 +38,8 @@ bool is_type_in_list(const char *type, const std::string &list);
 //! Note: DEBUG_TYPE must be defined before using this macro.
 #define LOG(X)                                                                 \
   do {                                                                         \
-    if (::sammine_log::is_type_in_list(DEBUG_TYPE,                            \
-                                        ::sammine_log::get_enabled_types())) { \
+    if (::sammine_log::is_type_in_list(DEBUG_TYPE,                             \
+                                       ::sammine_log::get_enabled_types())) {  \
       X;                                                                       \
     }                                                                          \
   } while (false)

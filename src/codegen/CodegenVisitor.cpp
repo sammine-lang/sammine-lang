@@ -54,12 +54,11 @@ llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
   // Create wrapper function: ret_type @__wrap_<name>(ptr %env, params...)
   auto *wrapperFT = type_converter.get_closure_function_type(ft);
   auto wrapperName = "__wrap_" + name;
-  auto *wrapper = llvm::Function::Create(
-      wrapperFT, llvm::Function::InternalLinkage, wrapperName,
-      resPtr->Module.get());
+  auto *wrapper =
+      llvm::Function::Create(wrapperFT, llvm::Function::InternalLinkage,
+                             wrapperName, resPtr->Module.get());
 
-  auto *entry =
-      llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
+  auto *entry = llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
   resPtr->Builder->SetInsertPoint(entry);
 
   // Forward all args except env to the original function
@@ -85,9 +84,7 @@ llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
   closure_wrappers[name] = wrapper;
   return wrapper;
 }
-void CgVisitor::enter_new_scope() {
-  allocaValues.push({});
-}
+void CgVisitor::enter_new_scope() { allocaValues.push({}); }
 void CgVisitor::exit_new_scope() { allocaValues.pop(); }
 
 void CgVisitor::setCurrentFunction(llvm::Function *func) {
@@ -121,8 +118,9 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   CodegenUtils::declare_free(*this->resPtr->Module);
 
   CodegenUtils::declare_fn(*this->resPtr->Module, "exit",
-      llvm::Type::getVoidTy(*this->resPtr->Context),
-      llvm::Type::getInt32Ty(*this->resPtr->Context), false);
+                           llvm::Type::getVoidTy(*this->resPtr->Context),
+                           llvm::Type::getInt32Ty(*this->resPtr->Context),
+                           false);
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
@@ -140,10 +138,12 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
   auto *alloca = this->allocaValues.top()[var_name];
 
   LOG({
-    fmt::print(stderr, "[CODEGEN] Codegen postorder_walk for VarDefAST for {}\n",
+    fmt::print(stderr,
+               "[CODEGEN] Codegen postorder_walk for VarDefAST for {}\n",
                var_name);
   });
-  this->abort_if_not(ast->Expression, "VarDefAST requires an initializer expression");
+  this->abort_if_not(ast->Expression,
+                     "VarDefAST requires an initializer expression");
 
   resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
@@ -210,8 +210,10 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       }
 
       // Direct variable case: arr[i] = val
-      auto *var_expr = dynamic_cast<VariableExprAST *>(idx_expr->array_expr.get());
-      this->abort_if_not(var_expr, "Array index assignment requires a variable");
+      auto *var_expr =
+          dynamic_cast<VariableExprAST *>(idx_expr->array_expr.get());
+      this->abort_if_not(var_expr,
+                         "Array index assignment requires a variable");
       auto *alloca = this->allocaValues.top()[var_expr->variableName];
       this->abort_if_not(alloca, "Unknown array variable in index assignment");
 
@@ -222,7 +224,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       emitBoundsCheck(idx, arr_size);
       auto *gep = resPtr->Builder->CreateGEP(
           arr_type, alloca,
-          {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
+          {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
+           idx},
           "arr_idx_assign");
       resPtr->Builder->CreateStore(R, gep);
       ast->val = R;
@@ -349,8 +352,10 @@ void CgVisitor::preorder_walk(VariableExprAST *ast) {
     auto *nullEnv = llvm::ConstantPointerNull::get(
         llvm::PointerType::get(*resPtr->Context, 0));
     llvm::Value *closure = llvm::UndefValue::get(closureTy);
-    closure = resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "cls.code");
-    closure = resPtr->Builder->CreateInsertValue(closure, nullEnv, 1, "cls.env");
+    closure =
+        resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "cls.code");
+    closure =
+        resPtr->Builder->CreateInsertValue(closure, nullEnv, 1, "cls.env");
     ast->val = closure;
     return;
   }
@@ -482,9 +487,10 @@ void CgVisitor::visit(DerefExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(DerefExprAST *ast) {
-  auto pointee_type = std::get<PointerType>(ast->operand->type.type_data).get_pointee();
-  ast->val = resPtr->Builder->CreateLoad(
-      type_converter.get_type(pointee_type), ast->operand->val, "deref");
+  auto pointee_type =
+      std::get<PointerType>(ast->operand->type.type_data).get_pointee();
+  ast->val = resPtr->Builder->CreateLoad(type_converter.get_type(pointee_type),
+                                         ast->operand->val, "deref");
 }
 
 void CgVisitor::postorder_walk(AllocExprAST *ast) {
@@ -494,12 +500,13 @@ void CgVisitor::postorder_walk(AllocExprAST *ast) {
   // Compute sizeof(T) using DataLayout
   auto &data_layout = resPtr->Module->getDataLayout();
   auto size = data_layout.getTypeAllocSize(operand_llvm_type);
-  auto *size_val = llvm::ConstantInt::get(
-      llvm::Type::getInt64Ty(*resPtr->Context), size);
+  auto *size_val =
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*resPtr->Context), size);
 
   // Call malloc(size)
   auto *malloc_fn = resPtr->Module->getFunction("malloc");
-  auto *malloc_ptr = resPtr->Builder->CreateCall(malloc_fn, {size_val}, "alloc_ptr");
+  auto *malloc_ptr =
+      resPtr->Builder->CreateCall(malloc_fn, {size_val}, "alloc_ptr");
 
   // Store the operand value through the opaque pointer
   resPtr->Builder->CreateStore(operand_val, malloc_ptr);
@@ -529,9 +536,11 @@ void CgVisitor::visit(AddrOfExprAST *ast) {
 }
 
 // Taken from
-// echo 'void f(int *out) { int a[] = {10,20,30}; }' | clang -xc - -emit-llvm -S -o -
+// echo 'void f(int *out) { int a[] = {10,20,30}; }' | clang -xc - -emit-llvm -S
+// -o -
 void CgVisitor::postorder_walk(ArrayLiteralExprAST *ast) {
-  auto *arr_llvm_type = llvm::cast<llvm::ArrayType>(type_converter.get_type(ast->type));
+  auto *arr_llvm_type =
+      llvm::cast<llvm::ArrayType>(type_converter.get_type(ast->type));
 
   // Collect element constants
   std::vector<llvm::Constant *> constants;
@@ -554,10 +563,8 @@ void CgVisitor::postorder_walk(ArrayLiteralExprAST *ast) {
   auto &data_layout = resPtr->Module->getDataLayout();
   auto size = data_layout.getTypeAllocSize(arr_llvm_type);
 
-  resPtr->Builder->CreateMemCpy(
-      alloca, alloca->getAlign(),
-      global, global->getAlign(),
-      size);
+  resPtr->Builder->CreateMemCpy(alloca, alloca->getAlign(), global,
+                                global->getAlign(), size);
 
   ast->val = resPtr->Builder->CreateLoad(arr_llvm_type, alloca, "arr_val");
 }
@@ -579,7 +586,8 @@ void CgVisitor::visit(IndexExprAST *ast) {
 void CgVisitor::postorder_walk(IndexExprAST *ast) {
   // Handle (*ptr)[i] — array indexing through dereferenced pointer
   if (auto *deref = dynamic_cast<DerefExprAST *>(ast->array_expr.get())) {
-    auto *ptr_val = deref->operand->val; // pointer to the array (loaded by visit())
+    auto *ptr_val =
+        deref->operand->val; // pointer to the array (loaded by visit())
     // deref->type is the pointee type = the array type
     auto &arr_data = std::get<ArrayType>(deref->type.type_data);
     auto *arr_llvm_type = type_converter.get_type(deref->type);
@@ -612,7 +620,8 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
 
   auto *gep = resPtr->Builder->CreateGEP(
       arr_type, alloca,
-      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0), idx},
+      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
+       idx},
       "arr_idx");
   ast->val = resPtr->Builder->CreateLoad(
       type_converter.get_type(arr_data.get_element()), gep, "arr_elem");
@@ -620,7 +629,8 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
 
 void CgVisitor::postorder_walk(LenExprAST *ast) {
   auto arr_size = std::get<ArrayType>(ast->operand->type.type_data).get_size();
-  ast->val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), arr_size);
+  ast->val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
+                                    arr_size);
 }
 
 void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
@@ -653,7 +663,8 @@ void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
 
 void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
   auto *operand_val = ast->operand->val;
-  if (ast->operand->type == Type::I32_t() || ast->operand->type == Type::I64_t())
+  if (ast->operand->type == Type::I32_t() ||
+      ast->operand->type == Type::I64_t())
     ast->val = resPtr->Builder->CreateNeg(operand_val, "neg");
   else if (ast->operand->type == Type::F64_t())
     ast->val = resPtr->Builder->CreateFNeg(operand_val, "fneg");

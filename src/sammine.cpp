@@ -42,8 +42,7 @@ int main(int argc, char *argv[]) {
       .implicit_value(std::string("true"));
 
   auto &g_diag = program.add_group("Diagnostics related options");
-  g_diag
-      .add_argument("", "--llvm-ir")
+  g_diag.add_argument("", "--llvm-ir")
       .default_value(std::string("false"))
       .nargs(1)
       .help("Emit LLVM IR. Required value: pre, post, or diff");
@@ -55,16 +54,19 @@ int main(int argc, char *argv[]) {
       .default_value(std::string("none"))
       .help("sammine compiler spits out diagnostics for "
             "sammine-lang developers. Use "
-            "with value for logging: --diagnostics=stages;lexer;parser. Default value is none");
+            "with value for logging: --diagnostics=stages;lexer;parser. "
+            "Default value is none");
   g_diag.add_argument("", "--time")
       .default_value(std::string("false"))
       .implicit_value(std::string("simple"))
       .nargs(0, 1)
-      .help("Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes)");
+      .help("Print compilation timing. Also accepts: sparse (per-phase table), "
+            "coarse (per-phase + all LLVM passes)");
   g_diag.add_argument("", "--dev")
       .default_value(false)
       .implicit_value(true)
-      .help("Show compiler source locations in error messages (for developers)");
+      .help(
+          "Show compiler source locations in error messages (for developers)");
 
   if (argc < 1) {
     std::cerr << program;
@@ -74,12 +76,12 @@ int main(int argc, char *argv[]) {
     program.parse_args(argc, argv); // Example: ./main -abc 1.95 2.47
     compiler_options[compiler_option_enum::FILE] =
         program.present("-f") ? program.get("-f") : "";
-    compiler_options[STR] =
-        program.present("-s") ? program.get("-s") : "";
+    compiler_options[STR] = program.present("-s") ? program.get("-s") : "";
     if (program.is_used("--llvm-ir")) {
       auto val = program.get("--llvm-ir");
       if (val != "pre" && val != "post" && val != "diff") {
-        fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+        fmt::print(stderr,
+                   sammine_util::styled(fmt::terminal_color::bright_red),
                    "Error: --llvm-ir requires a value: pre, post, or diff\n");
         std::cerr << program;
         return 1;
@@ -89,8 +91,7 @@ int main(int argc, char *argv[]) {
       compiler_options[LLVM_IR] = "false";
     }
     compiler_options[AST_IR] = program.get("--ast-ir");
-    compiler_options[DIAGNOSTIC] =
-        program.get("--diagnostics");
+    compiler_options[DIAGNOSTIC] = program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");
     compiler_options[DEV] = program.get<bool>("--dev") ? "true" : "false";
     if (program.is_used("--time")) {

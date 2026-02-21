@@ -205,7 +205,8 @@ class TokenStream {
 public:
   std::vector<std::shared_ptr<Token>> ErrStream;
 
-  TokenStream() : TokStream(), current_index(0), rollback_mark(0), error(false) {}
+  TokenStream()
+      : TokStream(), current_index(0), rollback_mark(0), error(false) {}
 
   void push_back(const std::shared_ptr<Token> &token) {
     if (token->tok_type == TokINVALID) {
@@ -221,15 +222,12 @@ public:
   void push_back(const Token &token) {
     this->push_back(std::make_shared<Token>(token));
   }
-  void mark_rollback() {
-    this->rollback_mark = current_index;
-  }
-  void rollback() {
-    this->current_index = rollback_mark;
-  }
+  void mark_rollback() { this->rollback_mark = current_index; }
+  void rollback() { this->current_index = rollback_mark; }
 
   void rollback(size_t rollback_count) {
-    assert(current_index >= rollback_count && "Current index needs to be larger than rollback count");
+    assert(current_index >= rollback_count &&
+           "Current index needs to be larger than rollback count");
     this->current_index -= rollback_count;
   }
 

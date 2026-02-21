@@ -44,7 +44,8 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
     auto &typed_var = vect[param_index];
     arg.setName(typed_var->name);
     // Mark immutable pointer params as readonly nocapture so LLVM can optimize
-    if (typed_var->type.type_kind == TypeKind::Pointer && !typed_var->is_mutable) {
+    if (typed_var->type.type_kind == TypeKind::Pointer &&
+        !typed_var->is_mutable) {
       F->addParamAttr(param_index, llvm::Attribute::ReadOnly);
       F->addParamAttr(param_index,
                       llvm::Attribute::getWithCaptureInfo(
@@ -101,21 +102,19 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
       fmt::print(stderr,
                  "[codegen] call '{}': partial application, binding {} of {} "
                  "args, wrapper = __partial_{}\n",
-                 ast->functionName, ast->arguments.size(),
-                 callee->arg_size(), partial_counter);
+                 ast->functionName, ast->arguments.size(), callee->arg_size(),
+                 partial_counter);
     });
     this->abort_if_not(ast->callee_func_type.has_value(),
                        "ICE: partial call missing callee_func_type");
-    auto full_ft =
-        std::get<FunctionType>(ast->callee_func_type->type_data);
+    auto full_ft = std::get<FunctionType>(ast->callee_func_type->type_data);
     auto all_params = full_ft.get_params_types();
     size_t bound_count = ast->arguments.size();
     // Create env struct type for bound args
     std::vector<llvm::Type *> env_fields;
     for (size_t i = 0; i < bound_count; i++)
       env_fields.push_back(type_converter.get_type(all_params[i]));
-    auto *envStructTy =
-        llvm::StructType::get(*resPtr->Context, env_fields);
+    auto *envStructTy = llvm::StructType::get(*resPtr->Context, env_fields);
 
     // Stack-allocate env and store bound args
     auto *envAlloca = CodegenUtils::CreateEntryBlockAlloca(
@@ -129,37 +128,31 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     // Signature: ret_type(ptr %env, remaining_param_types...)
     auto ret_type = full_ft.get_return_type();
     std::vector<llvm::Type *> wrapperParams;
-    wrapperParams.push_back(
-        llvm::PointerType::get(*resPtr->Context, 0)); // env
+    wrapperParams.push_back(llvm::PointerType::get(*resPtr->Context, 0)); // env
     for (size_t i = bound_count; i < all_params.size(); i++)
       wrapperParams.push_back(type_converter.get_type(all_params[i]));
 
-    llvm::Type *llvm_ret =
-        ret_type.type_kind == TypeKind::Unit
-            ? llvm::Type::getVoidTy(*resPtr->Context)
-            : type_converter.get_type(ret_type);
-    auto *wrapperFT =
-        llvm::FunctionType::get(llvm_ret, wrapperParams, false);
-    auto wrapperName =
-        fmt::format("__partial_{}", partial_counter++);
-    auto *wrapper = llvm::Function::Create(
-        wrapperFT, llvm::Function::InternalLinkage, wrapperName,
-        resPtr->Module.get());
+    llvm::Type *llvm_ret = ret_type.type_kind == TypeKind::Unit
+                               ? llvm::Type::getVoidTy(*resPtr->Context)
+                               : type_converter.get_type(ret_type);
+    auto *wrapperFT = llvm::FunctionType::get(llvm_ret, wrapperParams, false);
+    auto wrapperName = fmt::format("__partial_{}", partial_counter++);
+    auto *wrapper =
+        llvm::Function::Create(wrapperFT, llvm::Function::InternalLinkage,
+                               wrapperName, resPtr->Module.get());
 
     // Save insert point
     auto *savedBB = resPtr->Builder->GetInsertBlock();
     auto savedPt = resPtr->Builder->GetInsertPoint();
 
-    auto *entry =
-        llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
+    auto *entry = llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
     resPtr->Builder->SetInsertPoint(entry);
 
     // Load bound args from env
     auto *envArg = &*wrapper->arg_begin();
     std::vector<llvm::Value *> fullArgs;
     for (size_t i = 0; i < bound_count; i++) {
-      auto *gep =
-          resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
+      auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
       fullArgs.push_back(resPtr->Builder->CreateLoad(env_fields[i], gep));
     }
     // Forward remaining args
@@ -179,8 +172,8 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     resPtr->Builder->SetInsertPoint(savedBB, savedPt);
 
     // Build closure struct: {partial_fn_ptr, env_ptr}
-    auto *closureTy = llvm::StructType::getTypeByName(*resPtr->Context,
-                                                      "sammine.closure");
+    auto *closureTy =
+        llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
     llvm::Value *closure = llvm::UndefValue::get(closureTy);
     closure =
         resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "pcls.code");
@@ -202,9 +195,10 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     this->abort_if_not(ast->callee_func_type.has_value(),
                        "ICE: indirect call missing callee_func_type");
     auto ft = std::get<FunctionType>(ast->callee_func_type->type_data);
-    auto *closureTy = llvm::StructType::getTypeByName(*resPtr->Context,
-                                                      "sammine.closure");
-    auto *closureVal = resPtr->Builder->CreateLoad(closureTy, alloca, "closure");
+    auto *closureTy =
+        llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
+    auto *closureVal =
+        resPtr->Builder->CreateLoad(closureTy, alloca, "closure");
     auto *codePtr =
         resPtr->Builder->CreateExtractValue(closureVal, 0, "code_ptr");
     auto *envPtr =

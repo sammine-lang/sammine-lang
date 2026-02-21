@@ -35,8 +35,8 @@ class Compiler {
   std::map<compiler_option_enum, std::string> compiler_options;
   std::shared_ptr<LLVMRes> resPtr;
   std::string file_name, input;
-  
-  const std::set<std::string> pre_func { "printf"};
+
+  const std::set<std::string> pre_func{"printf"};
 
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
@@ -93,10 +93,12 @@ Compiler::Compiler(
   this->resPtr = std::make_shared<LLVMRes>();
 
   bool dev_mode = compiler_options[compiler_option_enum::DEV] == "true";
-  this->reporter = sammine_util::Reporter(file_name, input, context_radius, dev_mode);
+  this->reporter =
+      sammine_util::Reporter(file_name, input, context_radius, dev_mode);
 
   // Initialize debug logging from --diagnostics flag
-  std::string diagnostic_value = compiler_options[compiler_option_enum::DIAGNOSTIC];
+  std::string diagnostic_value =
+      compiler_options[compiler_option_enum::DIAGNOSTIC];
   sammine_log::set_enabled_types(diagnostic_value);
 }
 
@@ -131,7 +133,8 @@ void Compiler::semantics() {
       return;
     }
     LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+      fmt::print(stderr,
+                 sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start scope checking stage...\n");
     });
     auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
@@ -146,7 +149,8 @@ void Compiler::semantics() {
     if (this->error)
       return;
     LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+      fmt::print(stderr,
+                 sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start general semantics stage...\n");
     });
     auto vs = sammine_lang::AST::GeneralSemanticsVisitor();
@@ -183,14 +187,16 @@ void Compiler::typecheck() {
 void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
     LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+      fmt::print(stderr,
+                 sammine_util::styled(fmt::terminal_color::bright_green),
                  "Start dumping ast-ir stage...\n");
     });
     AST::ASTPrinter::print(programAST.get());
   }
   if (this->error) {
     LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+      fmt::print(stderr,
+                 sammine_util::styled(fmt::terminal_color::bright_green),
                  "There were errors in previous stages. Aborting now\n");
     });
     std::exit(1);
@@ -202,7 +208,8 @@ void Compiler::codegen() {
   }
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
     LOG({
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+      fmt::print(stderr,
+                 sammine_util::styled(fmt::terminal_color::bright_green),
                  "Finished checking. Stopping at codegen stage with compiler's "
                  "--check flag. \n");
     });
@@ -293,10 +300,8 @@ void Compiler::emit_object() {
                "Start emit object stage...\n");
   });
 
-  std::string stem =
-      std::filesystem::path(this->file_name).stem().string();
-  llvm::raw_fd_ostream dest(
-      llvm::raw_fd_ostream(stem + ".o", resPtr->EC));
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  llvm::raw_fd_ostream dest(llvm::raw_fd_ostream(stem + ".o", resPtr->EC));
   if (resPtr->EC) {
     llvm::errs() << "Could not open file: " << resPtr->EC.message();
     return;
@@ -323,8 +328,7 @@ void Compiler::link() {
                "Start link stage...\n");
   });
 
-  std::string stem =
-      std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
 
   auto try_compile_with = [&stem](const std::string &compiler) {
     std::string test_command =

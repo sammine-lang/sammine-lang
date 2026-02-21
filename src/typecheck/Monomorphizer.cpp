@@ -10,16 +10,14 @@ static std::shared_ptr<Token> make_tok(const std::string &lexeme) {
                                  sammine_util::Location{});
 }
 
-std::string
-Monomorphizer::resolve_type_name(const std::string &name) const {
+std::string Monomorphizer::resolve_type_name(const std::string &name) const {
   auto it = bindings.find(name);
   if (it != bindings.end())
     return it->second.to_string();
   return name;
 }
 
-std::unique_ptr<TypeExprAST>
-Monomorphizer::clone_type_expr(TypeExprAST *expr) {
+std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   if (!expr)
     return nullptr;
 
@@ -49,8 +47,7 @@ Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   sammine_util::abort("Unknown TypeExprAST subclass in Monomorphizer");
 }
 
-std::unique_ptr<TypedVarAST>
-Monomorphizer::clone_typed_var(TypedVarAST *var) {
+std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
   if (!var)
     return nullptr;
   auto result = std::make_unique<TypedVarAST>(
@@ -104,7 +101,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   if (auto *var = dynamic_cast<VariableExprAST *>(expr)) {
-    auto result = std::make_unique<VariableExprAST>(make_tok(var->variableName));
+    auto result =
+        std::make_unique<VariableExprAST>(make_tok(var->variableName));
     return result;
   }
 
@@ -125,8 +123,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 
   if (auto *ret = dynamic_cast<ReturnExprAST *>(expr)) {
     if (ret->is_implicit) {
-      auto result = std::make_unique<ReturnExprAST>(
-          clone_expr(ret->return_expr.get()));
+      auto result =
+          std::make_unique<ReturnExprAST>(clone_expr(ret->return_expr.get()));
       return result;
     }
     auto result = std::make_unique<ReturnExprAST>(
@@ -143,8 +141,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 
   if (auto *ife = dynamic_cast<IfExprAST *>(expr)) {
     auto result = std::make_unique<IfExprAST>(
-        clone_expr(ife->bool_expr.get()),
-        clone_block(ife->thenBlockAST.get()),
+        clone_expr(ife->bool_expr.get()), clone_block(ife->thenBlockAST.get()),
         clone_block(ife->elseBlockAST.get()));
     return result;
   }
@@ -152,8 +149,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   if (auto *unit = dynamic_cast<UnitExprAST *>(expr)) {
     if (unit->is_implicit)
       return std::make_unique<UnitExprAST>();
-    return std::make_unique<UnitExprAST>(
-        make_tok("("), make_tok(")"));
+    return std::make_unique<UnitExprAST>(make_tok("("), make_tok(")"));
   }
 
   if (auto *deref = dynamic_cast<DerefExprAST *>(expr)) {

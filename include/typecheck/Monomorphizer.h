@@ -18,12 +18,13 @@ public:
 
 private:
   const SubstitutionMap &bindings;
-  explicit Monomorphizer(const SubstitutionMap &bindings) : bindings(bindings) {}
+  explicit Monomorphizer(const SubstitutionMap &bindings)
+      : bindings(bindings) {}
 
   std::unique_ptr<TypeExprAST> clone_type_expr(TypeExprAST *expr);
   std::unique_ptr<TypedVarAST> clone_typed_var(TypedVarAST *var);
-  std::unique_ptr<PrototypeAST> clone_prototype(PrototypeAST *proto,
-                                                 const std::string &mangled_name);
+  std::unique_ptr<PrototypeAST>
+  clone_prototype(PrototypeAST *proto, const std::string &mangled_name);
   std::unique_ptr<BlockAST> clone_block(BlockAST *block);
   std::unique_ptr<ExprAST> clone_expr(ExprAST *expr);
 

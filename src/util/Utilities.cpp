@@ -129,12 +129,11 @@ std::vector<GroupedReport> group_reports(const Reportee &reports) {
       }
       // Deduplicate source locations (same file + line) so --dev mode
       // doesn't print the same origin twice.
-      bool dup = std::any_of(it->srcs.begin(), it->srcs.end(),
-                             [&](const std::source_location &s) {
-                               return s.line() == src.line() &&
-                                      std::string_view(s.file_name()) ==
-                                          src.file_name();
-                             });
+      bool dup = std::any_of(
+          it->srcs.begin(), it->srcs.end(), [&](const std::source_location &s) {
+            return s.line() == src.line() &&
+                   std::string_view(s.file_name()) == src.file_name();
+          });
       if (!dup)
         it->srcs.push_back(src);
     } else {
@@ -301,10 +300,9 @@ void Reporter::report(const Reportee &reports) const {
       auto msgs = g.msgs;
       if (dev_mode) {
         for (const auto &src : g.srcs) {
-          auto sf =
-              std::filesystem::path(src.file_name()).filename().string();
-          msgs.push_back(fmt::format("[Error-borne --dev location: {}:{}]",
-                                     sf, src.line()));
+          auto sf = std::filesystem::path(src.file_name()).filename().string();
+          msgs.push_back(fmt::format("[Error-borne --dev location: {}:{}]", sf,
+                                     src.line()));
         }
       }
       line_anns[row].push_back({cs, ce, std::move(msgs), g.kind});
@@ -314,7 +312,7 @@ void Reporter::report(const Reportee &reports) const {
     print_fmt(LINE_COLOR, "    |");
     if (cluster.group_indices.size() == 1) {
       Locator locator(groups[cluster.group_indices[0]].loc, context_radius,
-                       diagnostic_data);
+                      diagnostic_data);
       auto [row, col] = locator.get_row_col();
       print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name, row + 1,
                 col);
@@ -336,8 +334,7 @@ void Reporter::report(const Reportee &reports) const {
                                it->second[0].col_end);
       for (const auto &ann : it->second) {
         indicate_singular_line(ann.kind, ann.col_start, ann.col_end);
-        report_singular_line(ann.kind, ann.msgs, ann.col_start,
-                             ann.col_end);
+        report_singular_line(ann.kind, ann.msgs, ann.col_start, ann.col_end);
       }
     }
   }

@@ -650,9 +650,12 @@ public:
   explicit ArrayLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
       : elements(std::move(elements)) {
     for (auto &e : this->elements)
-      if (e) this->join_location(e.get());
+      if (e)
+        this->join_location(e.get());
   }
-  virtual std::string getTreeName() const override { return "ArrayLiteralExprAST"; }
+  virtual std::string getTreeName() const override {
+    return "ArrayLiteralExprAST";
+  }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);

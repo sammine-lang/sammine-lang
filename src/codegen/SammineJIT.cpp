@@ -16,9 +16,10 @@ SammineJIT::SammineJIT(std::unique_ptr<llvm::orc::ExecutionSession> ES,
                        llvm::orc::JITTargetMachineBuilder JTMB,
                        llvm::DataLayout DL)
     : ES(std::move(ES)),
-      ObjectLayer(
-          *this->ES,
-          [](const llvm::MemoryBuffer&) { return std::make_unique<llvm::SectionMemoryManager>(); }),
+      ObjectLayer(*this->ES,
+                  [](const llvm::MemoryBuffer &) {
+                    return std::make_unique<llvm::SectionMemoryManager>();
+                  }),
       CompileLayer(
           *this->ES, ObjectLayer,
           std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(JTMB))),

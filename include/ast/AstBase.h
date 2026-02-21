@@ -140,7 +140,8 @@ public:
   virtual ~ASTVisitor() = 0;
 };
 
-template <class T, class S> class LexicalStack : public std::stack<LexicalContext<T, S>> {
+template <class T, class S>
+class LexicalStack : public std::stack<LexicalContext<T, S>> {
 public:
   void push_context() {
     if (this->empty())
@@ -172,7 +173,9 @@ public:
     return this->top().recursive_get_from_name(name);
   }
 
-  const LexicalContext<T, S> *parent_scope() const { return this->top().parent_scope; }
+  const LexicalContext<T, S> *parent_scope() const {
+    return this->top().parent_scope;
+  }
   LexicalContext<T, S> *parent_scope() { return this->top().parent_scope; }
 };
 
@@ -277,7 +280,6 @@ public:
   }
   sammine_util::Location get_location() const { return this->location; }
   bool synthesized() const { return this->type.synthesized(); }
-
 };
 } // namespace AST
 } // namespace sammine_lang

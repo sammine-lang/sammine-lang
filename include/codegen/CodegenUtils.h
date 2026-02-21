@@ -21,11 +21,10 @@ public:
   static llvm::FunctionCallee declare_malloc(llvm::Module &);
   static llvm::FunctionCallee declare_free(llvm::Module &);
 
-  static llvm::FunctionCallee declare_fn(llvm::Module &module,
-                                         const std::string &name,
-                                         llvm::Type *return_type,
-                                         llvm::ArrayRef<llvm::Type *> param_types,
-                                         bool is_vararg = false);
+  static llvm::FunctionCallee
+  declare_fn(llvm::Module &module, const std::string &name,
+             llvm::Type *return_type, llvm::ArrayRef<llvm::Type *> param_types,
+             bool is_vararg = false);
 };
 
 } // namespace sammine_lang

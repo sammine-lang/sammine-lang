@@ -5,10 +5,10 @@
 #define DEBUG_TYPE "lexer"
 
 #include "lex/Lexer.h"
-#include "util/Logging.h"
 #include "fmt/core.h"
 #include "functional"
 #include "lex/Token.h"
+#include "util/Logging.h"
 #include <cassert>
 #include <string>
 
@@ -69,13 +69,27 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       if (input[i] == '\\') {
         i = advance(i);
         switch (input[i]) {
-        case 'n': str += '\n'; break;
-        case 't': str += '\t'; break;
-        case 'r': str += '\r'; break;
-        case '\\': str += '\\'; break;
-        case '\"': str += '\"'; break;
-        case '0': str += '\0'; break;
-        default: str += input[i]; break;
+        case 'n':
+          str += '\n';
+          break;
+        case 't':
+          str += '\t';
+          break;
+        case 'r':
+          str += '\r';
+          break;
+        case '\\':
+          str += '\\';
+          break;
+        case '\"':
+          str += '\"';
+          break;
+        case '0':
+          str += '\0';
+          break;
+        default:
+          str += input[i];
+          break;
         }
       } else {
         str += input[i];

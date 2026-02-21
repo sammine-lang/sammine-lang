@@ -22,15 +22,13 @@ template <class T, class Scope> class LexicalContext {
 
 public:
   LexicalContext *parent_scope;
-  std::optional<Scope> s; 
+  std::optional<Scope> s;
 
   explicit LexicalContext() : symbols(), symbols_to_t(), parent_scope() {}
   LexicalContext(LexicalContext *parent_scope)
       : symbols(), symbols_to_t(), parent_scope(parent_scope) {}
 
-  void setScope(Scope s) {
-    this->s = s;
-  }
+  void setScope(Scope s) { this->s = s; }
 
   void registerNameT(const std::string &name, T l) {
     symbols.insert(name);
@@ -39,7 +37,9 @@ public:
   NameQueryResult queryName(const std::string &name) const {
     return symbols.contains(name) ? nameFound : nameNotFound;
   }
-  T get_from_name(const std::string &name) const { return symbols_to_t.at(name); }
+  T get_from_name(const std::string &name) const {
+    return symbols_to_t.at(name);
+  }
 
   T recursive_get_from_name(const std::string &name) const {
     if (symbols.find(name) != symbols.end())

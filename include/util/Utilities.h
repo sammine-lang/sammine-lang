@@ -49,8 +49,7 @@ void abort_if_not(const T &condition,
   }
 }
 inline void log_diagnostics(const std::string &diagnostics) {
-  fmt::print(stderr, fg(fmt::terminal_color::green), "{}\n",
-             diagnostics);
+  fmt::print(stderr, fg(fmt::terminal_color::green), "{}\n", diagnostics);
 }
 
 //! A class representing a location for sammine-lang, this is helpful in
@@ -118,9 +117,8 @@ public:
     warn,
     diag,
   };
-  using Report =
-      std::tuple<Location, std::vector<std::string>, ReportKind,
-                 std::source_location>;
+  using Report = std::tuple<Location, std::vector<std::string>, ReportKind,
+                            std::source_location>;
 
   using iterator = std::vector<Report>::iterator;
   using const_iterator = std::vector<Report>::const_iterator;
@@ -165,8 +163,9 @@ public:
     reports.push_back({loc, {std::move(msg)}, ReportKind::warn, src});
     warn_count++;
   }
-  void add_diagnostics(Location loc, std::string msg,
-                       std::source_location src = std::source_location::current()) {
+  void
+  add_diagnostics(Location loc, std::string msg,
+                  std::source_location src = std::source_location::current()) {
     reports.push_back({loc, {std::move(msg)}, ReportKind::diag, src});
     diag_count++;
   }
@@ -200,8 +199,7 @@ private:
   inline static fmt::terminal_color LINE_COLOR =
       fmt::terminal_color::bright_magenta;
 
-  inline static fmt::terminal_color MSG_COLOR =
-      fmt::terminal_color::blue;
+  inline static fmt::terminal_color MSG_COLOR = fmt::terminal_color::blue;
   std::string file_name;
   std::string input;
   std::vector<std::pair<std::int64_t, std::string_view>> diagnostic_data;

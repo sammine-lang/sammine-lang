@@ -12,7 +12,7 @@ class ScopeGeneratorVisitor : public ScopedASTVisitor {
 public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
-  LexicalStack<sammine_util::Location, AST::FuncDefAST*> scope_stack;
+  LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
   std::set<std::string> pre_func;
   ScopeGeneratorVisitor() {
     pre_func.insert("printf");
@@ -31,13 +31,14 @@ public:
     return result;
   }
   NameQueryResult can_see_parent(const std::string &symbol) const {
-  const auto *parent_scope = this->scope_stack.parent_scope();
+    const auto *parent_scope = this->scope_stack.parent_scope();
     auto result = parent_scope->recursiveQueryName(symbol);
     if (result == nameNotFound)
       return pre_func.contains(symbol) ? nameFound : nameNotFound;
     return result;
   }
-  void register_name_parent(const std::string &symbol, sammine_util::Location loc) {
+  void register_name_parent(const std::string &symbol,
+                            sammine_util::Location loc) {
     auto *parent_scope = this->scope_stack.parent_scope();
     return parent_scope->registerNameT(symbol, loc);
   }
