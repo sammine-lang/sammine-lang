@@ -8,6 +8,7 @@
 #include "codegen/LLVMRes.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
+#include "lex/Lexer.h"
 #include "parser/Parser.h"
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
@@ -35,21 +36,25 @@ class Compiler {
   std::map<compiler_option_enum, std::string> compiler_options;
   std::shared_ptr<LLVMRes> resPtr;
   std::string file_name, input;
+  std::vector<std::string> extra_object_files;
+  std::filesystem::path stdlib_dir;
 
-  const std::set<std::string> pre_func{"printf"};
 
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
   bool error;
+  bool has_main = false;
 
   void lex();
   void parse();
+  void resolve_imports();
   void semantics();
   void typecheck();
   void dump_ast();
   void codegen();
   void optimize();
   void emit_object();
+  void emit_interface();
   void link();
   void print_timing_table(
       const std::vector<std::pair<const char *, double>> &timings);
@@ -100,6 +105,15 @@ Compiler::Compiler(
   bool dev_mode = sammine_log::is_type_in_list("dev", diagnostic_value);
   this->reporter =
       sammine_util::Reporter(file_name, input, context_radius, dev_mode);
+
+  // Compute stdlib directory relative to the binary location
+  std::string argv0 = compiler_options[compiler_option_enum::ARGV0];
+  if (!argv0.empty()) {
+    std::error_code ec;
+    auto bin_path = std::filesystem::canonical(argv0, ec);
+    if (!ec)
+      stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
+  }
 }
 
 void Compiler::lex() {
@@ -124,6 +138,76 @@ void Compiler::parse() {
 
   this->error = psr.has_errors();
   reporter.report(psr);
+
+  for (auto &def : programAST->DefinitionVec)
+    if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get()))
+      if (fd->Prototype->functionName == "main") {
+        has_main = true;
+        break;
+      }
+}
+
+void Compiler::resolve_imports() {
+  if (this->error || programAST->imports.empty())
+    return;
+
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start resolve imports stage...\n");
+  });
+
+  auto source_dir = std::filesystem::path(this->file_name).parent_path();
+  if (source_dir.empty())
+    source_dir = ".";
+
+  for (auto &import : programAST->imports) {
+    // Look for .mni in CWD, source dir, then stdlib dir
+    std::filesystem::path mni_path = import.module_name + ".mni";
+    if (!std::filesystem::exists(mni_path))
+      mni_path = source_dir / (import.module_name + ".mni");
+    if (!std::filesystem::exists(mni_path) && !stdlib_dir.empty())
+      mni_path = stdlib_dir / (import.module_name + ".mni");
+    if (!std::filesystem::exists(mni_path)) {
+      reporter.immediate_error(
+          fmt::format("Cannot find interface file '{}.mni'. Did you compile "
+                      "{}.mn first?",
+                      import.module_name, import.module_name),
+          import.location);
+      this->error = true;
+      return;
+    }
+
+    // Parse the .mni file — it contains valid sammine extern declarations
+    std::string mni_input = sammine_util::get_string_from_file(mni_path.string());
+    Lexer mni_lexer(mni_input);
+    auto mni_tok_stream = mni_lexer.getTokenStream();
+    Parser mni_parser(mni_tok_stream);
+    auto mni_program = mni_parser.Parse();
+
+    if (mni_parser.has_errors()) {
+      reporter.immediate_error(
+          fmt::format("Failed to parse interface file '{}'", mni_path.string()),
+          import.location);
+      this->error = true;
+      return;
+    }
+
+    // Insert the extern declarations at the front of our DefinitionVec
+    for (auto it = mni_program->DefinitionVec.rbegin();
+         it != mni_program->DefinitionVec.rend(); ++it) {
+      programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                       std::move(*it));
+    }
+
+    // Track the .o file for linking (CWD, source dir, then stdlib dir)
+    std::filesystem::path obj_path = import.module_name + ".o";
+    if (!std::filesystem::exists(obj_path))
+      obj_path = source_dir / (import.module_name + ".o");
+    if (!std::filesystem::exists(obj_path) && !stdlib_dir.empty())
+      obj_path = stdlib_dir / (import.module_name + ".o");
+    if (std::filesystem::exists(obj_path))
+      extra_object_files.push_back(obj_path.string());
+  }
 }
 
 void Compiler::semantics() {
@@ -169,7 +253,7 @@ void Compiler::typecheck() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start bi-direcitonal type checking stage...\n");
   });
-  auto vs = sammine_lang::AST::BiTypeCheckerVisitor(pre_func);
+  auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
   programAST->accept_vis(&vs);
 
   // Inject monomorphized generic function definitions at the front
@@ -318,6 +402,51 @@ void Compiler::emit_object() {
   dest.flush();
 }
 
+void Compiler::emit_interface() {
+  if (this->error || has_main)
+    return;
+
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start emit interface stage...\n");
+  });
+
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string mni_path = stem + ".mni";
+  std::ofstream out(mni_path);
+  if (!out.is_open()) {
+    fmt::print(stderr, "Could not open {} for writing\n", mni_path);
+    return;
+  }
+
+  auto emit_proto = [&out](AST::PrototypeAST *proto, bool is_var_arg) {
+    out << "extern " << proto->functionName << "(";
+    for (size_t i = 0; i < proto->parameterVectors.size(); i++) {
+      auto &param = proto->parameterVectors[i];
+      out << param->name;
+      if (param->type_expr)
+        out << " : " << param->type_expr->to_string();
+      if (i + 1 < proto->parameterVectors.size() || is_var_arg)
+        out << ", ";
+    }
+    if (is_var_arg)
+      out << "...";
+    out << ")";
+    if (proto->return_type_expr)
+      out << " -> " << proto->return_type_expr->to_string();
+    out << ";\n";
+  };
+
+  for (auto &def : this->programAST->DefinitionVec) {
+    if (auto *func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
+      emit_proto(func_def->Prototype.get(), func_def->Prototype->is_var_arg);
+    } else if (auto *extern_def = dynamic_cast<AST::ExternAST *>(def.get())) {
+      emit_proto(extern_def->Prototype.get(),
+                 extern_def->Prototype->is_var_arg);
+    }
+  }
+}
+
 void Compiler::link() {
   if (this->error) {
     return;
@@ -330,28 +459,26 @@ void Compiler::link() {
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
 
-  auto try_compile_with = [&stem](const std::string &compiler) {
+  std::string obj_list = stem + ".o";
+  for (auto &obj : extra_object_files)
+    obj_list += " " + obj;
+
+  auto try_compile_with = [&obj_list, &stem](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
       return false;
     std::string command =
-        fmt::format("{} {}.o -o {}.exe", compiler, stem, stem);
+        fmt::format("{} {} -o {}.exe", compiler, obj_list, stem);
     int result = std::system(command.c_str());
     return result == 0;
   };
-  for (auto &def : this->programAST->DefinitionVec) {
-    if (auto func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
-      if (func_def->Prototype->functionName == "main") {
-        if (try_compile_with("clang++") || try_compile_with("g++"))
-          return;
-        else
-          sammine_util::abort(
-              "Neither clang++ nor g++ is available for final linkage\n");
-      }
-    }
-  }
+  if (!has_main)
+    return;
+  if (!try_compile_with("clang++") && !try_compile_with("g++"))
+    sammine_util::abort(
+        "Neither clang++ nor g++ is available for final linkage\n");
 }
 void Compiler::print_timing_table(
     const std::vector<std::pair<const char *, double>> &timings) {
@@ -377,12 +504,14 @@ void Compiler::start() {
   std::vector<Stage> stages = {
       {"lex", &Compiler::lex},
       {"parse", &Compiler::parse},
+      {"imports", &Compiler::resolve_imports},
       {"semantics", &Compiler::semantics},
       {"typecheck", &Compiler::typecheck},
       {"dump_ast", &Compiler::dump_ast},
       {"codegen", &Compiler::codegen},
       {"optimize", &Compiler::optimize},
       {"emit_obj", &Compiler::emit_object},
+      {"emit_iface", &Compiler::emit_interface},
       {"link", &Compiler::link},
   };
 

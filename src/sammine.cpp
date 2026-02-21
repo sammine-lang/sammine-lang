@@ -103,6 +103,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  compiler_options[ARGV0] = argv[0];
   CompilerRunner::run(compiler_options);
   return 0;
 }
