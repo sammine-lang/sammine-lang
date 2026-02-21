@@ -236,7 +236,111 @@ public:
         return true;
     }
 
+    bool update(const std::string &check_filename, std::istream &input) {
+        // Read all actual output lines from stdin
+        std::vector<std::string> output_lines;
+        std::string line;
+        while (std::getline(input, line)) {
+            output_lines.push_back(line);
+        }
+
+        // Read all lines from the check file
+        std::ifstream file(check_filename);
+        if (!file) {
+            std::cerr << "error: Could not open check file: " << check_filename << "\n";
+            return false;
+        }
+
+        std::vector<std::string> file_lines;
+        while (std::getline(file, line)) {
+            file_lines.push_back(line);
+        }
+        file.close();
+
+        // Find the last RUN line index and remove existing CHECK directive lines
+        int last_run_idx = -1;
+        std::vector<std::string> filtered_lines;
+        for (size_t i = 0; i < file_lines.size(); i++) {
+            if (is_check_directive(file_lines[i])) {
+                continue; // Strip existing CHECK lines
+            }
+            if (file_lines[i].find("# RUN:") != std::string::npos) {
+                last_run_idx = static_cast<int>(filtered_lines.size());
+            }
+            filtered_lines.push_back(file_lines[i]);
+        }
+
+        // Build new CHECK lines from actual output
+        std::vector<std::string> check_lines;
+        for (size_t i = 0; i < output_lines.size(); i++) {
+            std::string directive = (i == 0) ? (check_prefix_ + ":") : (check_prefix_ + "-NEXT:");
+            if (output_lines[i].empty()) {
+                // Empty lines need {{^$}} regex to match explicitly
+                check_lines.push_back("# " + directive + " {{^$}}");
+            } else {
+                check_lines.push_back("# " + directive + " " + output_lines[i]);
+            }
+        }
+
+        if (output_lines.empty()) {
+            std::cerr << "warning: No output lines; existing CHECK lines removed\n";
+        }
+
+        // Insert CHECK lines after the last RUN line (or at the top if no RUN line)
+        std::vector<std::string> result;
+        if (last_run_idx >= 0) {
+            // Insert after the last RUN line
+            for (int i = 0; i <= last_run_idx; i++) {
+                result.push_back(filtered_lines[i]);
+            }
+            for (const auto &cl : check_lines) {
+                result.push_back(cl);
+            }
+            for (size_t i = last_run_idx + 1; i < filtered_lines.size(); i++) {
+                result.push_back(filtered_lines[i]);
+            }
+        } else {
+            // No RUN line found — insert CHECK lines at the top
+            for (const auto &cl : check_lines) {
+                result.push_back(cl);
+            }
+            for (const auto &fl : filtered_lines) {
+                result.push_back(fl);
+            }
+        }
+
+        // Write the file back
+        std::ofstream out(check_filename);
+        if (!out) {
+            std::cerr << "error: Could not write to check file: " << check_filename << "\n";
+            return false;
+        }
+        for (size_t i = 0; i < result.size(); i++) {
+            out << result[i];
+            if (i + 1 < result.size()) {
+                out << "\n";
+            }
+        }
+        // Preserve trailing newline
+        out << "\n";
+        out.close();
+
+        std::cerr << "Updated " << check_filename << " with " << check_lines.size()
+                  << " CHECK lines from " << output_lines.size() << " output lines\n";
+        return true;
+    }
+
 private:
+    bool is_check_directive(const std::string &line) const {
+        // Check if line contains any CHECK directive with the configured prefix
+        if (line.find(check_prefix_ + ":") != std::string::npos) return true;
+        if (line.find(check_prefix_ + "-NEXT:") != std::string::npos) return true;
+        if (line.find(check_prefix_ + "-NOT:") != std::string::npos) return true;
+        if (line.find(check_prefix_ + "-SAME:") != std::string::npos) return true;
+        if (line.find(check_prefix_ + "-LABEL:") != std::string::npos) return true;
+        return false;
+    }
+
     void parse_check_line(const std::string &line, int line_num) {
         // Look for CHECK patterns - they can appear anywhere in the line (usually in comments)
         auto parse_with_prefix = [&](const std::string &prefix) {
@@ -339,6 +443,7 @@ void print_usage(const char *prog) {
     std::cerr << "Options:\n";
     std::cerr << "  --input-file <file>   Read input from file instead of stdin\n";
     std::cerr << "  --check-prefix <pfx>  Use <pfx> instead of CHECK (default: CHECK)\n";
+    std::cerr << "  --update              Update CHECK lines in check-file to match actual output\n";
     std::cerr << "  -v, --verbose         Verbose mode\n";
     std::cerr << "  -h, --help            Show this help\n";
     std::cerr << "\n";
@@ -357,12 +462,15 @@ int main(int argc, char *argv[]) {
     std::string input_file;
     std::string check_prefix = "CHECK";
     bool verbose = false;
+    bool update_mode = false;
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
             return 0;
+        } else if (arg == "--update") {
+            update_mode = true;
         } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;
         } else if (arg == "--input-file") {
@@ -394,6 +502,22 @@ int main(int argc, char *argv[]) {
 
     FileChecker checker(check_prefix);
     checker.set_verbose(verbose);
+
+    if (update_mode) {
+        // In update mode, read actual output and rewrite CHECK lines in the file
+        bool result;
+        if (!input_file.empty()) {
+            std::ifstream input(input_file);
+            if (!input) {
+                std::cerr << "error: Could not open input file: " << input_file << "\n";
+                return 1;
+            }
+            result = checker.update(check_file, input);
+        } else {
+            result = checker.update(check_file, std::cin);
+        }
+        return result ? 0 : 1;
+    }
 
     if (!checker.parse_check_file(check_file)) {
         std::cerr << "error: No check patterns found in " << check_file << "\n";
