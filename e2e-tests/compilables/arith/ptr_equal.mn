@@ -1,0 +1,42 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: same ptr equal: 1
+# CHECK: same ptr not-equal: 0
+# CHECK: diff ptr equal: 0
+# CHECK: diff ptr not-equal: 1
+
+import std;
+
+let main() -> i32 {
+  let x : i32 = 42;
+  let p1 : ptr<i32> = &x;
+  let p2 : ptr<i32> = &x;
+
+  if p1 == p2 {
+    printf("same ptr equal: 1\n");
+  } else {
+    printf("same ptr equal: 0\n");
+  };
+
+  if p1 != p2 {
+    printf("same ptr not-equal: 1\n");
+  } else {
+    printf("same ptr not-equal: 0\n");
+  };
+
+  let y : i32 = 42;
+  let p3 : ptr<i32> = &y;
+
+  if p1 == p3 {
+    printf("diff ptr equal: 1\n");
+  } else {
+    printf("diff ptr equal: 0\n");
+  };
+
+  if p1 != p3 {
+    printf("diff ptr not-equal: 1\n");
+  } else {
+    printf("diff ptr not-equal: 0\n");
+  };
+
+  return 0;
+}

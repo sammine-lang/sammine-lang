@@ -33,6 +33,8 @@ private:
                                             const FunctionType &ft);
 
   void emitBoundsCheck(llvm::Value *idx, size_t arr_size);
+  llvm::Value *emitArrayComparison(llvm::Value *L, llvm::Value *R,
+                                   const Type &arrType, TokenType tok);
 
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol

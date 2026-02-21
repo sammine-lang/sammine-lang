@@ -119,9 +119,18 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
       sammine_util::abort("Invalid token for float comparison");
     }
   }
+  case TypeKind::Pointer: {
+    switch (tok) {
+    case TokenType::TokEQUAL:
+      return CmpInst::ICMP_EQ;
+    case TokenType::TokNOTEqual:
+      return CmpInst::ICMP_NE;
+    default:
+      sammine_util::abort("Only == and != supported for pointers");
+    }
+  }
   case TypeKind::Unit:
   case TypeKind::Function:
-  case TypeKind::Pointer:
   case TypeKind::Array:
   case TypeKind::Never:
   case TypeKind::NonExistent:

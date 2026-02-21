@@ -1,0 +1,40 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: same arrays equal: 1
+# CHECK: same arrays not-equal: 0
+# CHECK: diff arrays equal: 0
+# CHECK: diff arrays not-equal: 1
+
+import std;
+
+let main() -> i32 {
+  let a : [i32;3] = [1, 2, 3];
+  let b : [i32;3] = [1, 2, 3];
+
+  if a == b {
+    printf("same arrays equal: 1\n");
+  } else {
+    printf("same arrays equal: 0\n");
+  };
+
+  if a != b {
+    printf("same arrays not-equal: 1\n");
+  } else {
+    printf("same arrays not-equal: 0\n");
+  };
+
+  let c : [i32;3] = [1, 2, 99];
+
+  if a == c {
+    printf("diff arrays equal: 1\n");
+  } else {
+    printf("diff arrays equal: 0\n");
+  };
+
+  if a != c {
+    printf("diff arrays not-equal: 1\n");
+  } else {
+    printf("diff arrays not-equal: 0\n");
+  };
+
+  return 0;
+}

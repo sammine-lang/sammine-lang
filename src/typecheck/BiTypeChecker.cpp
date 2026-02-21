@@ -621,8 +621,19 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
                     ast->RHS->type.to_string()));
     return ast->type = ast->LHS->type;
   }
-  if (ast->Op->is_comparison())
+  if (ast->Op->is_comparison()) {
+    auto kind = ast->LHS->type.type_kind;
+    if (kind == TypeKind::Array || kind == TypeKind::Pointer) {
+      if (ast->Op->tok_type != TokEQUAL && ast->Op->tok_type != TokNOTEqual) {
+        this->add_error(
+            ast->Op->get_location(),
+            fmt::format("Only == and != are supported for {} types",
+                        ast->LHS->type.to_string()));
+        return ast->type = Type::Poisoned();
+      }
+    }
     return ast->type = Type::Bool();
+  }
   if (ast->Op->is_assign()) {
     if (auto *var = dynamic_cast<VariableExprAST *>(ast->LHS.get())) {
       if (!var->type.is_mutable) {

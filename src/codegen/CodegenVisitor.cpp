@@ -276,8 +276,12 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   } else if (tok == TokAND) {
     ast->val = resPtr->Builder->CreateLogicalAnd(L, R);
   } else if (ast->Op->is_comparison()) {
-    ast->val = resPtr->Builder->CreateCmp(
-        type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
+    if (lhs_type.type_kind == TypeKind::Array) {
+      ast->val = emitArrayComparison(L, R, lhs_type, tok);
+    } else {
+      ast->val = resPtr->Builder->CreateCmp(
+          type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
+    }
   } else if (tok == TokMOD) {
     ast->val = resPtr->Builder->CreateSRem(L, R);
   } else {
@@ -670,6 +674,103 @@ void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
     ast->val = resPtr->Builder->CreateFNeg(operand_val, "fneg");
   else
     this->abort("UnaryNegExprAST has invalid operand type");
+}
+
+llvm::Value *CgVisitor::emitArrayComparison(llvm::Value *L, llvm::Value *R,
+                                             const Type &arrType,
+                                             TokenType tok) {
+  auto &Ctx = *resPtr->Context;
+  auto &arr_data = std::get<ArrayType>(arrType.type_data);
+  auto arr_size = arr_data.get_size();
+  auto elem_type = arr_data.get_element();
+  auto *arr_llvm_type =
+      llvm::cast<llvm::ArrayType>(type_converter.get_type(arrType));
+
+  auto *function = resPtr->Builder->GetInsertBlock()->getParent();
+
+  // Store L and R into temporary allocas so we can GEP into them
+  auto *alloca_l = CodegenUtils::CreateEntryBlockAlloca(function, "arr_cmp_l",
+                                                        arr_llvm_type);
+  auto *alloca_r = CodegenUtils::CreateEntryBlockAlloca(function, "arr_cmp_r",
+                                                        arr_llvm_type);
+  resPtr->Builder->CreateStore(L, alloca_l);
+  resPtr->Builder->CreateStore(R, alloca_r);
+
+  auto *i32Ty = llvm::Type::getInt32Ty(Ctx);
+  auto *i1Ty = llvm::Type::getInt1Ty(Ctx);
+  auto *zero = llvm::ConstantInt::get(i32Ty, 0);
+  auto *size_val = llvm::ConstantInt::get(i32Ty, arr_size);
+  auto *true_val = llvm::ConstantInt::getTrue(Ctx);
+  auto *false_val = llvm::ConstantInt::getFalse(Ctx);
+
+  // Basic blocks:
+  //   entry -> loop_header -> loop_body -> loop_latch -> loop_header
+  //                |                 |
+  //                v (all equal)     v (mismatch)
+  //            loop_exit <------ loop_mismatch
+  auto *entry_bb = resPtr->Builder->GetInsertBlock();
+  auto *loop_header = BasicBlock::Create(Ctx, "arr_cmp_header", function);
+  auto *loop_body = BasicBlock::Create(Ctx, "arr_cmp_body", function);
+  auto *loop_latch = BasicBlock::Create(Ctx, "arr_cmp_latch", function);
+  auto *loop_mismatch = BasicBlock::Create(Ctx, "arr_cmp_mismatch", function);
+  auto *loop_exit = BasicBlock::Create(Ctx, "arr_cmp_exit", function);
+
+  resPtr->Builder->CreateBr(loop_header);
+
+  // Loop header: counter phi, bounds check
+  resPtr->Builder->SetInsertPoint(loop_header);
+  auto *counter = resPtr->Builder->CreatePHI(i32Ty, 2, "arr_cmp_i");
+  counter->addIncoming(zero, entry_bb);
+  auto *cond =
+      resPtr->Builder->CreateICmpSLT(counter, size_val, "arr_cmp_cond");
+  resPtr->Builder->CreateCondBr(cond, loop_body, loop_exit);
+
+  // Loop body: load elements, compare
+  resPtr->Builder->SetInsertPoint(loop_body);
+  auto *elem_llvm_type = type_converter.get_type(elem_type);
+  auto *gep_l = resPtr->Builder->CreateGEP(arr_llvm_type, alloca_l,
+                                            {zero, counter}, "arr_cmp_gep_l");
+  auto *gep_r = resPtr->Builder->CreateGEP(arr_llvm_type, alloca_r,
+                                            {zero, counter}, "arr_cmp_gep_r");
+  auto *elem_l =
+      resPtr->Builder->CreateLoad(elem_llvm_type, gep_l, "arr_cmp_el");
+  auto *elem_r =
+      resPtr->Builder->CreateLoad(elem_llvm_type, gep_r, "arr_cmp_er");
+
+  llvm::Value *elem_eq;
+  if (elem_type.type_kind == TypeKind::Array) {
+    elem_eq = emitArrayComparison(elem_l, elem_r, elem_type, TokEQUAL);
+  } else {
+    elem_eq = resPtr->Builder->CreateCmp(
+        type_converter.get_cmp_func(elem_type, elem_type, TokEQUAL), elem_l,
+        elem_r, "arr_cmp_eq");
+  }
+
+  // Short-circuit: if elements differ, jump to mismatch
+  resPtr->Builder->CreateCondBr(elem_eq, loop_latch, loop_mismatch);
+
+  // Loop latch: increment counter, branch back to header
+  resPtr->Builder->SetInsertPoint(loop_latch);
+  auto *next_i = resPtr->Builder->CreateAdd(
+      counter, llvm::ConstantInt::get(i32Ty, 1), "arr_cmp_next");
+  counter->addIncoming(next_i, loop_latch);
+  resPtr->Builder->CreateBr(loop_header);
+
+  // Mismatch exit: arrays differ
+  resPtr->Builder->SetInsertPoint(loop_mismatch);
+  resPtr->Builder->CreateBr(loop_exit);
+
+  // Final exit: phi merges true (all matched) vs false (mismatch)
+  resPtr->Builder->SetInsertPoint(loop_exit);
+  auto *result = resPtr->Builder->CreatePHI(i1Ty, 2, "arr_cmp_result");
+  result->addIncoming(true_val, loop_header);
+  result->addIncoming(false_val, loop_mismatch);
+
+  // For !=, negate the == result
+  if (tok == TokNOTEqual) {
+    return resPtr->Builder->CreateNot(result, "arr_cmp_ne");
+  }
+  return result;
 }
 
 } // namespace sammine_lang::AST
