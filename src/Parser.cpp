@@ -526,15 +526,15 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto id = expect(TokenType::TokID)) {
-    // Handle qualified type names: alias.TypeName (e.g. m.Point)
-    if (tokStream->peek()->tok_type == TokDot) {
+    // Handle qualified type names: alias::TypeName (e.g. m::Point)
+    if (tokStream->peek()->tok_type == TokDoubleColon) {
       auto it = alias_to_module.find(id->lexeme);
       if (it != alias_to_module.end()) {
-        tokStream->consume(); // consume the dot
+        tokStream->consume(); // consume the ::
         auto member_id = expect(TokID);
         if (!member_id) {
           this->imm_error(
-              fmt::format("Expected type name after '{}.`", id->lexeme),
+              fmt::format("Expected type name after '{}::`", id->lexeme),
               id->get_location());
           return nullptr;
         }
@@ -1033,15 +1033,15 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (!id)
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
-  // Handle qualified names: alias.member (e.g. m.add)
-  if (tokStream->peek()->tok_type == TokDot) {
+  // Handle qualified names: alias::member (e.g. m::add)
+  if (tokStream->peek()->tok_type == TokDoubleColon) {
     auto it = alias_to_module.find(id->lexeme);
     if (it != alias_to_module.end()) {
-      tokStream->consume(); // consume the dot
+      tokStream->consume(); // consume the ::
       auto member_id = expect(TokID);
       if (!member_id) {
         this->imm_error(
-            fmt::format("Expected member name after '{}.`", id->lexeme),
+            fmt::format("Expected member name after '{}::`", id->lexeme),
             id->get_location());
         return {nullptr, COMMITTED_NO_MORE_ERROR};
       }
