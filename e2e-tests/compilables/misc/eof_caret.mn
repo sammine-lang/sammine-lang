@@ -1,0 +1,7 @@
+# RUN: ! %sammine --file %full --diagnostics=dev 2>&1 | %check %full
+# CHECK:      |eof_caret.mn:5:30
+# CHECK-NEXT: |let main() -> i32 { return 0;
+# CHECK-NEXT: |                             ^
+# CHECK-NEXT: |                              Failed to parse right curly of a statement block.
+# CHECK-NEXT: |[Error-borne `dev` location: Parser.cpp:
+let main() -> i32 { return 0;

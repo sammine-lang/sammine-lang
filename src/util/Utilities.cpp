@@ -201,11 +201,17 @@ void Reporter::indicate_singular_line(ReportKind report_kind, int64_t col_start,
                                       int64_t col_end) const {
 
   print_fmt(LINE_COLOR, "    |");
+  auto effective_start = col_start;
+  auto effective_end = col_end;
+  if (effective_start == effective_end) {
+    effective_start = std::max(int64_t(0), effective_start - 1);
+    effective_end = effective_start + 1;
+  }
   int64_t j = 0;
-  for (; j < col_start; j++)
+  for (; j < effective_start; j++)
     print_fmt(report_kind, " ");
 
-  for (; j < col_end; j++)
+  for (; j < effective_end; j++)
     print_fmt(report_kind, "^");
   print_fmt(report_kind, "\n");
 }
