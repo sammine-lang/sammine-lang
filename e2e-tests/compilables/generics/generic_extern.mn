@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK: Generic extern functions are not supported
+
+extern generic_func(x: T) -> T;
+
+let main() -> i32 {
+  return 0;
+}

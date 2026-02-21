@@ -131,6 +131,15 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
 
 void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   enter_new_scope();
+  bool is_generic = discover_type_params(ast->Prototype.get());
+  if (is_generic) {
+    this->add_error(
+        ast->Prototype->get_location(),
+        "Generic extern functions are not supported; generics require a "
+        "function body for monomorphization");
+    exit_new_scope();
+    return;
+  }
   ast->Prototype->accept_vis(this);
   exit_new_scope();
 }
