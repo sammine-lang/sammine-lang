@@ -8,7 +8,8 @@
   - `Bool` → `getInt1Ty`, `Unit` → `getVoidTy`
 - `get_cmp_func(Type, Type, TokenType)`: returns `llvm::CmpInst::Predicate`
   - Integer types use `ICMP_*`, float uses `FCMP_*`
-  - Pointer/Unit/Function/etc. → abort (cannot compare)
+  - Pointer uses `ICMP_EQ`/`ICMP_NE` (address comparison, `==`/`!=` only)
+  - Unit/Function/etc. → abort (cannot compare)
 
 ## CgVisitor (`include/codegen/CodegenVisitor.h`, `src/codegen/CodegenVisitor.cpp`)
 - Extends `ScopedASTVisitor`
@@ -34,6 +35,14 @@ Both read and assignment through dereferenced pointers to arrays are supported:
 - **`postorder_walk(IndexExprAST*)`**: if `array_expr` is `DerefExprAST`, uses `GEP(arr_type, ptr_val, {0, idx})` + `CreateLoad` for element access
 - Bounds checking via `emitBoundsCheck()` applies in both direct and pointer-to-array cases
 - Immutable pointer params get `readonly nocapture` LLVM attributes for optimization (`FunctionCodegen.cpp`)
+
+## Array Equality Codegen (`emitArrayComparison`)
+- Element-wise comparison via loop: stores arrays to allocas, GEPs into each element, compares
+- Short-circuits on first mismatch (branches to `loop_mismatch` → result is `false`)
+- If all elements match, loop exits normally → result is `true`
+- `!=` is implemented as `CreateNot` of the `==` result
+- Nested arrays (e.g. `[[i32;2];3]`) handled via recursive `emitArrayComparison` calls
+- Dispatched from `postorder_walk(BinaryExprAST*)` when `lhs_type.type_kind == TypeKind::Array`
 
 ## First-Class Functions & Closures
 

@@ -98,6 +98,11 @@ Generic functions use **implicit type parameter discovery** (no `<T>` syntax) an
 - Type parameters only (no const generics — array sizes must be concrete)
 - No partial application of generic functions (all args must be provided)
 
+## Compound Type Comparison Guards
+- `synthesize(BinaryExprAST*)` restricts comparison operators for Array and Pointer types
+- Only `==` and `!=` are allowed; `<`, `>`, `<=`, `>=` emit a type error and return `Type::Poisoned()`
+- Guard checks `ast->LHS->type.type_kind` after the `compatible_to_from` check, before returning `Type::Bool()`
+
 ## Adding a New AST Node to Type Checker
 1. Add `synthesize()` declaration in `BiTypeChecker.h`
 2. Add `preorder_walk()` and `postorder_walk()` declarations in `BiTypeChecker.h`
