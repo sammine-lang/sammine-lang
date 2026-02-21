@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 42
 
+import std;
+
 let inc(x: i32) -> i32 {
   return x + 1;
 }

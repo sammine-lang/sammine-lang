@@ -3,6 +3,8 @@
 
 # Project Euler Problem 6: Sum square difference for 1..100
 
+import std;
+
 let sum(n: i32, acc: i32) -> i32 {
   if n > 100 { acc } else { sum(n + 1, acc + n) }
 }

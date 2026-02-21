@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 2
 
+import std;
+
 let main() -> i32 {
   let x = if true {
     2;

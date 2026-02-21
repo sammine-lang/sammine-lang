@@ -2,6 +2,8 @@
 # CHECK: 6
 # Primitive types bypass the mutability check (always by-value)
 
+import std;
+
 let f(mut x: i32) -> i32 {
   x = x + 1;
   return x;

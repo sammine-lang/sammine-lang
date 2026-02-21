@@ -3,6 +3,8 @@
 
 # Project Euler Problem 8: Greatest product of 13 adjacent digits
 
+import std;
+
 let product13(d: ptr<[i64;1000]>, i: i32, j: i32, acc: i64) -> i64 {
   if j >= 13 { acc } else { product13(d, i, j + 1, acc * (*d)[i + j]) }
 }

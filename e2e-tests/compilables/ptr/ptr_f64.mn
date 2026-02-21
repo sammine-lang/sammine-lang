@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 2.72
 
+import std;
+
 let main() -> i32 {
   let x : f64 = 2.72;
   let p : ptr<f64> = &x;

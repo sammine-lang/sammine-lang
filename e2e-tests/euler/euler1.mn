@@ -2,6 +2,9 @@
 # CHECK: 233168
 
 # Project Euler Problem 1: Sum of multiples of 3 or 5 below 1000
+
+import std;
+
 let sum_multiples(n: i32, acc: i32) -> i32 {
   if n >= 1000 {
     acc

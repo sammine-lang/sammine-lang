@@ -3,6 +3,8 @@
 
 # Project Euler Problem 10: Sum of all primes below 2,000,000
 
+import std;
+
 let is_prime_h(n: i64, d: i64) -> i64 {
   if d * d > n {
     1i64

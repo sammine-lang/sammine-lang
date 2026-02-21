@@ -2,6 +2,9 @@
 # CHECK: 233168
 
 # Test implicit return - no explicit 'return' keyword needed
+
+import std;
+
 let sum_multiples(n: i32, acc: i32) -> i32 {
   if n >= 1000 {
     acc

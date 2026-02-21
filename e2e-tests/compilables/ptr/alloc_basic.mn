@@ -1,5 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 42
+
+import std;
+
 let main() -> i32 {
   let p : ptr<i32> = alloc(42);
   let y : i32 = *p;

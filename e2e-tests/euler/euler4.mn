@@ -6,6 +6,9 @@
 
 # Mirror a 3-digit number into a 6-digit palindrome
 # e.g., 906 -> 906609
+
+import std;
+
 let make_palindrome(n: i32) -> i32 {
   let d1  = n / 100;
   let d2  = (n / 10) % 10;

@@ -2,6 +2,9 @@
 # CHECK: 5
 
 # Passing mutable to immutable parameter is fine
+
+import std;
+
 let f(x: i32) -> i32 {
   return x;
 }

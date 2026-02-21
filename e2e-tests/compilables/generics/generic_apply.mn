@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 10
 
+import std;
+
 let double(x: i32) -> i32 { x + x }
 
 let apply(f: (T) -> U, x: T) -> U { f(x) }

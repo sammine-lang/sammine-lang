@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 4613732
 
+import std;
+
 let even_fib(a: i32, b: i32, sum: i32) -> i32 {
   if b > 4000000 {
     sum

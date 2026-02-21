@@ -1,5 +1,8 @@
 # RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
 # CHECK: Array index out of bounds: index 5 on array of size 3
+
+import std;
+
 let main() -> i32 {
   let a : [i32;3] = [10, 20, 30];
   printf("%d\n", a[5]);

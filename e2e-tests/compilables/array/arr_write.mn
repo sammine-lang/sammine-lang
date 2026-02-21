@@ -1,5 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 99
+
+import std;
+
 let main() -> i32 {
   let a : [i32;3] = [10, 20, 30];
   a[1] = 99;

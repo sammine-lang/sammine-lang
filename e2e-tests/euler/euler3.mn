@@ -3,6 +3,8 @@
 
 # Project Euler Problem 3: Largest prime factor of 600851475143
 
+import std;
+
 let find_factor(n: i64, d: i64) -> i64 {
   if d * d > n {
     n

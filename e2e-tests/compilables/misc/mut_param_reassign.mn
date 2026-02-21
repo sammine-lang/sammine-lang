@@ -2,6 +2,9 @@
 # CHECK: 11
 
 # Mutable parameter can be reassigned inside the function
+
+import std;
+
 let f(mut x: i32) -> i32 {
   x = x + 1;
   return x;

@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 10
 
+import std;
+
 let first(arr: [T; 3]) -> T { arr[0] }
 
 let main() -> i32 {

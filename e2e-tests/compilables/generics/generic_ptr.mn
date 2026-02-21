@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 42
 
+import std;
+
 let deref_val(p: ptr<T>) -> T { *p }
 
 let main() -> i32 {

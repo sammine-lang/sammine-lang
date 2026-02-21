@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 50
 
+import std;
+
 let square(x: i32) -> i32 {
   return x * x;
 }

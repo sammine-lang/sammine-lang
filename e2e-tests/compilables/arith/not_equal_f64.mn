@@ -2,6 +2,8 @@
 # CHECK: not equal
 # CHECK: equal
 
+import std;
+
 let main() -> i32 {
   let a : f64 = 3.14;
   let b : f64 = 2.72;

@@ -1,6 +1,8 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
 # CHECK: 7 3.14 99
 
+import std;
+
 let identity(x: T) -> T { x }
 
 let main() -> i32 {

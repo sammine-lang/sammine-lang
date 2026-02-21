@@ -4,6 +4,8 @@
 # Project Euler Problem 9: Special Pythagorean triplet
 # Find a*b*c where a+b+c=1000 and a^2+b^2=c^2
 
+import std;
+
 let check_b(a: i64, b: i64) -> i64 {
   let c : i64 = 1000i64 - a - b;
   if b >= c {
