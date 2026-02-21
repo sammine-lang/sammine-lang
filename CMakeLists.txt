@@ -53,6 +53,22 @@ SET(INCLUDE_PROJECT_DIR "${CMAKE_SOURCE_DIR}/include/")
 add_subdirectory(src)
 add_subdirectory(tools)
 
+# --- Standard library ---
+# Compile stdlib/std.mn using the freshly-built sammine binary to produce
+# std.o and std.mni in build/lib/sammine/. The compiler resolves `import std;`
+# by looking for .mni files in ../lib/sammine/ relative to its own binary.
+set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
+file(MAKE_DIRECTORY ${STDLIB_DIR})
+
+add_custom_command(
+  OUTPUT ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/std.mn
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/std.mn
+  WORKING_DIRECTORY ${STDLIB_DIR}
+  COMMENT "Compiling stdlib/std.mn"
+)
+
+add_custom_target(stdlib ALL DEPENDS ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni)
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
 include(CTest)
