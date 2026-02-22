@@ -77,6 +77,10 @@ Naming convention: `feature_variant.mn` (e.g. `ptr_nested.mn`, `alloc_type_misma
 - Library sources go in `Inputs/` subdirectory (excluded from lit discovery via `config.excludes`)
 - Use `%dir` to locate sibling files relative to the test
 
+## README Demo
+The file `e2e-tests/compilables/misc/readme_demo.mn` mirrors the code in the README's "Language Features" block.
+**Every time you update the README code example, update `readme_demo.mn` to match (and vice versa), then verify it compiles and passes.**
+
 ## Gotchas
 - `if/else` blocks used as **statements** (not the last expression in a block) need a trailing semicolon: `if cond { ... } else { ... };` — without it, the parser errors on the next token
 - Auxiliary test inputs in `Inputs/` directories are excluded from lit discovery
