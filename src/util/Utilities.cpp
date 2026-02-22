@@ -275,6 +275,8 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
   if (dev_mode) {
     auto sf = std::filesystem::path(src.file_name()).filename().string();
     print_fmt(LINE_COLOR, "    |");
+    for (int64_t j = 0; j < col_start; j++)
+      print_fmt(report_kind, " ");
     print_fmt(report_kind, "[Error-borne `dev` location: {}:{}]\n", sf, src.line());
   }
 }
