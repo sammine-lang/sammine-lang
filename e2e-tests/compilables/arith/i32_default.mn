@@ -6,6 +6,6 @@ import std;
 let main() -> i32 {
   let x = 7;
   let y = 3;
-  printf("%d\n", x + y);
+  std::printf("%d\n", x + y);
   return 0;
 }

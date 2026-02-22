@@ -10,6 +10,6 @@ let add(a : i32, b : i32) -> i32 {
 let main() -> i32 {
   let x : i32 = 69;
   let y : i32 = -2;
-  printf("%d\n", add(x, y));
+  std::printf("%d\n", add(x, y));
   return 0;
 }

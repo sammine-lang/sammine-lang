@@ -12,6 +12,6 @@ let apply(f: (i32) -> i32, x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", apply(add(10), 32));
+  std::printf("%d\n", apply(add(10), 32));
   return 0;
 }

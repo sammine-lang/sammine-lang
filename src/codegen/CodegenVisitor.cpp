@@ -8,6 +8,7 @@
 #include "util/Logging.h"
 #include "util/Utilities.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -147,9 +148,44 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
 
   resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
-void CgVisitor::preorder_walk(ExternAST *ast) {}
+void CgVisitor::preorder_walk(ExternAST *ast) { in_extern = true; }
 void CgVisitor::preorder_walk(RecordDefAST *ast) {
   this->abort("You forgot to implement record");
+}
+void CgVisitor::postorder_walk(ExternAST *ast) {
+  in_extern = false;
+  // For exposed externs in library modules, create an IFunc so the mangled
+  // name (module$func) resolves to the original C symbol at load time.
+  // We can't use GlobalAlias because the aliasee can't be a declaration.
+  // IFuncs work portably: ELF resolves at load time, MachO uses
+  // .symbol_resolver stubs.
+  if (ast->is_exposed && !module_name.empty()) {
+    auto *fn = resPtr->Module->getFunction(ast->Prototype->functionName);
+    if (fn) {
+      std::string mangled = module_name + "$" + ast->Prototype->functionName;
+
+      // Create resolver: define ptr @resolve_<mangled>() { ret ptr @fn }
+      auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
+      auto *resolverTy = llvm::FunctionType::get(ptrTy, false);
+      auto *resolver = llvm::Function::Create(
+          resolverTy, llvm::Function::InternalLinkage,
+          "resolve_" + mangled, resPtr->Module.get());
+      auto *entry =
+          llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
+
+      auto *savedBB = resPtr->Builder->GetInsertBlock();
+      auto savedPt = resPtr->Builder->GetInsertPoint();
+      resPtr->Builder->SetInsertPoint(entry);
+      resPtr->Builder->CreateRet(fn);
+      if (savedBB)
+        resPtr->Builder->SetInsertPoint(savedBB, savedPt);
+
+      // Create IFunc: @mangled = ifunc <FnTy>, ptr @resolver
+      llvm::GlobalIFunc::create(fn->getFunctionType(), 0,
+                                llvm::GlobalValue::ExternalLinkage,
+                                mangled, resolver, resPtr->Module.get());
+    }
+  }
 }
 void CgVisitor::postorder_walk(RecordDefAST *ast) {}
 

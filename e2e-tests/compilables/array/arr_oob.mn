@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let a : [i32;3] = [10, 20, 30];
-  printf("%d\n", a[5]);
+  std::printf("%d\n", a[5]);
   return 0;
 }

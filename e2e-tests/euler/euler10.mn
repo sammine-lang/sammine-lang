@@ -35,6 +35,6 @@ let sum_primes(n: i64, limit: i64, acc: i64) -> i64 {
 
 let main() -> i32 {
   let result : i64 = sum_primes(2i64, 2000000i64, 0i64);
-  printf("%lld\n", result);
+  std::printf("%lld\n", result);
   0
 }

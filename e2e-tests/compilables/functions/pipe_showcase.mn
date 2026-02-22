@@ -9,6 +9,6 @@ let add(a: i32, b: i32) -> i32 { return a + b; }
 
 let main() -> i32 {
   let result: i32 = 5 |> square |> double |> add(1);
-  printf("%d\n", result);
+  std::printf("%d\n", result);
   return 0;
 }

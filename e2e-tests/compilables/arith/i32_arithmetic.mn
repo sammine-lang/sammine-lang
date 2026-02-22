@@ -9,9 +9,9 @@ import std;
 let main() -> i32 {
   let a : i32 = 10;
   let b : i32 = 5;
-  printf("%d\n", a + b);
-  printf("%d\n", a - b);
-  printf("%d\n", a * b);
-  printf("%d\n", a / b);
+  std::printf("%d\n", a + b);
+  std::printf("%d\n", a - b);
+  std::printf("%d\n", a * b);
+  std::printf("%d\n", a / b);
   return 0;
 }

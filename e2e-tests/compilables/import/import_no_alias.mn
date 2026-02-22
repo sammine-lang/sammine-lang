@@ -1,0 +1,11 @@
+# RUN: %sammine --file %dir/Inputs/math.mn && %sammine --file %full && ./import_no_alias.exe | %check %full
+# CHECK: 12
+
+import math;
+
+import std;
+
+let main() -> i32 {
+  std::printf("%d\n", math::multiply(3, 4));
+  return 0;
+}

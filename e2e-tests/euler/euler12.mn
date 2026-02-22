@@ -33,6 +33,6 @@ let find_tri(pred: (i32) -> i32, n: i32, tri: i32) -> i32 {
 
 let main() -> i32 {
   let result: i32 = has_over(500) |> find_tri(1, 1);
-  printf("%d\n", result);
+  std::printf("%d\n", result);
   return 0;
 }

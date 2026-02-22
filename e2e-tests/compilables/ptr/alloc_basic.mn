@@ -7,6 +7,6 @@ let main() -> i32 {
   let p : ptr<i32> = alloc(42);
   let y : i32 = *p;
   free(p);
-  printf("%d\n", y);
+  std::printf("%d\n", y);
   return 0;
 }

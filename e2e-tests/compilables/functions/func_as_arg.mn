@@ -12,6 +12,6 @@ let apply(f: (i32) -> i32, x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", apply(square, 5));
+  std::printf("%d\n", apply(square, 5));
   return 0;
 }

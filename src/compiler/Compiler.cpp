@@ -192,9 +192,14 @@ void Compiler::resolve_imports() {
       return;
     }
 
-    // Insert the extern declarations at the front of our DefinitionVec
+    // Insert the extern declarations at the front of our DefinitionVec.
+    // Override their locations to point to the import statement so that
+    // error messages (e.g. name conflicts) reference the user's source.
     for (auto it = mni_program->DefinitionVec.rbegin();
          it != mni_program->DefinitionVec.rend(); ++it) {
+      (*it)->set_location(import.location);
+      if (auto *ext = dynamic_cast<AST::ExternAST *>(it->get()))
+        ext->Prototype->set_location(import.location);
       programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                        std::move(*it));
     }
@@ -303,7 +308,8 @@ void Compiler::codegen() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start code-gen stage...\n");
   });
-  auto vs = sammine_lang::AST::CgVisitor(resPtr);
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  auto vs = sammine_lang::AST::CgVisitor(resPtr, has_main ? "" : stem);
   programAST->accept_vis(&vs);
 
   reporter.report(vs);
@@ -419,8 +425,9 @@ void Compiler::emit_interface() {
     return;
   }
 
-  auto emit_proto = [&out](AST::PrototypeAST *proto, bool is_var_arg) {
-    out << "extern " << proto->functionName << "(";
+  auto emit_proto = [&out](const std::string &name, AST::PrototypeAST *proto,
+                          bool is_var_arg) {
+    out << "extern " << name << "(";
     for (size_t i = 0; i < proto->parameterVectors.size(); i++) {
       auto &param = proto->parameterVectors[i];
       out << param->name;
@@ -439,10 +446,18 @@ void Compiler::emit_interface() {
 
   for (auto &def : this->programAST->DefinitionVec) {
     if (auto *func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
-      emit_proto(func_def->Prototype.get(), func_def->Prototype->is_var_arg);
+      // let functions get mangled: module$func
+      std::string mangled = stem + "$" + func_def->Prototype->functionName;
+      emit_proto(mangled, func_def->Prototype.get(),
+                 func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = dynamic_cast<AST::ExternAST *>(def.get())) {
-      emit_proto(extern_def->Prototype.get(),
-                 extern_def->Prototype->is_var_arg);
+      if (extern_def->is_exposed) {
+        // Exposed externs get mangled name too: module$func
+        std::string mangled =
+            stem + "$" + extern_def->Prototype->functionName;
+        emit_proto(mangled, extern_def->Prototype.get(),
+                   extern_def->Prototype->is_var_arg);
+      }
     }
   }
 }

@@ -28,16 +28,22 @@ void CgVisitor::preorder_walk(FuncDefAST *ast) {
 /// INFO: Register the function with its arguments, put it in the module
 /// this comes before visiting a function
 void CgVisitor::preorder_walk(PrototypeAST *ast) {
+  // Compute the LLVM symbol name: mangle library functions with module$func
+  // Externs keep their C names — aliases handle the mangled lookup.
+  std::string llvm_name = ast->functionName;
+  if (!module_name.empty() && ast->functionName != "main" && !in_extern)
+    llvm_name = module_name + "$" + ast->functionName;
+
   // If the function is already declared in the module (e.g. runtime builtins
   // like printf), reuse the existing declaration instead of creating a
   // duplicate with a potentially different signature.
-  if (auto *existing = resPtr->Module->getFunction(ast->functionName)) {
+  if (auto *existing = resPtr->Module->getFunction(llvm_name)) {
     ast->function = existing;
     current_func = existing;
     LOG({
       fmt::print(stderr,
                  "[codegen] reusing existing declaration for '{}'\n",
-                 ast->functionName);
+                 llvm_name);
     });
     return;
   }
@@ -51,7 +57,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
       ast->is_var_arg);
   llvm::Function *F =
       llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
-                             ast->functionName, resPtr->Module.get());
+                             llvm_name, resPtr->Module.get());
 
   size_t param_index = 0;
   auto &vect = ast->parameterVectors;

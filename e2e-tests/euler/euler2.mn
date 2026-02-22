@@ -18,6 +18,6 @@ let even_fib(a: i32, b: i32, sum: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", even_fib(0, 1, 0));
+  std::printf("%d\n", even_fib(0, 1, 0));
   return 0;
 }

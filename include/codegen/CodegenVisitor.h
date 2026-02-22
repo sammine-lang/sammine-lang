@@ -25,6 +25,8 @@ private:
 
   void setCurrentFunction(llvm::Function *);
 
+  std::string module_name;
+  bool in_extern = false;
   TypeConverter type_converter;
 
   std::map<std::string, llvm::Function *> closure_wrappers;
@@ -40,8 +42,10 @@ private:
   // once that she's a garbage woman lol
 
 public:
-  CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr)
-      : resPtr(resPtr), type_converter(*resPtr) {}
+  CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr,
+            std::string module_name = "")
+      : resPtr(resPtr), module_name(std::move(module_name)),
+        type_converter(*resPtr) {}
 
   void enter_new_scope() override;
   void exit_new_scope() override;
@@ -81,7 +85,7 @@ public:
   // TODO: Implement these?
   virtual void postorder_walk(ProgramAST *ast) override {}
   virtual void postorder_walk(VarDefAST *ast) override;
-  virtual void postorder_walk(ExternAST *ast) override {}
+  virtual void postorder_walk(ExternAST *ast) override;
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(RecordDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override {}

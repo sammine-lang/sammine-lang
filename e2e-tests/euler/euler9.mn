@@ -28,6 +28,6 @@ let check_a(a: i64) -> i64 {
 
 let main() -> i32 {
   let result : i64 = check_a(1i64);
-  printf("%lld\n", result);
+  std::printf("%lld\n", result);
   return 0;
 }

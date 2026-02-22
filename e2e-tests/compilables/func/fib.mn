@@ -21,7 +21,7 @@ let fib_v2(x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", fib_v1(9));
-  printf("%d\n", fib_v2(9));
+  std::printf("%d\n", fib_v1(9));
+  std::printf("%d\n", fib_v2(9));
   return 0;
 }

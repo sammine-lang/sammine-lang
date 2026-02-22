@@ -8,6 +8,6 @@ let square(x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", 5 |> square);
+  std::printf("%d\n", 5 |> square);
   return 0;
 }

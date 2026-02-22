@@ -18,6 +18,6 @@ let lcm_range(n: i32, acc: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", lcm_range(1, 1));
+  std::printf("%d\n", lcm_range(1, 1));
   return 0;
 }

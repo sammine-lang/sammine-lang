@@ -12,6 +12,6 @@ let f(mut x: i32) -> i32 {
 
 let main() -> i32 {
   let mut y: i32 = 10;
-  printf("%d\n", f(y));
+  std::printf("%d\n", f(y));
   return 0;
 }

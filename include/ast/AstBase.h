@@ -279,6 +279,10 @@ public:
     return this;
   }
   sammine_util::Location get_location() const { return this->location; }
+  void set_location(sammine_util::Location loc) {
+    this->location = loc;
+    first_location = false;
+  }
   bool synthesized() const { return this->type.synthesized(); }
 };
 } // namespace AST

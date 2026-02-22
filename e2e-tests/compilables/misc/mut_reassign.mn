@@ -6,6 +6,6 @@ import std;
 let main() -> i32 {
   let mut x: i32 = 5;
   x = 10;
-  printf("%d\n", x);
+  std::printf("%d\n", x);
   return 0;
 }

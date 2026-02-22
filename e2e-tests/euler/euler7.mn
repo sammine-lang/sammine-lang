@@ -29,6 +29,6 @@ let nth_prime(candidate: i32, count: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", nth_prime(3, 2));
+  std::printf("%d\n", nth_prime(3, 2));
   return 0;
 }

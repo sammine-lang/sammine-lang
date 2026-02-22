@@ -16,8 +16,8 @@ let write_elem(arr: ptr<[i32;3]>, i: i32, val: i32) -> i32 {
 
 let main() -> i32 {
   let a : [i32;3] = [10, 20, 30];
-  printf("%d\n", read_elem(&a, 0));
-  printf("%d\n", read_elem(&a, 2));
-  printf("%d\n", write_elem(&a, 1, 99));
+  std::printf("%d\n", read_elem(&a, 0));
+  std::printf("%d\n", read_elem(&a, 2));
+  std::printf("%d\n", write_elem(&a, 1, 99));
   return 0;
 }

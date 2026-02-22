@@ -15,6 +15,6 @@ let sum_squares(n: i32, acc: i32) -> i32 {
 
 let main() -> i32 {
   let s = sum(1, 0);
-  printf("%d\n", s * s - sum_squares(1, 0));
+  std::printf("%d\n", s * s - sum_squares(1, 0));
   return 0;
 }

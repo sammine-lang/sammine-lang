@@ -9,6 +9,6 @@ let main() -> i32 {
   } else {
     3;
   };
-  printf("%d", x);
+  std::printf("%d", x);
   return 0;
 }

@@ -42,6 +42,6 @@ let search(half: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", search(999));
+  std::printf("%d\n", search(999));
   return 0;
 }

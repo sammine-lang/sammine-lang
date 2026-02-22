@@ -12,6 +12,6 @@ let double_it(x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  printf("%d\n", 5 |> square |> double_it);
+  std::printf("%d\n", 5 |> square |> double_it);
   return 0;
 }

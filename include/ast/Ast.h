@@ -208,6 +208,7 @@ public:
 class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
+  bool is_exposed = false;
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype)
       : Prototype(std::move(Prototype)) {

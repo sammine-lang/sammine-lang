@@ -10,6 +10,13 @@ namespace sammine_lang::AST {
 // pre order
 void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
 
+  // Map import-statement locations to module names so we can tell the user
+  // which import introduced a conflicting name.
+  std::map<std::pair<int64_t, int64_t>, std::string> import_loc_to_module;
+  for (auto &imp : ast->imports)
+    import_loc_to_module[{imp.location.source_start, imp.location.source_end}] =
+        imp.module_name;
+
   std::string fn_name;
   sammine_util::Location loc;
   for (auto &def : ast->DefinitionVec) {
@@ -29,12 +36,26 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
       if (can_see(fn_name) == nameNotFound)
         register_name(fn_name, loc);
       else if (can_see(fn_name) == nameFound) {
-        add_error(loc, fmt::format(
-                           "[SCOPE]: The name `{}` has been introduced before",
-                           fn_name));
-        add_error(this->scope_stack.get_from_name(fn_name),
-                  fmt::format("[SCOPE]: Most recently defined `{}` is here",
-                              fn_name));
+        auto prev_loc = this->scope_stack.get_from_name(fn_name);
+        auto prev_key =
+            std::make_pair(prev_loc.source_start, prev_loc.source_end);
+        auto imp_it = import_loc_to_module.find(prev_key);
+        if (imp_it != import_loc_to_module.end()) {
+          add_error(
+              loc,
+              fmt::format(
+                  "[SCOPE]: The name `{}` conflicts with `{}` imported from '{}'",
+                  fn_name, fn_name, imp_it->second));
+        } else {
+          add_error(loc,
+                    fmt::format(
+                        "[SCOPE]: The name `{}` has been introduced before",
+                        fn_name));
+          add_error(
+              prev_loc,
+              fmt::format("[SCOPE]: Most recently defined `{}` is here",
+                          fn_name));
+        }
       }
     }
   }
