@@ -22,7 +22,7 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
     return nullptr;
 
   if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(expr)) {
-    auto resolved = resolve_type_name(simple->name);
+    auto resolved = resolve_type_name(simple->name.mangled());
     return std::make_unique<SimpleTypeExprAST>(make_tok(resolved));
   }
 
@@ -110,7 +110,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     std::vector<std::unique_ptr<ExprAST>> args;
     for (auto &a : call->arguments)
       args.push_back(clone_expr(a.get()));
-    auto result = std::make_unique<CallExprAST>(make_tok(call->functionName),
+    auto result = std::make_unique<CallExprAST>(call->functionName,
+                                                call->get_location(),
                                                 std::move(args));
     return result;
   }
@@ -199,7 +200,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     for (auto &v : sl->field_values)
       values.push_back(clone_expr(v.get()));
     return std::make_unique<StructLiteralExprAST>(
-        make_tok(sl->struct_name), sl->field_names, std::move(values));
+        sl->struct_name, sl->get_location(), sl->field_names, std::move(values));
   }
 
   if (auto *fa = dynamic_cast<FieldAccessExprAST *>(expr)) {

@@ -27,6 +27,7 @@ inline fmt::text_style styled(fmt::terminal_color c) {
   return stderr_is_tty() ? fg(c) : fmt::text_style{};
 }
 
+
 auto get_string_from_file(const std::string &file_name) -> std::string;
 
 template <typename T>

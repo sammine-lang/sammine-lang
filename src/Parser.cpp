@@ -541,21 +541,24 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto id = expect(TokenType::TokID)) {
-    // Handle qualified type names: alias::TypeName (e.g. m::Point → math$Point)
+    // Handle qualified type names: alias::TypeName (e.g. m::Point)
     if (tokStream->peek()->tok_type == TokDoubleColon) {
+      tokStream->consume(); // always consume the ::
+      auto member_id = expect(TokID);
+      if (!member_id) {
+        this->imm_error(
+            fmt::format("Expected type name after '{}::'", id->lexeme),
+            id->get_location());
+        return nullptr;
+      }
+      auto loc = id->get_location() | member_id->get_location();
       auto it = alias_to_module.find(id->lexeme);
       if (it != alias_to_module.end()) {
-        tokStream->consume(); // consume the ::
-        auto member_id = expect(TokID);
-        if (!member_id) {
-          this->imm_error(
-              fmt::format("Expected type name after '{}::`", id->lexeme),
-              id->get_location());
-          return nullptr;
-        }
-        // Construct mangled name: module$TypeName
-        member_id->lexeme = it->second + "$" + member_id->lexeme;
-        return std::make_unique<SimpleTypeExprAST>(member_id);
+        return std::make_unique<SimpleTypeExprAST>(
+            sammine_util::QualifiedName::qualified(it->second, member_id->lexeme), loc);
+      } else {
+        return std::make_unique<SimpleTypeExprAST>(
+            sammine_util::QualifiedName::unresolved_qualified(id->lexeme, member_id->lexeme), loc);
       }
     }
     return std::make_unique<SimpleTypeExprAST>(id);
@@ -924,17 +927,18 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
     if (binOpToken->tok_type == TokenType::TokPipe) {
       // x |> f      →  f(x)
       // x |> f(y,z) →  f(x,y,z)
-      std::shared_ptr<Token> tok;
+      sammine_util::QualifiedName qn;
+      sammine_util::Location qn_loc;
       std::vector<std::unique_ptr<ExprAST>> new_args;
 
       if (auto *call = dynamic_cast<CallExprAST *>(RHS.get())) {
-        tok = std::make_shared<Token>(TokenType::TokID, call->functionName,
-                                     call->get_location());
+        qn = call->functionName;
+        qn_loc = call->get_location();
         for (auto &arg : call->arguments)
           new_args.push_back(std::move(arg));
       } else if (auto *var = dynamic_cast<VariableExprAST *>(RHS.get())) {
-        tok = std::make_shared<Token>(TokenType::TokID, var->variableName,
-                                     var->get_location());
+        qn = sammine_util::QualifiedName::local(var->variableName);
+        qn_loc = var->get_location();
       } else {
         this->imm_error("Right-hand side of |> must be a function name or call",
                         binOpToken->get_location());
@@ -942,7 +946,7 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
       }
 
       new_args.insert(new_args.begin(), std::move(LHS));
-      LHS = std::make_unique<CallExprAST>(tok, std::move(new_args));
+      LHS = std::make_unique<CallExprAST>(std::move(qn), qn_loc, std::move(new_args));
     } else {
       LHS = std::make_unique<BinaryExprAST>(binOpToken, std::move(LHS),
                                             std::move(RHS));
@@ -997,21 +1001,24 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (!id)
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
-  // Handle qualified names: alias::member (e.g. m::add → math$add)
+  // Handle qualified names: alias::member (e.g. m::add)
+  sammine_util::QualifiedName qn = sammine_util::QualifiedName::local(id->lexeme);
+  auto qn_loc = id->get_location();
   if (tokStream->peek()->tok_type == TokDoubleColon) {
+    tokStream->consume(); // always consume the ::
+    auto member_id = expect(TokID);
+    if (!member_id) {
+      this->imm_error(
+          fmt::format("Expected member name after '{}::'", id->lexeme),
+          id->get_location());
+      return {nullptr, COMMITTED_NO_MORE_ERROR};
+    }
+    qn_loc = id->get_location() | member_id->get_location();
     auto it = alias_to_module.find(id->lexeme);
     if (it != alias_to_module.end()) {
-      tokStream->consume(); // consume the ::
-      auto member_id = expect(TokID);
-      if (!member_id) {
-        this->imm_error(
-            fmt::format("Expected member name after '{}::`", id->lexeme),
-            id->get_location());
-        return {nullptr, COMMITTED_NO_MORE_ERROR};
-      }
-      // Construct mangled name: module$func
-      member_id->lexeme = it->second + "$" + member_id->lexeme;
-      id = member_id;
+      qn = sammine_util::QualifiedName::qualified(it->second, member_id->lexeme);
+    } else {
+      qn = sammine_util::QualifiedName::unresolved_qualified(id->lexeme, member_id->lexeme);
     }
   }
 
@@ -1086,23 +1093,23 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
       this->imm_error("Expected '}' to close struct literal",
                       lbrace->get_location());
       return {std::make_unique<StructLiteralExprAST>(
-                  id, std::move(field_names), std::move(field_values)),
+                  qn, qn_loc, std::move(field_names), std::move(field_values)),
               COMMITTED_NO_MORE_ERROR};
     }
     if (had_error) {
       return {std::make_unique<StructLiteralExprAST>(
-                  id, std::move(field_names), std::move(field_values)),
+                  qn, qn_loc, std::move(field_names), std::move(field_values)),
               COMMITTED_NO_MORE_ERROR};
     }
     return {std::make_unique<StructLiteralExprAST>(
-                id, std::move(field_names), std::move(field_values)),
+                qn, qn_loc, std::move(field_names), std::move(field_values)),
             SUCCESS};
   }
 
   auto [args, result] = ParseArguments();
   switch (result) {
   case SUCCESS:
-    return {std::make_unique<CallExprAST>(id, std::move(args)), SUCCESS};
+    return {std::make_unique<CallExprAST>(qn, qn_loc, std::move(args)), SUCCESS};
   case NONCOMMITTED:
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
@@ -1110,7 +1117,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
                     id->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<CallExprAST>(id, std::move(args)),
+    return {std::make_unique<CallExprAST>(qn, qn_loc, std::move(args)),
             COMMITTED_NO_MORE_ERROR};
   }
   this->abort("Should not happen");

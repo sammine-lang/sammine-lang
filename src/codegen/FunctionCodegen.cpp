@@ -100,11 +100,11 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     ArgsVector.push_back(arg->val);
 
   // Path 1: Direct call to a module-level function
-  llvm::Function *callee = resPtr->Module->getFunction(ast->functionName);
+  llvm::Function *callee = resPtr->Module->getFunction(ast->functionName.mangled());
   if (callee && !ast->is_partial) {
     LOG({
       fmt::print(stderr, "[codegen] call '{}': direct call with {} args\n",
-                 ast->functionName, ast->arguments.size());
+                 ast->functionName.display(), ast->arguments.size());
     });
     // Skip arg count check for variadic functions (like printf)
     if (!callee->isVarArg() && ast->arguments.size() != callee->arg_size())
@@ -123,7 +123,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
       fmt::print(stderr,
                  "[codegen] call '{}': partial application, binding {} of {} "
                  "args, wrapper = __partial_{}\n",
-                 ast->functionName, ast->arguments.size(), callee->arg_size(),
+                 ast->functionName.display(), ast->arguments.size(), callee->arg_size(),
                  partial_counter);
     });
     this->abort_if_not(ast->callee_func_type.has_value(),
@@ -205,13 +205,13 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
   }
 
   // Path 3: Indirect call through a function-typed variable
-  auto *alloca = this->allocaValues.top()[ast->functionName];
+  auto *alloca = this->allocaValues.top()[ast->functionName.mangled()];
   if (alloca) {
     LOG({
       fmt::print(stderr,
                  "[codegen] call '{}': indirect call through closure with {} "
                  "args\n",
-                 ast->functionName, ast->arguments.size());
+                 ast->functionName.display(), ast->arguments.size());
     });
     this->abort_if_not(ast->callee_func_type.has_value(),
                        "ICE: indirect call missing callee_func_type");

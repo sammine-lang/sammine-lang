@@ -1,6 +1,7 @@
 #pragma once
 #include "ast/AstBase.h"
 #include "ast/AstDecl.h"
+#include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include <cassert>
 #include <cstddef>
@@ -29,14 +30,18 @@ public:
 
 class SimpleTypeExprAST : public TypeExprAST {
 public:
-  std::string name;
-  explicit SimpleTypeExprAST(std::shared_ptr<Token> tok) {
-    if (tok) {
-      name = tok->lexeme;
+  sammine_util::QualifiedName name;
+  explicit SimpleTypeExprAST(std::shared_ptr<Token> tok)
+      : name(sammine_util::QualifiedName::local(tok ? tok->lexeme : "")) {
+    if (tok)
       location = tok->get_location();
-    }
   }
-  std::string to_string() const override { return name; }
+  explicit SimpleTypeExprAST(sammine_util::QualifiedName qn,
+                             sammine_util::Location loc)
+      : name(std::move(qn)) {
+    location = loc;
+  }
+  std::string to_string() const override { return name.display(); }
 };
 
 class PointerTypeExprAST : public TypeExprAST {
@@ -466,19 +471,28 @@ public:
 class CallExprAST : public ExprAST {
 
 public:
-  std::string functionName;
+  sammine_util::QualifiedName functionName;
   std::vector<std::unique_ptr<AST::ExprAST>> arguments;
   std::optional<Type> callee_func_type;
   bool is_partial = false;
   std::optional<std::string> resolved_generic_name;
   std::unordered_map<std::string, Type> type_bindings;
   explicit CallExprAST(
-      std::shared_ptr<Token> functionName,
-      std::vector<std::unique_ptr<AST::ExprAST>> arguments = {}) {
-    join_location(functionName);
-    if (functionName)
-      this->functionName = functionName->lexeme;
-
+      std::shared_ptr<Token> tok,
+      std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
+      : functionName(sammine_util::QualifiedName::local(
+            tok ? tok->lexeme : "")) {
+    join_location(tok);
+    for (auto &arg : arguments)
+      if (arg)
+        this->join_location(arg.get());
+    this->arguments = std::move(arguments);
+  }
+  explicit CallExprAST(
+      sammine_util::QualifiedName qn, sammine_util::Location loc,
+      std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
+      : functionName(std::move(qn)) {
+    this->location = loc;
     for (auto &arg : arguments)
       if (arg)
         this->join_location(arg.get());
@@ -744,18 +758,30 @@ public:
 
 class StructLiteralExprAST : public ExprAST {
 public:
-  std::string struct_name;
+  sammine_util::QualifiedName struct_name;
   std::vector<std::string> field_names;
   std::vector<std::unique_ptr<ExprAST>> field_values;
   explicit StructLiteralExprAST(
       std::shared_ptr<Token> name_tok,
       std::vector<std::string> field_names,
       std::vector<std::unique_ptr<ExprAST>> field_values)
-      : field_names(std::move(field_names)),
+      : struct_name(sammine_util::QualifiedName::local(
+            name_tok ? name_tok->lexeme : "")),
+        field_names(std::move(field_names)),
         field_values(std::move(field_values)) {
     this->join_location(name_tok);
-    if (name_tok)
-      this->struct_name = name_tok->lexeme;
+    for (auto &v : this->field_values)
+      if (v)
+        this->join_location(v.get());
+  }
+  explicit StructLiteralExprAST(
+      sammine_util::QualifiedName qn, sammine_util::Location loc,
+      std::vector<std::string> field_names,
+      std::vector<std::unique_ptr<ExprAST>> field_values)
+      : struct_name(std::move(qn)),
+        field_names(std::move(field_names)),
+        field_values(std::move(field_values)) {
+    this->location = loc;
     for (auto &v : this->field_values)
       if (v)
         this->join_location(v.get());

@@ -69,7 +69,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
 
     auto expr =
         static_cast<sammine_lang::AST::CallExprAST *>(varDef->Expression.get());
-    REQUIRE(expr->functionName == "hi");
+    REQUIRE(expr->functionName.mangled() == "hi");
     REQUIRE(expr->arguments.size() == 0);
   }
 

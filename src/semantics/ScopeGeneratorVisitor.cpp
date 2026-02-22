@@ -133,14 +133,20 @@ void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
+  if (ast->functionName.is_unresolved()) {
+    add_error(ast->get_location(),
+              fmt::format("Module '{}' is not imported",
+                          ast->functionName.module));
+    return;
+  }
 
-  auto var_name = ast->functionName;
+  auto var_name = ast->functionName.mangled();
   if (can_see(var_name) == nameNotFound) {
     add_error(
         ast->get_location(),
         fmt::format(
             "The called name {} for the call expression is not found before",
-            var_name));
+            ast->functionName.display()));
   }
 }
 

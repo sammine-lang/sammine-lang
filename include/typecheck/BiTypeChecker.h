@@ -229,23 +229,30 @@ public:
       return Type::NonExistent();
 
     if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(type_expr)) {
-      auto get_type_opt = this->get_typename_type(simple->name);
+      if (simple->name.is_unresolved()) {
+        this->add_error(type_expr->location,
+                        fmt::format("Module '{}' is not imported",
+                                    simple->name.module));
+        return Type::Poisoned();
+      }
+      auto mangled = simple->name.mangled();
+      auto get_type_opt = this->get_typename_type(mangled);
       if (!get_type_opt.has_value()) {
         if (in_prototype_context) {
           // Auto-discover as type parameter
-          auto tp = Type::TypeParam(simple->name);
-          typename_to_type.registerNameT(simple->name, tp);
+          auto tp = Type::TypeParam(mangled);
+          typename_to_type.registerNameT(mangled, tp);
           // Only add if not already discovered
           if (std::find(discovered_type_params.begin(),
                         discovered_type_params.end(),
-                        simple->name) == discovered_type_params.end()) {
-            discovered_type_params.push_back(simple->name);
+                        mangled) == discovered_type_params.end()) {
+            discovered_type_params.push_back(mangled);
           }
           return tp;
         }
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",
-                                    simple->name));
+                                    simple->name.display()));
         return Type::Poisoned();
       }
       return get_type_opt.value();
