@@ -1,0 +1,15 @@
+# RUN: ! %sammine --file %full --check 2>&1 | %check %full
+# CHECK:          |double_invalid.mn
+# CHECK:        12|$@ $@
+# CHECK-NEXT:     |─┬ ─┬
+# CHECK-NEXT:     | │  ╰─ Encountered invalid token
+# CHECK-NEXT:     | ╰──── Encountered invalid token
+# CHECK-NEXT:   13|let main() -> i32 {
+# CHECK-NEXT:   14|  return 0;
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+$@ $@
+let main() -> i32 {
+  return 0;
+}
