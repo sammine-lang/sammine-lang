@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full --check 2>&1 | %check %full
 
 # Using an alias that was never imported should produce a clear error
-# CHECK-ERR: Module 'x' is not imported
+# CHECK: Module 'x' is not imported
 
 let main() -> i32 {
   x::foo();

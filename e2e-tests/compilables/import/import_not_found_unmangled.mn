@@ -1,0 +1,12 @@
+# RUN: %sammine --file %dir/Inputs/math.mn && ! %sammine --file %full --check 2>&1 | %check %full
+
+# Calling a function that doesn't exist in the imported module should
+# produce an error with the unmangled name (math::divide, not math$divide)
+# CHECK: Function 'math::divide' not found
+
+import math as m;
+
+let main() -> i32 {
+  m::divide(10, 2);
+  return 0;
+}
