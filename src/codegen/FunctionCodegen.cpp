@@ -191,14 +191,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     }
 
     // Build closure struct: {partial_fn_ptr, env_ptr}
-    auto *closureTy =
-        llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
-    llvm::Value *closure = llvm::UndefValue::get(closureTy);
-    closure =
-        resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "pcls.code");
-    closure =
-        resPtr->Builder->CreateInsertValue(closure, envAlloca, 1, "pcls.env");
-    ast->val = closure;
+    ast->val = buildClosure(wrapper, envAlloca);
     return;
   }
 

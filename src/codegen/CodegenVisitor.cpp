@@ -391,16 +391,9 @@ void CgVisitor::preorder_walk(VariableExprAST *ast) {
     });
     auto ft = std::get<FunctionType>(ast->type.type_data);
     auto *wrapper = getOrCreateClosureWrapper(fn, ft);
-    auto *closureTy =
-        llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
     auto *nullEnv = llvm::ConstantPointerNull::get(
         llvm::PointerType::get(*resPtr->Context, 0));
-    llvm::Value *closure = llvm::UndefValue::get(closureTy);
-    closure =
-        resPtr->Builder->CreateInsertValue(closure, wrapper, 0, "cls.code");
-    closure =
-        resPtr->Builder->CreateInsertValue(closure, nullEnv, 1, "cls.env");
-    ast->val = closure;
+    ast->val = buildClosure(wrapper, nullEnv);
     return;
   }
 
@@ -836,6 +829,18 @@ llvm::Value *CgVisitor::emitArrayComparison(llvm::Value *L, llvm::Value *R,
     return resPtr->Builder->CreateNot(result, "arr_cmp_ne");
   }
   return result;
+}
+
+llvm::Value *CgVisitor::buildClosure(llvm::Value *codePtr,
+                                     llvm::Value *envPtr) {
+  auto *closureTy =
+      llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
+  llvm::Value *closure = llvm::UndefValue::get(closureTy);
+  closure =
+      resPtr->Builder->CreateInsertValue(closure, codePtr, 0, "cls.code");
+  closure =
+      resPtr->Builder->CreateInsertValue(closure, envPtr, 1, "cls.env");
+  return closure;
 }
 
 } // namespace sammine_lang::AST
