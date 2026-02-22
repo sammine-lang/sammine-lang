@@ -23,6 +23,15 @@
 - Type annotations parsed as `TypeExprAST` hierarchy (not strings), avoiding double-parsing
 - `alloc(expr)` and `free(expr)` follow the `keyword(expr)` pattern: expect keyword, `(`, parse inner expression, expect `)`
 
+## QualifiedName (`include/util/QualifiedName.h`)
+- `QualifiedName` struct carries module + name separately instead of eagerly mangling `m::add` → `math$add`
+- Factory methods: `QualifiedName::local("add")`, `::qualified("math", "add")`, `::unresolved_qualified("x", "add")`
+- `.mangled()` → `"math$add"` (for scope lookups, codegen), `.display()` → `"math::add"` (for error messages)
+- `.is_unresolved()` → true when alias wasn't found in `alias_to_module` — enables "Module 'x' is not imported" errors
+- Used by: `CallExprAST::functionName`, `StructLiteralExprAST::struct_name`, `SimpleTypeExprAST::name`
+- NOT used by (always local definitions): `PrototypeAST::functionName`, `StructDefAST::struct_name`, `VariableExprAST::variableName`
+- Parser always consumes `::` when seen after ID — never silently skips it for unknown aliases
+
 ## AST Nodes
 - All AST nodes extend `AstBase` (via `ExprAST` or `DefinitionAST`) and implement `Visitable`
 - Each node needs: `getTreeName()`, `accept_vis()`, `walk_with_preorder()`, `walk_with_postorder()`, `accept_synthesis()`

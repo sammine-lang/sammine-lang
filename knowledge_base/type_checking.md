@@ -24,9 +24,11 @@
 - Bidirectional: `synthesize()` produces types bottom-up, `postorder_walk()` checks consistency top-down
 - Two lexical stacks: `id_to_type` (variable/function names) and `typename_to_type` (type names like "i32", "f64")
 - Built-in types registered in `enter_new_scope()`: i32, i64, f64, bool, unit
+- All scope lookups use `QualifiedName::mangled()`, all error messages use `QualifiedName::display()`
+- Unresolved qualified names (unknown aliases) are checked early and produce "Module 'x' is not imported" errors
 - `resolve_type_expr(TypeExprAST*)` resolves structured type AST nodes:
   - `nullptr` → `Type::NonExistent()`
-  - `SimpleTypeExprAST` → lookup in `typename_to_type`
+  - `SimpleTypeExprAST` → check unresolved, then lookup `.mangled()` in `typename_to_type`
   - `PointerTypeExprAST` → recursive resolve, wrap in `Type::Pointer()`
   - `ArrayTypeExprAST` → recursive resolve, wrap in `Type::Array()`
   - `FunctionTypeExprAST` → recursive resolve params + return, wrap in `Type::Function()`
