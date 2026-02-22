@@ -43,10 +43,10 @@ class Locator {
   int64_t source_index_to_line(int64_t source_index) const {
     auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
     auto idx =
-        std::ranges::lower_bound(
+        std::ranges::upper_bound(
             data, std::make_pair(source_index, std::string_view("")), cmp) -
         data.begin();
-    return idx + (idx == 0);
+    return std::max(int64_t(idx), int64_t(1));
   }
 
 public:
