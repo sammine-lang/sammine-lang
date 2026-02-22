@@ -45,7 +45,7 @@ public:
 
   virtual void visit(FuncDefAST *ast) override;
 
-  virtual void visit(RecordDefAST *ast) override;
+  virtual void visit(StructDefAST *ast) override;
 
   virtual void visit(PrototypeAST *ast) override;
 
@@ -75,12 +75,14 @@ public:
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
   virtual void visit(UnaryNegExprAST *ast) override;
+  virtual void visit(StructLiteralExprAST *ast) override;
+  virtual void visit(FieldAccessExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
-  virtual void preorder_walk(RecordDefAST *ast) override;
+  virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
   virtual void preorder_walk(ReturnExprAST *ast) override;
@@ -101,13 +103,15 @@ public:
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
+  virtual void preorder_walk(StructLiteralExprAST *ast) override;
+  virtual void preorder_walk(FieldAccessExprAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
   virtual void postorder_walk(VarDefAST *ast) override;
   virtual void postorder_walk(ExternAST *ast) override;
   virtual void postorder_walk(FuncDefAST *ast) override;
-  virtual void postorder_walk(RecordDefAST *ast) override;
+  virtual void postorder_walk(StructDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override;
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;
@@ -128,6 +132,8 @@ public:
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
+  virtual void postorder_walk(StructLiteralExprAST *ast) override;
+  virtual void postorder_walk(FieldAccessExprAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -186,12 +192,12 @@ void AstPrinterVisitor::visit(FuncDefAST *ast) {
   generic_postprint();
 }
 
-void AstPrinterVisitor::visit(RecordDefAST *ast) {
+void AstPrinterVisitor::visit(StructDefAST *ast) {
   generic_preprintln(ast);
   this->enter_new_scope();
   ast->walk_with_preorder(this);
-  for (auto &t : ast->record_members)
-    safeguard_visit(t.get(), "!!nullptr!! record_members (typed var)");
+  for (auto &t : ast->struct_members)
+    safeguard_visit(t.get(), "!!nullptr!! struct_members (typed var)");
   ast->walk_with_postorder(this);
   this->exit_new_scope();
   generic_postprint();
@@ -346,9 +352,9 @@ void AstPrinterVisitor::preorder_walk(ProgramAST *ast) {}
 void AstPrinterVisitor::preorder_walk(VarDefAST *ast) {}
 void AstPrinterVisitor::preorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::preorder_walk(FuncDefAST *ast) {}
-void AstPrinterVisitor::preorder_walk(RecordDefAST *ast) {
+void AstPrinterVisitor::preorder_walk(StructDefAST *ast) {
   // print the record’s name at the current indent
-  add_to_rep(fmt::format("{}record_name: \"{}\"", tabs(), ast->record_name));
+  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name));
 }
 void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
   add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName));
@@ -400,7 +406,7 @@ void AstPrinterVisitor::postorder_walk(ProgramAST *ast) {
 void AstPrinterVisitor::postorder_walk(VarDefAST *ast) {}
 void AstPrinterVisitor::postorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FuncDefAST *ast) {}
-void AstPrinterVisitor::postorder_walk(RecordDefAST *ast) {}
+void AstPrinterVisitor::postorder_walk(StructDefAST *ast) {}
 
 void AstPrinterVisitor::postorder_walk(PrototypeAST *ast) {}
 void AstPrinterVisitor::postorder_walk(CallExprAST *ast) {}
@@ -495,5 +501,26 @@ void AstPrinterVisitor::visit(UnaryNegExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(UnaryNegExprAST *ast) {}
+
+void AstPrinterVisitor::visit(StructLiteralExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  for (auto &val : ast->field_values)
+    safeguard_visit(val.get(), "!!nullptr!! field_value");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(StructLiteralExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(StructLiteralExprAST *ast) {}
+
+void AstPrinterVisitor::visit(FieldAccessExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->object_expr.get(), "!!nullptr!! object_expr");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(FieldAccessExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 
 } // namespace sammine_lang::AST

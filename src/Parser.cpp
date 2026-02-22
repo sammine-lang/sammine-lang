@@ -8,7 +8,7 @@
 #include <utility>
 //! \file Parser.cpp
 //! \brief Implementation for Parser class, it takes in the token stream and
-//! converts it into Parsing things suchs as programs, top-level (record,
+//! converts it into Parsing things suchs as programs, top-level (struct,
 //! functions, global variables)
 
 namespace sammine_lang {
@@ -126,7 +126,7 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
 auto Parser::ParseDefinition() -> p<DefinitionAST> {
   using ParseFunction = std::function<p<DefinitionAST>(Parser *)>;
   std::vector<std::pair<ParseFunction, bool>> ParseFunctions = {
-      {&Parser::ParseRecordDef, false},
+      {&Parser::ParseStructDef, false},
       {&Parser::ParseFuncDef, false},
   };
 
@@ -166,46 +166,46 @@ auto Parser::ParseTypeDef() -> p<DefinitionAST> {
   }
   return {nullptr, ParserError::SUCCESS};
 }
-auto Parser::ParseRecordDef() -> p<DefinitionAST> {
-  auto record_tok = expect(TokRecord);
-  if (!record_tok)
+auto Parser::ParseStructDef() -> p<DefinitionAST> {
+  auto struct_tok = expect(TokStruct);
+  if (!struct_tok)
     return {nullptr, NONCOMMITTED};
 
   auto id = expect(TokID);
   if (!id) {
-    this->add_error(record_tok->get_location(),
-                    "Expected an identifier after 'record'");
+    this->add_error(struct_tok->get_location(),
+                    "Expected an identifier after 'struct'");
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
 
   auto left_curly = expect(TokLeftCurly);
   if (!left_curly) {
-    this->add_error(record_tok->get_location() | id->get_location(),
-                    fmt::format("Expected '{{{{' after record identifier {}",
+    this->add_error(struct_tok->get_location() | id->get_location(),
+                    fmt::format("Expected '{{{{' after struct identifier {}",
                                 id->lexeme));
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
 
-  std::vector<std::unique_ptr<TypedVarAST>> record_members;
+  std::vector<std::unique_ptr<TypedVarAST>> struct_members;
   while (!tokStream->isEnd()) {
     auto [member, result] = ParseTypedVar();
     switch (result) {
     case SUCCESS: {
-      record_members.push_back(std::move(member));
+      struct_members.push_back(std::move(member));
       // TODO:
-      // Later in the future we have to find a way to compose Record
+      // Later in the future we have to find a way to compose struct
       // where the last member not needing a comma(,)
       //
-      // name_1 is last in this case `Record id { name_1 };`
-      // name_2 is last in this case `Record id { name_1, name_2 };`
+      // name_1 is last in this case `struct id { name_1 };`
+      // name_2 is last in this case `struct id { name_1, name_2 };`
       //
-      // for now we'll stick to `Record id { name_1, name_2, };`
+      // for now we'll stick to `struct id { name_1, name_2, };`
       if (!expect(TokComma)) {
         this->add_error(
             member->get_location(),
             fmt::format("Expected ',' after member {}",
                         member->name));
-        return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
+        return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
                 COMMITTED_NO_MORE_ERROR};
       }
       continue;
@@ -215,11 +215,11 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
       break;
     case COMMITTED_EMIT_MORE_ERROR:
       this->add_error(
-          record_tok->get_location(),
-          fmt::format("Expected a valid member in record '{}'", record_tok->lexeme));
+          struct_tok->get_location(),
+          fmt::format("Expected a valid member in struct '{}'", struct_tok->lexeme));
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
-      return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
+      return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
               COMMITTED_NO_MORE_ERROR};
     }
     break;
@@ -228,30 +228,30 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
   auto right_curly = expect(TokRightCurly);
   if (!right_curly) {
     // pick the error location
-    auto err_loc = record_members.empty()
+    auto err_loc = struct_members.empty()
                        ? left_curly->get_location()
-                       : record_members.back()->get_location();
+                       : struct_members.back()->get_location();
 
     // build the message
-    auto msg = fmt::format("Expected '}}}}' to close record '{}' after member '{}'",
-                           record_tok->lexeme, record_members.back()->name);
+    auto msg = fmt::format("Expected '}}}}' to close struct '{}' after member '{}'",
+                           struct_tok->lexeme, struct_members.back()->name);
 
-    // In the case there's no members in the Record
-    if (record_members.empty()) {
-      msg = fmt::format("Expected '}}}}' to close record '{}'",
-                        record_tok->lexeme);
+    // In the case there's no members in the struct
+    if (struct_members.empty()) {
+      msg = fmt::format("Expected '}}}}' to close struct '{}'",
+                        struct_tok->lexeme);
     }
 
     this->add_error(err_loc, msg);
 
-    return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
+    return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
             COMMITTED_NO_MORE_ERROR};
   }
   if (!expect(TokSemiColon))
     this->add_error(right_curly->get_location(),
-                    "Expected ';' after record definition");
+                    "Expected ';' after struct definition");
 
-  return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
+  return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
           SUCCESS};
 }
 
@@ -861,34 +861,50 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
     auto [expr, result] = fn(this);
     switch (result) {
     case SUCCESS: {
-      // Handle index postfix: expr[idx]
-      while (auto lb = expect(TokenType::TokLeftBracket)) {
-        auto [idx, idx_result] = ParseExpr();
-        switch (idx_result) {
-        case SUCCESS:
+      // Handle postfix operators: expr[idx] and expr.field
+      while (true) {
+        if (auto lb = expect(TokenType::TokLeftBracket)) {
+          auto [idx, idx_result] = ParseExpr();
+          switch (idx_result) {
+          case SUCCESS:
+            break;
+          case COMMITTED_EMIT_MORE_ERROR:
+            this->imm_error("Incomplete index expression inside '[]'",
+                            lb->get_location());
+            [[fallthrough]];
+          case COMMITTED_NO_MORE_ERROR:
+            return {
+                std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
+                COMMITTED_NO_MORE_ERROR};
+          case NONCOMMITTED:
+            this->imm_error("Expected expression inside '[]'",
+                            lb->get_location());
+            return {nullptr, COMMITTED_NO_MORE_ERROR};
+          }
+          auto rb = expect(TokenType::TokRightBracket);
+          if (!rb) {
+            this->imm_error("Expected ']' to close index expression",
+                            lb->get_location());
+            return {
+                std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
+                COMMITTED_NO_MORE_ERROR};
+          }
+          expr =
+              std::make_unique<IndexExprAST>(std::move(expr), std::move(idx));
+        } else if (auto dot = expect(TokenType::TokDot)) {
+          auto field_tok = expect(TokenType::TokID);
+          if (!field_tok) {
+            this->imm_error("Expected field name after '.'",
+                            dot->get_location());
+            return {std::make_unique<FieldAccessExprAST>(std::move(expr),
+                                                         nullptr),
+                    COMMITTED_NO_MORE_ERROR};
+          }
+          expr = std::make_unique<FieldAccessExprAST>(std::move(expr),
+                                                       field_tok);
+        } else {
           break;
-        case COMMITTED_EMIT_MORE_ERROR:
-          this->imm_error("Incomplete index expression inside '[]'",
-                          lb->get_location());
-          [[fallthrough]];
-        case COMMITTED_NO_MORE_ERROR:
-          return {
-              std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
-              COMMITTED_NO_MORE_ERROR};
-        case NONCOMMITTED:
-          this->imm_error("Expected expression inside '[]'",
-                          lb->get_location());
-          return {nullptr, COMMITTED_NO_MORE_ERROR};
         }
-        auto rb = expect(TokenType::TokRightBracket);
-        if (!rb) {
-          this->imm_error("Expected ']' to close index expression",
-                          lb->get_location());
-          return {
-              std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
-              COMMITTED_NO_MORE_ERROR};
-        }
-        expr = std::make_unique<IndexExprAST>(std::move(expr), std::move(idx));
       }
       return std::make_pair(std::move(expr), SUCCESS);
     }
@@ -1064,6 +1080,90 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
       member_id->lexeme = it->second + "$" + member_id->lexeme;
       id = member_id;
     }
+  }
+
+  // Check for struct literal: ID { field: value, ... }
+  // Lookahead to distinguish struct literal from a block that follows
+  // a variable expression (e.g. `if x { ... }`).
+  // Struct literal requires `{ ID : ...` or `{ }`.
+  auto is_struct_literal = [&]() -> bool {
+    if (tokStream->peek()->tok_type != TokLeftCurly)
+      return false;
+    tokStream->consume(); // consume {
+    if (tokStream->peek()->tok_type == TokRightCurly) {
+      tokStream->rollback(1);
+      return true; // empty struct: Name {}
+    }
+    if (tokStream->peek()->tok_type == TokID) {
+      tokStream->consume(); // consume potential field name
+      bool result = (tokStream->peek()->tok_type == TokColon);
+      tokStream->rollback(2); // rollback field + {
+      return result;
+    }
+    tokStream->rollback(1);
+    return false;
+  }();
+
+  if (is_struct_literal) {
+    auto lbrace = tokStream->consume(); // consume {
+    std::vector<std::string> field_names;
+    std::vector<std::unique_ptr<ExprAST>> field_values;
+    bool had_error = false;
+
+    while (tokStream->peek()->tok_type != TokRightCurly &&
+           tokStream->peek()->tok_type != TokEOF) {
+      auto field_id = expect(TokID);
+      if (!field_id) {
+        this->imm_error("Expected field name in struct literal",
+                        tokStream->currentLocation());
+        had_error = true;
+        break;
+      }
+      auto colon = expect(TokColon);
+      if (!colon) {
+        this->imm_error(
+            fmt::format("Expected ':' after field name '{}'", field_id->lexeme),
+            field_id->get_location());
+        had_error = true;
+        break;
+      }
+      auto [val, val_result] = ParseExpr();
+      if (val_result == NONCOMMITTED) {
+        this->imm_error(
+            fmt::format("Expected expression for field '{}'", field_id->lexeme),
+            colon->get_location());
+        had_error = true;
+        break;
+      }
+      if (val_result == COMMITTED_EMIT_MORE_ERROR ||
+          val_result == COMMITTED_NO_MORE_ERROR) {
+        field_names.push_back(field_id->lexeme);
+        field_values.push_back(std::move(val));
+        had_error = true;
+        break;
+      }
+      field_names.push_back(field_id->lexeme);
+      field_values.push_back(std::move(val));
+      if (!expect(TokComma))
+        break; // comma is optional before }
+    }
+
+    auto rbrace = expect(TokRightCurly);
+    if (!rbrace) {
+      this->imm_error("Expected '}' to close struct literal",
+                      lbrace->get_location());
+      return {std::make_unique<StructLiteralExprAST>(
+                  id, std::move(field_names), std::move(field_values)),
+              COMMITTED_NO_MORE_ERROR};
+    }
+    if (had_error) {
+      return {std::make_unique<StructLiteralExprAST>(
+                  id, std::move(field_names), std::move(field_values)),
+              COMMITTED_NO_MORE_ERROR};
+    }
+    return {std::make_unique<StructLiteralExprAST>(
+                id, std::move(field_names), std::move(field_values)),
+            SUCCESS};
   }
 
   auto [args, result] = ParseArguments();

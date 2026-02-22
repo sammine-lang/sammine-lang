@@ -19,7 +19,7 @@ enum class TypeKind {
   Function,
   Pointer,
   Array,
-  Record,
+  Struct,
   Never,
   NonExistent,
   Poisoned,
@@ -67,8 +67,27 @@ public:
   size_t get_size() const;
   ArrayType(Type element, size_t size);
 };
-using TypeData = std::variant<FunctionType, PointerType, ArrayType, std::string,
-                              std::monostate>;
+class StructType {
+  std::string name;
+  std::vector<std::string> field_names;
+  std::vector<Type> field_types;
+
+public:
+  bool operator==(const StructType &t) const;
+  bool operator<(const StructType &t) const;
+  const std::string &get_name() const { return name; }
+  const std::vector<std::string> &get_field_names() const {
+    return field_names;
+  }
+  const std::vector<Type> &get_field_types() const { return field_types; }
+  std::optional<size_t> get_field_index(const std::string &field) const;
+  Type get_field_type(size_t idx) const;
+  size_t field_count() const { return field_names.size(); }
+  StructType(std::string name, std::vector<std::string> field_names,
+             std::vector<Type> field_types);
+};
+using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
+                              std::string, std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -100,6 +119,12 @@ struct Type {
   static Type Array(Type element, size_t size) {
     return Type{TypeKind::Array, ArrayType(element, size)};
   }
+  static Type Struct(std::string name, std::vector<std::string> field_names,
+                     std::vector<Type> field_types) {
+    return Type{TypeKind::Struct,
+                StructType(std::move(name), std::move(field_names),
+                           std::move(field_types))};
+  }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
     return this->type_kind != TypeKind::Poisoned;
@@ -127,8 +152,8 @@ struct Type {
       return "f64";
     case TypeKind::Unit:
       return "()";
-    case TypeKind::Record:
-      return "record";
+    case TypeKind::Struct:
+      return std::get<StructType>(type_data).get_name();
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Pointer:

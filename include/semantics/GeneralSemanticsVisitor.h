@@ -37,7 +37,7 @@ public:
   virtual void preorder_walk(VarDefAST *ast) override {}
 
   virtual void preorder_walk(ExternAST *ast) override {}
-  virtual void preorder_walk(RecordDefAST *ast) override {}
+  virtual void preorder_walk(StructDefAST *ast) override {}
   virtual void preorder_walk(PrototypeAST *ast) override {}
   virtual void preorder_walk(CallExprAST *ast) override {}
   virtual void preorder_walk(BinaryExprAST *ast) override {}
@@ -57,13 +57,15 @@ public:
   virtual void preorder_walk(IndexExprAST *ast) override {}
   virtual void preorder_walk(LenExprAST *ast) override {}
   virtual void preorder_walk(UnaryNegExprAST *ast) override {}
+  virtual void preorder_walk(StructLiteralExprAST *ast) override {}
+  virtual void preorder_walk(FieldAccessExprAST *ast) override {}
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override {}
   virtual void postorder_walk(VarDefAST *ast) override {}
   virtual void postorder_walk(ExternAST *ast) override {}
   virtual void postorder_walk(FuncDefAST *ast) override {}
-  virtual void postorder_walk(RecordDefAST *ast) override {}
+  virtual void postorder_walk(StructDefAST *ast) override {}
   virtual void postorder_walk(PrototypeAST *ast) override {}
   virtual void postorder_walk(CallExprAST *ast) override {}
   virtual void postorder_walk(ReturnExprAST *ast) override {}
@@ -83,5 +85,7 @@ public:
   virtual void postorder_walk(IndexExprAST *ast) override {}
   virtual void postorder_walk(LenExprAST *ast) override {}
   virtual void postorder_walk(UnaryNegExprAST *ast) override {}
+  virtual void postorder_walk(StructLiteralExprAST *ast) override {}
+  virtual void postorder_walk(FieldAccessExprAST *ast) override {}
 };
 } // namespace sammine_lang::AST

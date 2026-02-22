@@ -1,0 +1,17 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK:      x = 10, y = 20
+
+import std;
+
+struct Vec2 { x: i32, y: i32, };
+
+let print_vec(v: Vec2) {
+  std::printf("x = %d, y = %d\n", v.x, v.y);
+  return;
+}
+
+let main() -> i32 {
+  let v : Vec2 = Vec2 { x: 10, y: 20 };
+  print_vec(v);
+  return 0;
+}

@@ -9,7 +9,7 @@ class DefinitionAST;
 class VarDefAST;
 class ExternAST;
 class FuncDefAST;
-class RecordDefAST;
+class StructDefAST;
 class PrototypeAST;
 class TypedVarAST;
 class Stmt;
@@ -32,6 +32,8 @@ class ArrayLiteralExprAST;
 class IndexExprAST;
 class LenExprAST;
 class UnaryNegExprAST;
+class StructLiteralExprAST;
+class FieldAccessExprAST;
 
 } // namespace AST
 } // namespace sammine_lang

@@ -48,6 +48,26 @@ bool ArrayType::operator<(const ArrayType &t) const {
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
+StructType::StructType(std::string name, std::vector<std::string> field_names,
+                       std::vector<Type> field_types)
+    : name(std::move(name)), field_names(std::move(field_names)),
+      field_types(std::move(field_types)) {}
+bool StructType::operator==(const StructType &t) const {
+  return name == t.name; // nominal typing
+}
+bool StructType::operator<(const StructType &t) const {
+  return name < t.name;
+}
+std::optional<size_t>
+StructType::get_field_index(const std::string &field) const {
+  for (size_t i = 0; i < field_names.size(); i++) {
+    if (field_names[i] == field)
+      return i;
+  }
+  return std::nullopt;
+}
+Type StructType::get_field_type(size_t idx) const { return field_types[idx]; }
+
 Type Type::Function(std::vector<Type> params, bool var_arg) {
   return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
@@ -63,6 +83,7 @@ bool Type::operator==(const Type &other) const {
   if (this->type_kind == TypeKind::Function ||
       this->type_kind == TypeKind::Pointer ||
       this->type_kind == TypeKind::Array ||
+      this->type_kind == TypeKind::Struct ||
       this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 

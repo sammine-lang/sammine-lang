@@ -194,6 +194,19 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
                                              clone_expr(neg->operand.get()));
   }
 
+  if (auto *sl = dynamic_cast<StructLiteralExprAST *>(expr)) {
+    std::vector<std::unique_ptr<ExprAST>> values;
+    for (auto &v : sl->field_values)
+      values.push_back(clone_expr(v.get()));
+    return std::make_unique<StructLiteralExprAST>(
+        make_tok(sl->struct_name), sl->field_names, std::move(values));
+  }
+
+  if (auto *fa = dynamic_cast<FieldAccessExprAST *>(expr)) {
+    return std::make_unique<FieldAccessExprAST>(
+        clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
+  }
+
   sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");
 }
 

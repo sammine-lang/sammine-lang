@@ -30,7 +30,7 @@ void ASTVisitor::visit(ExternAST *ast) {
   ast->Prototype->accept_vis(this);
   ast->walk_with_postorder(this);
 }
-void ASTVisitor::visit(RecordDefAST *ast) {
+void ASTVisitor::visit(StructDefAST *ast) {
   ast->walk_with_preorder(this);
   ast->walk_with_postorder(this);
 }
@@ -163,6 +163,19 @@ void ASTVisitor::visit(LenExprAST *ast) {
 void ASTVisitor::visit(UnaryNegExprAST *ast) {
   ast->walk_with_preorder(this);
   ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(StructLiteralExprAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &val : ast->field_values)
+    val->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(FieldAccessExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->object_expr->accept_vis(this);
   ast->walk_with_postorder(this);
 }
 

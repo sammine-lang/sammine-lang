@@ -26,8 +26,8 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
     } else if (auto extern_def = dynamic_cast<ExternAST *>(def.get())) {
       fn_name = extern_def->Prototype->functionName;
       loc = extern_def->Prototype->get_location();
-    } else if (auto record_def = dynamic_cast<RecordDefAST *>(def.get())) {
-      fn_name = record_def->record_name;
+    } else if (auto record_def = dynamic_cast<StructDefAST *>(def.get())) {
+      fn_name = record_def->struct_name;
       loc = record_def->get_location();
     } else
       this->abort("Should not be any other def");
@@ -83,7 +83,7 @@ void ScopeGeneratorVisitor::visit(ExternAST *ast) {
 }
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(RecordDefAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
   auto var_name = ast->functionName;
@@ -122,13 +122,15 @@ void ScopeGeneratorVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VarDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(RecordDefAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
 
@@ -169,4 +171,6 @@ void ScopeGeneratorVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 } // namespace sammine_lang::AST

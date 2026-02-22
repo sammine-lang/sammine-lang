@@ -1,7 +1,14 @@
-# RUN:  %sammine --file %full  --check --diagnostics
-Record test { var: i32, };
-Record test2 { var1: i32, var2 : f64, };
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK:      x = 42
+# CHECK-NEXT: y = 3.140000
 
-let foo() {
-  return;
+import std;
+
+struct Point { x: i32, y: f64, };
+
+let main() -> i32 {
+  let p : Point = Point { x: 42, y: 3.14 };
+  std::printf("x = %d\n", p.x);
+  std::printf("y = %f\n", p.y);
+  return 0;
 }

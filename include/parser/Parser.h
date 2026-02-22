@@ -56,7 +56,7 @@ public:
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
   [[nodiscard]] auto ParseTypeDef() -> p<DefinitionAST>;
-  [[nodiscard]] auto ParseRecordDef() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
 
   // Parse type
   [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;

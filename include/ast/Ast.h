@@ -11,7 +11,7 @@
 #include <vector>
 
 //! \file Ast.h
-//! \brief Defined the AST Node classes (ProgramAST, RecordDefAST, FuncDefAST)
+//! \brief Defined the AST Node classes (ProgramAST, StructDefAST, FuncDefAST)
 //! and a visitor interface for traversing the AST
 
 namespace sammine_lang {
@@ -284,21 +284,21 @@ public:
   }
 };
 
-// Record id { typed_var }
-class RecordDefAST : public DefinitionAST {
+// struct id { typed_var }
+class StructDefAST : public DefinitionAST {
 public:
-  std::string record_name;
-  std::vector<std::unique_ptr<TypedVarAST>> record_members;
-  virtual std::string getTreeName() const override { return "RecordDefAST"; }
+  std::string struct_name;
+  std::vector<std::unique_ptr<TypedVarAST>> struct_members;
+  virtual std::string getTreeName() const override { return "StructDefAST"; }
 
-  explicit RecordDefAST(std::shared_ptr<Token> record_id,
-                        decltype(record_members) record_members)
-      : record_members(std::move(record_members)) {
-    if (record_id)
-      record_name = record_id->lexeme;
+  explicit StructDefAST(std::shared_ptr<Token> struct_id,
+                        decltype(struct_members) struct_members)
+      : struct_members(std::move(struct_members)) {
+    if (struct_id)
+      struct_name = struct_id->lexeme;
 
-    this->join_location(record_id);
-    for (auto &m : record_members)
+    this->join_location(struct_id);
+    for (auto &m : struct_members)
       this->join_location(m.get());
   }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
@@ -730,6 +730,66 @@ public:
     this->join_location(op_tok)->join_location(this->operand.get());
   }
   virtual std::string getTreeName() const override { return "UnaryNegExprAST"; }
+  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
+  virtual void walk_with_preorder(ASTVisitor *visitor) override {
+    visitor->preorder_walk(this);
+  }
+  virtual void walk_with_postorder(ASTVisitor *visitor) override {
+    visitor->postorder_walk(this);
+  }
+  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
+    return visitor->synthesize(this);
+  }
+};
+
+class StructLiteralExprAST : public ExprAST {
+public:
+  std::string struct_name;
+  std::vector<std::string> field_names;
+  std::vector<std::unique_ptr<ExprAST>> field_values;
+  explicit StructLiteralExprAST(
+      std::shared_ptr<Token> name_tok,
+      std::vector<std::string> field_names,
+      std::vector<std::unique_ptr<ExprAST>> field_values)
+      : field_names(std::move(field_names)),
+        field_values(std::move(field_values)) {
+    this->join_location(name_tok);
+    if (name_tok)
+      this->struct_name = name_tok->lexeme;
+    for (auto &v : this->field_values)
+      if (v)
+        this->join_location(v.get());
+  }
+  virtual std::string getTreeName() const override {
+    return "StructLiteralExprAST";
+  }
+  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
+  virtual void walk_with_preorder(ASTVisitor *visitor) override {
+    visitor->preorder_walk(this);
+  }
+  virtual void walk_with_postorder(ASTVisitor *visitor) override {
+    visitor->postorder_walk(this);
+  }
+  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
+    return visitor->synthesize(this);
+  }
+};
+
+class FieldAccessExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> object_expr;
+  std::string field_name;
+  explicit FieldAccessExprAST(std::unique_ptr<ExprAST> object_expr,
+                              std::shared_ptr<Token> field_tok)
+      : object_expr(std::move(object_expr)) {
+    this->join_location(this->object_expr.get());
+    this->join_location(field_tok);
+    if (field_tok)
+      this->field_name = field_tok->lexeme;
+  }
+  virtual std::string getTreeName() const override {
+    return "FieldAccessExprAST";
+  }
   void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
   virtual void walk_with_preorder(ASTVisitor *visitor) override {
     visitor->preorder_walk(this);

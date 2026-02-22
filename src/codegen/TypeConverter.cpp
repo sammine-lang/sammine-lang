@@ -33,8 +33,15 @@ llvm::Type *TypeConverter::get_type(Type t) {
   }
   case TypeKind::Function:
     return llvm::StructType::getTypeByName(context, "sammine.closure");
-  case TypeKind::Record:
-    sammine_util::abort("Record not yet converted");
+  case TypeKind::Struct: {
+    auto &st = std::get<StructType>(t.type_data);
+    auto *cached = get_struct_type(st.get_name());
+    if (cached)
+      return cached;
+    sammine_util::abort(
+        fmt::format("Struct '{}' not registered in TypeConverter",
+                    st.get_name()));
+  }
   case TypeKind::Never:
     sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:
@@ -138,7 +145,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::String:
   case TypeKind::Integer:
   case TypeKind::Flt:
-  case TypeKind::Record:
+  case TypeKind::Struct:
   case TypeKind::TypeParam:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));

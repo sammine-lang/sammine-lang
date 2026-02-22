@@ -144,7 +144,30 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   exit_new_scope();
 }
 
-void BiTypeCheckerVisitor::visit(RecordDefAST *ast) {}
+void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
+  std::vector<std::string> field_names;
+  std::vector<Type> field_types;
+  bool had_error = false;
+
+  for (auto &member : ast->struct_members) {
+    auto ft = resolve_type_expr(member->type_expr.get());
+    if (ft.type_kind == TypeKind::Poisoned)
+      had_error = true;
+    field_names.push_back(member->name);
+    field_types.push_back(ft);
+  }
+
+  if (had_error) {
+    ast->type = Type::Poisoned();
+    return;
+  }
+
+  auto struct_type =
+      Type::Struct(ast->struct_name, std::move(field_names),
+                   std::move(field_types));
+  ast->type = struct_type;
+  typename_to_type.registerNameT(ast->struct_name, struct_type);
+}
 
 void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
@@ -332,12 +355,23 @@ void BiTypeCheckerVisitor::visit(UnaryNegExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(StructLiteralExprAST *ast) {
+  for (auto &val : ast->field_values)
+    val->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
+void BiTypeCheckerVisitor::visit(FieldAccessExprAST *ast) {
+  ast->object_expr->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 // pre order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(RecordDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(StructDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -358,12 +392,14 @@ void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(UnaryNegExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(StructLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 
 // post order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
-void BiTypeCheckerVisitor::postorder_walk(RecordDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(StructDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {}
@@ -385,6 +421,8 @@ void BiTypeCheckerVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(UnaryNegExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(StructLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -422,7 +460,7 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(ExternAST *ast) {
   return Type::NonExistent();
 }
-Type BiTypeCheckerVisitor::synthesize(RecordDefAST *ast) {
+Type BiTypeCheckerVisitor::synthesize(StructDefAST *ast) {
   return Type::NonExistent();
 }
 Type BiTypeCheckerVisitor::synthesize(FuncDefAST *ast) {
@@ -588,7 +626,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::Array:
   case TypeKind::Never:
   case TypeKind::NonExistent:
-  case TypeKind::Record:
+  case TypeKind::Struct:
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
@@ -921,6 +959,90 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
     return ast->type = Type::Poisoned();
   }
   return ast->type = operand_type;
+}
+
+Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto type_opt = get_typename_type(ast->struct_name);
+  if (!type_opt.has_value()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Unknown struct type '{}'", ast->struct_name));
+    return ast->type = Type::Poisoned();
+  }
+
+  auto struct_type = type_opt.value();
+  if (struct_type.type_kind != TypeKind::Struct) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("'{}' is not a struct type", ast->struct_name));
+    return ast->type = Type::Poisoned();
+  }
+
+  auto &st = std::get<StructType>(struct_type.type_data);
+
+  // Check field count
+  if (ast->field_names.size() != st.field_count()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Struct '{}' expects {} fields, got {}", ast->struct_name,
+                    st.field_count(), ast->field_names.size()));
+    return ast->type = Type::Poisoned();
+  }
+
+  // Check each field
+  for (size_t i = 0; i < ast->field_names.size(); i++) {
+    auto idx = st.get_field_index(ast->field_names[i]);
+    if (!idx.has_value()) {
+      this->add_error(
+          ast->field_values[i]->get_location(),
+          fmt::format("Struct '{}' has no field named '{}'", ast->struct_name,
+                      ast->field_names[i]));
+      return ast->type = Type::Poisoned();
+    }
+
+    auto expected = st.get_field_type(idx.value());
+    auto actual = ast->field_values[i]->accept_synthesis(this);
+    if (!type_map_ordering.compatible_to_from(expected, actual)) {
+      this->add_error(
+          ast->field_values[i]->get_location(),
+          fmt::format("Field '{}': expected type {}, got {}",
+                      ast->field_names[i], expected.to_string(),
+                      actual.to_string()));
+      return ast->type = Type::Poisoned();
+    }
+  }
+
+  return ast->type = struct_type;
+}
+
+Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  auto obj_type = ast->object_expr->accept_synthesis(this);
+  if (obj_type.type_kind == TypeKind::Poisoned)
+    return ast->type = Type::Poisoned();
+
+  if (obj_type.type_kind != TypeKind::Struct) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot access field '{}' on non-struct type {}",
+                                ast->field_name, obj_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  auto &st = std::get<StructType>(obj_type.type_data);
+  auto idx = st.get_field_index(ast->field_name);
+  if (!idx.has_value()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Struct '{}' has no field named '{}'", st.get_name(),
+                    ast->field_name));
+    return ast->type = Type::Poisoned();
+  }
+
+  return ast->type = st.get_field_type(idx.value());
 }
 
 // --- Generic support: unification, substitution ---

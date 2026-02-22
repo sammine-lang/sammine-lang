@@ -1,0 +1,18 @@
+# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# CHECK:          |struct_wrong_field_type.mn:6:25
+# CHECK-NEXT:    4|
+# CHECK-NEXT:    5|let main() -> i32 {
+# CHECK-NEXT:    6|  let b : Bar = Bar { x: 3.14 };
+# CHECK-NEXT:     |                         ───┬
+# CHECK-NEXT:     |                            ╰─ Field 'x': expected type i32, got f64
+# CHECK-NEXT:    7|  return 0;
+# CHECK-NEXT:    8|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+struct Bar { x: i32, };
+
+let main() -> i32 {
+  let b : Bar = Bar { x: 3.14 };
+  return 0;
+}

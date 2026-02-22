@@ -66,7 +66,7 @@ enum TokenType {
   // TokFunction
   TokReturn,
   TokFunc,   // fn
-  TokRecord, // record
+  TokStruct, // struct
   TokPtr,    // ptr
   TokAlloc,  // alloc
   TokFree,   // free
@@ -152,7 +152,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokArrow, "->"},
     {TokLet, "let"},
     {TokMUT, "mut"},
-    {TokRecord, "Record"},
+    {TokStruct, "struct"},
     {TokPtr, "ptr"},
     {TokAlloc, "alloc"},
     {TokFree, "free"},

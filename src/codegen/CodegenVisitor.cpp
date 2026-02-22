@@ -149,8 +149,19 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
   resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
 void CgVisitor::preorder_walk(ExternAST *ast) { in_extern = true; }
-void CgVisitor::preorder_walk(RecordDefAST *ast) {
-  this->abort("You forgot to implement record");
+void CgVisitor::preorder_walk(StructDefAST *ast) {
+  if (ast->type.type_kind == TypeKind::Poisoned)
+    return;
+
+  auto &st = std::get<StructType>(ast->type.type_data);
+  std::vector<llvm::Type *> field_llvm_types;
+  for (auto &ft : st.get_field_types())
+    field_llvm_types.push_back(type_converter.get_type(ft));
+
+  auto *llvm_struct = llvm::StructType::create(
+      *resPtr->Context, field_llvm_types,
+      "sammine.struct." + st.get_name());
+  type_converter.register_struct_type(st.get_name(), llvm_struct);
 }
 void CgVisitor::postorder_walk(ExternAST *ast) {
   in_extern = false;
@@ -187,7 +198,7 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
     }
   }
 }
-void CgVisitor::postorder_walk(RecordDefAST *ast) {}
+void CgVisitor::postorder_walk(StructDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
   // INFO: If we cannot parse return expr, treat it as unit for now
@@ -350,7 +361,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
   case TypeKind::String:
-  case TypeKind::Record:
+  case TypeKind::Struct:
   case TypeKind::Integer:
   case TypeKind::Flt:
   case TypeKind::TypeParam:
@@ -436,7 +447,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
   case TypeKind::Unit:
-  case TypeKind::Record:
+  case TypeKind::Struct:
   case TypeKind::Array:
   case TypeKind::Function:
   case TypeKind::Pointer:
@@ -710,6 +721,35 @@ void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
     ast->val = resPtr->Builder->CreateFNeg(operand_val, "fneg");
   else
     this->abort("UnaryNegExprAST has invalid operand type");
+}
+
+void CgVisitor::postorder_walk(StructLiteralExprAST *ast) {
+  if (ast->type.type_kind == TypeKind::Poisoned)
+    return;
+
+  auto &st = std::get<StructType>(ast->type.type_data);
+  auto *llvm_struct_ty = type_converter.get_struct_type(st.get_name());
+
+  llvm::Value *agg = llvm::UndefValue::get(llvm_struct_ty);
+  for (size_t i = 0; i < ast->field_values.size(); i++) {
+    auto field_idx = st.get_field_index(ast->field_names[i]);
+    agg = resPtr->Builder->CreateInsertValue(agg, ast->field_values[i]->val,
+                                             {(unsigned)field_idx.value()});
+  }
+  ast->val = agg;
+}
+
+void CgVisitor::postorder_walk(FieldAccessExprAST *ast) {
+  if (ast->type.type_kind == TypeKind::Poisoned)
+    return;
+
+  auto obj_type = ast->object_expr->type;
+  auto &st = std::get<StructType>(obj_type.type_data);
+  auto field_idx = st.get_field_index(ast->field_name);
+
+  ast->val = resPtr->Builder->CreateExtractValue(
+      ast->object_expr->val, {(unsigned)field_idx.value()},
+      ast->field_name);
 }
 
 llvm::Value *CgVisitor::emitArrayComparison(llvm::Value *L, llvm::Value *R,
