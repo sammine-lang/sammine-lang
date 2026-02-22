@@ -99,7 +99,7 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
       programAST->DefinitionVec.push_back(std::move(def));
       continue;
     case COMMITTED_EMIT_MORE_ERROR: {
-      this->imm_error("Failed to parse a definition",
+      this->imm_error("Incomplete definition",
                       tokStream->currentLocation());
       programAST->DefinitionVec.push_back(std::move(def));
       return programAST;
@@ -116,7 +116,7 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
   }
   if (!tokStream->isEnd()) {
     this->add_error(tokStream->currentLocation(),
-                    "Failed to parse the remaining of file");
+                    "Expected a valid declaration");
   }
   return programAST;
 }
@@ -134,7 +134,7 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
     case SUCCESS:
       return make_pair(std::move(def), result);
     case COMMITTED_EMIT_MORE_ERROR: {
-      this->imm_error("Failed to parse an extern/function definition",
+      this->imm_error("Incomplete function or extern definition",
                       tokStream->currentLocation());
       def->pe = true;
       return std::make_pair(std::move(def), COMMITTED_NO_MORE_ERROR);
@@ -159,7 +159,7 @@ auto Parser::ParseTypeDef() -> p<DefinitionAST> {
   auto id = expect(TokID);
   if (!id) {
     this->add_error(type_tok->get_location(),
-                    "Failed to parse an identifier after token Type");
+                    "Expected an identifier after 'type'");
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
   return {nullptr, ParserError::SUCCESS};
@@ -172,15 +172,14 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
   auto id = expect(TokID);
   if (!id) {
     this->add_error(record_tok->get_location(),
-                    "Failed to parse an identifier after token Record");
+                    "Expected an identifier after 'record'");
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
 
   auto left_curly = expect(TokLeftCurly);
   if (!left_curly) {
     this->add_error(record_tok->get_location() | id->get_location(),
-                    fmt::format("Failed to parse the left curly braces for "
-                                "record definition after identifier {}",
+                    fmt::format("Expected '{{{{' after record identifier {}",
                                 id->lexeme));
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
@@ -202,7 +201,7 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
       if (!expect(TokComma)) {
         this->add_error(
             member->get_location(),
-            fmt::format("Failed to parse a comma after the Identifier {}",
+            fmt::format("Expected ',' after member {}",
                         member->name));
         return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
                 COMMITTED_NO_MORE_ERROR};
@@ -215,7 +214,7 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
     case COMMITTED_EMIT_MORE_ERROR:
       this->add_error(
           record_tok->get_location(),
-          fmt::format("Failed to parse record {}", record_tok->lexeme));
+          fmt::format("Expected a valid member in record '{}'", record_tok->lexeme));
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
       return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
@@ -232,15 +231,12 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
                        : record_members.back()->get_location();
 
     // build the message
-    auto msg = fmt::format("Failed to parse the right curly braces at end of "
-                           "record '{}' definition, "
-                           "after identifier '{}'",
+    auto msg = fmt::format("Expected '}}}}' to close record '{}' after member '{}'",
                            record_tok->lexeme, record_members.back()->name);
 
     // In the case there's no members in the Record
     if (record_members.empty()) {
-      msg = fmt::format("Failed to parse the right curly braces at end of "
-                        "record '{}' definition",
+      msg = fmt::format("Expected '}}}}' to close record '{}'",
                         record_tok->lexeme);
     }
 
@@ -251,8 +247,7 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
   }
   if (!expect(TokSemiColon))
     this->add_error(right_curly->get_location(),
-                    "Failed to parse semicolon for record "
-                    "definition after right curly braces");
+                    "Expected ';' after record definition");
 
   return {std::make_unique<RecordDefAST>(id, std::move(record_members)),
           SUCCESS};
@@ -266,14 +261,16 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     switch (result) {
     case SUCCESS: {
       if (!expect(TokSemiColon))
-        this->imm_error("Need semicolon when parsing extern",
+        this->imm_error("Expected ';' after extern declaration",
                         extern_fn->get_location());
       return std::make_pair(std::make_unique<ExternAST>(std::move(prototype)),
                             SUCCESS);
     }
     case COMMITTED_EMIT_MORE_ERROR:
     case NONCOMMITTED:
-      this->imm_error("Failed to parse a prototype of a function",
+      this->imm_error(result == NONCOMMITTED
+                          ? "Expected a function prototype after 'extern'"
+                          : "Incomplete function prototype after 'extern'",
                       extern_fn->get_location());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -297,7 +294,9 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
 
   case COMMITTED_EMIT_MORE_ERROR:
   case NONCOMMITTED:
-    this->imm_error("Failed to parse a prototype of a function",
+    this->imm_error(proto_result == NONCOMMITTED
+                        ? "Expected a function prototype after 'let'"
+                        : "Incomplete function prototype after 'let'",
                     fn->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -315,7 +314,9 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   case NONCOMMITTED:
     [[fallthrough]];
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse a block of a function definition",
+    this->imm_error(result == NONCOMMITTED
+                        ? "Expected a function body block"
+                        : "Incomplete function body block",
                     tokStream->currentLocation());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -345,7 +346,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   case SUCCESS: {
     auto assign_tok = expect(TokenType::TokASSIGN, true, TokSemiColon);
     if (!assign_tok) {
-      this->imm_error("Failed to match assign token `=`",
+      this->imm_error("Expected '=' in variable definition",
                       typedVar->get_location());
       return std::make_pair(std::make_unique<VarDefAST>(
                                 let, std::move(typedVar), nullptr, is_mutable),
@@ -363,8 +364,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
             SUCCESS);
 
       this->imm_error(
-          "Failed to parse semicolon after expression in a variable "
-          "definintion",
+          "Expected ';' after variable definition",
           tokStream->currentLocation());
       return std::make_pair(
           std::make_unique<VarDefAST>(let, std::move(typedVar), std::move(expr),
@@ -377,7 +377,9 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     case COMMITTED_EMIT_MORE_ERROR:
       [[fallthrough]];
     case NONCOMMITTED:
-      this->imm_error("Failed to parse expr for variable definition",
+      this->imm_error(result == NONCOMMITTED
+                          ? "Expected an expression in variable definition"
+                          : "Incomplete expression in variable definition",
                       let->get_location());
       return std::make_pair(
           std::make_unique<VarDefAST>(let, std::move(typedVar), std::move(expr),
@@ -392,9 +394,10 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   case NONCOMMITTED:
     [[fallthrough]];
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error(
-        "Failed to parse typed variable, already consume `let` token",
-        let->get_location());
+    this->imm_error(tv_result == NONCOMMITTED
+                        ? "Expected a typed variable after 'let'"
+                        : "Incomplete typed variable after 'let'",
+                    let->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
     return std::make_pair(std::make_unique<VarDefAST>(let, std::move(typedVar),
@@ -589,7 +592,7 @@ auto Parser::ParseUnaryNegExpr() -> p<ExprAST> {
     return {std::make_unique<UnaryNegExprAST>(sub_tok, std::move(operand)),
             SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse operand for unary negation",
+    this->imm_error("Incomplete operand after '-'",
                     sub_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -624,7 +627,7 @@ auto Parser::ParseDerefExpr() -> p<ExprAST> {
     return {std::make_unique<DerefExprAST>(star_tok, std::move(operand)),
             SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse operand for dereference",
+    this->imm_error("Incomplete operand after '*'",
                     star_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -648,7 +651,7 @@ auto Parser::ParseAddrOfExpr() -> p<ExprAST> {
     return {std::make_unique<AddrOfExprAST>(amp_tok, std::move(operand)),
             SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse operand for address-of",
+    this->imm_error("Incomplete operand after '&'",
                     amp_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -676,7 +679,7 @@ auto Parser::ParseAllocExpr() -> p<ExprAST> {
   case SUCCESS:
     break;
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse expression inside alloc()",
+    this->imm_error("Incomplete expression inside 'alloc()'",
                     alloc_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -711,7 +714,7 @@ auto Parser::ParseFreeExpr() -> p<ExprAST> {
   case SUCCESS:
     break;
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse expression inside free()",
+    this->imm_error("Incomplete expression inside 'free()'",
                     free_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -747,7 +750,7 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
                     left_bracket->get_location());
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse element in array literal",
+    this->imm_error("Incomplete element in array literal",
                     left_bracket->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -764,7 +767,7 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
       elements.push_back(std::move(elem));
       break;
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse element in array literal",
+      this->imm_error("Incomplete element in array literal",
                       left_bracket->get_location());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -801,7 +804,7 @@ auto Parser::ParseLenExpr() -> p<ExprAST> {
   case SUCCESS:
     break;
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse expression inside len()",
+    this->imm_error("Incomplete expression inside 'len()'",
                     len_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -852,7 +855,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
         case SUCCESS:
           break;
         case COMMITTED_EMIT_MORE_ERROR:
-          this->imm_error("Failed to parse index expression",
+          this->imm_error("Incomplete index expression inside '[]'",
                           lb->get_location());
           [[fallthrough]];
         case COMMITTED_NO_MORE_ERROR:
@@ -879,7 +882,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
     case COMMITTED_NO_MORE_ERROR:
       return std::make_pair(std::move(expr), COMMITTED_NO_MORE_ERROR);
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse " + fn_name, expr->get_location());
+      this->imm_error("Incomplete " + fn_name, expr->get_location());
       return {std::move(expr), COMMITTED_NO_MORE_ERROR};
     case NONCOMMITTED:
       break;
@@ -899,7 +902,7 @@ auto Parser::ParseExpr() -> p<ExprAST> {
   case NONCOMMITTED:
     return {std::move(LHS), NONCOMMITTED};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse a primary expression",
+    this->imm_error("Incomplete expression",
                     tokStream->currentLocation());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -913,7 +916,7 @@ auto Parser::ParseExpr() -> p<ExprAST> {
   case NONCOMMITTED:
     return {std::move(next), SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse the continuation of binary expression",
+    this->imm_error("Incomplete right-hand side of binary expression",
                     tokStream->currentLocation());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -949,7 +952,7 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
       std::tie(RHS, right_result) =
           ParseBinaryExpr(TokPrec + 1, std::move(RHS));
       if (right_result != SUCCESS) {
-        this->imm_error("Failed to parse nested right-hand binary expression",
+        this->imm_error("Incomplete right-hand expression after binary operator",
                         binOpToken->get_location());
         return {nullptr, right_result};
       }
@@ -1001,14 +1004,14 @@ auto Parser::ParseReturnExpr() -> p<ExprAST> {
     return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
             COMMITTED_NO_MORE_ERROR};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Unable to parse an expression after return statement",
+    this->imm_error("Incomplete expression after 'return'",
                     return_tok->get_location());
     return {std::make_unique<ReturnExprAST>(return_tok, nullptr),
             COMMITTED_NO_MORE_ERROR};
   }
   auto semi = expect(TokenType::TokSemiColon);
   if (!semi) {
-    this->imm_error("Missing the semicolon for the return statement",
+    this->imm_error("Expected ';' after return statement",
                     return_tok ? return_tok->get_location()
                                : this->tokStream->peek()->get_location());
     return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
@@ -1057,7 +1060,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   case NONCOMMITTED:
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse arguments for call expression rule",
+    this->imm_error("Incomplete arguments for function call",
                     id->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -1086,9 +1089,10 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
   case COMMITTED_EMIT_MORE_ERROR:
     [[fallthrough]];
   case NONCOMMITTED:
-    this->imm_error(
-        "Failed to parse the predicate of if expression after the token `if`",
-        if_tok->get_location());
+    this->imm_error(cond_result == NONCOMMITTED
+                        ? "Expected a condition after 'if'"
+                        : "Incomplete condition after 'if'",
+                    if_tok->get_location());
     return {std::make_unique<IfExprAST>(std::move(cond), nullptr, nullptr),
             COMMITTED_NO_MORE_ERROR};
   }
@@ -1100,7 +1104,9 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
   case COMMITTED_EMIT_MORE_ERROR:
     [[fallthrough]];
   case NONCOMMITTED:
-    this->imm_error("Failed to parse the `then block` after the predicate",
+    this->imm_error(then_result == NONCOMMITTED
+                        ? "Expected a block after 'if' condition"
+                        : "Incomplete block after 'if' condition",
                     cond->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -1136,7 +1142,9 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
   case COMMITTED_EMIT_MORE_ERROR:
     [[fallthrough]];
   case NONCOMMITTED:
-    this->imm_error("Failed to parse the `else block` after the `else` token",
+    this->imm_error(else_result == NONCOMMITTED
+                        ? "Expected a block after 'else'"
+                        : "Incomplete block after 'else'",
                     else_tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -1197,9 +1205,10 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
     [[fallthrough]];
   case NONCOMMITTED:
     this->imm_error(
-        fmt::format("Failed to parse the parameters in a function's prototype "
-                    "after identifier `{}`",
-                    id->lexeme),
+        result == NONCOMMITTED
+            ? fmt::format("Expected '(' for parameter list after '{}'",
+                          id->lexeme)
+            : fmt::format("Incomplete parameter list for '{}'", id->lexeme),
         id->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -1221,7 +1230,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
     proto->is_var_arg = var_arg;
     return {std::move(proto), SUCCESS};
   } else {
-    this->imm_error("Failed to parse the return type after the token `->`",
+    this->imm_error("Expected a return type after '->'",
                     arrow->get_location());
     auto proto = std::make_unique<PrototypeAST>(
         id, std::move(return_type_expr), std::move(params));
@@ -1263,7 +1272,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
     case NONCOMMITTED:
       break;
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse a statement in a block",
+      this->imm_error("Incomplete statement in block",
                       tokStream->currentLocation());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -1285,7 +1294,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
     case NONCOMMITTED:
       break;
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse a variable definition in a block",
+      this->imm_error("Incomplete variable definition in block",
                       tokStream->currentLocation());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -1304,7 +1313,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
       break;
 
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse a return expression in a block",
+      this->imm_error("Incomplete return expression in block",
                       tokStream->currentLocation());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -1316,7 +1325,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
   }
 
   auto rightCurly = expect(TokRightCurly, true, TokEOF,
-                           "Failed to parse right curly of a statement block.");
+                           "Expected '}' to close statement block");
 
   if (!rightCurly)
     return {std::move(blockAST), COMMITTED_NO_MORE_ERROR};
@@ -1341,7 +1350,7 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
   case COMMITTED_NO_MORE_ERROR:
     this->add_error(
         tok_left->get_location(),
-        "Encountered error in parsing expression after left parenthesis");
+        "Incomplete expression after '('");
     return {std::unique_ptr<UnitExprAST>(), COMMITTED_NO_MORE_ERROR};
   case NONCOMMITTED:
     break;
@@ -1400,7 +1409,7 @@ auto Parser::ParseParams()
     auto rightParen = expect(TokRightParen, true);
     if (!rightParen) {
       this->imm_error(
-          "Failed to parse the right parenthesis of list of parameters",
+          "Expected ')' after parameters",
           leftParen->get_location());
       return {std::move(vec), COMMITTED_NO_MORE_ERROR};
     }
@@ -1409,7 +1418,7 @@ auto Parser::ParseParams()
     return {std::move(vec), SUCCESS};
   }
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse a typed variable as a parameter",
+    this->imm_error("Incomplete parameter declaration",
                     leftParen->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
@@ -1437,8 +1446,7 @@ auto Parser::ParseParams()
     case NONCOMMITTED: {
       auto rightParen = expect(TokRightParen, true);
       if (!rightParen) {
-        this->imm_error("Failed to parse the right parenthesis of list of "
-                        "follow-up parameters",
+        this->imm_error("Expected ')' after parameters",
                         leftParen->get_location());
         return {std::move(vec), COMMITTED_NO_MORE_ERROR};
       }
@@ -1448,7 +1456,7 @@ auto Parser::ParseParams()
       return {std::move(vec), SUCCESS};
     }
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse a follow-up parameters",
+      this->imm_error("Incomplete parameter after ','",
                       leftParen->get_location());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -1461,7 +1469,7 @@ auto Parser::ParseParams()
   auto rightParen = expect(TokRightParen, true);
   if (!rightParen) {
     this->imm_error(
-        "Failed to parse the right parenthesis of list of parameters",
+        "Expected ')' after parameters",
         leftParen->get_location());
     return {std::move(vec), COMMITTED_NO_MORE_ERROR};
   }
@@ -1488,7 +1496,7 @@ auto Parser::ParseArguments()
   case NONCOMMITTED:
     break;
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Failed to parse an argument", leftParen->get_location());
+    this->imm_error("Incomplete argument", leftParen->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
     vec.push_back(std::move(first_expr));
@@ -1509,8 +1517,7 @@ auto Parser::ParseArguments()
     case NONCOMMITTED: {
       auto rightParen = expect(TokRightParen, true);
       if (!rightParen) {
-        this->imm_error("Failed to parse the right parenthesis of list of "
-                        "follow-up arguments",
+        this->imm_error("Expected ')' after arguments",
                         leftParen->get_location());
         return {std::move(vec), COMMITTED_NO_MORE_ERROR};
       }
@@ -1520,7 +1527,7 @@ auto Parser::ParseArguments()
       return {std::move(vec), SUCCESS};
     }
     case COMMITTED_EMIT_MORE_ERROR:
-      this->imm_error("Failed to parse a follow-up argument",
+      this->imm_error("Incomplete argument after ','",
                       leftParen->get_location());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
@@ -1533,7 +1540,7 @@ auto Parser::ParseArguments()
   auto rightParen = expect(TokRightParen, true);
   if (!rightParen) {
     this->imm_error(
-        "Failed to parse the right parenthesis of list of arguments",
+        "Expected ')' after arguments",
         leftParen->get_location());
     return {std::move(vec), COMMITTED_NO_MORE_ERROR};
   }

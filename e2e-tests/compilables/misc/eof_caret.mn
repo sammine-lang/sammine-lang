@@ -2,6 +2,6 @@
 # CHECK:          |eof_caret.mn:7:30
 # CHECK:         7|let main() -> i32 { return 0;
 # CHECK:          |                             ^
-# CHECK-NEXT:     |                              Failed to parse right curly of a statement block.
+# CHECK-NEXT:     |                              Expected '}' to close statement block
 # CHECK-NEXT:     |                              [Error-borne `dev` location: Parser.cpp:1557]
 let main() -> i32 { return 0;
