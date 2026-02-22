@@ -39,6 +39,8 @@ public:
             parse_check_line(line, line_num);
         }
 
+        if (unknown_directive_count_ > 0)
+            return false;
         return !checks_.empty();
     }
 
@@ -50,6 +52,8 @@ public:
             line_num++;
             parse_check_line(line, line_num);
         }
+        if (unknown_directive_count_ > 0)
+            return false;
         return !checks_.empty();
     }
 
@@ -372,6 +376,7 @@ private:
 
     void parse_check_line(const std::string &line, int line_num) {
         // Look for CHECK patterns - they can appear anywhere in the line (usually in comments)
+        bool found_directive = false;
         auto parse_with_prefix = [&](const std::string &prefix) {
             std::string check_str = prefix + ":";
             std::string check_next = prefix + "-NEXT:";
@@ -386,35 +391,75 @@ private:
                 pattern = trim(pattern);
                 if (!pattern.empty()) {
                     checks_.push_back({Check::LABEL, pattern, line_num, prefix});
+                    found_directive = true;
                 }
             } else if ((pos = line.find(check_next)) != std::string::npos) {
                 std::string pattern = line.substr(pos + check_next.length());
                 pattern = trim(pattern);
                 if (!pattern.empty()) {
                     checks_.push_back({Check::NEXT, pattern, line_num, prefix});
+                    found_directive = true;
                 }
             } else if ((pos = line.find(check_not)) != std::string::npos) {
                 std::string pattern = line.substr(pos + check_not.length());
                 pattern = trim(pattern);
                 if (!pattern.empty()) {
                     checks_.push_back({Check::NOT, pattern, line_num, prefix});
+                    found_directive = true;
                 }
             } else if ((pos = line.find(check_same)) != std::string::npos) {
                 std::string pattern = line.substr(pos + check_same.length());
                 pattern = trim(pattern);
                 if (!pattern.empty()) {
                     checks_.push_back({Check::SAME, pattern, line_num, prefix});
+                    found_directive = true;
                 }
             } else if ((pos = line.find(check_str)) != std::string::npos) {
                 std::string pattern = line.substr(pos + check_str.length());
                 pattern = trim(pattern);
                 if (!pattern.empty()) {
                     checks_.push_back({Check::PLAIN, pattern, line_num, prefix});
+                    found_directive = true;
                 }
             }
         };
 
         parse_with_prefix(check_prefix_);
+
+        // Warn about lines that look like CHECK directives but aren't recognized.
+        // Match PREFIX-<WORD>: where <WORD> is not a known suffix.
+        if (!found_directive) {
+            std::string prefix_dash = check_prefix_ + "-";
+            size_t pos = line.find(prefix_dash);
+            if (pos != std::string::npos) {
+                // Extract the suffix up to the next ':'
+                size_t suffix_start = pos + prefix_dash.length();
+                size_t colon = line.find(':', suffix_start);
+                if (colon != std::string::npos && colon > suffix_start) {
+                    std::string suffix = line.substr(suffix_start, colon - suffix_start);
+                    // Only flag if suffix looks like an identifier (all alpha/hyphen)
+                    bool looks_like_directive = !suffix.empty();
+                    for (char c : suffix) {
+                        if (!std::isalpha(c) && c != '-') {
+                            looks_like_directive = false;
+                            break;
+                        }
+                    }
+                    if (looks_like_directive) {
+                        std::cerr << "error: unknown check directive '"
+                                  << check_prefix_ << "-" << suffix
+                                  << ":' on line " << line_num << "\n";
+                        std::cerr << "  Known directives: "
+                                  << check_prefix_ << ":, "
+                                  << check_prefix_ << "-NEXT:, "
+                                  << check_prefix_ << "-NOT:, "
+                                  << check_prefix_ << "-SAME:, "
+                                  << check_prefix_ << "-LABEL:\n";
+                        unknown_directive_count_++;
+                    }
+                }
+            }
+        }
     }
 
     bool match_pattern(const std::string &line, const std::string &pattern) {
@@ -464,6 +509,7 @@ private:
     std::string check_prefix_;
     std::vector<Check> checks_;
     bool verbose_;
+    int unknown_directive_count_ = 0;
 };
 
 void print_usage(const char *prog) {
