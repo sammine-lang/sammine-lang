@@ -44,6 +44,17 @@ class Parser : public Reportee {
 public:
   template <class T> using p = std::pair<std::unique_ptr<T>, ParserError>;
   template <class T> using u = std::unique_ptr<T>;
+
+private:
+  template <typename NodeT>
+  [[nodiscard]] auto ParseBuiltinCallExpr(TokenType keyword,
+                                          const std::string &name) -> p<ExprAST>;
+
+  template <typename NodeT>
+  [[nodiscard]] auto ParseUnaryPrefixExpr(TokenType opTok,
+                                          const std::string &opStr) -> p<ExprAST>;
+
+public:
   std::optional<std::reference_wrapper<Reporter>> reporter;
   std::shared_ptr<TokenStream> tokStream;
   std::map<std::string, std::string> alias_to_module;

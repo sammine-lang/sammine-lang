@@ -596,28 +596,34 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
       std::make_unique<TypedVarAST>(name, std::move(type_expr), is_mutable),
       SUCCESS);
 }
-auto Parser::ParseUnaryNegExpr() -> p<ExprAST> {
-  auto sub_tok = expect(TokenType::TokSUB);
-  if (!sub_tok)
+template <typename NodeT>
+auto Parser::ParseUnaryPrefixExpr(TokenType opTok, const std::string &opStr)
+    -> p<ExprAST> {
+  auto tok = expect(opTok);
+  if (!tok)
     return {nullptr, NONCOMMITTED};
   auto [operand, result] = ParsePrimaryExpr();
   switch (result) {
   case SUCCESS:
-    return {std::make_unique<UnaryNegExprAST>(sub_tok, std::move(operand)),
-            SUCCESS};
+    return {std::make_unique<NodeT>(tok, std::move(operand)), SUCCESS};
   case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Incomplete operand after '-'",
-                    sub_tok->get_location());
+    this->imm_error(fmt::format("Incomplete operand after '{}'", opStr),
+                    tok->get_location());
     [[fallthrough]];
   case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<UnaryNegExprAST>(sub_tok, std::move(operand)),
+    return {std::make_unique<NodeT>(tok, std::move(operand)),
             COMMITTED_NO_MORE_ERROR};
   case NONCOMMITTED:
-    this->imm_error("Expected expression after '-'", sub_tok->get_location());
+    this->imm_error(fmt::format("Expected expression after '{}'", opStr),
+                    tok->get_location());
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
-  this->abort("Should not happen in ParseUnaryNegExpr");
+  this->abort("Should not happen in ParseUnaryPrefixExpr");
   return {nullptr, COMMITTED_EMIT_MORE_ERROR};
+}
+
+auto Parser::ParseUnaryNegExpr() -> p<ExprAST> {
+  return ParseUnaryPrefixExpr<UnaryNegExprAST>(TokSUB, "-");
 }
 
 auto Parser::ParseDerefExpr() -> p<ExprAST> {
@@ -656,96 +662,53 @@ auto Parser::ParseDerefExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseAddrOfExpr() -> p<ExprAST> {
-  auto amp_tok = expect(TokenType::TokAndLogical);
-  if (!amp_tok)
+  return ParseUnaryPrefixExpr<AddrOfExprAST>(TokAndLogical, "&");
+}
+
+template <typename NodeT>
+auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
+    -> p<ExprAST> {
+  auto kw_tok = expect(keyword);
+  if (!kw_tok)
     return {nullptr, NONCOMMITTED};
-  auto [operand, result] = ParsePrimaryExpr();
-  switch (result) {
-  case SUCCESS:
-    return {std::make_unique<AddrOfExprAST>(amp_tok, std::move(operand)),
-            SUCCESS};
-  case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Incomplete operand after '&'",
-                    amp_tok->get_location());
-    [[fallthrough]];
-  case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<AddrOfExprAST>(amp_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  case NONCOMMITTED:
-    this->imm_error("Expected expression after '&'", amp_tok->get_location());
+  auto left_paren = expect(TokenType::TokLeftParen);
+  if (!left_paren) {
+    this->imm_error(fmt::format("Expected '(' after '{}'", name),
+                    kw_tok->get_location());
     return {nullptr, COMMITTED_NO_MORE_ERROR};
   }
-  this->abort("Should not happen in ParseAddrOfExpr");
-  return {nullptr, COMMITTED_EMIT_MORE_ERROR};
+  auto [operand, result] = ParseExpr();
+  switch (result) {
+  case SUCCESS:
+    break;
+  case COMMITTED_EMIT_MORE_ERROR:
+    this->imm_error(fmt::format("Incomplete expression inside '{}()'", name),
+                    kw_tok->get_location());
+    [[fallthrough]];
+  case COMMITTED_NO_MORE_ERROR:
+    return {std::make_unique<NodeT>(kw_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  case NONCOMMITTED:
+    this->imm_error(fmt::format("Expected expression inside {}()", name),
+                    kw_tok->get_location());
+    return {nullptr, COMMITTED_NO_MORE_ERROR};
+  }
+  auto right_paren = expect(TokenType::TokRightParen);
+  if (!right_paren) {
+    this->imm_error(fmt::format("Expected ')' to close {}()", name),
+                    kw_tok->get_location());
+    return {std::make_unique<NodeT>(kw_tok, std::move(operand)),
+            COMMITTED_NO_MORE_ERROR};
+  }
+  return {std::make_unique<NodeT>(kw_tok, std::move(operand)), SUCCESS};
 }
 
 auto Parser::ParseAllocExpr() -> p<ExprAST> {
-  auto alloc_tok = expect(TokenType::TokAlloc);
-  if (!alloc_tok)
-    return {nullptr, NONCOMMITTED};
-  auto left_paren = expect(TokenType::TokLeftParen);
-  if (!left_paren) {
-    this->imm_error("Expected '(' after 'alloc'", alloc_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto [operand, result] = ParseExpr();
-  switch (result) {
-  case SUCCESS:
-    break;
-  case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Incomplete expression inside 'alloc()'",
-                    alloc_tok->get_location());
-    [[fallthrough]];
-  case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  case NONCOMMITTED:
-    this->imm_error("Expected expression inside alloc()",
-                    alloc_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto right_paren = expect(TokenType::TokRightParen);
-  if (!right_paren) {
-    this->imm_error("Expected ')' to close alloc()", alloc_tok->get_location());
-    return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  }
-  return {std::make_unique<AllocExprAST>(alloc_tok, std::move(operand)),
-          SUCCESS};
+  return ParseBuiltinCallExpr<AllocExprAST>(TokAlloc, "alloc");
 }
 
 auto Parser::ParseFreeExpr() -> p<ExprAST> {
-  auto free_tok = expect(TokenType::TokFree);
-  if (!free_tok)
-    return {nullptr, NONCOMMITTED};
-  auto left_paren = expect(TokenType::TokLeftParen);
-  if (!left_paren) {
-    this->imm_error("Expected '(' after 'free'", free_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto [operand, result] = ParseExpr();
-  switch (result) {
-  case SUCCESS:
-    break;
-  case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Incomplete expression inside 'free()'",
-                    free_tok->get_location());
-    [[fallthrough]];
-  case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  case NONCOMMITTED:
-    this->imm_error("Expected expression inside free()",
-                    free_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto right_paren = expect(TokenType::TokRightParen);
-  if (!right_paren) {
-    this->imm_error("Expected ')' to close free()", free_tok->get_location());
-    return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  }
-  return {std::make_unique<FreeExprAST>(free_tok, std::move(operand)), SUCCESS};
+  return ParseBuiltinCallExpr<FreeExprAST>(TokFree, "free");
 }
 
 auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
@@ -805,37 +768,7 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseLenExpr() -> p<ExprAST> {
-  auto len_tok = expect(TokenType::TokLen);
-  if (!len_tok)
-    return {nullptr, NONCOMMITTED};
-  auto left_paren = expect(TokenType::TokLeftParen);
-  if (!left_paren) {
-    this->imm_error("Expected '(' after 'len'", len_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto [operand, result] = ParseExpr();
-  switch (result) {
-  case SUCCESS:
-    break;
-  case COMMITTED_EMIT_MORE_ERROR:
-    this->imm_error("Incomplete expression inside 'len()'",
-                    len_tok->get_location());
-    [[fallthrough]];
-  case COMMITTED_NO_MORE_ERROR:
-    return {std::make_unique<LenExprAST>(len_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  case NONCOMMITTED:
-    this->imm_error("Expected expression inside len()",
-                    len_tok->get_location());
-    return {nullptr, COMMITTED_NO_MORE_ERROR};
-  }
-  auto right_paren = expect(TokenType::TokRightParen);
-  if (!right_paren) {
-    this->imm_error("Expected ')' to close len()", len_tok->get_location());
-    return {std::make_unique<LenExprAST>(len_tok, std::move(operand)),
-            COMMITTED_NO_MORE_ERROR};
-  }
-  return {std::make_unique<LenExprAST>(len_tok, std::move(operand)), SUCCESS};
+  return ParseBuiltinCallExpr<LenExprAST>(TokLen, "len");
 }
 
 auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
