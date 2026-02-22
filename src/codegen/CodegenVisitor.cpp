@@ -370,8 +370,8 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   this->abort_if_not(ast->val, "cannot generate number");
 }
 void CgVisitor::preorder_walk(BoolExprAST *ast) {
-  ast->val = llvm::ConstantFP::get(
-      *resPtr->Context, llvm::APFloat(std::stod(ast->b ? "1.0" : "0.0")));
+  ast->val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*resPtr->Context),
+                                    ast->b ? 1 : 0);
 }
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
   auto *alloca = this->allocaValues.top()[ast->variableName];
@@ -463,11 +463,7 @@ void CgVisitor::visit(IfExprAST *ast) {
     this->abort("Invalid syntax or broken typechecker for now\n");
     break;
   case TypeKind::Bool:
-    ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(
-        resPtr->Builder->CreateSIToFP(
-            ast->bool_expr->val, llvm::Type::getDoubleTy(*resPtr->Context)),
-        llvm::ConstantFP::get(*resPtr->Context, llvm::APFloat(0.0)),
-        "ifcond_bool");
+    // Bool is already i1, usable directly by CreateCondBr
     break;
   }
 
