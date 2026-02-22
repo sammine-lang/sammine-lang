@@ -17,6 +17,7 @@
 namespace sammine_lang {
 
 using LexFunction = std::function<size_t(Lexer *, size_t, const std::string &)>;
+
 std::shared_ptr<Token> Lexer::peek() { return tokStream->peek(); }
 
 std::shared_ptr<Token> Lexer::consume() { return tokStream->consume(); }
@@ -30,35 +31,45 @@ Lexer::Lexer(const std::string &input) : Lexer() {
                DEBUG_TYPE, input.size());
   });
 
-  size_t i = 0;
-  size_t i_0 = 0;
+  stored_input = input;
+  cursor = 0;
+  at_eof = false;
+  tokStream->setTokenProducer([this]() { lexNextToken(); });
+}
 
+void Lexer::lexNextToken() {
+  if (at_eof)
+    return;
+  if (cursor >= stored_input.length()) {
+    tokStream->push_back({TokEOF, "end of file", location});
+    at_eof = true;
+    return;
+  }
+  cursor = handleSpaces(cursor, stored_input);
+  if (cursor >= stored_input.length()) {
+    tokStream->push_back({TokEOF, "end of file", location});
+    at_eof = true;
+    return;
+  }
+  updateLocation();
   static std::vector<LexFunction> MatchFunctions = {
       &Lexer::handleID,
       &Lexer::handleNumber,
       &Lexer::handleOperators,
       &Lexer::handleUtility,
   };
-
-  while (i < input.length()) {
-
-    i = handleSpaces(i, input);
-
-    updateLocation();
-    for (auto fn : MatchFunctions) {
-      i_0 = i;
-      i = fn(this, i, input);
-      if (i != i_0) {
-        updateLocation();
-        break;
-      }
-    }
-
-    if (i == i_0 && i < input.length()) {
-      i = handleInvalid(i, input);
+  size_t i_0 = cursor;
+  for (auto fn : MatchFunctions) {
+    i_0 = cursor;
+    cursor = fn(this, cursor, stored_input);
+    if (cursor != i_0) {
+      updateLocation();
+      return;
     }
   }
-  tokStream->push_back({TokEOF, "end of file", location});
+  if (cursor == i_0) {
+    cursor = handleInvalid(cursor, stored_input);
+  }
 }
 
 size_t Lexer::handleID(size_t i, const std::string &input) {

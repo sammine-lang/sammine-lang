@@ -17,6 +17,9 @@ class Lexer : public sammine_util::Reportee {
 private:
   sammine_util::Location location;
   std::shared_ptr<TokenStream> tokStream;
+  std::string stored_input;
+  size_t cursor;
+  bool at_eof;
 
   [[nodiscard]] size_t handleNumber(size_t i, const std::string &input);
   size_t handleSpaces(size_t i, const std::string &input);
@@ -49,7 +52,10 @@ private:
 
 public:
   explicit Lexer(const std::string &input);
-  Lexer() : location() { tokStream = std::make_shared<TokenStream>(); }
+  Lexer() : location(), cursor(0), at_eof(false) {
+    tokStream = std::make_shared<TokenStream>();
+  }
+  void lexNextToken();
   std::shared_ptr<Token> peek();
   std::shared_ptr<Token> consume();
 

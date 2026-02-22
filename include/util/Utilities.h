@@ -113,6 +113,7 @@ public:
 };
 class Reportee {
 public:
+  virtual ~Reportee() = default;
   enum ReportKind {
     error,
     warn,

@@ -1,5 +1,6 @@
 #pragma once
 #include "util/Utilities.h"
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -207,12 +208,22 @@ class TokenStream {
   size_t current_index;
   size_t rollback_mark;
   bool error;
+  std::function<void()> tokenProducer;
+
+  void ensureTokenAt(size_t index) {
+    while (index >= TokStream.size() && tokenProducer)
+      tokenProducer();
+  }
 
 public:
   std::vector<std::shared_ptr<Token>> ErrStream;
 
   TokenStream()
       : TokStream(), current_index(0), rollback_mark(0), error(false) {}
+
+  void setTokenProducer(std::function<void()> producer) {
+    tokenProducer = std::move(producer);
+  }
 
   void push_back(const std::shared_ptr<Token> &token) {
     if (token->tok_type == TokINVALID) {
@@ -239,10 +250,17 @@ public:
 
   std::shared_ptr<Token> &exhaust_until(TokenType tokType) {
     if (tokType == TokenType::TokEOF) {
+      // Lex everything until EOF is produced
+      while (tokenProducer) {
+        if (!TokStream.empty() && TokStream.back()->tok_type == TokEOF)
+          break;
+        tokenProducer();
+      }
       current_index = TokStream.size() - 1;
       return TokStream.back();
     }
     while (!isEnd()) {
+      ensureTokenAt(current_index);
       if (TokStream[current_index]->tok_type == tokType)
         return TokStream[current_index++];
       else
@@ -252,15 +270,25 @@ public:
     return TokStream.back();
   }
 
-  bool isEnd() const { return current_index >= (TokStream.size() - 1); }
-  std::shared_ptr<Token> peek() const { return TokStream[current_index]; };
+  bool isEnd() {
+    ensureTokenAt(current_index);
+    return current_index < TokStream.size() &&
+           TokStream[current_index]->tok_type == TokEOF;
+  }
+  std::shared_ptr<Token> peek() {
+    ensureTokenAt(current_index);
+    return TokStream[current_index];
+  }
   std::shared_ptr<Token> consume() {
-    auto token = peek();
-    current_index = std::min(TokStream.size() - 1, current_index + 1);
+    ensureTokenAt(current_index);
+    auto token = TokStream[current_index];
+    if (token->tok_type != TokEOF)
+      current_index++;
     return token;
   }
 
-  sammine_util::Location currentLocation() const {
+  sammine_util::Location currentLocation() {
+    ensureTokenAt(current_index);
     if (!TokStream.empty()) {
       return TokStream[current_index]->get_location();
     }

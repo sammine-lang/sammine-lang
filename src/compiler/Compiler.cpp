@@ -32,6 +32,7 @@
 namespace sammine_lang {
 class Compiler {
   std::shared_ptr<TokenStream> tokStream;
+  std::unique_ptr<Lexer> lexer;
   std::shared_ptr<AST::ProgramAST> programAST;
   std::map<compiler_option_enum, std::string> compiler_options;
   std::shared_ptr<LLVMRes> resPtr;
@@ -121,9 +122,8 @@ void Compiler::lex() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start lexing stage...\n");
   });
-  Lexer lxr = Lexer(input);
-  reporter.report(lxr);
-  tokStream = lxr.getTokenStream();
+  lexer = std::make_unique<Lexer>(input);
+  tokStream = lexer->getTokenStream();
 }
 
 void Compiler::parse() {
@@ -137,6 +137,7 @@ void Compiler::parse() {
   programAST = std::move(result);
 
   this->error = psr.has_errors();
+  reporter.report(*lexer);
   reporter.report(psr);
 
   for (auto &def : programAST->DefinitionVec)
