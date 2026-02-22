@@ -1,0 +1,9 @@
+# RUN: %sammine --file %dir/Inputs/has_extern_c.mn && %sammine --file %full && ./import_extern_c.exe | %check %full
+# CHECK: hello from has_extern_c
+
+import has_extern_c as he;
+
+let main() -> i32 {
+  he::greet();
+  return 0;
+}

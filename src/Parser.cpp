@@ -71,6 +71,8 @@ auto Parser::ParseImport() -> std::optional<AST::ImportDecl> {
   } else {
     decl.alias = "";
     decl.location = import_tok->get_location() | module_id->get_location();
+    // Auto-alias: `import math;` allows `math::add` syntax
+    alias_to_module[decl.module_name] = decl.module_name;
   }
 
   auto semi = expect(TokSemiColon);
@@ -254,29 +256,39 @@ auto Parser::ParseRecordDef() -> p<DefinitionAST> {
 }
 
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {
-  // this is for extern
+  // this is for extern / extern C
   if (auto extern_fn = expect(TokenType::TokExtern)) {
+    // Check for `extern C` (re-exported C linkage extern)
+    bool is_extern_c = false;
+    if (!tokStream->isEnd() && tokStream->peek()->tok_type == TokID &&
+        tokStream->peek()->lexeme == "C") {
+      tokStream->consume(); // eat the "C"
+      is_extern_c = true;
+    }
 
     auto [prototype, result] = ParsePrototype();
+    std::string kw = is_extern_c ? "extern C" : "extern";
     switch (result) {
     case SUCCESS: {
       if (!expect(TokSemiColon))
-        this->imm_error("Expected ';' after extern declaration",
+        this->imm_error("Expected ';' after " + kw + " declaration",
                         extern_fn->get_location());
-      return std::make_pair(std::make_unique<ExternAST>(std::move(prototype)),
-                            SUCCESS);
+      auto node = std::make_unique<ExternAST>(std::move(prototype));
+      node->is_exposed = is_extern_c;
+      return std::make_pair(std::move(node), SUCCESS);
     }
     case COMMITTED_EMIT_MORE_ERROR:
     case NONCOMMITTED:
       this->imm_error(result == NONCOMMITTED
-                          ? "Expected a function prototype after 'extern'"
-                          : "Incomplete function prototype after 'extern'",
+                          ? "Expected a function prototype after '" + kw + "'"
+                          : "Incomplete function prototype after '" + kw + "'",
                       extern_fn->get_location());
       [[fallthrough]];
     case COMMITTED_NO_MORE_ERROR:
       (void)expect(TokenType::TokSemiColon);
-      return std::make_pair(std::make_unique<ExternAST>(std::move(prototype)),
-                            COMMITTED_NO_MORE_ERROR);
+      auto node = std::make_unique<ExternAST>(std::move(prototype));
+      node->is_exposed = is_extern_c;
+      return std::make_pair(std::move(node), COMMITTED_NO_MORE_ERROR);
     }
   }
 
@@ -529,7 +541,7 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto id = expect(TokenType::TokID)) {
-    // Handle qualified type names: alias::TypeName (e.g. m::Point)
+    // Handle qualified type names: alias::TypeName (e.g. m::Point → math$Point)
     if (tokStream->peek()->tok_type == TokDoubleColon) {
       auto it = alias_to_module.find(id->lexeme);
       if (it != alias_to_module.end()) {
@@ -541,6 +553,8 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
               id->get_location());
           return nullptr;
         }
+        // Construct mangled name: module$TypeName
+        member_id->lexeme = it->second + "$" + member_id->lexeme;
         return std::make_unique<SimpleTypeExprAST>(member_id);
       }
     }
@@ -839,7 +853,6 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       {&Parser::ParseIfExpr, "IfExpr"},
       {&Parser::ParseNumberExpr, "NumberExpr"},
       {&Parser::ParseBoolExpr, "BoolExpr"},
-      {&Parser::ParseVariableExpr, "VariableExpr"},
       {&Parser::ParseStringExpr, "StringExpr"},
   };
 
@@ -960,28 +973,27 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
 
     // Combine LHS and RHS
     if (binOpToken->tok_type == TokenType::TokPipe) {
-      // x |> f  →  f(x)
-      if (auto *var = dynamic_cast<VariableExprAST *>(RHS.get())) {
-        auto tok = std::make_shared<Token>(TokenType::TokID, var->variableName,
-                                           var->get_location());
-        std::vector<std::unique_ptr<ExprAST>> args;
-        args.push_back(std::move(LHS));
-        LHS = std::make_unique<CallExprAST>(tok, std::move(args));
-      }
-      // x |> f(y, z)  →  f(x, y, z)
-      else if (auto *call = dynamic_cast<CallExprAST *>(RHS.get())) {
-        auto tok = std::make_shared<Token>(TokenType::TokID, call->functionName,
-                                           call->get_location());
-        std::vector<std::unique_ptr<ExprAST>> new_args;
-        new_args.push_back(std::move(LHS));
+      // x |> f      →  f(x)
+      // x |> f(y,z) →  f(x,y,z)
+      std::shared_ptr<Token> tok;
+      std::vector<std::unique_ptr<ExprAST>> new_args;
+
+      if (auto *call = dynamic_cast<CallExprAST *>(RHS.get())) {
+        tok = std::make_shared<Token>(TokenType::TokID, call->functionName,
+                                     call->get_location());
         for (auto &arg : call->arguments)
           new_args.push_back(std::move(arg));
-        LHS = std::make_unique<CallExprAST>(tok, std::move(new_args));
+      } else if (auto *var = dynamic_cast<VariableExprAST *>(RHS.get())) {
+        tok = std::make_shared<Token>(TokenType::TokID, var->variableName,
+                                     var->get_location());
       } else {
         this->imm_error("Right-hand side of |> must be a function name or call",
                         binOpToken->get_location());
         return {nullptr, COMMITTED_NO_MORE_ERROR};
       }
+
+      new_args.insert(new_args.begin(), std::move(LHS));
+      LHS = std::make_unique<CallExprAST>(tok, std::move(new_args));
     } else {
       LHS = std::make_unique<BinaryExprAST>(binOpToken, std::move(LHS),
                                             std::move(RHS));
@@ -1036,7 +1048,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (!id)
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
-  // Handle qualified names: alias::member (e.g. m::add)
+  // Handle qualified names: alias::member (e.g. m::add → math$add)
   if (tokStream->peek()->tok_type == TokDoubleColon) {
     auto it = alias_to_module.find(id->lexeme);
     if (it != alias_to_module.end()) {
@@ -1048,7 +1060,8 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
             id->get_location());
         return {nullptr, COMMITTED_NO_MORE_ERROR};
       }
-      // Replace id with the member name (desugar m.add → add)
+      // Construct mangled name: module$func
+      member_id->lexeme = it->second + "$" + member_id->lexeme;
       id = member_id;
     }
   }

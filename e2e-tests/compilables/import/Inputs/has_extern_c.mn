@@ -1,0 +1,6 @@
+extern C printf(fmt : ptr<i32>, ...) -> i32;
+
+let greet() -> i32 {
+  printf("hello from has_extern_c\n");
+  return 42;
+}

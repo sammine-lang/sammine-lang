@@ -1,0 +1,9 @@
+# RUN: %sammine --file %dir/Inputs/has_extern_c.mn && %sammine --file %full && ./import_extern_c_printf.exe | %check %full
+# CHECK: 99
+
+import has_extern_c as he;
+
+let main() -> i32 {
+  he::printf("%d\n", 99i32);
+  return 0;
+}

@@ -1,1 +1,1 @@
-extern printf(fmt : ptr<i32>, ...) -> i32;
+extern C printf(fmt : ptr<i32>, ...) -> i32;

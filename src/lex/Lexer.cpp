@@ -101,12 +101,12 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
     return i;
   }
   if (isalpha(input[i]) or
-      (input[i] == '_')) { // identifier: [a-zA-Z][a-zA-Z0-9]*
+      (input[i] == '_')) { // identifier: [a-zA-Z_][a-zA-Z0-9_$]*
     std::string IdentifierStr;
     IdentifierStr = input[i];
 
     i = advance(i);
-    while (isalnum(input[i]) or (input[i] == '_')) {
+    while (isalnum(input[i]) or (input[i] == '_') or (input[i] == '$')) {
       IdentifierStr += input[i];
       i = advance(i);
     }

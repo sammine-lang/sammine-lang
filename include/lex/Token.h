@@ -156,6 +156,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokAlloc, "alloc"},
     {TokFree, "free"},
     {TokLen, "len"},
+    {TokExtern, "extern"},
     {TokImport, "import"},
     {TokAs, "as"},
     {TokEllipsis, "..."},
