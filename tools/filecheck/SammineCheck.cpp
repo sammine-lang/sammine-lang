@@ -270,16 +270,30 @@ public:
             filtered_lines.push_back(file_lines[i]);
         }
 
-        // Build new CHECK lines from actual output
+        // Build new CHECK lines from actual output, skipping blank lines.
+        // After a blank gap, use CHECK: (search forward) instead of CHECK-NEXT:.
+        // Pad CHECK: with extra spaces so pattern text aligns with CHECK-NEXT:.
+        std::string next_directive = check_prefix_ + "-NEXT:";
+        std::string plain_directive = check_prefix_ + ":";
+        std::string padding(next_directive.size() - plain_directive.size(), ' ');
+
         std::vector<std::string> check_lines;
+        bool first = true;
+        bool after_blank = false;
         for (size_t i = 0; i < output_lines.size(); i++) {
-            std::string directive = (i == 0) ? (check_prefix_ + ":") : (check_prefix_ + "-NEXT:");
-            if (output_lines[i].empty()) {
-                // Empty lines need {{^$}} regex to match explicitly
-                check_lines.push_back("# " + directive + " {{^$}}");
-            } else {
-                check_lines.push_back("# " + directive + " " + output_lines[i]);
+            if (output_lines[i].empty() || is_lit_directive(output_lines[i])) {
+                after_blank = true;
+                continue;
             }
+            // Sanitize: strip directory prefixes from paths
+            std::string escaped = sanitize_output_line(output_lines[i]);
+            if (first || after_blank) {
+                check_lines.push_back("# " + plain_directive + padding + " " + escaped);
+            } else {
+                check_lines.push_back("# " + next_directive + " " + escaped);
+            }
+            first = false;
+            after_blank = false;
         }
 
         if (output_lines.empty()) {
@@ -331,6 +345,21 @@ public:
     }
 
 private:
+    static std::string sanitize_output_line(const std::string &line) {
+        // Strip directory prefixes from .mn paths to just the filename.
+        // Matches "some/path/to/foo.mn" or "/abs/path/foo.mn" -> "foo.mn"
+        std::regex path_re("[^ |]*/([^/ ]+\\.mn)");
+        return std::regex_replace(line, path_re, "$1");
+    }
+
+    bool is_lit_directive(const std::string &line) const {
+        // Skip output lines containing lit/check directives (RUN:, CHECK:, etc.)
+        // These are source context lines echoed by the compiler.
+        if (line.find("RUN:") != std::string::npos) return true;
+        if (is_check_directive(line)) return true;
+        return false;
+    }
+
     bool is_check_directive(const std::string &line) const {
         // Check if line contains any CHECK directive with the configured prefix
         if (line.find(check_prefix_ + ":") != std::string::npos) return true;
