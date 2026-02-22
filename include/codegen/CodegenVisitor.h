@@ -41,6 +41,11 @@ private:
   llvm::Value *emitArrayElementGEP(llvm::Value *base, llvm::Value *idx,
                                    llvm::Type *arrLlvmType, size_t arrSize);
 
+  void emitCall(ExprAST *ast, llvm::FunctionCallee callee,
+                llvm::ArrayRef<llvm::Value *> args, const llvm::Twine &name);
+  void emitPartialApplication(CallExprAST *ast, llvm::Function *callee,
+                              llvm::ArrayRef<llvm::Value *> boundArgs);
+
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
 

@@ -93,6 +93,87 @@ void CgVisitor::postorder_walk(FuncDefAST *ast) {
 
 void CgVisitor::preorder_walk(CallExprAST *ast) {}
 
+void CgVisitor::emitCall(ExprAST *ast, llvm::FunctionCallee callee,
+                         llvm::ArrayRef<llvm::Value *> args,
+                         const llvm::Twine &name) {
+  if (callee.getFunctionType()->getReturnType()->isVoidTy())
+    resPtr->Builder->CreateCall(callee, args);
+  else
+    ast->val = resPtr->Builder->CreateCall(callee, args, name);
+}
+
+void CgVisitor::emitPartialApplication(CallExprAST *ast,
+                                        llvm::Function *callee,
+                                        llvm::ArrayRef<llvm::Value *> boundArgs) {
+  this->abort_if_not(ast->callee_func_type.has_value(),
+                     "ICE: partial call missing callee_func_type");
+  auto full_ft = std::get<FunctionType>(ast->callee_func_type->type_data);
+  auto all_params = full_ft.get_params_types();
+  size_t bound_count = boundArgs.size();
+
+  // Create env struct type for bound args
+  std::vector<llvm::Type *> env_fields;
+  for (size_t i = 0; i < bound_count; i++)
+    env_fields.push_back(type_converter.get_type(all_params[i]));
+  auto *envStructTy = llvm::StructType::get(*resPtr->Context, env_fields);
+
+  // Stack-allocate env and store bound args
+  auto *envAlloca = CodegenUtils::CreateEntryBlockAlloca(
+      getCurrentFunction(), "partial_env", envStructTy);
+  for (size_t i = 0; i < bound_count; i++) {
+    auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envAlloca, i);
+    resPtr->Builder->CreateStore(boundArgs[i], gep);
+  }
+
+  // Generate partial wrapper function at module scope
+  // Signature: ret_type(ptr %env, remaining_param_types...)
+  auto ret_type = full_ft.get_return_type();
+  std::vector<llvm::Type *> wrapperParams;
+  wrapperParams.push_back(llvm::PointerType::get(*resPtr->Context, 0)); // env
+  for (size_t i = bound_count; i < all_params.size(); i++)
+    wrapperParams.push_back(type_converter.get_type(all_params[i]));
+
+  llvm::Type *llvm_ret = ret_type.type_kind == TypeKind::Unit
+                             ? llvm::Type::getVoidTy(*resPtr->Context)
+                             : type_converter.get_type(ret_type);
+  auto *wrapperFT = llvm::FunctionType::get(llvm_ret, wrapperParams, false);
+  auto wrapperName = fmt::format("__partial_{}", partial_counter++);
+  auto *wrapper =
+      llvm::Function::Create(wrapperFT, llvm::Function::InternalLinkage,
+                             wrapperName, resPtr->Module.get());
+
+  {
+    llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
+
+    auto *entry =
+        llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
+    resPtr->Builder->SetInsertPoint(entry);
+
+    // Load bound args from env
+    auto *envArg = &*wrapper->arg_begin();
+    std::vector<llvm::Value *> fullArgs;
+    for (size_t i = 0; i < bound_count; i++) {
+      auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
+      fullArgs.push_back(resPtr->Builder->CreateLoad(env_fields[i], gep));
+    }
+    // Forward remaining args
+    for (auto it = wrapper->arg_begin() + 1; it != wrapper->arg_end(); ++it)
+      fullArgs.push_back(&*it);
+
+    if (llvm_ret->isVoidTy()) {
+      resPtr->Builder->CreateCall(callee, fullArgs);
+      resPtr->Builder->CreateRetVoid();
+    } else {
+      auto *result =
+          resPtr->Builder->CreateCall(callee, fullArgs, "partial_call");
+      resPtr->Builder->CreateRet(result);
+    }
+  }
+
+  // Build closure struct: {partial_fn_ptr, env_ptr}
+  ast->val = buildClosure(wrapper, envAlloca);
+}
+
 void CgVisitor::postorder_walk(CallExprAST *ast) {
   // Collect argument values
   std::vector<llvm::Value *> ArgsVector;
@@ -110,10 +191,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     if (!callee->isVarArg() && ast->arguments.size() != callee->arg_size())
       this->abort("Incorrect number of arguments passed");
 
-    if (callee->getReturnType() != llvm::Type::getVoidTy(*resPtr->Context))
-      ast->val = resPtr->Builder->CreateCall(callee, ArgsVector, "calltmp");
-    else
-      resPtr->Builder->CreateCall(callee, ArgsVector);
+    emitCall(ast, callee, ArgsVector, "calltmp");
     return;
   }
 
@@ -126,72 +204,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
                  ast->functionName.display(), ast->arguments.size(), callee->arg_size(),
                  partial_counter);
     });
-    this->abort_if_not(ast->callee_func_type.has_value(),
-                       "ICE: partial call missing callee_func_type");
-    auto full_ft = std::get<FunctionType>(ast->callee_func_type->type_data);
-    auto all_params = full_ft.get_params_types();
-    size_t bound_count = ast->arguments.size();
-    // Create env struct type for bound args
-    std::vector<llvm::Type *> env_fields;
-    for (size_t i = 0; i < bound_count; i++)
-      env_fields.push_back(type_converter.get_type(all_params[i]));
-    auto *envStructTy = llvm::StructType::get(*resPtr->Context, env_fields);
-
-    // Stack-allocate env and store bound args
-    auto *envAlloca = CodegenUtils::CreateEntryBlockAlloca(
-        getCurrentFunction(), "partial_env", envStructTy);
-    for (size_t i = 0; i < bound_count; i++) {
-      auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envAlloca, i);
-      resPtr->Builder->CreateStore(ArgsVector[i], gep);
-    }
-
-    // Generate partial wrapper function at module scope
-    // Signature: ret_type(ptr %env, remaining_param_types...)
-    auto ret_type = full_ft.get_return_type();
-    std::vector<llvm::Type *> wrapperParams;
-    wrapperParams.push_back(llvm::PointerType::get(*resPtr->Context, 0)); // env
-    for (size_t i = bound_count; i < all_params.size(); i++)
-      wrapperParams.push_back(type_converter.get_type(all_params[i]));
-
-    llvm::Type *llvm_ret = ret_type.type_kind == TypeKind::Unit
-                               ? llvm::Type::getVoidTy(*resPtr->Context)
-                               : type_converter.get_type(ret_type);
-    auto *wrapperFT = llvm::FunctionType::get(llvm_ret, wrapperParams, false);
-    auto wrapperName = fmt::format("__partial_{}", partial_counter++);
-    auto *wrapper =
-        llvm::Function::Create(wrapperFT, llvm::Function::InternalLinkage,
-                               wrapperName, resPtr->Module.get());
-
-    {
-      llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
-
-      auto *entry =
-          llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
-      resPtr->Builder->SetInsertPoint(entry);
-
-      // Load bound args from env
-      auto *envArg = &*wrapper->arg_begin();
-      std::vector<llvm::Value *> fullArgs;
-      for (size_t i = 0; i < bound_count; i++) {
-        auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
-        fullArgs.push_back(resPtr->Builder->CreateLoad(env_fields[i], gep));
-      }
-      // Forward remaining args
-      for (auto it = wrapper->arg_begin() + 1; it != wrapper->arg_end(); ++it)
-        fullArgs.push_back(&*it);
-
-      if (llvm_ret->isVoidTy()) {
-        resPtr->Builder->CreateCall(callee, fullArgs);
-        resPtr->Builder->CreateRetVoid();
-      } else {
-        auto *result =
-            resPtr->Builder->CreateCall(callee, fullArgs, "partial_call");
-        resPtr->Builder->CreateRet(result);
-      }
-    }
-
-    // Build closure struct: {partial_fn_ptr, env_ptr}
-    ast->val = buildClosure(wrapper, envAlloca);
+    emitPartialApplication(ast, callee, ArgsVector);
     return;
   }
 
@@ -224,11 +237,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
     for (auto &v : ArgsVector)
       indirectArgs.push_back(v);
 
-    if (funcTy->getReturnType()->isVoidTy())
-      resPtr->Builder->CreateCall(funcTy, codePtr, indirectArgs);
-    else
-      ast->val =
-          resPtr->Builder->CreateCall(funcTy, codePtr, indirectArgs, "icall");
+    emitCall(ast, llvm::FunctionCallee(funcTy, codePtr), indirectArgs, "icall");
     return;
   }
 
