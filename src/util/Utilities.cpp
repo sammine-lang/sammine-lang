@@ -346,9 +346,102 @@ void Reporter::report(const Reportee &reports) const {
       }
       print_data_singular_line(str, it->second[0].col_start,
                                it->second[0].col_end);
-      for (const auto &ann : it->second) {
-        indicate_singular_line(ann.kind, ann.col_start, ann.col_end);
-        report_singular_line(ann.kind, ann.msgs, ann.col_start, ann.col_end);
+      // Partition annotations into runs of same-message same-kind
+      // (mergeable) vs others (rendered individually).
+      auto &anns = it->second;
+      size_t ai = 0;
+      while (ai < anns.size()) {
+        // Find a run of annotations with identical msgs and kind.
+        size_t run_end = ai + 1;
+        while (run_end < anns.size() && anns[run_end].msgs == anns[ai].msgs &&
+               anns[run_end].kind == anns[ai].kind)
+          run_end++;
+
+        {
+          // Ariadne-style render (works for single and merged groups).
+          size_t n = run_end - ai;
+          auto kind = anns[ai].kind;
+
+          // Compute effective span and pipe column for each annotation.
+          auto eff_span = [&](size_t idx,
+                              int64_t &es, int64_t &ee) {
+            es = anns[idx].col_start;
+            ee = anns[idx].col_end;
+            if (es == ee) {
+              es = std::max(int64_t(0), es - 1);
+              ee = es + 1;
+            }
+          };
+          auto pipe_col = [&](size_t idx) -> int64_t {
+            int64_t es, ee;
+            eff_span(idx, es, ee);
+            return ee - 1;
+          };
+
+          // Aligned message column: rightmost pipe + 3 (for "╰─ ")
+          auto msg_start = pipe_col(run_end - 1) + 3;
+
+          // First line: ─┬ style span markers.
+          print_fmt(LINE_COLOR, "    |");
+          int64_t pos = 0;
+          for (size_t k = ai; k < run_end; k++) {
+            int64_t es, ee;
+            eff_span(k, es, ee);
+            auto pc = ee - 1;
+            for (; pos < es; pos++)
+              print_fmt(kind, " ");
+            for (; pos < pc; pos++)
+              print_fmt(kind, "\u2500"); // ─
+            print_fmt(kind, "\u252C"); // ┬
+            pos++;
+          }
+          print_fmt(kind, "\n");
+
+          // Waterfall: for each annotation from rightmost to leftmost,
+          // print │ pipes for persisting spans, then ╰──── arrow to
+          // aligned message column.
+          for (size_t mi = n; mi > 0; mi--) {
+            print_fmt(LINE_COLOR, "    |");
+            pos = 0;
+            // │ for persisting spans 0..(mi-2)
+            for (size_t k = ai; k < ai + mi - 1; k++) {
+              auto pc = pipe_col(k);
+              for (; pos < pc; pos++)
+                print_fmt(kind, " ");
+              print_fmt(kind, "\u2502"); // │
+              pos++;
+            }
+            // ╰── turn with dashes extending to msg_start
+            auto cur_pc = pipe_col(ai + mi - 1);
+            for (; pos < cur_pc; pos++)
+              print_fmt(kind, " ");
+            print_fmt(kind, "\u2570"); // ╰
+            pos++;
+            for (; pos < msg_start - 1; pos++)
+              print_fmt(kind, "\u2500"); // ─
+            print_fmt(kind, " ");
+            pos++;
+            // First message
+            auto &cur_msgs = anns[ai + mi - 1].msgs;
+            print_fmt(kind, "{}\n", cur_msgs[0]);
+            // Continuation messages (e.g. dev location) — just indented
+            for (size_t msi = 1; msi < cur_msgs.size(); msi++) {
+              print_fmt(LINE_COLOR, "    |");
+              pos = 0;
+              for (size_t k = ai; k < ai + mi - 1; k++) {
+                auto pc = pipe_col(k);
+                for (; pos < pc; pos++)
+                  print_fmt(kind, " ");
+                print_fmt(kind, "\u2502"); // │
+                pos++;
+              }
+              for (; pos < msg_start; pos++)
+                print_fmt(kind, " ");
+              print_fmt(kind, "{}\n", cur_msgs[msi]);
+            }
+          }
+        }
+        ai = run_end;
       }
     }
   }
