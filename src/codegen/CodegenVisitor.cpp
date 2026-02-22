@@ -236,14 +236,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
         auto *arr_llvm_type = type_converter.get_type(deref->type);
         auto *idx = idx_expr->index_expr->val;
 
-        emitBoundsCheck(idx, arr_data.get_size());
-
-        auto *gep = resPtr->Builder->CreateGEP(
-            arr_llvm_type, ptr_val,
-            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
-                                    0),
-             idx},
-            "arr_idx_assign");
+        auto *gep = emitArrayElementGEP(ptr_val, idx, arr_llvm_type,
+                                        arr_data.get_size());
         resPtr->Builder->CreateStore(R, gep);
         ast->val = R;
         return;
@@ -260,13 +254,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       auto *arr_type = type_converter.get_type(var_expr->type);
       auto *idx = idx_expr->index_expr->val;
       auto &arr_data = std::get<ArrayType>(var_expr->type.type_data);
-      auto arr_size = arr_data.get_size();
-      emitBoundsCheck(idx, arr_size);
-      auto *gep = resPtr->Builder->CreateGEP(
-          arr_type, alloca,
-          {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
-           idx},
-          "arr_idx_assign");
+      auto *gep = emitArrayElementGEP(alloca, idx, arr_type,
+                                      arr_data.get_size());
       resPtr->Builder->CreateStore(R, gep);
       ast->val = R;
       return;
@@ -626,14 +615,8 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
     auto *arr_llvm_type = type_converter.get_type(deref->type);
     auto *idx = ast->index_expr->val;
 
-    emitBoundsCheck(idx, arr_data.get_size());
-
-    // GEP into the array through the pointer — same as the alloca case
-    auto *gep = resPtr->Builder->CreateGEP(
-        arr_llvm_type, ptr_val,
-        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
-         idx},
-        "arr_idx");
+    auto *gep = emitArrayElementGEP(ptr_val, idx, arr_llvm_type,
+                                    arr_data.get_size());
     ast->val = resPtr->Builder->CreateLoad(
         type_converter.get_type(arr_data.get_element()), gep, "arr_elem");
     return;
@@ -649,13 +632,7 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
   auto *arr_type = type_converter.get_type(var_expr->type);
   auto *idx = ast->index_expr->val;
 
-  emitBoundsCheck(idx, arr_data.get_size());
-
-  auto *gep = resPtr->Builder->CreateGEP(
-      arr_type, alloca,
-      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
-       idx},
-      "arr_idx");
+  auto *gep = emitArrayElementGEP(alloca, idx, arr_type, arr_data.get_size());
   ast->val = resPtr->Builder->CreateLoad(
       type_converter.get_type(arr_data.get_element()), gep, "arr_elem");
 }
@@ -829,6 +806,18 @@ llvm::Value *CgVisitor::emitArrayComparison(llvm::Value *L, llvm::Value *R,
     return resPtr->Builder->CreateNot(result, "arr_cmp_ne");
   }
   return result;
+}
+
+llvm::Value *CgVisitor::emitArrayElementGEP(llvm::Value *base,
+                                             llvm::Value *idx,
+                                             llvm::Type *arrLlvmType,
+                                             size_t arrSize) {
+  emitBoundsCheck(idx, arrSize);
+  return resPtr->Builder->CreateGEP(
+      arrLlvmType, base,
+      {llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context), 0),
+       idx},
+      "arr_idx");
 }
 
 llvm::Value *CgVisitor::buildClosure(llvm::Value *codePtr,

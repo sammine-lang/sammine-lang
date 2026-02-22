@@ -38,6 +38,8 @@ private:
   llvm::Value *emitArrayComparison(llvm::Value *L, llvm::Value *R,
                                    const Type &arrType, TokenType tok);
   llvm::Value *buildClosure(llvm::Value *codePtr, llvm::Value *envPtr);
+  llvm::Value *emitArrayElementGEP(llvm::Value *base, llvm::Value *idx,
+                                   llvm::Type *arrLlvmType, size_t arrSize);
 
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
