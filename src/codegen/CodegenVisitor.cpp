@@ -48,9 +48,7 @@ llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
     return it->second;
   }
 
-  // Save current insert point
-  auto savedBB = resPtr->Builder->GetInsertBlock();
-  auto savedPt = resPtr->Builder->GetInsertPoint();
+  llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
 
   // Create wrapper function: ret_type @__wrap_<name>(ptr %env, params...)
   auto *wrapperFT = type_converter.get_closure_function_type(ft);
@@ -74,10 +72,6 @@ llvm::Function *CgVisitor::getOrCreateClosureWrapper(llvm::Function *fn,
     auto *result = resPtr->Builder->CreateCall(fn, args, "wrap_call");
     resPtr->Builder->CreateRet(result);
   }
-
-  // Restore insert point
-  if (savedBB)
-    resPtr->Builder->SetInsertPoint(savedBB, savedPt);
 
   LOG({
     fmt::print(stderr, "[codegen] closure wrapper: creating __wrap_{}\n", name);
@@ -184,12 +178,11 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
       auto *entry =
           llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
 
-      auto *savedBB = resPtr->Builder->GetInsertBlock();
-      auto savedPt = resPtr->Builder->GetInsertPoint();
-      resPtr->Builder->SetInsertPoint(entry);
-      resPtr->Builder->CreateRet(fn);
-      if (savedBB)
-        resPtr->Builder->SetInsertPoint(savedBB, savedPt);
+      {
+        llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
+        resPtr->Builder->SetInsertPoint(entry);
+        resPtr->Builder->CreateRet(fn);
+      }
 
       // Create IFunc: @mangled = ifunc <FnTy>, ptr @resolver
       llvm::GlobalIFunc::create(fn->getFunctionType(), 0,

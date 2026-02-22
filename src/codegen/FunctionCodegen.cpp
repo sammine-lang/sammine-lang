@@ -162,35 +162,33 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
         llvm::Function::Create(wrapperFT, llvm::Function::InternalLinkage,
                                wrapperName, resPtr->Module.get());
 
-    // Save insert point
-    auto *savedBB = resPtr->Builder->GetInsertBlock();
-    auto savedPt = resPtr->Builder->GetInsertPoint();
+    {
+      llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
 
-    auto *entry = llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
-    resPtr->Builder->SetInsertPoint(entry);
+      auto *entry =
+          llvm::BasicBlock::Create(*resPtr->Context, "entry", wrapper);
+      resPtr->Builder->SetInsertPoint(entry);
 
-    // Load bound args from env
-    auto *envArg = &*wrapper->arg_begin();
-    std::vector<llvm::Value *> fullArgs;
-    for (size_t i = 0; i < bound_count; i++) {
-      auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
-      fullArgs.push_back(resPtr->Builder->CreateLoad(env_fields[i], gep));
+      // Load bound args from env
+      auto *envArg = &*wrapper->arg_begin();
+      std::vector<llvm::Value *> fullArgs;
+      for (size_t i = 0; i < bound_count; i++) {
+        auto *gep = resPtr->Builder->CreateStructGEP(envStructTy, envArg, i);
+        fullArgs.push_back(resPtr->Builder->CreateLoad(env_fields[i], gep));
+      }
+      // Forward remaining args
+      for (auto it = wrapper->arg_begin() + 1; it != wrapper->arg_end(); ++it)
+        fullArgs.push_back(&*it);
+
+      if (llvm_ret->isVoidTy()) {
+        resPtr->Builder->CreateCall(callee, fullArgs);
+        resPtr->Builder->CreateRetVoid();
+      } else {
+        auto *result =
+            resPtr->Builder->CreateCall(callee, fullArgs, "partial_call");
+        resPtr->Builder->CreateRet(result);
+      }
     }
-    // Forward remaining args
-    for (auto it = wrapper->arg_begin() + 1; it != wrapper->arg_end(); ++it)
-      fullArgs.push_back(&*it);
-
-    if (llvm_ret->isVoidTy()) {
-      resPtr->Builder->CreateCall(callee, fullArgs);
-      resPtr->Builder->CreateRetVoid();
-    } else {
-      auto *result =
-          resPtr->Builder->CreateCall(callee, fullArgs, "partial_call");
-      resPtr->Builder->CreateRet(result);
-    }
-
-    // Restore insert point
-    resPtr->Builder->SetInsertPoint(savedBB, savedPt);
 
     // Build closure struct: {partial_fn_ptr, env_ptr}
     auto *closureTy =
