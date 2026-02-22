@@ -228,8 +228,22 @@ size_t Lexer::handleSpaces(size_t i, const std::string &input) {
 }
 
 size_t Lexer::handleInvalid(size_t i, const std::string &input) {
+  size_t start = i;
   i = advance(i);
-  tokStream->push_back(Token(TokINVALID, input.substr(i - 1, 1), location));
+  while (i < input.length() && !isspace(input[i]) && !isalpha(input[i]) &&
+         !isdigit(input[i]) && input[i] != '_' && input[i] != '"' &&
+         input[i] != '+' && input[i] != '-' && input[i] != '*' &&
+         input[i] != '/' && input[i] != '%' && input[i] != '&' &&
+         input[i] != '|' && input[i] != '^' && input[i] != '<' &&
+         input[i] != '>' && input[i] != '=' && input[i] != '!' &&
+         input[i] != '(' && input[i] != ')' && input[i] != '{' &&
+         input[i] != '}' && input[i] != '[' && input[i] != ']' &&
+         input[i] != '#' && input[i] != ',' && input[i] != ';' &&
+         input[i] != ':' && input[i] != '.') {
+    i = advance(i);
+  }
+  tokStream->push_back(
+      Token(TokINVALID, input.substr(start, i - start), location));
   add_error(location, "Encountered invalid token");
   return i;
 }
