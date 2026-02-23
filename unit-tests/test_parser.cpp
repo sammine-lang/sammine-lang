@@ -33,7 +33,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
-        static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
+        static_cast<sammine_lang::AST::VarDefAST *>(programAST.node.get());
     REQUIRE(varDef->TypedVar->name == "b");
     REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }
@@ -48,7 +48,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
-        static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
+        static_cast<sammine_lang::AST::VarDefAST *>(programAST.node.get());
     REQUIRE(varDef->TypedVar->name == "b");
     REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }
@@ -63,7 +63,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     REQUIRE_FALSE(pg.has_errors());
 
     auto varDef =
-        static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
+        static_cast<sammine_lang::AST::VarDefAST *>(programAST.node.get());
     REQUIRE(varDef->TypedVar->name == "b");
     REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
 
@@ -81,7 +81,7 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
     auto programAST = pg.ParseVarDef();
 
     auto varDef =
-        static_cast<sammine_lang::AST::VarDefAST *>(programAST.first.get());
+        static_cast<sammine_lang::AST::VarDefAST *>(programAST.node.get());
     REQUIRE(varDef->TypedVar->name == "b");
     REQUIRE(varDef->TypedVar->type_expr->to_string() == "blablabla");
   }

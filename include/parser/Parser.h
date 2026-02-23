@@ -13,10 +13,28 @@
 namespace sammine_lang {
 enum ParserError {
   SUCCESS,
-  COMMITTED_NO_MORE_ERROR,
-  COMMITTED_EMIT_MORE_ERROR,
+  FAILED,
   NONCOMMITTED,
 };
+
+template <typename T> struct ParseResult {
+  std::unique_ptr<T> node;
+  ParserError status;
+  bool ok() const { return status == SUCCESS; }
+  bool failed() const { return status == FAILED; }
+  bool uncommitted() const { return status == NONCOMMITTED; }
+};
+#define PARSER_UNREACHABLE()                                                   \
+  do {                                                                         \
+    sammine_util::abort("Unreachable");                                        \
+    std::unreachable();                                                        \
+  } while (0)
+#define REQUIRE(var, tokType, msg, loc, ...)                                   \
+  auto var = expect(tokType);                                                  \
+  if (!(var)) {                                                                \
+    imm_error(msg, loc);                                                       \
+    return __VA_ARGS__;                                                        \
+  }
 using namespace AST;
 using namespace sammine_util;
 class Parser : public Reportee {
@@ -40,10 +58,17 @@ class Parser : public Reportee {
       reporter->get().immediate_diag(msg, loc, src);
     }
   }
+  void emit_if_uncommitted(
+      ParserError result, const std::string &msg, Location loc,
+      std::source_location src = std::source_location::current()) {
+    if (result == NONCOMMITTED)
+      imm_error(msg, loc, src);
+  }
 
 public:
-  template <class T> using p = std::pair<std::unique_ptr<T>, ParserError>;
+  template <class T> using p = ParseResult<T>;
   template <class T> using u = std::unique_ptr<T>;
+  template <class T> using ListResult = std::pair<std::vector<u<T>>, ParserError>;
 
 private:
   template <typename NodeT>
@@ -53,6 +78,13 @@ private:
   template <typename NodeT>
   [[nodiscard]] auto ParseUnaryPrefixExpr(TokenType opTok,
                                           const std::string &opStr) -> p<ExprAST>;
+
+  template <typename T, typename... Fns>
+  auto tryParsers(Fns... fns) -> p<T> {
+    p<T> result{nullptr, NONCOMMITTED};
+    (void)((result = (this->*fns)(), result.status != NONCOMMITTED) || ...);
+    return result;
+  }
 
 public:
   std::optional<std::reference_wrapper<Reporter>> reporter;
@@ -74,9 +106,10 @@ public:
   [[nodiscard]] auto ParseTypeExpr() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypedVar() -> p<TypedVarAST>;
 
-  // Parse pressions
+  // Parse expressions
   [[nodiscard]] auto ParseExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParsePrimaryExpr() -> p<ExprAST>;
+  [[nodiscard]] auto parsePostfixOps(u<ExprAST> expr) -> p<ExprAST>;
   [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS)
       -> p<ExprAST>;
   [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
@@ -89,9 +122,10 @@ public:
   [[nodiscard]] auto ParseLenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,
+                                            Location qn_loc) -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseArguments()
-      -> std::pair<std::vector<u<ExprAST>>, ParserError>;
+  [[nodiscard]] auto ParseArguments() -> ListResult<ExprAST>;
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseNumberExpr() -> p<ExprAST>;
@@ -102,14 +136,22 @@ public:
   [[nodiscard]] auto ParseBlock() -> p<BlockAST>;
 
   // Parse parameters
-  [[nodiscard]] auto ParseParams()
-      -> std::pair<std::vector<u<TypedVarAST>>, ParserError>;
+  [[nodiscard]] auto ParseParams() -> ListResult<TypedVarAST>;
 
   // Utilities
   [[nodiscard]] auto expect(TokenType tokType, bool exhausts = false,
                             TokenType until = TokenType::TokEOF,
                             const std::string &message = "")
       -> std::shared_ptr<Token>;
+
+  [[nodiscard]] auto resolveQualifiedName(const std::string &alias,
+                                          const std::string &member)
+      -> sammine_util::QualifiedName {
+    auto it = alias_to_module.find(alias);
+    if (it != alias_to_module.end())
+      return sammine_util::QualifiedName::qualified(it->second, member);
+    return sammine_util::QualifiedName::unresolved_qualified(alias, member);
+  }
 
   // The lexer merges ">>" into a single TokSHR token. When parsing nested
   // angle brackets (e.g. ptr<ptr<i32>>), the innermost closing '>' consumes
