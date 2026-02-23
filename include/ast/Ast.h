@@ -15,6 +15,21 @@
 //! \brief Defined the AST Node classes (ProgramAST, StructDefAST, FuncDefAST)
 //! and a visitor interface for traversing the AST
 
+// clang-format off
+#define AST_NODE_METHODS(tree_name)                                            \
+  std::string getTreeName() const override { return tree_name; }               \
+  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }      \
+  void walk_with_preorder(ASTVisitor *visitor) override {                      \
+    visitor->preorder_walk(this);                                              \
+  }                                                                            \
+  void walk_with_postorder(ASTVisitor *visitor) override {                     \
+    visitor->postorder_walk(this);                                             \
+  }                                                                            \
+  Type accept_synthesis(TypeCheckerVisitor *visitor) override {                \
+    return visitor->synthesize(this);                                          \
+  }
+// clang-format on
+
 namespace sammine_lang {
 
 namespace AST {
@@ -96,17 +111,7 @@ class ProgramAST : public AstBase, public Printable {
 public:
   std::vector<ImportDecl> imports;
   std::vector<std::unique_ptr<DefinitionAST>> DefinitionVec;
-  virtual std::string getTreeName() const override { return "ProgramAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("ProgramAST")
 };
 
 class TypedVarAST : public AstBase, public Printable {
@@ -131,18 +136,7 @@ public:
     if (name)
       this->name = name->lexeme;
   }
-  virtual std::string getTreeName() const override { return "TypedVarAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("TypedVarAST")
 };
 
 //! \brief A prototype to present "func func_name(...) -> type;"
@@ -192,20 +186,10 @@ public:
     for (size_t i = 0; i < this->parameterVectors.size(); i++)
       this->join_location(this->parameterVectors[i]->get_location());
   }
-  virtual std::string getTreeName() const override { return "PrototypeAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
 
   bool returnsUnit() const { return return_type_expr == nullptr; }
 
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("PrototypeAST")
 };
 
 //! \brief A Function Definition that has the prototype and definition in terms
@@ -219,18 +203,7 @@ public:
       : Prototype(std::move(Prototype)) {
     this->join_location(this->Prototype.get());
   }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-
-  virtual std::string getTreeName() const override { return "ExternAST"; }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("ExternAST")
 };
 class ExprAST : public AstBase, public Printable {
 public:
@@ -245,17 +218,7 @@ class BlockAST : public AstBase, public Printable {
 
 public:
   std::vector<std::unique_ptr<ExprAST>> Statements;
-  virtual std::string getTreeName() const override { return "BlockAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("BlockAST")
 };
 
 class FuncDefAST : public DefinitionAST {
@@ -271,22 +234,11 @@ public:
         ->join_location(this->Block.get());
   }
 
-  virtual std::string getTreeName() const override { return "FuncDefAST"; }
-
   std::string getFunctionName() const { return Prototype->functionName; }
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
 
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("FuncDefAST")
 };
 
 // struct id { typed_var }
@@ -294,7 +246,6 @@ class StructDefAST : public DefinitionAST {
 public:
   std::string struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
-  virtual std::string getTreeName() const override { return "StructDefAST"; }
 
   explicit StructDefAST(std::shared_ptr<Token> struct_id,
                         decltype(struct_members) struct_members)
@@ -306,16 +257,7 @@ public:
     for (auto &m : struct_members)
       this->join_location(m.get());
   }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("StructDefAST")
 };
 
 //! \brief A variable definition: "var x = expression;"
@@ -337,17 +279,7 @@ public:
         ->join_location(this->Expression.get());
   };
 
-  virtual std::string getTreeName() const override { return "VarDefAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("VarDefAST")
 };
 class NumberExprAST : public ExprAST {
 public:
@@ -358,17 +290,7 @@ public:
     join_location(t);
     number = t->lexeme;
   }
-  virtual std::string getTreeName() const override { return "NumberExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("NumberExprAST")
 };
 class StringExprAST : public ExprAST {
 public:
@@ -379,17 +301,7 @@ public:
     join_location(t);
     string_content = t->lexeme;
   }
-  virtual std::string getTreeName() const override { return "StringExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("StringExprAST")
 };
 
 class BoolExprAST : public ExprAST {
@@ -398,17 +310,7 @@ public:
   BoolExprAST(bool b, sammine_util::Location loc) : b(b) {
     this->location = loc;
   }
-  virtual std::string getTreeName() const override { return "BoolExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("BoolExprAST")
 };
 class BinaryExprAST : public ExprAST {
 public:
@@ -422,17 +324,7 @@ public:
         ->join_location(this->RHS.get());
   }
 
-  virtual std::string getTreeName() const override { return "BinaryExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("BinaryExprAST")
 };
 class ReturnExprAST : public ExprAST {
 
@@ -456,17 +348,7 @@ public:
     this->join_location(this->return_expr.get());
   }
 
-  virtual std::string getTreeName() const override { return "ReturnExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("ReturnExprAST")
 };
 class CallExprAST : public ExprAST {
 
@@ -499,17 +381,7 @@ public:
     this->arguments = std::move(arguments);
   }
 
-  virtual std::string getTreeName() const override { return "CallExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("CallExprAST")
 };
 
 class UnitExprAST : public ExprAST {
@@ -526,17 +398,7 @@ public:
   };
   explicit UnitExprAST() : is_implicit(true) {}
 
-  virtual std::string getTreeName() const override { return "UnitExpr"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("UnitExprAST")
 };
 class IfExprAST : public ExprAST {
 public:
@@ -552,17 +414,7 @@ public:
         ->join_location(this->elseBlockAST.get());
   }
 
-  virtual std::string getTreeName() const override { return "IfExpr"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("IfExprAST")
 };
 class VariableExprAST : public ExprAST {
 public:
@@ -573,17 +425,7 @@ public:
       variableName = var->lexeme;
   };
 
-  virtual std::string getTreeName() const override { return "VariableExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("VariableExprAST")
 };
 class DerefExprAST : public ExprAST {
 public:
@@ -593,17 +435,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(star_tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "DerefExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("DerefExprAST")
 };
 
 class AddrOfExprAST : public ExprAST {
@@ -614,17 +446,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(amp_tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "AddrOfExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("AddrOfExprAST")
 };
 class AllocExprAST : public ExprAST {
 public:
@@ -634,17 +456,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "AllocExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("AllocExprAST")
 };
 
 class FreeExprAST : public ExprAST {
@@ -655,17 +467,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "FreeExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("FreeExprAST")
 };
 class ArrayLiteralExprAST : public ExprAST {
 public:
@@ -676,19 +478,7 @@ public:
       if (e)
         this->join_location(e.get());
   }
-  virtual std::string getTreeName() const override {
-    return "ArrayLiteralExprAST";
-  }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("ArrayLiteralExprAST")
 };
 
 class IndexExprAST : public ExprAST {
@@ -701,17 +491,7 @@ public:
     this->join_location(this->array_expr.get())
         ->join_location(this->index_expr.get());
   }
-  virtual std::string getTreeName() const override { return "IndexExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("IndexExprAST")
 };
 
 class LenExprAST : public ExprAST {
@@ -722,17 +502,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "LenExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("LenExprAST")
 };
 
 class UnaryNegExprAST : public ExprAST {
@@ -743,17 +513,7 @@ public:
       : operand(std::move(operand)) {
     this->join_location(op_tok)->join_location(this->operand.get());
   }
-  virtual std::string getTreeName() const override { return "UnaryNegExprAST"; }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("UnaryNegExprAST")
 };
 
 class StructLiteralExprAST : public ExprAST {
@@ -786,19 +546,7 @@ public:
       if (v)
         this->join_location(v.get());
   }
-  virtual std::string getTreeName() const override {
-    return "StructLiteralExprAST";
-  }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("StructLiteralExprAST")
 };
 
 class FieldAccessExprAST : public ExprAST {
@@ -813,20 +561,10 @@ public:
     if (field_tok)
       this->field_name = field_tok->lexeme;
   }
-  virtual std::string getTreeName() const override {
-    return "FieldAccessExprAST";
-  }
-  void accept_vis(ASTVisitor *visitor) override { visitor->visit(this); }
-  virtual void walk_with_preorder(ASTVisitor *visitor) override {
-    visitor->preorder_walk(this);
-  }
-  virtual void walk_with_postorder(ASTVisitor *visitor) override {
-    visitor->postorder_walk(this);
-  }
-  virtual Type accept_synthesis(TypeCheckerVisitor *visitor) override {
-    return visitor->synthesize(this);
-  }
+  AST_NODE_METHODS("FieldAccessExprAST")
 };
 
 } // namespace AST
 } // namespace sammine_lang
+
+#undef AST_NODE_METHODS
