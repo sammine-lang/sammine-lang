@@ -74,10 +74,14 @@ enum TokenType {
   TokArrow,  // ->
   TokLet,    // let
   TokMUT,    // mut
-  TokExtern, // extern
+  TokReuse,  // reuse
+  TokExport, // export
   TokImport, // import
-  TokAs,       // as
-  TokEllipsis, // ...
+  TokAs,        // as
+  TokEllipsis,  // ...
+  TokTypeclass, // typeclass
+  TokInstance,  // instance
+  TokSizeof,    // sizeof
   // TokID
   TokID,  // Representing an identifier
   TokStr, // Representing a string
@@ -157,10 +161,14 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokAlloc, "alloc"},
     {TokFree, "free"},
     {TokLen, "len"},
-    {TokExtern, "extern"},
+    {TokReuse, "reuse"},
+    {TokExport, "export"},
     {TokImport, "import"},
     {TokAs, "as"},
     {TokEllipsis, "..."},
+    {TokTypeclass, "typeclass"},
+    {TokInstance, "instance"},
+    {TokSizeof, "sizeof"},
     {TokID, "identifier"},
 
     {TokNum, "number"},
