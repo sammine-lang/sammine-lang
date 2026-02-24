@@ -10,6 +10,7 @@ knowledge_base/
 scratch/
 log/
 plans/
+.serena/
 
 # Module interface files
 *.mni
