@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 4
+# CHECK: 99
+
+# Test: struct named 'T' — same name as the typeclass type parameter in Sized<T>.
+# Verifies that sizeof<T>() resolves T to our struct, not the abstract param.
+
+reuse printf(fmt : ptr<i32>, ...) -> i32;
+
+struct T { val : i32, };
+
+instance Sized<T> {
+  let sizeof() -> i64 { 99i64 }
+}
+
+let main() -> i32 {
+  printf("%ld\n", sizeof<i32>());
+  printf("%ld\n", sizeof<T>());
+  return 0;
+}

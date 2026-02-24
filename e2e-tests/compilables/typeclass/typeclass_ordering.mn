@@ -1,0 +1,29 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 8
+
+# DoubleSized instance is defined BEFORE Doubled instance,
+# but DoubleSized<i32>::double_size calls doubled<i32>().
+# Tests that forward declarations handle cross-typeclass dependencies.
+
+reuse printf(fmt : ptr<i32>, ...) -> i32;
+
+typeclass DoubleSized<T> {
+  double_size() -> i64;
+}
+
+typeclass Doubled<T> {
+  doubled() -> i64;
+}
+
+instance DoubleSized<i32> {
+  let double_size() -> i64 { doubled<i32>() }
+}
+
+instance Doubled<i32> {
+  let doubled() -> i64 { 8i64 }
+}
+
+let main() -> i32 {
+  printf("%ld\n", double_size<i32>());
+  return 0;
+}

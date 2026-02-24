@@ -1,0 +1,25 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 4
+# CHECK: 8
+
+# User-defined typeclass with custom method name (not just sizeof)
+
+reuse printf(fmt : ptr<i32>, ...) -> i32;
+
+typeclass MySize<T> {
+  mysize() -> i64;
+}
+
+instance MySize<i32> {
+  let mysize() -> i64 { 4i64 }
+}
+
+instance MySize<i64> {
+  let mysize() -> i64 { 8i64 }
+}
+
+let main() -> i32 {
+  printf("%ld\n", mysize<i32>());
+  printf("%ld\n", mysize<i64>());
+  return 0;
+}

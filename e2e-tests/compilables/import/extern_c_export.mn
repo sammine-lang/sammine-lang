@@ -1,9 +1,9 @@
 # RUN: %sammine --file %dir/Inputs/has_extern_c.mn && cat has_extern_c.mni | %check %full
 
-# extern C re-exports a C extern — both the exposed extern and let-functions
+# reuse re-exports a C binding — both the reuse and let-functions
 # should appear in .mni with mangled names
-# CHECK: extern has_extern_c$printf
-# CHECK: extern has_extern_c$greet
+# CHECK: reuse has_extern_c$printf
+# CHECK: reuse has_extern_c$greet
 
 let main() -> i32 {
   return 0;

@@ -6,7 +6,7 @@
 
 import std;                                   # import standard library (provides printf)
 
-extern sqrt(x: f64) -> f64;                  # C extern (private to this file)
+reuse sqrt(x: f64) -> f64;                   # C function binding
 
 let add(a: i32, b: i32) -> i32 {             # function definition
   a + b                                       # implicit return (last expression)
@@ -57,16 +57,16 @@ let main() -> i32 {
   let r2 = 5 |> identity |> add(3);         # chained pipes
 
   # --- Partial function application ---
-  let add5: (i32) -> i32 = add(5);          # fewer args -> new function
+  let add5 = add(5);                         # fewer args -> new function
   let eight = add5(3);                       # call the partially applied fn
 
   # --- Higher-order functions ---
-  let f: (i32) -> i32 = add5;              # function as value
+  let f: (i32) -> i32 = add5;               # function as value
   let res = apply(f, 42);                   # pass function as argument
 
   # --- Generics (monomorphized) ---
   let a_i32 = identity(42);                 # instantiates identity.i32
-  let a_f64 = identity(3.14);              # instantiates identity.f64
+  let a_f64 = identity(3.14);               # instantiates identity.f64
 
   std::printf("%d\n", fib(9));
   return 0;                                  # explicit return

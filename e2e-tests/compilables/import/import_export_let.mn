@@ -1,0 +1,9 @@
+# RUN: %sammine --file %dir/Inputs/has_export_let.mn && %sammine --file %full && ./import_export_let.exe | %check %full
+# CHECK: hello from export let
+
+import has_export_let as lib;
+
+let main() -> i32 {
+  lib::greet_c();
+  return 0;
+}

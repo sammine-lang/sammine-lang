@@ -1,0 +1,10 @@
+# RUN: %sammine --file %dir/Inputs/has_export_let.mn && cat has_export_let.mni | %check %full
+
+# export let functions appear in .mni with mangled names, as do reuse bindings
+# CHECK: reuse has_export_let$printf
+# CHECK: reuse has_export_let$greet_c
+# CHECK: reuse has_export_let$internal_only
+
+let main() -> i32 {
+  return 0;
+}

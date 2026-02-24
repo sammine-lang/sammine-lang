@@ -1,0 +1,19 @@
+typeclass Sized<T> {
+  sizeof() -> i64;
+}
+
+instance Sized<i32> {
+  let sizeof() -> i64 { 4i64 }
+}
+
+instance Sized<i64> {
+  let sizeof() -> i64 { 8i64 }
+}
+
+instance Sized<f64> {
+  let sizeof() -> i64 { 8i64 }
+}
+
+instance Sized<bool> {
+  let sizeof() -> i64 { 1i64 }
+}
