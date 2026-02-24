@@ -46,6 +46,10 @@ public:
   // INFO: CheckAndReg variable name
   virtual void preorder_walk(VarDefAST *ast) override;
 
+  // Type class decls/instances: skip scope checking for their methods
+  virtual void visit(TypeClassDeclAST *ast) override {}
+  virtual void visit(TypeClassInstanceAST *ast) override {}
+
   // INFO: CheckAndReg extern name
   virtual void visit(ExternAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
@@ -79,6 +83,8 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(TypeClassDeclAST *ast) override;
+  virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -109,6 +115,8 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(TypeClassDeclAST *ast) override;
+  virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 };
 
 } // namespace sammine_lang::AST

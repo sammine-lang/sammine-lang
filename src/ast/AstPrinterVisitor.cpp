@@ -105,6 +105,8 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(TypeClassDeclAST *ast) override;
+  virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -134,6 +136,11 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(TypeClassDeclAST *ast) override;
+  virtual void postorder_walk(TypeClassInstanceAST *ast) override;
+
+  virtual void visit(TypeClassDeclAST *ast) override;
+  virtual void visit(TypeClassInstanceAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -522,5 +529,32 @@ void AstPrinterVisitor::visit(FieldAccessExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+
+void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  for (auto &method : ast->methods)
+    safeguard_visit(method.get(), "!!nullptr!! PrototypeAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  for (auto &method : ast->methods)
+    safeguard_visit(method.get(), "!!nullptr!! FuncDefAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(TypeClassDeclAST *ast) {
+  add_to_rep(fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name,
+                         ast->type_param));
+}
+void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
+  add_to_rep(fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name,
+                         ast->concrete_type.to_string()));
+}
+void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
+void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 
 } // namespace sammine_lang::AST

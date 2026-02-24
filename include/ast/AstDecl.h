@@ -34,6 +34,8 @@ class LenExprAST;
 class UnaryNegExprAST;
 class StructLiteralExprAST;
 class FieldAccessExprAST;
+class TypeClassDeclAST;
+class TypeClassInstanceAST;
 
 } // namespace AST
 } // namespace sammine_lang

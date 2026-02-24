@@ -226,6 +226,7 @@ public:
   ~FuncDefAST() = default;
   std::unique_ptr<PrototypeAST> Prototype;
   std::unique_ptr<BlockAST> Block;
+  bool is_exported = false;
 
   FuncDefAST(std::unique_ptr<PrototypeAST> Prototype,
              std::unique_ptr<BlockAST> Block)
@@ -359,6 +360,8 @@ public:
   bool is_partial = false;
   std::optional<std::string> resolved_generic_name;
   std::unordered_map<std::string, Type> type_bindings;
+  std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
+  bool is_typeclass_call = false;
   explicit CallExprAST(
       std::shared_ptr<Token> tok,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
@@ -562,6 +565,39 @@ public:
       this->field_name = field_tok->lexeme;
   }
   AST_NODE_METHODS("FieldAccessExprAST")
+};
+
+class TypeClassDeclAST : public DefinitionAST {
+public:
+  std::string class_name;
+  std::string type_param;
+  std::vector<std::unique_ptr<PrototypeAST>> methods;
+  explicit TypeClassDeclAST(std::shared_ptr<Token> tok, std::string name,
+                            std::string param,
+                            std::vector<std::unique_ptr<PrototypeAST>> methods)
+      : class_name(std::move(name)), type_param(std::move(param)),
+        methods(std::move(methods)) {
+    this->join_location(tok);
+  }
+  AST_NODE_METHODS("TypeClassDeclAST")
+};
+
+class TypeClassInstanceAST : public DefinitionAST {
+public:
+  std::string class_name;
+  std::unique_ptr<TypeExprAST> concrete_type_expr;
+  Type concrete_type = Type::NonExistent();
+  std::vector<std::unique_ptr<FuncDefAST>> methods;
+  explicit TypeClassInstanceAST(
+      std::shared_ptr<Token> tok, std::string class_name,
+      std::unique_ptr<TypeExprAST> type_expr,
+      std::vector<std::unique_ptr<FuncDefAST>> methods)
+      : class_name(std::move(class_name)),
+        concrete_type_expr(std::move(type_expr)),
+        methods(std::move(methods)) {
+    this->join_location(tok);
+  }
+  AST_NODE_METHODS("TypeClassInstanceAST")
 };
 
 } // namespace AST

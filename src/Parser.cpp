@@ -97,8 +97,9 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
 }
 
 auto Parser::ParseDefinition() -> p<DefinitionAST> {
-  auto result =
-      tryParsers<DefinitionAST>(&Parser::ParseStructDef, &Parser::ParseFuncDef);
+  auto result = tryParsers<DefinitionAST>(
+      &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
+      &Parser::ParseStructDef, &Parser::ParseFuncDef);
   if (result.failed() && result.node)
     result.node->pe = true;
   return result;
@@ -179,38 +180,45 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
 }
 
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {
-  // this is for extern / extern C
-  if (auto extern_fn = expect(TokenType::TokExtern)) {
-    // Check for `extern C` (re-exported C linkage extern)
-    bool is_extern_c = false;
-    if (!tokStream->isEnd() && tokStream->peek()->tok_type == TokID &&
-        tokStream->peek()->lexeme == "C") {
-      tokStream->consume(); // eat the "C"
-      is_extern_c = true;
-    }
+  // Try optional 'export' prefix
+  auto export_tok = expect(TokenType::TokExport);
+  bool is_exported = export_tok != nullptr;
 
+  // 'export reuse' is an error — reuse always re-exports
+  if (is_exported && !tokStream->isEnd() &&
+      tokStream->peek()->tok_type == TokReuse) {
+    imm_warn("'export reuse' is not needed; reuse is always visible to "
+              "importers",
+              export_tok->get_location());
+  }
+
+  // 'reuse' — parse as ExternAST (always re-exported)
+  if (auto reuse_tok = expect(TokenType::TokReuse)) {
     auto [prototype, result] = ParsePrototype();
-    std::string kw = is_extern_c ? "extern C" : "extern";
     if (result == SUCCESS) {
       if (!expect(TokSemiColon))
-        imm_error("Expected ';' after " + kw + " declaration",
-                  extern_fn->get_location());
+        imm_error("Expected ';' after reuse declaration",
+                  reuse_tok->get_location());
       auto node = std::make_unique<ExternAST>(std::move(prototype));
-      node->is_exposed = is_extern_c;
+      node->is_exposed = true;
       return {std::move(node), SUCCESS};
     }
     emit_if_uncommitted(result,
-                          "Expected a function prototype after '" + kw + "'",
-                          extern_fn->get_location());
+                          "Expected a function prototype after 'reuse'",
+                          reuse_tok->get_location());
     (void)expect(TokenType::TokSemiColon);
     auto node = std::make_unique<ExternAST>(std::move(prototype));
-    node->is_exposed = is_extern_c;
+    node->is_exposed = true;
     return {std::move(node), FAILED};
   }
 
-  // this is for fn
+  // 'let' (possibly preceded by 'export')
   auto fn = expect(TokenType::TokLet);
   if (!fn) {
+    if (is_exported) {
+      imm_error("Expected 'let' after 'export'", export_tok->get_location());
+      return {std::make_unique<FuncDefAST>(nullptr, nullptr), FAILED};
+    }
     return {std::make_unique<FuncDefAST>(nullptr, nullptr), NONCOMMITTED};
   }
 
@@ -232,8 +240,9 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
         std::make_unique<FuncDefAST>(std::move(prototype), std::move(block)),
         FAILED};
   }
-  return {std::make_unique<FuncDefAST>(std::move(prototype), std::move(block)),
-          SUCCESS};
+  auto node = std::make_unique<FuncDefAST>(std::move(prototype), std::move(block));
+  node->is_exported = is_exported;
+  return {std::move(node), SUCCESS};
 }
 
 //! Parsing implementation for a variable decl/def
@@ -558,8 +567,9 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   auto result = tryParsers<ExprAST>(
       &Parser::ParseUnaryNegExpr, &Parser::ParseDerefExpr,
       &Parser::ParseAddrOfExpr, &Parser::ParseAllocExpr, &Parser::ParseFreeExpr,
-      &Parser::ParseLenExpr, &Parser::ParseArrayLiteralExpr,
-      &Parser::ParseCallExpr, &Parser::ParseParenExpr, &Parser::ParseIfExpr,
+      &Parser::ParseLenExpr,
+      &Parser::ParseArrayLiteralExpr, &Parser::ParseCallExpr,
+      &Parser::ParseParenExpr, &Parser::ParseIfExpr,
       &Parser::ParseNumberExpr, &Parser::ParseBoolExpr,
       &Parser::ParseStringExpr);
   if (!result.ok())
@@ -771,6 +781,35 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     qn = resolveQualifiedName(id->lexeme, member_id->lexeme);
   }
 
+  // Speculative parse: f<TypeExpr>(args) — generic call with explicit type arg.
+  // We try to parse <type_arg> and check that a '(' follows.
+  // If any step fails, we rollback and fall through to normal parsing.
+  std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
+  if (tokStream->peek()->tok_type == TokLESS) {
+    tokStream->mark_rollback();
+    int saved_split_greater_depth = split_greater_depth;
+    tokStream->consume(); // consume '<'
+
+    bool speculative_ok = true;
+    auto type_arg = ParseTypeExpr();
+    if (!type_arg)
+      speculative_ok = false;
+
+    if (speculative_ok && !consumeClosingAngleBracket())
+      speculative_ok = false;
+
+    // Must be followed by '(' for this to be a generic call
+    if (speculative_ok && tokStream->peek()->tok_type != TokLeftParen)
+      speculative_ok = false;
+
+    if (!speculative_ok) {
+      tokStream->rollback();
+      split_greater_depth = saved_split_greater_depth;
+    } else {
+      explicit_type_args.push_back(std::move(type_arg));
+    }
+  }
+
   // Check for struct literal: ID { field: value, ... }
   // Lookahead to distinguish struct literal from a block that follows
   // a variable expression (e.g. `if x { ... }`).
@@ -797,12 +836,16 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     return ParseStructLiteralExpr(std::move(qn), qn_loc);
 
   auto [args, result] = ParseArguments();
-  if (result == SUCCESS)
-    return {std::make_unique<CallExprAST>(qn, qn_loc, std::move(args)),
-            SUCCESS};
+  if (result == SUCCESS) {
+    auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
+    call->explicit_type_args = std::move(explicit_type_args);
+    return {std::move(call), SUCCESS};
+  }
   if (result == NONCOMMITTED)
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
-  return {std::make_unique<CallExprAST>(qn, qn_loc, std::move(args)), FAILED};
+  auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
+  call->explicit_type_args = std::move(explicit_type_args);
+  return {std::move(call), FAILED};
 }
 
 auto Parser::ParseIfExpr() -> p<ExprAST> {
@@ -1127,6 +1170,77 @@ auto Parser::ParseArguments() -> ListResult<ExprAST> {
     return {std::move(vec), FAILED};
   }
   return {std::move(vec), error ? FAILED : SUCCESS};
+}
+
+auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
+  auto kw = expect(TokTypeclass);
+  if (!kw)
+    return {nullptr, NONCOMMITTED};
+
+  REQUIRE(name_tok, TokID, "Expected type class name after 'typeclass'",
+          kw->get_location(), {nullptr, FAILED});
+  REQUIRE(_lt, TokLESS, "Expected '<' after type class name",
+          name_tok->get_location(), {nullptr, FAILED});
+  REQUIRE(param_tok, TokID, "Expected type parameter",
+          name_tok->get_location(), {nullptr, FAILED});
+  if (!consumeClosingAngleBracket()) {
+    imm_error("Expected '>' to close type class type parameter",
+              param_tok->get_location());
+    return {nullptr, FAILED};
+  }
+  REQUIRE(_lc, TokLeftCurly, "Expected '{' after type class declaration",
+          kw->get_location(), {nullptr, FAILED});
+
+  std::vector<std::unique_ptr<PrototypeAST>> methods;
+  while (!tokStream->isEnd() && tokStream->peek()->tok_type != TokRightCurly) {
+    auto [proto, result] = ParsePrototype();
+    if (result != SUCCESS)
+      break;
+    (void)expect(TokSemiColon); // optional semicolon
+    methods.push_back(std::move(proto));
+  }
+  REQUIRE(_rc, TokRightCurly, "Expected '}' to close type class",
+          kw->get_location(), {nullptr, FAILED});
+  return {std::make_unique<TypeClassDeclAST>(kw, name_tok->lexeme,
+                                             param_tok->lexeme,
+                                             std::move(methods)),
+          SUCCESS};
+}
+
+auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
+  auto kw = expect(TokInstance);
+  if (!kw)
+    return {nullptr, NONCOMMITTED};
+
+  REQUIRE(name_tok, TokID, "Expected type class name after 'instance'",
+          kw->get_location(), {nullptr, FAILED});
+  REQUIRE(_lt, TokLESS, "Expected '<' after type class name",
+          name_tok->get_location(), {nullptr, FAILED});
+  auto type_expr = ParseTypeExpr();
+  if (!type_expr) {
+    imm_error("Expected type in instance declaration", kw->get_location());
+    return {nullptr, FAILED};
+  }
+  if (!consumeClosingAngleBracket()) {
+    imm_error("Expected '>' to close instance type", kw->get_location());
+    return {nullptr, FAILED};
+  }
+  REQUIRE(_lc, TokLeftCurly, "Expected '{' after instance declaration",
+          kw->get_location(), {nullptr, FAILED});
+
+  std::vector<std::unique_ptr<FuncDefAST>> methods;
+  while (!tokStream->isEnd() && tokStream->peek()->tok_type != TokRightCurly) {
+    auto [def, result] = ParseFuncDef();
+    if (result != SUCCESS)
+      break;
+    methods.push_back(
+        std::unique_ptr<FuncDefAST>(static_cast<FuncDefAST *>(def.release())));
+  }
+  REQUIRE(_rc, TokRightCurly, "Expected '}' to close instance",
+          kw->get_location(), {nullptr, FAILED});
+  return {std::make_unique<TypeClassInstanceAST>(
+              kw, name_tok->lexeme, std::move(type_expr), std::move(methods)),
+          SUCCESS};
 }
 
 auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,

@@ -19,6 +19,19 @@ namespace sammine_lang::AST {
 
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
+
+  // First pass: register structs, typeclass declarations, and instances
+  // so method bodies can reference any type/instance regardless of order.
+  for (auto &def : ast->DefinitionVec) {
+    if (auto *sd = dynamic_cast<StructDefAST *>(def.get()))
+      sd->accept_vis(this);
+    else if (auto *tc = dynamic_cast<TypeClassDeclAST *>(def.get()))
+      register_typeclass_decl(tc);
+    else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get()))
+      register_typeclass_instance(tci);
+  }
+
+  // Second pass: full type checking of everything
   for (auto &def : ast->DefinitionVec)
     def->accept_vis(this);
 }
@@ -135,7 +148,7 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   if (is_generic) {
     this->add_error(
         ast->Prototype->get_location(),
-        "Generic extern functions are not supported; generics require a "
+        "Generic reuse declarations are not supported; generics require a "
         "function body for monomorphization");
     exit_new_scope();
     return;
@@ -145,6 +158,10 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
+  // Skip if already registered (e.g. by first pass)
+  if (ast->type.type_kind != TypeKind::NonExistent)
+    return;
+
   std::vector<std::string> field_names;
   std::vector<Type> field_types;
   bool had_error = false;
@@ -197,6 +214,15 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
       // Rewrite call to use mangled name
       ast->functionName = sammine_util::QualifiedName::local(mangled);
     }
+    return;
+  }
+
+  // Type class calls are fully resolved during synthesis — just rewrite the
+  // call target to the mangled instance method name.
+  if (ast->is_typeclass_call) {
+    if (ast->resolved_generic_name.has_value())
+      ast->functionName =
+          sammine_util::QualifiedName::local(ast->resolved_generic_name.value());
     return;
   }
 
@@ -368,6 +394,69 @@ void BiTypeCheckerVisitor::visit(FieldAccessExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
+  if (type_class_defs.contains(ast->class_name))
+    return;
+
+  TypeClassInfo info;
+  info.name = ast->class_name;
+  info.type_param = ast->type_param;
+
+  enter_new_scope();
+  typename_to_type.registerNameT(ast->type_param,
+                                 Type::TypeParam(ast->type_param));
+
+  for (auto &proto : ast->methods) {
+    proto->accept_synthesis(this);
+    info.methods.push_back(proto.get());
+    method_to_class[proto->functionName] = ast->class_name;
+  }
+
+  exit_new_scope();
+  type_class_defs[ast->class_name] = std::move(info);
+}
+
+void BiTypeCheckerVisitor::register_typeclass_instance(
+    TypeClassInstanceAST *ast) {
+  ast->concrete_type = resolve_type_expr(ast->concrete_type_expr.get());
+  if (ast->concrete_type.type_kind == TypeKind::Poisoned)
+    return;
+
+  auto it = type_class_defs.find(ast->class_name);
+  if (it == type_class_defs.end()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Unknown type class '{}'", ast->class_name));
+    return;
+  }
+
+  TypeClassInstanceInfo inst_info;
+  inst_info.class_name = ast->class_name;
+  inst_info.concrete_type = ast->concrete_type;
+
+  for (auto &method : ast->methods) {
+    std::string original_name = method->Prototype->functionName;
+    std::string mangled = ast->class_name + "$" +
+                          ast->concrete_type.to_string() + "$" + original_name;
+    method->Prototype->functionName = mangled;
+    inst_info.method_mangled_names[original_name] = mangled;
+  }
+
+  std::string key =
+      ast->class_name + "$" + ast->concrete_type.to_string();
+  type_class_instances[key] = std::move(inst_info);
+}
+
+void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
+  // Already registered in first pass — nothing to do
+  register_typeclass_decl(ast);
+}
+
+void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
+  // Registration already done in first pass — just type-check method bodies
+  for (auto &method : ast->methods)
+    method->accept_vis(this);
+}
+
 // pre order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
@@ -396,6 +485,8 @@ void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FieldAccessExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(TypeClassDeclAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
 // post order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -425,6 +516,8 @@ void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(TypeClassDeclAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
@@ -494,6 +587,72 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
+  // --- Type class method dispatch ---
+  if (!ast->explicit_type_args.empty()) {
+    auto method_name = ast->functionName.mangled();
+    auto class_it = method_to_class.find(method_name);
+    if (class_it != method_to_class.end()) {
+      auto &class_name = class_it->second;
+      auto &tc = type_class_defs[class_name];
+
+      // Resolve the explicit type argument
+      Type concrete = resolve_type_expr(ast->explicit_type_args[0].get());
+      if (concrete.type_kind == TypeKind::Poisoned)
+        return ast->type = Type::Poisoned();
+
+      // Find the instance
+      std::string key = class_name + "$" + concrete.to_string();
+      auto inst_it = type_class_instances.find(key);
+      if (inst_it == type_class_instances.end()) {
+        add_error(ast->get_location(),
+                  fmt::format("No instance of {}<{}>", class_name,
+                              concrete.to_string()));
+        return ast->type = Type::Poisoned();
+      }
+
+      // Find the method prototype in the type class
+      PrototypeAST *method_proto = nullptr;
+      for (auto *p : tc.methods) {
+        if (p->functionName == method_name) {
+          method_proto = p;
+          break;
+        }
+      }
+      if (!method_proto) {
+        add_error(ast->get_location(),
+                  fmt::format("Method '{}' not found in type class '{}'",
+                              method_name, class_name));
+        return ast->type = Type::Poisoned();
+      }
+
+      // Validate argument count
+      auto func_type = std::get<FunctionType>(method_proto->type.type_data);
+      auto params = func_type.get_params_types();
+      if (ast->arguments.size() != params.size()) {
+        add_error(ast->get_location(),
+                  fmt::format("Type class method '{}' expects {} arguments, "
+                              "got {}",
+                              method_name, params.size(),
+                              ast->arguments.size()));
+        return ast->type = Type::Poisoned();
+      }
+
+      // Set resolved call target
+      auto &mangled =
+          inst_it->second.method_mangled_names[method_name];
+      ast->resolved_generic_name = mangled;
+      ast->is_typeclass_call = true;
+
+      // Return type: substitute type param with concrete type
+      auto return_type = func_type.get_return_type();
+      std::unordered_map<std::string, Type> bindings;
+      bindings[tc.type_param] = concrete;
+      return_type = substitute(return_type, bindings);
+
+      return ast->type = return_type;
+    }
+  }
+
   // Check if this is a generic function call
   auto gen_it = generic_func_defs.find(ast->functionName.mangled());
   if (gen_it != generic_func_defs.end()) {
@@ -510,33 +669,62 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       return ast->type = Type::Poisoned();
     }
 
-    // Synthesize each argument type
     std::unordered_map<std::string, Type> bindings;
-    for (size_t i = 0; i < ast->arguments.size(); i++) {
-      auto arg_type = ast->arguments[i]->accept_synthesis(this);
-      if (arg_type.type_kind == TypeKind::Poisoned)
-        return ast->type = Type::Poisoned();
-      if (!unify(params[i], arg_type, bindings)) {
-        // Show the expected type with any bindings resolved so far
-        auto expected = substitute(params[i], bindings);
-        this->add_error(ast->arguments[i]->get_location(),
-                        fmt::format("Type mismatch in argument {} of '{}': "
-                                    "expected {}, got {}",
-                                    i + 1, ast->functionName.display(),
-                                    expected.to_string(),
-                                    arg_type.to_string()));
-        return ast->type = Type::Poisoned();
-      }
-    }
 
-    // Check all type params resolved
-    for (auto &tp : generic_def->Prototype->type_params) {
-      if (bindings.find(tp) == bindings.end()) {
-        this->add_error(
-            ast->get_location(),
-            fmt::format("Type parameter '{}' could not be inferred for '{}'",
-                        tp, ast->functionName.display()));
+    if (!ast->explicit_type_args.empty()) {
+      // Explicit type argument: f<T>(args)
+      auto &type_params = generic_def->Prototype->type_params;
+      assert(type_params.size() == 1 && "Only single type parameter supported");
+
+      Type resolved = resolve_type_expr(ast->explicit_type_args[0].get());
+      if (resolved.type_kind == TypeKind::Poisoned)
         return ast->type = Type::Poisoned();
+      bindings[type_params[0]] = resolved;
+
+      // Synthesize and check argument types against the now-known param types
+      for (size_t i = 0; i < ast->arguments.size(); i++) {
+        auto arg_type = ast->arguments[i]->accept_synthesis(this);
+        if (arg_type.type_kind == TypeKind::Poisoned)
+          return ast->type = Type::Poisoned();
+        auto expected = substitute(params[i], bindings);
+        if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
+          this->add_error(ast->arguments[i]->get_location(),
+                          fmt::format("Type mismatch in argument {} of '{}': "
+                                      "expected {}, got {}",
+                                      i + 1, ast->functionName.display(),
+                                      expected.to_string(),
+                                      arg_type.to_string()));
+          return ast->type = Type::Poisoned();
+        }
+      }
+    } else {
+      // Infer type arguments from call arguments
+      for (size_t i = 0; i < ast->arguments.size(); i++) {
+        auto arg_type = ast->arguments[i]->accept_synthesis(this);
+        if (arg_type.type_kind == TypeKind::Poisoned)
+          return ast->type = Type::Poisoned();
+        if (!unify(params[i], arg_type, bindings)) {
+          auto expected = substitute(params[i], bindings);
+          this->add_error(ast->arguments[i]->get_location(),
+                          fmt::format("Type mismatch in argument {} of '{}': "
+                                      "expected {}, got {}",
+                                      i + 1, ast->functionName.display(),
+                                      expected.to_string(),
+                                      arg_type.to_string()));
+          return ast->type = Type::Poisoned();
+        }
+      }
+
+      // Check all type params resolved
+      for (auto &tp : generic_def->Prototype->type_params) {
+        if (bindings.find(tp) == bindings.end()) {
+          this->add_error(
+              ast->get_location(),
+              fmt::format(
+                  "Type parameter '{}' could not be inferred for '{}'",
+                  tp, ast->functionName.display()));
+          return ast->type = Type::Poisoned();
+        }
       }
     }
 
@@ -1053,6 +1241,13 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   }
 
   return ast->type = st.get_field_type(idx.value());
+}
+
+Type BiTypeCheckerVisitor::synthesize(TypeClassDeclAST *ast) {
+  return Type::NonExistent();
+}
+Type BiTypeCheckerVisitor::synthesize(TypeClassInstanceAST *ast) {
+  return Type::NonExistent();
 }
 
 // --- Generic support: unification, substitution ---

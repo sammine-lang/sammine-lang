@@ -49,6 +49,7 @@ class Compiler {
   void lex();
   void parse();
   void resolve_imports();
+  void load_definitions();
   void semantics();
   void typecheck();
   void dump_ast();
@@ -216,6 +217,42 @@ void Compiler::resolve_imports() {
   }
 }
 
+void Compiler::load_definitions() {
+  if (this->error || !has_main)
+    return;
+
+  // Find definitions.mn in stdlib_dir
+  std::filesystem::path def_path;
+  if (!stdlib_dir.empty())
+    def_path = stdlib_dir / "definitions.mn";
+
+  if (def_path.empty() || !std::filesystem::exists(def_path))
+    return;
+
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+               "Start load definitions stage...\n");
+  });
+
+  std::string def_input = sammine_util::get_string_from_file(def_path.string());
+  Lexer def_lexer(def_input);
+  auto def_tok_stream = def_lexer.getTokenStream();
+  Parser def_parser(def_tok_stream);
+  auto def_program = def_parser.Parse();
+
+  if (def_parser.has_errors()) {
+    fmt::print(stderr, "Warning: failed to parse {}\n", def_path.string());
+    return;
+  }
+
+  // Prepend definitions to user's program
+  for (auto it = def_program->DefinitionVec.rbegin();
+       it != def_program->DefinitionVec.rend(); ++it) {
+    programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                     std::move(*it));
+  }
+}
+
 void Compiler::semantics() {
   // INFO: ScopeGeneratorVisitor
   {
@@ -262,8 +299,8 @@ void Compiler::typecheck() {
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
   programAST->accept_vis(&vs);
 
-  // Inject monomorphized generic function definitions at the front
-  // so they are codegen'd before call sites that reference them
+  // Inject monomorphized generic function definitions at the front.
+  // Order doesn't matter — codegen forward-declares all functions first.
   for (auto it = vs.monomorphized_defs.rbegin();
        it != vs.monomorphized_defs.rend(); ++it) {
     programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
@@ -428,7 +465,7 @@ void Compiler::emit_interface() {
 
   auto emit_proto = [&out](const std::string &name, AST::PrototypeAST *proto,
                           bool is_var_arg) {
-    out << "extern " << name << "(";
+    out << "reuse " << name << "(";
     for (size_t i = 0; i < proto->parameterVectors.size(); i++) {
       auto &param = proto->parameterVectors[i];
       out << param->name;
@@ -452,13 +489,11 @@ void Compiler::emit_interface() {
       emit_proto(mangled, func_def->Prototype.get(),
                  func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = dynamic_cast<AST::ExternAST *>(def.get())) {
-      if (extern_def->is_exposed) {
-        // Exposed externs get mangled name too: module$func
-        std::string mangled =
-            stem + "$" + extern_def->Prototype->functionName;
-        emit_proto(mangled, extern_def->Prototype.get(),
-                   extern_def->Prototype->is_var_arg);
-      }
+      // reuse always re-exports: mangled name module$func
+      std::string mangled =
+          stem + "$" + extern_def->Prototype->functionName;
+      emit_proto(mangled, extern_def->Prototype.get(),
+                 extern_def->Prototype->is_var_arg);
     }
   }
 }
@@ -521,6 +556,7 @@ void Compiler::start() {
       {"lex", &Compiler::lex},
       {"parse", &Compiler::parse},
       {"imports", &Compiler::resolve_imports},
+      {"definitions", &Compiler::load_definitions},
       {"semantics", &Compiler::semantics},
       {"typecheck", &Compiler::typecheck},
       {"dump_ast", &Compiler::dump_ast},

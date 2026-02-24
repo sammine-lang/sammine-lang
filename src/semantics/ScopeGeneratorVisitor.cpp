@@ -29,6 +29,10 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
     } else if (auto record_def = dynamic_cast<StructDefAST *>(def.get())) {
       fn_name = record_def->struct_name;
       loc = record_def->get_location();
+    } else if (dynamic_cast<TypeClassDeclAST *>(def.get()) ||
+               dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+      // Type class decls/instances don't register top-level names in scope
+      continue;
     } else
       this->abort("Should not be any other def");
 
@@ -124,6 +128,8 @@ void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
@@ -133,6 +139,11 @@ void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
+  // Type class calls (e.g. sizeof<i32>()) have explicit type args and are
+  // resolved by the type checker, not by scope lookup.
+  if (!ast->explicit_type_args.empty())
+    return;
+
   if (ast->functionName.is_unresolved()) {
     add_error(ast->get_location(),
               fmt::format("Module '{}' is not imported",
@@ -179,4 +190,6 @@ void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 } // namespace sammine_lang::AST

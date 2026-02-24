@@ -179,6 +179,20 @@ void ASTVisitor::visit(FieldAccessExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(TypeClassDeclAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &method : ast->methods)
+    method->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(TypeClassInstanceAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &method : ast->methods)
+    method->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
 // -------------------------------------------------------
 ScopedASTVisitor::~ScopedASTVisitor() {}
 

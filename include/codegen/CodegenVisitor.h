@@ -26,7 +26,8 @@ private:
   void setCurrentFunction(llvm::Function *);
 
   std::string module_name;
-  bool in_extern = false;
+  bool in_reuse = false;
+  bool current_func_exported = false;
   TypeConverter type_converter;
 
   std::map<std::string, llvm::Function *> closure_wrappers;
@@ -45,6 +46,7 @@ private:
                 llvm::ArrayRef<llvm::Value *> args, const llvm::Twine &name);
   void emitPartialApplication(CallExprAST *ast, llvm::Function *callee,
                               llvm::ArrayRef<llvm::Value *> boundArgs);
+  void forward_declare(PrototypeAST *ast);
 
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
@@ -90,6 +92,8 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override {}
   virtual void preorder_walk(StructLiteralExprAST *ast) override {}
   virtual void preorder_walk(FieldAccessExprAST *ast) override {}
+  virtual void preorder_walk(TypeClassDeclAST *ast) override {}
+  virtual void preorder_walk(TypeClassInstanceAST *ast) override {}
 
   // post order
   // TODO: Implement these?
@@ -120,7 +124,11 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(TypeClassDeclAST *ast) override {}
+  virtual void postorder_walk(TypeClassInstanceAST *ast) override {}
 
+  virtual void visit(TypeClassDeclAST *ast) override {}
+  virtual void visit(TypeClassInstanceAST *ast) override;
   virtual void visit(DerefExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(AddrOfExprAST *ast) override;

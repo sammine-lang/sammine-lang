@@ -145,6 +145,14 @@ public:
   virtual void preorder_walk(FieldAccessExprAST *ast) = 0;
   virtual void postorder_walk(FieldAccessExprAST *ast) = 0;
 
+  virtual void visit(TypeClassDeclAST *ast);
+  virtual void preorder_walk(TypeClassDeclAST *ast) = 0;
+  virtual void postorder_walk(TypeClassDeclAST *ast) = 0;
+
+  virtual void visit(TypeClassInstanceAST *ast);
+  virtual void preorder_walk(TypeClassInstanceAST *ast) = 0;
+  virtual void postorder_walk(TypeClassInstanceAST *ast) = 0;
+
   virtual ~ASTVisitor() = 0;
 };
 
@@ -229,6 +237,8 @@ public:
   virtual Type synthesize(UnaryNegExprAST *ast) = 0;
   virtual Type synthesize(StructLiteralExprAST *ast) = 0;
   virtual Type synthesize(FieldAccessExprAST *ast) = 0;
+  virtual Type synthesize(TypeClassDeclAST *ast) = 0;
+  virtual Type synthesize(TypeClassInstanceAST *ast) = 0;
 
   virtual ~TypeCheckerVisitor() = 0;
 };

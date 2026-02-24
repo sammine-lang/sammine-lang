@@ -90,12 +90,20 @@ void CgVisitor::visit(FuncDefAST *ast) {
   if (ast->Prototype->is_generic())
     return;
 
+  current_func_exported = ast->is_exported;
   this->enter_new_scope();
   ast->Prototype->accept_vis(this);
   ast->walk_with_preorder(this);
   ast->Block->accept_vis(this);
   ast->walk_with_postorder(this);
   this->exit_new_scope();
+  current_func_exported = false;
+}
+
+void CgVisitor::visit(TypeClassInstanceAST *ast) {
+  // Codegen each instance method as a regular function
+  for (auto &method : ast->methods)
+    method->accept_vis(this);
 }
 
 void CgVisitor::preorder_walk(ProgramAST *ast) {
@@ -116,6 +124,36 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
                            llvm::Type::getVoidTy(*this->resPtr->Context),
                            llvm::Type::getInt32Ty(*this->resPtr->Context),
                            false);
+
+  // Forward-declare all functions so definition order doesn't matter.
+  // Struct types must be registered first since prototypes reference them.
+  for (auto &def : ast->DefinitionVec) {
+    if (auto *sd = dynamic_cast<StructDefAST *>(def.get())) {
+      if (sd->type.type_kind != TypeKind::Poisoned) {
+        auto &st = std::get<StructType>(sd->type.type_data);
+        if (!llvm::StructType::getTypeByName(*resPtr->Context,
+                                             "sammine.struct." + st.get_name())) {
+          std::vector<llvm::Type *> field_types;
+          for (auto &ft : st.get_field_types())
+            field_types.push_back(type_converter.get_type(ft));
+          auto *llvm_struct = llvm::StructType::create(
+              *resPtr->Context, field_types,
+              "sammine.struct." + st.get_name());
+          type_converter.register_struct_type(st.get_name(), llvm_struct);
+        }
+      }
+    }
+  }
+  for (auto &def : ast->DefinitionVec) {
+    if (auto *fd = dynamic_cast<FuncDefAST *>(def.get()))
+      forward_declare(fd->Prototype.get());
+    else if (auto *ext = dynamic_cast<ExternAST *>(def.get()))
+      forward_declare(ext->Prototype.get());
+    else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+      for (auto &method : tci->methods)
+        forward_declare(method->Prototype.get());
+    }
+  }
 }
 
 void CgVisitor::preorder_walk(VarDefAST *ast) {
@@ -142,12 +180,17 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
 
   resPtr->Builder->CreateStore(ast->Expression->val, alloca);
 }
-void CgVisitor::preorder_walk(ExternAST *ast) { in_extern = true; }
+void CgVisitor::preorder_walk(ExternAST *ast) { in_reuse = true; }
 void CgVisitor::preorder_walk(StructDefAST *ast) {
   if (ast->type.type_kind == TypeKind::Poisoned)
     return;
 
   auto &st = std::get<StructType>(ast->type.type_data);
+
+  // Skip if already registered (e.g. by forward-declaration pass)
+  if (type_converter.get_struct_type(st.get_name()))
+    return;
+
   std::vector<llvm::Type *> field_llvm_types;
   for (auto &ft : st.get_field_types())
     field_llvm_types.push_back(type_converter.get_type(ft));
@@ -158,13 +201,13 @@ void CgVisitor::preorder_walk(StructDefAST *ast) {
   type_converter.register_struct_type(st.get_name(), llvm_struct);
 }
 void CgVisitor::postorder_walk(ExternAST *ast) {
-  in_extern = false;
-  // For exposed externs in library modules, create an IFunc so the mangled
+  in_reuse = false;
+  // For reuse declarations in library modules, create an IFunc so the mangled
   // name (module$func) resolves to the original C symbol at load time.
   // We can't use GlobalAlias because the aliasee can't be a declaration.
   // IFuncs work portably: ELF resolves at load time, MachO uses
   // .symbol_resolver stubs.
-  if (ast->is_exposed && !module_name.empty()) {
+  if (!module_name.empty()) {
     auto *fn = resPtr->Module->getFunction(ast->Prototype->functionName);
     if (fn) {
       std::string mangled = module_name + "$" + ast->Prototype->functionName;

@@ -58,6 +58,15 @@ class Parser : public Reportee {
       reporter->get().immediate_diag(msg, loc, src);
     }
   }
+  void imm_warn(const std::string &msg,
+                Location loc = Location::NonPrintable(),
+                std::source_location src = std::source_location::current()) {
+    if (loc == Location::NonPrintable())
+      loc = last_exhaustible_loc;
+    if (reporter.has_value()) {
+      reporter->get().immediate_warn(msg, loc, src);
+    }
+  }
   void emit_if_uncommitted(
       ParserError result, const std::string &msg, Location loc,
       std::source_location src = std::source_location::current()) {
@@ -100,6 +109,8 @@ public:
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
   [[nodiscard]] auto ParseTypeDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseTypeClassDecl() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseTypeClassInstance() -> p<DefinitionAST>;
 
   // Parse type
   [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;

@@ -113,6 +113,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     auto result = std::make_unique<CallExprAST>(call->functionName,
                                                 call->get_location(),
                                                 std::move(args));
+    for (auto &ta : call->explicit_type_args)
+      result->explicit_type_args.push_back(clone_type_expr(ta.get()));
     return result;
   }
 

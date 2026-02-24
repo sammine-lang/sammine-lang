@@ -274,6 +274,16 @@ public:
       report_single_msg(l, {str}, ReportKind::diag, src);
     }
   }
+  void immediate_warn(const std::string &str, Location l = Location(-1, -1),
+                      std::source_location src = std::source_location::current()) {
+    if (l.source_start <= 0 && l.source_end <= 0) {
+      print_fmt(LINE_COLOR, "    |");
+      print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
+      report_singular_line(ReportKind::warn, {str}, 0, 0);
+    } else {
+      report_single_msg(l, {str}, ReportKind::warn, src);
+    }
+  }
   Reporter() {}
   Reporter(std::string file_name, std::string input, int64_t context_radius,
            bool dev_mode = false)

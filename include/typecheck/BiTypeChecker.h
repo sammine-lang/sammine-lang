@@ -136,6 +136,29 @@ public:
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
+  virtual void visit(TypeClassDeclAST *ast) override;
+  virtual void visit(TypeClassInstanceAST *ast) override;
+
+  // Type class data structures
+  struct TypeClassInfo {
+    std::string name;
+    std::string type_param;
+    std::vector<PrototypeAST *> methods;
+  };
+
+  struct TypeClassInstanceInfo {
+    std::string class_name;
+    Type concrete_type;
+    std::unordered_map<std::string, std::string> method_mangled_names;
+  };
+
+  std::unordered_map<std::string, TypeClassInfo> type_class_defs;
+  std::unordered_map<std::string, TypeClassInstanceInfo> type_class_instances;
+  std::unordered_map<std::string, std::string> method_to_class;
+
+  // Two-pass typeclass registration (called before full type checking)
+  void register_typeclass_decl(TypeClassDeclAST *ast);
+  void register_typeclass_instance(TypeClassInstanceAST *ast);
 
   // pre order
 
@@ -166,6 +189,8 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(TypeClassDeclAST *ast) override;
+  virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -195,6 +220,8 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(TypeClassDeclAST *ast) override;
+  virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -223,6 +250,8 @@ public:
   virtual Type synthesize(UnaryNegExprAST *ast) override;
   virtual Type synthesize(StructLiteralExprAST *ast) override;
   virtual Type synthesize(FieldAccessExprAST *ast) override;
+  virtual Type synthesize(TypeClassDeclAST *ast) override;
+  virtual Type synthesize(TypeClassInstanceAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)

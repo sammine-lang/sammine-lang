@@ -1,5 +1,6 @@
 
 #pragma once
+#include "ast/Ast.h"
 #include "ast/AstBase.h"
 #include "ast/AstDecl.h"
 #include "util/LexicalContext.h"
@@ -59,6 +60,16 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override {}
   virtual void preorder_walk(StructLiteralExprAST *ast) override {}
   virtual void preorder_walk(FieldAccessExprAST *ast) override {}
+  using ScopedASTVisitor::visit;
+  // Type class declarations: no-op (only prototypes, no bodies)
+  virtual void visit(TypeClassDeclAST *ast) override {}
+  // Instance methods need implicit return wrapping, so visit each FuncDefAST
+  virtual void visit(TypeClassInstanceAST *ast) override {
+    for (auto &method : ast->methods)
+      method->accept_vis(this);
+  }
+  virtual void preorder_walk(TypeClassDeclAST *ast) override {}
+  virtual void preorder_walk(TypeClassInstanceAST *ast) override {}
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override {}
@@ -87,5 +98,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override {}
   virtual void postorder_walk(StructLiteralExprAST *ast) override {}
   virtual void postorder_walk(FieldAccessExprAST *ast) override {}
+  virtual void postorder_walk(TypeClassDeclAST *ast) override {}
+  virtual void postorder_walk(TypeClassInstanceAST *ast) override {}
 };
 } // namespace sammine_lang::AST

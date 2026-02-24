@@ -2,6 +2,7 @@
 #include "codegen/CodegenUtils.h"
 #include "codegen/CodegenVisitor.h"
 #include "fmt/format.h"
+#include "llvm/IR/GlobalIFunc.h"
 
 #define DEBUG_TYPE "codegen"
 #include "util/Logging.h"
@@ -25,13 +26,39 @@ void CgVisitor::preorder_walk(FuncDefAST *ast) {
     this->allocaValues.top()[std::string(Arg.getName())] = Alloca;
   }
 }
+void CgVisitor::forward_declare(PrototypeAST *ast) {
+  if (ast->is_generic())
+    return;
+
+  std::string llvm_name = ast->functionName;
+
+  if (resPtr->Module->getFunction(llvm_name))
+    return;
+
+  std::vector<llvm::Type *> param_types;
+  for (auto &p : ast->parameterVectors)
+    param_types.push_back(type_converter.get_type(p->type));
+
+  llvm::FunctionType *FT = llvm::FunctionType::get(
+      this->type_converter.get_return_type(ast->type), param_types,
+      ast->is_var_arg);
+  auto *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
+                                   llvm_name, resPtr->Module.get());
+
+  // Set parameter names so preorder_walk(FuncDefAST) can create named allocas
+  size_t i = 0;
+  for (auto &arg : F->args())
+    arg.setName(ast->parameterVectors[i++]->name);
+}
+
 /// INFO: Register the function with its arguments, put it in the module
 /// this comes before visiting a function
 void CgVisitor::preorder_walk(PrototypeAST *ast) {
   // Compute the LLVM symbol name: mangle library functions with module$func
   // Externs keep their C names — aliases handle the mangled lookup.
   std::string llvm_name = ast->functionName;
-  if (!module_name.empty() && ast->functionName != "main" && !in_extern)
+  if (!module_name.empty() && ast->functionName != "main" && !in_reuse &&
+      !current_func_exported)
     llvm_name = module_name + "$" + ast->functionName;
 
   // If the function is already declared in the module (e.g. runtime builtins
@@ -88,6 +115,31 @@ void CgVisitor::postorder_walk(FuncDefAST *ast) {
   if (not_verified) {
     resPtr->Module->print(llvm::errs(), nullptr);
     this->abort("ICE: Abort from creating a function");
+  }
+
+  // For 'export let' functions, create an IFunc so importers can call via
+  // the mangled name (module$func) while C code uses the plain name.
+  if (ast->is_exported && !module_name.empty()) {
+    auto *fn = getCurrentFunction();
+    std::string mangled = module_name + "$" + ast->Prototype->functionName;
+
+    auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
+    auto *resolverTy = llvm::FunctionType::get(ptrTy, false);
+    auto *resolver = llvm::Function::Create(
+        resolverTy, llvm::Function::InternalLinkage,
+        "resolve_" + mangled, resPtr->Module.get());
+    auto *entry =
+        llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
+
+    {
+      llvm::IRBuilderBase::InsertPointGuard guard(*resPtr->Builder);
+      resPtr->Builder->SetInsertPoint(entry);
+      resPtr->Builder->CreateRet(fn);
+    }
+
+    llvm::GlobalIFunc::create(fn->getFunctionType(), 0,
+                              llvm::GlobalValue::ExternalLinkage,
+                              mangled, resolver, resPtr->Module.get());
   }
 }
 
