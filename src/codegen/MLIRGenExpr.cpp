@@ -46,6 +46,8 @@ mlir::Value MLIRGenImpl::emitUnitExpr(AST::UnitExprAST *) {
 }
 
 mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
+  auto location = loc(ast);
+
   // If the variable is in the symbol table, handle it normally
   if (symbolTable.queryName(ast->variableName) != nameNotFound) {
     auto val = symbolTable.get_from_name(ast->variableName);
@@ -57,7 +59,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     // Variable in llvm.alloca: load the value
     if (mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
       auto elemType = convertType(ast->type);
-      return mlir::LLVM::LoadOp::create(builder, loc(ast), elemType, val);
+      return mlir::LLVM::LoadOp::create(builder, location, elemType, val);
     }
 
     return val;
@@ -71,13 +73,11 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     if (theModule.lookupSymbol<mlir::func::FuncOp>(funcName)) {
       auto &ft = std::get<FunctionType>(ast->type.type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);
-      auto ptrTy =
-          llvmPtrTy();
+      auto ptrTy = llvmPtrTy();
       auto wrapperAddr = mlir::LLVM::AddressOfOp::create(
-          builder, loc(ast), ptrTy, wrapperName);
-      auto nullEnv =
-          mlir::LLVM::ZeroOp::create(builder, loc(ast), ptrTy);
-      return buildClosure(wrapperAddr, nullEnv, loc(ast));
+          builder, location, ptrTy, wrapperName);
+      auto nullEnv = mlir::LLVM::ZeroOp::create(builder, location, ptrTy);
+      return buildClosure(wrapperAddr, nullEnv, location);
     }
   }
 
@@ -86,6 +86,8 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
+  auto location = loc(ast);
+
   // Assignment: store RHS into LHS's memref
   if (ast->Op->is_assign()) {
     // *p = val
@@ -94,7 +96,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       auto rhs = emitExpr(ast->RHS.get());
       if (!ptr || !rhs)
         return nullptr;
-      mlir::LLVM::StoreOp::create(builder, loc(ast), rhs, ptr);
+      mlir::LLVM::StoreOp::create(builder, location, rhs, ptr);
       return rhs;
     }
 
@@ -112,13 +114,13 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       if (mlir::isa<mlir::LLVM::LLVMPointerType>(arr.getType())) {
         auto &arrType =
             std::get<ArrayType>(idxExpr->array_expr->type.type_data);
-        emitPtrArrayStore(arr, idx, rhs, arrType, loc(ast));
+        emitPtrArrayStore(arr, idx, rhs, arrType, location);
         return rhs;
       }
 
       auto indexVal = mlir::arith::IndexCastOp::create(
-          builder, loc(ast), builder.getIndexType(), idx);
-      mlir::memref::StoreOp::create(builder, loc(ast), rhs, arr,
+          builder, location, builder.getIndexType(), idx);
+      mlir::memref::StoreOp::create(builder, location, rhs, arr,
                                      mlir::ValueRange{indexVal});
       return rhs;
     }
@@ -130,7 +132,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
     if (auto *lhsVar = dynamic_cast<AST::VariableExprAST *>(ast->LHS.get())) {
       auto varPtr = symbolTable.get_from_name(lhsVar->variableName);
-      mlir::LLVM::StoreOp::create(builder, loc(ast), rhs, varPtr);
+      mlir::LLVM::StoreOp::create(builder, location, rhs, varPtr);
       return rhs;
     }
 
@@ -141,8 +143,6 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   mlir::Value rhs = emitExpr(ast->RHS.get());
   if (!lhs || !rhs)
     return nullptr;
-
-  auto location = loc(ast);
   const auto &resultType = ast->type;
 
   // Integer arithmetic
@@ -412,7 +412,7 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitStringExpr(AST::StringExprAST *ast) {
-  auto name = fmt::format(".str.{}", strCounter++);
+  auto name = fmt::format("{}{}", kStringPrefix, strCounter++);
   return getOrCreateGlobalString(name, ast->string_content, loc(ast));
 }
 
@@ -579,7 +579,7 @@ mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
 
   // Call malloc(total_size)
   auto mallocOp = mlir::LLVM::CallOp::create(
-      builder, location, mlir::TypeRange{ptrTy}, "malloc",
+      builder, location, mlir::TypeRange{ptrTy}, kMallocFunc,
       mlir::ValueRange{totalSize.getResult()});
 
   return mallocOp.getResult();
@@ -592,7 +592,7 @@ mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
     return nullptr;
 
   mlir::LLVM::CallOp::create(builder, location, mlir::TypeRange{},
-                              "free", mlir::ValueRange{ptr});
+                              kFreeFunc, mlir::ValueRange{ptr});
 
   return nullptr;
 }
@@ -662,7 +662,7 @@ void MLIRGenImpl::emitBoundsCheck(mlir::Value idx, size_t arrSize,
 
   // exit(1) — uses func.call since exit is declared as func.func
   auto one = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 1);
-  mlir::func::CallOp::create(builder, location, "exit",
+  mlir::func::CallOp::create(builder, location, kExitFunc,
                               mlir::TypeRange{}, mlir::ValueRange{one});
 
   builder.setInsertionPointAfter(ifOp);

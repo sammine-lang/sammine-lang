@@ -36,11 +36,11 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   // Register the closure struct type: { ptr, ptr }
   auto closurePtrTy = llvmPtrTy();
   closureType = mlir::LLVM::LLVMStructType::getIdentified(
-      builder.getContext(), "sammine.closure");
+      builder.getContext(), kClosureTypeName);
   (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
 
-  // Pre-pass: register struct types before emitting any definitions,
-  // since function prototypes may reference struct types.
+  // Pre-pass: register struct types and forward-declare functions so that
+  // references can find them even if the definition comes later.
   for (auto &def : program->DefinitionVec) {
     if (auto *sd = dynamic_cast<AST::StructDefAST *>(def.get())) {
       if (sd->type.type_kind != TypeKind::Poisoned) {
@@ -49,20 +49,13 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         for (auto &ft : st.get_field_types())
           fieldTypes.push_back(convertType(ft));
         auto structTy = mlir::LLVM::LLVMStructType::getIdentified(
-            builder.getContext(), "sammine.struct." + st.get_name());
+            builder.getContext(), kStructTypePrefix.str() + st.get_name());
         (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
         structTypes[st.get_name()] = structTy;
       }
-    }
-  }
-
-  // Forward-declare all non-generic functions and typeclass instance methods
-  // so that references can find them even if the definition comes later.
-  for (auto &def : program->DefinitionVec) {
-    if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get())) {
-      if (fd->Prototype->is_generic())
-        continue;
-      forwardDeclareFunc(fd->Prototype.get());
+    } else if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get())) {
+      if (!fd->Prototype->is_generic())
+        forwardDeclareFunc(fd->Prototype.get());
     } else if (auto *tci =
                    dynamic_cast<AST::TypeClassInstanceAST *>(def.get())) {
       for (auto &method : tci->methods)
@@ -123,17 +116,17 @@ void MLIRGenImpl::declareRuntimeFunctions() {
   // @malloc(i64) -> !llvm.ptr  [LLVM dialect — used by emitAllocExpr]
   {
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(ptrTy, {i64Ty});
-    mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, "malloc", fnTy);
+    mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, kMallocFunc, fnTy);
   }
   // @free(!llvm.ptr) -> void  [LLVM dialect — used by emitFreeExpr]
   {
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(voidTy, {ptrTy});
-    mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, "free", fnTy);
+    mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, kFreeFunc, fnTy);
   }
   // @exit(i32)  [func dialect — used by bounds check via func.call]
   {
     auto funcType = builder.getFunctionType({i32Ty}, {});
-    auto funcOp = mlir::func::FuncOp::create(unknownLoc, "exit", funcType);
+    auto funcOp = mlir::func::FuncOp::create(unknownLoc, kExitFunc, funcType);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
   }
@@ -144,19 +137,17 @@ void MLIRGenImpl::declareRuntimeFunctions() {
 mlir::Type MLIRGenImpl::convertType(const Type &type) {
   switch (type.type_kind) {
   case TypeKind::I32_t:
+  case TypeKind::Integer:
     return builder.getI32Type();
   case TypeKind::I64_t:
     return builder.getI64Type();
   case TypeKind::F64_t:
+  case TypeKind::Flt:
     return builder.getF64Type();
   case TypeKind::Bool:
     return builder.getI1Type();
   case TypeKind::Unit:
     return mlir::NoneType::get(builder.getContext());
-  case TypeKind::Integer:
-    return builder.getI32Type();
-  case TypeKind::Flt:
-    return builder.getF64Type();
   case TypeKind::String:
     // String is a pointer to i8 in LLVM
     return llvmPtrTy();
@@ -313,6 +304,7 @@ mlir::Value MLIRGenImpl::emitBlock(AST::BlockAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
+  auto location = loc(ast);
   mlir::Value initVal = emitExpr(ast->Expression.get());
   if (!initVal)
     return nullptr;
@@ -324,8 +316,8 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   }
 
   // All non-array variables: llvm.alloca + llvm.store (uniform model)
-  auto alloca = emitAllocaOne(convertType(ast->type), loc(ast));
-  mlir::LLVM::StoreOp::create(builder, loc(ast), initVal, alloca);
+  auto alloca = emitAllocaOne(convertType(ast->type), location);
+  mlir::LLVM::StoreOp::create(builder, location, initVal, alloca);
   symbolTable.registerNameT(ast->TypedVar->name, alloca);
   return initVal;
 }

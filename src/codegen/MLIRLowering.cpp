@@ -2,7 +2,6 @@
 
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
-#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
@@ -41,10 +40,8 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
   pm.addPass(mlir::createConvertFuncToLLVMPass());
   pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 
-  if (mlir::failed(pm.run(module))) {
-    llvm::errs() << "MLIR lowering to LLVM dialect failed\n";
+  if (mlir::failed(pm.run(module)))
     return nullptr;
-  }
 
   // Register translations
   mlir::registerBuiltinDialectTranslation(*context);
@@ -52,10 +49,8 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
 
   // Export to LLVM IR
   auto llvmModule = mlir::translateModuleToLLVMIR(module, llvmCtx);
-  if (!llvmModule) {
-    llvm::errs() << "Failed to translate MLIR to LLVM IR\n";
+  if (!llvmModule)
     return nullptr;
-  }
 
   return llvmModule;
 }

@@ -65,7 +65,7 @@ MLIRGenImpl::getOrCreateClosureWrapper(const std::string &funcName,
   if (it != closureWrappers.end())
     return it->second;
 
-  auto wrapperName = "__wrap_" + funcName;
+  auto wrapperName = kWrapperPrefix.str() + funcName;
   auto wrapperFnTy = getClosureFuncType(ft);
   auto wrapperLoc = builder.getUnknownLoc();
 
@@ -113,6 +113,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   if (ast->Prototype->is_generic())
     return;
 
+  auto location = loc(ast);
   symbolTable.push_context();
 
   auto funcType = buildFuncType(ast->Prototype.get());
@@ -125,7 +126,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
     funcOp = existing;
   } else {
     builder.setInsertionPointToEnd(theModule.getBody());
-    funcOp = mlir::func::FuncOp::create(loc(ast),
+    funcOp = mlir::func::FuncOp::create(location,
                                           llvm::StringRef(funcName),
                                           funcType);
     theModule.push_back(funcOp);
@@ -157,8 +158,8 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
       // Array/sret params: register memref directly
       symbolTable.registerNameT(param->name, argVal);
     } else {
-      auto alloca = emitAllocaOne(argVal.getType(), loc(ast));
-      mlir::LLVM::StoreOp::create(builder, loc(ast), argVal, alloca);
+      auto alloca = emitAllocaOne(argVal.getType(), location);
+      mlir::LLVM::StoreOp::create(builder, location, argVal, alloca);
       symbolTable.registerNameT(param->name, alloca);
     }
   }
@@ -177,13 +178,13 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
       !currentBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
     if (isSret && bodyResult) {
       // sret: copy array into output buffer, return void
-      mlir::memref::CopyOp::create(builder, loc(ast), bodyResult,
+      mlir::memref::CopyOp::create(builder, location, bodyResult,
                                     currentSretBuffer);
-      mlir::func::ReturnOp::create(builder, loc(ast));
+      mlir::func::ReturnOp::create(builder, location);
     } else if (funcType.getNumResults() == 0) {
-      mlir::func::ReturnOp::create(builder, loc(ast));
+      mlir::func::ReturnOp::create(builder, location);
     } else if (bodyResult) {
-      mlir::func::ReturnOp::create(builder, loc(ast),
+      mlir::func::ReturnOp::create(builder, location,
                                    mlir::ValueRange{bodyResult});
     } else {
       // If we have a return type but no result, something went wrong —
@@ -191,18 +192,18 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
       auto retType = funcType.getResult(0);
       mlir::Value zeroVal;
       if (mlir::isa<mlir::LLVM::LLVMPointerType>(retType))
-        zeroVal = mlir::LLVM::ZeroOp::create(builder, loc(ast), retType);
+        zeroVal = mlir::LLVM::ZeroOp::create(builder, location, retType);
       else if (mlir::isa<mlir::FloatType>(retType))
         zeroVal = mlir::arith::ConstantFloatOp::create(
-                      builder, loc(ast), mlir::cast<mlir::FloatType>(retType),
+                      builder, location, mlir::cast<mlir::FloatType>(retType),
                       llvm::APFloat(0.0))
                       .getResult();
       else
         zeroVal =
             mlir::arith::ConstantIntOp::create(
-                builder, loc(ast), 0, retType.getIntOrFloatBitWidth())
+                builder, location, 0, retType.getIntOrFloatBitWidth())
                 .getResult();
-      mlir::func::ReturnOp::create(builder, loc(ast),
+      mlir::func::ReturnOp::create(builder, location,
                                    mlir::ValueRange{zeroVal});
       sammine_util::abort(fmt::format(
           "MLIRGen: non-void function '{}' has no return value — compiler bug",
@@ -221,6 +222,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   if (theModule.lookupSymbol(funcName))
     return;
 
+  auto location = loc(ast);
   builder.setInsertionPointToEnd(theModule.getBody());
 
   if (ast->Prototype->is_var_arg) {
@@ -238,11 +240,11 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
       llvmRetType = convertType(retType);
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(
         llvmRetType, paramTypes, /*isVarArg=*/true);
-    mlir::LLVM::LLVMFuncOp::create(builder, loc(ast), funcName, fnTy);
+    mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
   } else {
     auto funcType = buildFuncType(ast->Prototype.get());
     auto funcOp = mlir::func::FuncOp::create(
-        loc(ast), llvm::StringRef(funcName), funcType);
+        location, llvm::StringRef(funcName), funcType);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
   }
@@ -292,7 +294,7 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
           : convertType(retType);
   auto wrapperFnTy =
       mlir::LLVM::LLVMFunctionType::get(llvmRet, wrapperParams);
-  auto wrapperName = fmt::format("__partial_{}", partialCounter++);
+  auto wrapperName = fmt::format("{}{}", kPartialPrefix, partialCounter++);
 
   // 2. Generate the wrapper body in a separate scope so InsertionGuard
   //    restores the insertion point before we build the closure.

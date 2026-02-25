@@ -8,10 +8,22 @@
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
+#include "llvm/ADT/StringRef.h"
+
 #include <map>
 #include <string>
 
 namespace sammine_lang {
+
+// Named constants for magic strings used across MLIR codegen
+static constexpr llvm::StringLiteral kClosureTypeName = "sammine.closure";
+static constexpr llvm::StringLiteral kStructTypePrefix = "sammine.struct.";
+static constexpr llvm::StringLiteral kWrapperPrefix = "__wrap_";
+static constexpr llvm::StringLiteral kPartialPrefix = "__partial_";
+static constexpr llvm::StringLiteral kStringPrefix = ".str.";
+static constexpr llvm::StringLiteral kMallocFunc = "malloc";
+static constexpr llvm::StringLiteral kFreeFunc = "free";
+static constexpr llvm::StringLiteral kExitFunc = "exit";
 
 /// Implementation class for MLIR generation from a sammine AST.
 /// Declared in a header so method definitions can be split across
