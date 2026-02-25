@@ -13,6 +13,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
@@ -28,6 +29,8 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/IR/GlobalIFunc.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <chrono>
@@ -356,17 +359,7 @@ void Compiler::codegen() {
                "Start code-gen stage...\n");
   });
 
-  if (compiler_options[compiler_option_enum::BACKEND] == "mlir") {
-    codegen_mlir();
-    return;
-  }
-
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
-  auto vs = sammine_lang::AST::CgVisitor(resPtr, has_main ? "" : stem);
-  programAST->accept_vis(&vs);
-
-  reporter.report(vs);
-  this->error = vs.has_errors();
+  codegen_mlir();
 }
 
 void Compiler::codegen_mlir() {
@@ -375,6 +368,7 @@ void Compiler::codegen_mlir() {
   mlirCtx.getOrLoadDialect<mlir::func::FuncDialect>();
   mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
+  mlirCtx.getOrLoadDialect<mlir::cf::ControlFlowDialect>();
   mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
@@ -394,6 +388,34 @@ void Compiler::codegen_mlir() {
                "MLIR lowering to LLVM IR failed\n");
     this->error = true;
     return;
+  }
+
+  // Create IFuncs for exported C externs in library modules.
+  // Externs are declared with their C name (@printf), but importers look for
+  // the mangled name (@module$printf). IFuncs bridge that gap.
+  if (!moduleName.empty()) {
+    for (auto &def : programAST->DefinitionVec) {
+      auto *ext = dynamic_cast<AST::ExternAST *>(def.get());
+      if (!ext) continue;
+      std::string cName = ext->Prototype->functionName;
+      std::string mangled = moduleName + "$" + cName;
+      auto *fn = llvmModule->getFunction(cName);
+      if (!fn || llvmModule->getNamedValue(mangled)) continue;
+
+      auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
+      auto *resolverTy = llvm::FunctionType::get(ptrTy, false);
+      auto *resolver = llvm::Function::Create(
+          resolverTy, llvm::Function::InternalLinkage,
+          "resolve_" + mangled, llvmModule.get());
+      auto *entry =
+          llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
+      llvm::IRBuilder<> irBuilder(entry);
+      irBuilder.CreateRet(fn);
+
+      llvm::GlobalIFunc::create(fn->getFunctionType(), 0,
+                                llvm::GlobalValue::ExternalLinkage,
+                                mangled, resolver, llvmModule.get());
+    }
   }
 
   llvmModule->setDataLayout(resPtr->Module->getDataLayout());
