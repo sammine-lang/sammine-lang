@@ -205,11 +205,22 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     return {std::move(node), FAILED};
   }
 
+  // 'export struct' — delegate to struct parsing with export flag
+  if (is_exported && tokStream->peek()->tok_type == TokStruct) {
+    auto [node, result] = ParseStructDef();
+    if (node) {
+      if (auto *sd = dynamic_cast<StructDefAST *>(node.get()))
+        sd->is_exported = true;
+    }
+    return {std::move(node), result};
+  }
+
   // 'let' (possibly preceded by 'export')
   auto fn = expect(TokenType::TokLet);
   if (!fn) {
     if (is_exported) {
-      imm_error("Expected 'let' after 'export'", export_tok->get_location());
+      imm_error("Expected 'let' or 'struct' after 'export'",
+                export_tok->get_location());
       return {std::make_unique<FuncDefAST>(nullptr, nullptr), FAILED};
     }
     return {std::make_unique<FuncDefAST>(nullptr, nullptr), NONCOMMITTED};
@@ -600,7 +611,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       &Parser::ParseArrayLiteralExpr, &Parser::ParseCallExpr,
       &Parser::ParseParenExpr, &Parser::ParseIfExpr,
       &Parser::ParseNumberExpr, &Parser::ParseBoolExpr,
-      &Parser::ParseStringExpr);
+      &Parser::ParseCharExpr, &Parser::ParseStringExpr);
   if (!result.ok())
     return result;
   return parsePostfixOps(std::move(result.node));

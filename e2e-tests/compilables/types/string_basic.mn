@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK:      length = 5
+
+import std;
+import str;
+
+let main() -> i32 {
+  let s: str::String = str::new("hello");
+  std::printf("length = %ld\n", s.length);
+  str::delete(s);
+  return 0;
+}

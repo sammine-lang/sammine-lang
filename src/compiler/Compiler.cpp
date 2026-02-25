@@ -23,6 +23,7 @@
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
 #include "util/Logging.h"
+#include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
@@ -545,22 +546,49 @@ void Compiler::emit_interface() {
     return;
   }
 
-  auto emit_proto = [&out](const std::string &name, AST::PrototypeAST *proto,
-                          bool is_var_arg) {
+  // Recursively qualify struct type names for .mni emission using QualifiedName
+  std::function<std::string(const Type &)> qualify_type =
+      [&stem, &qualify_type](const Type &t) -> std::string {
+    using sammine_util::QualifiedName;
+    switch (t.type_kind) {
+    case TypeKind::Struct: {
+      auto &st = std::get<StructType>(t.type_data);
+      return QualifiedName::local(st.get_name()).with_module(stem).mangled();
+    }
+    case TypeKind::Pointer:
+      return "ptr<" +
+             qualify_type(std::get<PointerType>(t.type_data).get_pointee()) +
+             ">";
+    case TypeKind::Array: {
+      auto &arr = std::get<ArrayType>(t.type_data);
+      return "[" + qualify_type(arr.get_element()) + ";" +
+             std::to_string(arr.get_size()) + "]";
+    }
+    default:
+      return t.to_string();
+    }
+  };
+
+  auto emit_proto = [&out, &qualify_type](const std::string &name,
+                                          AST::PrototypeAST *proto,
+                                          bool is_var_arg) {
+    auto &funcType = std::get<FunctionType>(proto->type.type_data);
+    auto paramTypes = funcType.get_params_types();
+    auto retType = funcType.get_return_type();
+
     out << "reuse " << name << "(";
     for (size_t i = 0; i < proto->parameterVectors.size(); i++) {
       auto &param = proto->parameterVectors[i];
       out << param->name;
-      if (param->type_expr)
-        out << " : " << param->type_expr->to_string();
+      out << " : " << qualify_type(paramTypes[i]);
       if (i + 1 < proto->parameterVectors.size() || is_var_arg)
         out << ", ";
     }
     if (is_var_arg)
       out << "...";
     out << ")";
-    if (proto->return_type_expr)
-      out << " -> " << proto->return_type_expr->to_string();
+    if (retType.type_kind != TypeKind::Unit)
+      out << " -> " << qualify_type(retType);
     out << ";\n";
   };
 
@@ -578,6 +606,19 @@ void Compiler::emit_interface() {
           extern_def->Prototype->functionName.with_module(stem).mangled();
       emit_proto(mangled, extern_def->Prototype.get(),
                  extern_def->Prototype->is_var_arg);
+    } else if (auto *struct_def = dynamic_cast<AST::StructDefAST *>(def.get())) {
+      if (!struct_def->is_exported)
+        continue;
+      out << "struct "
+          << struct_def->struct_name.with_module(stem).mangled() << " {\n";
+      for (size_t i = 0; i < struct_def->struct_members.size(); i++) {
+        auto &member = struct_def->struct_members[i];
+        out << "  " << member->name;
+        if (member->type_expr)
+          out << ": " << member->type_expr->to_string();
+        out << ",\n";
+      }
+      out << "};\n";
     }
   }
 }

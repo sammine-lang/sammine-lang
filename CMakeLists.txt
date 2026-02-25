@@ -83,13 +83,25 @@ add_custom_command(
 )
 
 add_custom_command(
+  OUTPUT ${STDLIB_DIR}/str.o ${STDLIB_DIR}/str.mni
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/str.mn
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/str.mn
+  WORKING_DIRECTORY ${STDLIB_DIR}
+  COMMENT "Compiling stdlib/str.mn"
+)
+
+add_custom_command(
   OUTPUT ${STDLIB_DIR}/definitions.mn
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/definitions.mn ${STDLIB_DIR}/definitions.mn
   DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/definitions.mn
   COMMENT "Copying stdlib/definitions.mn"
 )
 
-add_custom_target(stdlib ALL DEPENDS ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni ${STDLIB_DIR}/definitions.mn)
+add_custom_target(stdlib ALL DEPENDS
+  ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni
+  ${STDLIB_DIR}/str.o ${STDLIB_DIR}/str.mni
+  ${STDLIB_DIR}/definitions.mn
+)
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
 include(CTest)

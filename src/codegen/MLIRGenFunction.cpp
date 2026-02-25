@@ -430,12 +430,14 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
     if (ast->type.type_kind != TypeKind::Unit)
       resultTypes.push_back(convertType(ast->type));
 
-    // If callee is an llvm.func (vararg C function), use llvm.call
+    // If callee is an llvm.func (C function), use llvm.call
     if (auto llvmFunc =
             theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
       auto llvmCallOp = mlir::LLVM::CallOp::create(
           builder, location, resultTypes, callee, operands);
-      llvmCallOp.setVarCalleeType(llvmFunc.getFunctionType());
+      // Only set var_callee_type for variadic functions
+      if (llvmFunc.getFunctionType().isVarArg())
+        llvmCallOp.setVarCalleeType(llvmFunc.getFunctionType());
       if (llvmCallOp.getNumResults() > 0)
         return llvmCallOp.getResult();
       return nullptr;

@@ -1,0 +1,20 @@
+reuse malloc(size: i64) -> ptr<char>;
+reuse memcpy(dst: ptr<char>, src: ptr<char>, n: i64) -> ptr<char>;
+reuse strlen(s: ptr<char>) -> i64;
+
+export struct String {
+  data: ptr<char>,
+  length: i64,
+  cap: i64,
+};
+
+export let new(src: ptr<char>) -> String {
+  let sz: i64 = strlen(src);
+  let buf: ptr<char> = malloc(sz);
+  memcpy(buf, src, sz);
+  String { data: buf, length: sz, cap: sz }
+}
+
+export let delete(s: String) -> unit {
+  free(s.data)
+}
