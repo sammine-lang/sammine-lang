@@ -5,7 +5,7 @@
 # Test: struct named 'T' — same name as the typeclass type parameter in Sized<T>.
 # Verifies that sizeof<T>() resolves T to our struct, not the abstract param.
 
-reuse printf(fmt : ptr<i32>, ...) -> i32;
+reuse printf(fmt : ptr<char>, ...) -> i32;
 
 struct T { val : i32, };
 

@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full 2>&1 | %check %full
 # CHECK: No instance of Sized<ptr<i32>>
 
-reuse printf(fmt : ptr<i32>, ...) -> i32;
+reuse printf(fmt : ptr<char>, ...) -> i32;
 
 let main() -> i32 {
   printf("%ld\n", sizeof<ptr<i32>>());

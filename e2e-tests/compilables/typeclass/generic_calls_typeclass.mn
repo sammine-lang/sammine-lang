@@ -4,7 +4,7 @@
 
 # A generic function that calls a typeclass method with its type parameter.
 
-reuse printf(fmt : ptr<i32>, ...) -> i32;
+reuse printf(fmt : ptr<char>, ...) -> i32;
 
 let print_size(x: T) -> i64 {
   sizeof<T>()

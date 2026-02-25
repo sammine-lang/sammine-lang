@@ -4,7 +4,7 @@
 
 # User-defined typeclass with custom method name (not just sizeof)
 
-reuse printf(fmt : ptr<i32>, ...) -> i32;
+reuse printf(fmt : ptr<char>, ...) -> i32;
 
 typeclass MySize<T> {
   mysize() -> i64;

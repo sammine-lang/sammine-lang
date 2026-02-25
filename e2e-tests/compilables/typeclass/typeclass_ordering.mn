@@ -5,7 +5,7 @@
 # but DoubleSized<i32>::double_size calls doubled<i32>().
 # Tests that forward declarations handle cross-typeclass dependencies.
 
-reuse printf(fmt : ptr<i32>, ...) -> i32;
+reuse printf(fmt : ptr<char>, ...) -> i32;
 
 typeclass DoubleSized<T> {
   double_size() -> i64;
