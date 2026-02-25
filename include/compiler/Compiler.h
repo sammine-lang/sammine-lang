@@ -19,6 +19,8 @@ enum compiler_option_enum {
   ARGV0,
   BACKEND,
   MLIR_IR,
+  OUTPUT_DIR,
+  IMPORT_PATHS,
 };
 
 class CompilerRunner {

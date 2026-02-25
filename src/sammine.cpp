@@ -72,6 +72,15 @@ int main(int argc, char *argv[]) {
       .default_value(std::string("llvm"))
       .help("Code generation backend: llvm (default) or mlir");
 
+  program.add_argument("-O")
+      .default_value(std::string(""))
+      .help("Output directory for build artifacts (.o, .exe, .mni). Defaults to current directory.");
+
+  program.add_argument("-I")
+      .default_value(std::vector<std::string>{})
+      .append()
+      .help("Add directory to import search path (repeatable).");
+
   if (argc < 1) {
     std::cerr << program;
     return 1;
@@ -126,6 +135,17 @@ int main(int argc, char *argv[]) {
   }
 
   compiler_options[ARGV0] = argv[0];
+  compiler_options[OUTPUT_DIR] = program.get("-O");
+  {
+    auto ipaths = program.get<std::vector<std::string>>("-I");
+    std::string joined;
+    for (size_t i = 0; i < ipaths.size(); i++) {
+      if (i > 0)
+        joined += ";";
+      joined += ipaths[i];
+    }
+    compiler_options[IMPORT_PATHS] = joined;
+  }
   CompilerRunner::run(compiler_options);
   return 0;
 }

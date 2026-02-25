@@ -37,6 +37,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 #define DEBUG_TYPE "stages"
 
@@ -51,7 +52,8 @@ class Compiler {
   std::string file_name, input;
   std::vector<std::string> extra_object_files;
   std::filesystem::path stdlib_dir;
-
+  std::string output_dir;
+  std::vector<std::string> import_paths;
 
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
@@ -74,6 +76,11 @@ class Compiler {
   void print_timing_table(
       const std::vector<std::pair<const char *, double>> &timings);
   void set_error() { error = true; }
+  std::string output_path(const std::string &filename) const {
+    if (output_dir.empty())
+      return filename;
+    return (std::filesystem::path(output_dir) / filename).string();
+  }
 
 public:
   Compiler(std::map<compiler_option_enum, std::string> &compiler_options);
@@ -120,6 +127,23 @@ Compiler::Compiler(
   bool dev_mode = sammine_log::is_type_in_list("dev", diagnostic_value);
   this->reporter =
       sammine_util::Reporter(file_name, input, context_radius, dev_mode);
+
+  // Initialize output directory
+  output_dir = compiler_options[compiler_option_enum::OUTPUT_DIR];
+  if (!output_dir.empty())
+    std::filesystem::create_directories(output_dir);
+
+  // Parse semicolon-joined import paths
+  {
+    std::string paths_str = compiler_options[compiler_option_enum::IMPORT_PATHS];
+    if (!paths_str.empty()) {
+      std::istringstream ss(paths_str);
+      std::string path;
+      while (std::getline(ss, path, ';'))
+        if (!path.empty())
+          import_paths.push_back(path);
+    }
+  }
 
   // Compute stdlib directory relative to the binary location
   std::string argv0 = compiler_options[compiler_option_enum::ARGV0];
@@ -176,8 +200,17 @@ void Compiler::resolve_imports() {
     source_dir = ".";
 
   for (auto &import : programAST->imports) {
-    // Look for .mni in CWD, source dir, then stdlib dir
+    // Look for .mni in CWD, -I paths, source dir, then stdlib dir
     std::filesystem::path mni_path = import.module_name + ".mni";
+    if (!std::filesystem::exists(mni_path)) {
+      for (auto &ipath : import_paths) {
+        auto candidate = std::filesystem::path(ipath) / (import.module_name + ".mni");
+        if (std::filesystem::exists(candidate)) {
+          mni_path = candidate;
+          break;
+        }
+      }
+    }
     if (!std::filesystem::exists(mni_path))
       mni_path = source_dir / (import.module_name + ".mni");
     if (!std::filesystem::exists(mni_path) && !stdlib_dir.empty())
@@ -223,8 +256,17 @@ void Compiler::resolve_imports() {
                                        std::move(*it));
     }
 
-    // Track the .o file for linking (CWD, source dir, then stdlib dir)
+    // Track the .o file for linking (CWD, -I paths, source dir, then stdlib dir)
     std::filesystem::path obj_path = import.module_name + ".o";
+    if (!std::filesystem::exists(obj_path)) {
+      for (auto &ipath : import_paths) {
+        auto candidate = std::filesystem::path(ipath) / (import.module_name + ".o");
+        if (std::filesystem::exists(candidate)) {
+          obj_path = candidate;
+          break;
+        }
+      }
+    }
     if (!std::filesystem::exists(obj_path))
       obj_path = source_dir / (import.module_name + ".o");
     if (!std::filesystem::exists(obj_path) && !stdlib_dir.empty())
@@ -512,7 +554,8 @@ void Compiler::emit_object() {
   });
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
-  llvm::raw_fd_ostream dest(llvm::raw_fd_ostream(stem + ".o", resPtr->EC));
+  std::string obj_file = output_path(stem + ".o");
+  llvm::raw_fd_ostream dest(llvm::raw_fd_ostream(obj_file, resPtr->EC));
   if (resPtr->EC) {
     llvm::errs() << "Could not open file: " << resPtr->EC.message();
     return;
@@ -539,10 +582,10 @@ void Compiler::emit_interface() {
   });
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
-  std::string mni_path = stem + ".mni";
-  std::ofstream out(mni_path);
+  std::string mni_file = output_path(stem + ".mni");
+  std::ofstream out(mni_file);
   if (!out.is_open()) {
-    fmt::print(stderr, "Could not open {} for writing\n", mni_path);
+    fmt::print(stderr, "Could not open {} for writing\n", mni_file);
     return;
   }
 
@@ -634,19 +677,21 @@ void Compiler::link() {
   });
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string obj_file = output_path(stem + ".o");
+  std::string exe_file = output_path(stem + ".exe");
 
-  std::string obj_list = stem + ".o";
+  std::string obj_list = obj_file;
   for (auto &obj : extra_object_files)
     obj_list += " " + obj;
 
-  auto try_compile_with = [&obj_list, &stem](const std::string &compiler) {
+  auto try_compile_with = [&obj_list, &exe_file](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
       return false;
     std::string command =
-        fmt::format("{} {} -o {}.exe", compiler, obj_list, stem);
+        fmt::format("{} {} -o {}", compiler, obj_list, exe_file);
     int result = std::system(command.c_str());
     return result == 0;
   };

@@ -76,17 +76,15 @@ file(MAKE_DIRECTORY ${STDLIB_DIR})
 
 add_custom_command(
   OUTPUT ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/std.mn
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/std.mn -O ${STDLIB_DIR}
   DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/std.mn
-  WORKING_DIRECTORY ${STDLIB_DIR}
   COMMENT "Compiling stdlib/std.mn"
 )
 
 add_custom_command(
   OUTPUT ${STDLIB_DIR}/str.o ${STDLIB_DIR}/str.mni
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/str.mn
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/str.mn -O ${STDLIB_DIR}
   DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/str.mn
-  WORKING_DIRECTORY ${STDLIB_DIR}
   COMMENT "Compiling stdlib/str.mn"
 )
 
