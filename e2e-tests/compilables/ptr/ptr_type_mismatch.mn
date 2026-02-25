@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full --diagnostics
+# RUN: ! %sammine --file %full %O --diagnostics
 let main() -> i32 {
   let x : i32 = 0;
   let p : ptr<i64> = &x;

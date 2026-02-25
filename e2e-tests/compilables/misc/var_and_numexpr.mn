@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full  
+# RUN: %sammine --file %full %O  
 let f() -> f64 {
     let x : f64 = 2.0;
     let y = 2.0;

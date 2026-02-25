@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: 76576500
 
 # Project Euler Problem 12: First triangle number with over 500 divisors

@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_extern.mn && cat has_extern.mni | %check %full
+# RUN: %sammine --file %dir/Inputs/has_extern.mn %O && cat %T/has_extern.mni | %check %full
 
 # export reuse and export let appear in .mni; plain reuse/let do not
 # CHECK: reuse has_extern$printf

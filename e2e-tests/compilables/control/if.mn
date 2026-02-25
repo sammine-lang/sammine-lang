@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full --check --diagnostics
+# RUN: %sammine --file %full %O --check --diagnostics
 
 # this is a function
 let f(x : i32) -> i32 {

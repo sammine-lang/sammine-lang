@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full  --check --diagnostics
+# RUN: %sammine --file %full %O  --check --diagnostics
 let main() -> i32 {
     let x = "abc";
     return 0;

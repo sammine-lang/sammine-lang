@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full --diagnostics
+# RUN: ! %sammine --file %full %O --diagnostics
 let use_t(x: i32) -> T { x }
 
 let main() -> i32 {

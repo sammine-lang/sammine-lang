@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full --check --diagnostics
+# RUN: %sammine --file %full %O --check --diagnostics
 let f() {
     let x = 2;
 

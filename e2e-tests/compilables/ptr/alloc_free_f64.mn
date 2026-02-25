@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: 3.14
 
 import std;

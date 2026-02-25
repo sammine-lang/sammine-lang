@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full  --diagnostics
+# RUN: ! %sammine --file %full %O  --diagnostics
 
 # this is a function
 let f(x : f64) {

@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: 232792560
 
 # Project Euler Problem 5: Smallest multiple of all numbers 1 to 20

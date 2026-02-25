@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK: The name `g` has been introduced before
 
 let g() -> i32 {

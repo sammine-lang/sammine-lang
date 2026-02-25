@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full --llvm-ir pre 2>&1 | %check %full
+# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
 
 # Pre-optimization IR should contain unoptimized patterns like alloca
 # CHECK: define i32 @main()

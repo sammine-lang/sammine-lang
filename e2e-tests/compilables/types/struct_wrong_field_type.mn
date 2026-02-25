@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK:          |struct_wrong_field_type.mn:6:25
 # CHECK-NEXT:    4|
 # CHECK-NEXT:    5|let main() -> i32 {

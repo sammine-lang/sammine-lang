@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full 2>&1 | %check %full
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK: No instance of Sized<ptr<i32>>
 
 reuse printf(fmt : ptr<char>, ...) -> i32;

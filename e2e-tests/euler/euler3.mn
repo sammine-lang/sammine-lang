@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: 6857
 
 # Project Euler Problem 3: Largest prime factor of 600851475143

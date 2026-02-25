@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK: Array element type mismatch: expected i32, got f64
 let main() -> i32 {
   let a : [i32;3] = [1.0, 2.0, 3];

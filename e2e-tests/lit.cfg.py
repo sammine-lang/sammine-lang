@@ -15,5 +15,7 @@ config.substitutions.append(('%check', sammine_check))
 config.substitutions.append(('%dir', '$(dirname %s)'))
 config.substitutions.append(('%full', '%s'))
 config.substitutions.append(('%base', '$(basename %s .mn)'))
+config.substitutions.append(('%O', '-O %T'))
+config.substitutions.append(('%I', '-I %T'))
 config.suffixes = ['.c', '.mn']
 config.excludes = ['Inputs']

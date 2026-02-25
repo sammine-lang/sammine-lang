@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full --llvm-ir post 2>&1 | %check %full
+# RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
 
 # Post-optimization IR should have the alloca optimized away
 # CHECK: define {{.*}}i32 @main()

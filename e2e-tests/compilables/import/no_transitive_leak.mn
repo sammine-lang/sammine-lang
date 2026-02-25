@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/math.mn && %sammine --file %dir/Inputs/middle.mn && cat middle.mni | %check %full
+# RUN: %sammine --file %dir/Inputs/math.mn %O && %sammine --file %dir/Inputs/middle.mn %O %I && cat %T/middle.mni | %check %full
 
 # middle imports math, but math's symbols should NOT leak into middle.mni
 # Only middle's own functions should appear

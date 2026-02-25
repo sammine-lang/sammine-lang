@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_extern_c.mn && cat has_extern_c.mni | %check %full
+# RUN: %sammine --file %dir/Inputs/has_extern_c.mn %O && cat %T/has_extern_c.mni | %check %full
 
 # export reuse and export let appear in .mni with mangled names
 # CHECK: reuse has_extern_c$printf

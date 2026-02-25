@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/math.mn && ! %sammine --file %full --check 2>&1 | %check %full
+# RUN: %sammine --file %dir/Inputs/math.mn %O && ! %sammine --file %full %O %I --check 2>&1 | %check %full
 
 # Calling a function that doesn't exist in the imported module should
 # produce an error with the unmangled name (math::divide, not math$divide)

@@ -1,4 +1,4 @@
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: 23514624000
 
 # Project Euler Problem 8: Greatest product of 13 adjacent digits
