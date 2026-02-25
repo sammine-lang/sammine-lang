@@ -328,6 +328,9 @@ void BiTypeCheckerVisitor::visit(StringExprAST *ast) {
 void BiTypeCheckerVisitor::visit(BoolExprAST *ast) {
   ast->accept_synthesis(this);
 }
+void BiTypeCheckerVisitor::visit(CharExprAST *ast) {
+  ast->accept_synthesis(this);
+}
 
 void BiTypeCheckerVisitor::visit(UnitExprAST *ast) {
   ast->accept_synthesis(this);
@@ -470,6 +473,7 @@ void BiTypeCheckerVisitor::preorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StringExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(NumberExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(BoolExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(CharExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(VariableExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(BlockAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(IfExprAST *ast) {}
@@ -501,6 +505,7 @@ void BiTypeCheckerVisitor::postorder_walk(BinaryExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StringExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(NumberExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(BoolExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(CharExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(VariableExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(BlockAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IfExprAST *ast) {}
@@ -813,6 +818,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   case TypeKind::F64_t:
   case TypeKind::Unit:
   case TypeKind::Bool:
+  case TypeKind::Char:
   case TypeKind::Pointer:
   case TypeKind::Array:
   case TypeKind::Never:
@@ -927,6 +933,9 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
 }
 Type BiTypeCheckerVisitor::synthesize(BoolExprAST *ast) {
   return ast->type = Type::Bool();
+}
+Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
+  return ast->type = Type::Char();
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
   ast->type = id_to_type.recursive_get_from_name(ast->variableName);

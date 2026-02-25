@@ -62,6 +62,7 @@ public:
     typename_to_type.registerNameT("i64", Type::I64_t());
     typename_to_type.registerNameT("f64", Type::F64_t());
     typename_to_type.registerNameT("bool", Type::Bool());
+    typename_to_type.registerNameT("char", Type::Char());
     typename_to_type.registerNameT("unit", Type::Unit());
   }
   virtual void exit_new_scope() override {
@@ -121,6 +122,7 @@ public:
   virtual void visit(NumberExprAST *ast) override;
   virtual void visit(StringExprAST *ast) override;
   virtual void visit(BoolExprAST *ast) override;
+  virtual void visit(CharExprAST *ast) override;
   virtual void visit(UnitExprAST *ast) override;
   virtual void visit(VariableExprAST *ast) override;
   virtual void visit(BlockAST *ast) override;
@@ -159,6 +161,7 @@ public:
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);
+  void register_builtin_op_instances();
 
   // pre order
 
@@ -174,6 +177,7 @@ public:
   virtual void preorder_walk(NumberExprAST *ast) override;
   virtual void preorder_walk(StringExprAST *ast) override;
   virtual void preorder_walk(BoolExprAST *ast) override;
+  virtual void preorder_walk(CharExprAST *ast) override;
   virtual void preorder_walk(UnitExprAST *ast) override;
   virtual void preorder_walk(VariableExprAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;
@@ -205,6 +209,7 @@ public:
   virtual void postorder_walk(NumberExprAST *ast) override;
   virtual void postorder_walk(StringExprAST *ast) override;
   virtual void postorder_walk(BoolExprAST *ast) override;
+  virtual void postorder_walk(CharExprAST *ast) override;
   virtual void postorder_walk(UnitExprAST *ast) override;
   virtual void postorder_walk(VariableExprAST *ast) override;
   virtual void postorder_walk(BlockAST *ast) override;
@@ -236,6 +241,7 @@ public:
   virtual Type synthesize(UnitExprAST *ast) override;
   virtual Type synthesize(StringExprAST *ast) override;
   virtual Type synthesize(BoolExprAST *ast) override;
+  virtual Type synthesize(CharExprAST *ast) override;
   virtual Type synthesize(VariableExprAST *ast) override;
   virtual Type synthesize(BlockAST *ast) override;
   virtual Type synthesize(IfExprAST *ast) override;

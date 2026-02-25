@@ -1,0 +1,16 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: A
+# CHECK: z
+# CHECK: 10
+
+import std;
+
+let main() -> i32 {
+  let c1 : char = 'A';
+  let c2 : char = 'z';
+  let newline : char = '\n';
+  std::printf("%c\n", c1);
+  std::printf("%c\n", c2);
+  std::printf("%d\n", newline);
+  return 0;
+}

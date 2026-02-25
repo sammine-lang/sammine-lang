@@ -22,6 +22,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
     return llvm::Type::getVoidTy(context);
   case TypeKind::Bool:
     return llvm::Type::getInt1Ty(context);
+  case TypeKind::Char:
+    return llvm::Type::getInt8Ty(context);
   case TypeKind::String:
     return llvm::StructType::get(context, llvm::PointerType::getInt8Ty(context),
                                  llvm::Type::getInt32Ty(context));
@@ -89,7 +91,8 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
 
   case TypeKind::I32_t:
   case TypeKind::I64_t:
-  case TypeKind::Bool: {
+  case TypeKind::Bool:
+  case TypeKind::Char: {
     // Signed integer comparisons
     switch (tok) {
     case TokenType::TokEQUAL:

@@ -21,6 +21,7 @@ class BinaryExprAST;
 class NumberExprAST;
 class StringExprAST;
 class BoolExprAST;
+class CharExprAST;
 class VariableExprAST;
 class BlockAST;
 class IfExprAST;

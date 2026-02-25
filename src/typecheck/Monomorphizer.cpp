@@ -100,6 +100,10 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     return result;
   }
 
+  if (auto *ch = dynamic_cast<CharExprAST *>(expr)) {
+    return std::make_unique<CharExprAST>(ch->value, ch->get_location());
+  }
+
   if (auto *var = dynamic_cast<VariableExprAST *>(expr)) {
     auto result =
         std::make_unique<VariableExprAST>(make_tok(var->variableName));

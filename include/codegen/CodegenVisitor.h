@@ -77,6 +77,7 @@ public:
   virtual void preorder_walk(NumberExprAST *ast) override;
   virtual void preorder_walk(StringExprAST *ast) override;
   virtual void preorder_walk(BoolExprAST *ast) override;
+  virtual void preorder_walk(CharExprAST *ast) override;
   virtual void preorder_walk(VariableExprAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;
   virtual void preorder_walk(IfExprAST *ast) override;
@@ -109,6 +110,7 @@ public:
   virtual void postorder_walk(NumberExprAST *ast) override {}
   virtual void postorder_walk(StringExprAST *ast) override;
   virtual void postorder_walk(BoolExprAST *ast) override {}
+  virtual void postorder_walk(CharExprAST *ast) override {}
   virtual void postorder_walk(VariableExprAST *ast) override {}
   virtual void postorder_walk(BlockAST *ast) override;
   virtual void postorder_walk(IfExprAST *ast) override {}

@@ -1,0 +1,33 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: equal: 1
+# CHECK: not_equal: 1
+# CHECK: less: 1
+# CHECK: greater: 1
+
+import std;
+
+let test_equal(a: char, b: char) -> i32 {
+  if a == b { 1 } else { 0 }
+}
+
+let test_not_equal(a: char, b: char) -> i32 {
+  if a != b { 1 } else { 0 }
+}
+
+let test_less(a: char, b: char) -> i32 {
+  if a < b { 1 } else { 0 }
+}
+
+let test_greater(a: char, b: char) -> i32 {
+  if a > b { 1 } else { 0 }
+}
+
+let main() -> i32 {
+  let a : char = 'A';
+  let b : char = 'B';
+  std::printf("equal: %d\n", test_equal(a, a));
+  std::printf("not_equal: %d\n", test_not_equal(a, b));
+  std::printf("less: %d\n", test_less(a, b));
+  std::printf("greater: %d\n", test_greater(b, a));
+  return 0;
+}

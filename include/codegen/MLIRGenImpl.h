@@ -110,6 +110,7 @@ public:
   // --- Expression emission (MLIRGenExpr.cpp) ---
   mlir::Value emitNumberExpr(AST::NumberExprAST *ast);
   mlir::Value emitBoolExpr(AST::BoolExprAST *ast);
+  mlir::Value emitCharExpr(AST::CharExprAST *ast);
   mlir::Value emitUnitExpr(AST::UnitExprAST *ast);
   mlir::Value emitVariableExpr(AST::VariableExprAST *ast);
   mlir::Value emitBinaryExpr(AST::BinaryExprAST *ast);

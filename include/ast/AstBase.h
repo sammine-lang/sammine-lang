@@ -85,6 +85,10 @@ public:
   virtual void preorder_walk(BoolExprAST *ast) = 0;
   virtual void postorder_walk(BoolExprAST *ast) = 0;
 
+  virtual void visit(CharExprAST *ast);
+  virtual void preorder_walk(CharExprAST *ast) = 0;
+  virtual void postorder_walk(CharExprAST *ast) = 0;
+
   virtual void visit(UnitExprAST *ast);
   virtual void preorder_walk(UnitExprAST *ast) = 0;
   virtual void postorder_walk(UnitExprAST *ast) = 0;
@@ -223,6 +227,7 @@ public:
   virtual Type synthesize(StringExprAST *ast) = 0;
   virtual Type synthesize(UnitExprAST *ast) = 0;
   virtual Type synthesize(BoolExprAST *ast) = 0;
+  virtual Type synthesize(CharExprAST *ast) = 0;
   virtual Type synthesize(VariableExprAST *ast) = 0;
   virtual Type synthesize(BlockAST *ast) = 0;
   virtual Type synthesize(IfExprAST *ast) = 0;

@@ -90,6 +90,7 @@ public:
   virtual void preorder_walk(NumberExprAST *ast) override;
   virtual void preorder_walk(StringExprAST *ast) override;
   virtual void preorder_walk(BoolExprAST *ast) override;
+  virtual void preorder_walk(CharExprAST *ast) override;
   virtual void preorder_walk(VariableExprAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;
   virtual void preorder_walk(IfExprAST *ast) override;
@@ -121,6 +122,7 @@ public:
   virtual void postorder_walk(NumberExprAST *ast) override;
   virtual void postorder_walk(StringExprAST *ast) override;
   virtual void postorder_walk(BoolExprAST *ast) override;
+  virtual void postorder_walk(CharExprAST *ast) override;
   virtual void postorder_walk(VariableExprAST *ast) override;
   virtual void postorder_walk(BlockAST *ast) override;
   virtual void postorder_walk(IfExprAST *ast) override;
@@ -379,6 +381,7 @@ void AstPrinterVisitor::preorder_walk(NumberExprAST *ast) {
                          ast->type.to_string()));
 }
 void AstPrinterVisitor::preorder_walk(BoolExprAST *ast) {}
+void AstPrinterVisitor::preorder_walk(CharExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(VariableExprAST *ast) {
   add_to_rep(fmt::format("(var_name, type): (\"{}\", {})", ast->variableName,
                          ast->type.to_string()));
@@ -425,6 +428,7 @@ void AstPrinterVisitor::postorder_walk(BinaryExprAST *ast) {
 void AstPrinterVisitor::postorder_walk(NumberExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(StringExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(BoolExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(CharExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(VariableExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(BlockAST *ast) {}
 void AstPrinterVisitor::postorder_walk(IfExprAST *ast) {}

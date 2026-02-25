@@ -73,6 +73,48 @@ void Lexer::lexNextToken() {
 }
 
 size_t Lexer::handleID(size_t i, const std::string &input) {
+  if (input[i] == '\'') {
+    i = advance(i);
+    char ch;
+    if (input[i] == '\\') {
+      i = advance(i);
+      switch (input[i]) {
+      case 'n':
+        ch = '\n';
+        break;
+      case 't':
+        ch = '\t';
+        break;
+      case 'r':
+        ch = '\r';
+        break;
+      case '\\':
+        ch = '\\';
+        break;
+      case '\'':
+        ch = '\'';
+        break;
+      case '0':
+        ch = '\0';
+        break;
+      default:
+        ch = input[i];
+        break;
+      }
+    } else {
+      ch = input[i];
+    }
+    i = advance(i);
+    if (i < input.length() && input[i] == '\'') {
+      i = advance(i);
+      tokStream->push_back(Token(TokChar, std::string(1, ch), location));
+    } else {
+      tokStream->push_back(
+          Token(TokINVALID, std::string(1, ch), location));
+      add_error(location, "Unterminated char literal, expected closing '");
+    }
+    return i;
+  }
   if (input[i] == '\"') {
     std::string str = "";
     i = advance(i);
@@ -216,7 +258,7 @@ size_t Lexer::handleInvalid(size_t i, const std::string &input) {
          input[i] != '(' && input[i] != ')' && input[i] != '{' &&
          input[i] != '}' && input[i] != '[' && input[i] != ']' &&
          input[i] != '#' && input[i] != ',' && input[i] != ';' &&
-         input[i] != ':' && input[i] != '.') {
+         input[i] != ':' && input[i] != '.' && input[i] != '\'') {
     i = advance(i);
   }
   tokStream->push_back(

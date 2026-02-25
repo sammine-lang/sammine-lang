@@ -15,6 +15,7 @@ enum class TypeKind {
   F64_t,
   Unit,
   Bool,
+  Char,
   String,
   Function,
   Pointer,
@@ -99,6 +100,7 @@ struct Type {
   static Type I64_t() { return Type{TypeKind::I64_t, std::monostate()}; }
   static Type F64_t() { return Type{TypeKind::F64_t, std::monostate()}; }
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
+  static Type Char() { return Type{TypeKind::Char, std::monostate()}; }
   static Type Poisoned() { return Type{TypeKind::Poisoned, std::monostate()}; }
   static Type Unit() { return Type{TypeKind::Unit, std::monostate()}; }
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
@@ -156,6 +158,8 @@ struct Type {
       return std::get<StructType>(type_data).get_name();
     case TypeKind::Bool:
       return "bool";
+    case TypeKind::Char:
+      return "char";
     case TypeKind::Pointer:
       return "ptr<" +
              std::get<PointerType>(type_data).get_pointee().to_string() + ">";
@@ -202,6 +206,7 @@ struct Type {
     case TypeKind::I64_t:
     case TypeKind::F64_t:
     case TypeKind::Bool:
+    case TypeKind::Char:
     case TypeKind::Unit:
     case TypeKind::String:
     case TypeKind::Integer:

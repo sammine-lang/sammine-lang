@@ -956,6 +956,14 @@ auto Parser::ParseBoolExpr() -> p<ExprAST> {
   return {nullptr, NONCOMMITTED};
 }
 
+auto Parser::ParseCharExpr() -> p<ExprAST> {
+  if (auto tok = expect(TokenType::TokChar)) {
+    char value = tok->lexeme.empty() ? '\0' : tok->lexeme[0];
+    return {std::make_unique<CharExprAST>(value, tok->get_location()), SUCCESS};
+  }
+  return {nullptr, NONCOMMITTED};
+}
+
 auto Parser::ParseVariableExpr() -> p<ExprAST> {
   if (auto name = expect(TokenType::TokID)) {
     return {std::make_unique<VariableExprAST>(name), SUCCESS};

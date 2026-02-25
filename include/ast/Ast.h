@@ -247,6 +247,7 @@ class StructDefAST : public DefinitionAST {
 public:
   sammine_util::QualifiedName struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
+  bool is_exported = false;
 
   explicit StructDefAST(std::shared_ptr<Token> struct_id,
                         decltype(struct_members) struct_members)
@@ -313,10 +314,19 @@ public:
   }
   AST_NODE_METHODS("BoolExprAST")
 };
+class CharExprAST : public ExprAST {
+public:
+  char value;
+  CharExprAST(char value, sammine_util::Location loc) : value(value) {
+    this->location = loc;
+  }
+  AST_NODE_METHODS("CharExprAST")
+};
 class BinaryExprAST : public ExprAST {
 public:
   std::shared_ptr<Token> Op;
   std::unique_ptr<ExprAST> LHS, RHS;
+  std::string resolved_op_method; // Set by type checker for typeclass operator dispatch
   BinaryExprAST(std::shared_ptr<Token> op, std::unique_ptr<ExprAST> LHS,
                 std::unique_ptr<ExprAST> RHS)
       : Op(op), LHS(std::move(LHS)), RHS(std::move(RHS)) {

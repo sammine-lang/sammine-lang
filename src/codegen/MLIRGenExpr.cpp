@@ -39,6 +39,12 @@ mlir::Value MLIRGenImpl::emitBoolExpr(AST::BoolExprAST *ast) {
       .getResult();
 }
 
+mlir::Value MLIRGenImpl::emitCharExpr(AST::CharExprAST *ast) {
+  return mlir::arith::ConstantIntOp::create(
+             builder, loc(ast), static_cast<uint8_t>(ast->value), 8)
+      .getResult();
+}
+
 mlir::Value MLIRGenImpl::emitUnitExpr(AST::UnitExprAST *) {
   // Unit has no runtime representation. Return nullptr — callers
   // that need a value should handle this.

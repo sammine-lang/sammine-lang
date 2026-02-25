@@ -124,6 +124,7 @@ public:
   [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS)
       -> p<ExprAST>;
   [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseCharExpr() -> p<ExprAST>;
 
   [[nodiscard]] auto ParseUnaryNegExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;

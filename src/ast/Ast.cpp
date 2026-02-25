@@ -103,6 +103,11 @@ void ASTVisitor::visit(BoolExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(CharExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->walk_with_postorder(this);
+}
+
 void ASTVisitor::visit(BlockAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &stmt : ast->Statements) {

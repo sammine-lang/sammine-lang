@@ -146,6 +146,8 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     return builder.getF64Type();
   case TypeKind::Bool:
     return builder.getI1Type();
+  case TypeKind::Char:
+    return builder.getI8Type();
   case TypeKind::Unit:
     return mlir::NoneType::get(builder.getContext());
   case TypeKind::String:
@@ -177,7 +179,8 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
 bool MLIRGenImpl::isIntegerType(const Type &type) {
   return type.type_kind == TypeKind::I32_t ||
          type.type_kind == TypeKind::I64_t ||
-         type.type_kind == TypeKind::Integer;
+         type.type_kind == TypeKind::Integer ||
+         type.type_kind == TypeKind::Char;
 }
 
 bool MLIRGenImpl::isFloatType(const Type &type) {
@@ -242,6 +245,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitNumberExpr(num);
   if (auto *boolE = dynamic_cast<AST::BoolExprAST *>(ast))
     return emitBoolExpr(boolE);
+  if (auto *charE = dynamic_cast<AST::CharExprAST *>(ast))
+    return emitCharExpr(charE);
   if (auto *unit = dynamic_cast<AST::UnitExprAST *>(ast))
     return emitUnitExpr(unit);
   if (auto *var = dynamic_cast<AST::VariableExprAST *>(ast))
@@ -343,6 +348,7 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   case TypeKind::Flt:
     return 8;
   case TypeKind::Bool:
+  case TypeKind::Char:
     return 1;
   case TypeKind::Pointer:
   case TypeKind::String:

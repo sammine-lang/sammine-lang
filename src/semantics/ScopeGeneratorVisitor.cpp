@@ -113,6 +113,7 @@ void ScopeGeneratorVisitor::preorder_walk(BinaryExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(NumberExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StringExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(BoolExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(CharExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(VariableExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(BlockAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IfExprAST *ast) {}
@@ -166,6 +167,7 @@ void ScopeGeneratorVisitor::postorder_walk(BinaryExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(NumberExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StringExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(BoolExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(CharExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
 
   auto var_name = ast->variableName;

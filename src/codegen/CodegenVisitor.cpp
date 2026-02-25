@@ -311,7 +311,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   auto *L = ast->LHS->val;
   auto *R = ast->RHS->val;
   auto &lhs_type = ast->LHS->type;
-  bool is_int = lhs_type == Type::I32_t() || lhs_type == Type::I64_t();
+  bool is_int = lhs_type == Type::I32_t() || lhs_type == Type::I64_t() ||
+                lhs_type == Type::Char();
   bool is_float = lhs_type == Type::F64_t();
 
   auto tok = ast->Op->tok_type;
@@ -542,7 +543,6 @@ void CgVisitor::preorder_walk(TypedVarAST *ast) {}
 
 void CgVisitor::postorder_walk(StringExprAST *ast) {
   ast->val = resPtr->Builder->CreateGlobalString(ast->string_content);
-  ast->type = Type::String(ast->string_content);
 }
 
 void CgVisitor::visit(DerefExprAST *ast) {
