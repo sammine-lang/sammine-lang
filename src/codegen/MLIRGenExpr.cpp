@@ -72,7 +72,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
       auto &ft = std::get<FunctionType>(ast->type.type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);
       auto ptrTy =
-          mlir::LLVM::LLVMPointerType::get(builder.getContext());
+          llvmPtrTy();
       auto wrapperAddr = mlir::LLVM::AddressOfOp::create(
           builder, loc(ast), ptrTy, wrapperName);
       auto nullEnv =
@@ -469,32 +469,30 @@ mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
                                        mlir::ValueRange{indexVal});
 }
 
+mlir::Value MLIRGenImpl::emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
+                                          const ArrayType &arrType,
+                                          mlir::Location location) {
+  auto elemMlirType = convertType(arrType.get_element());
+  auto arrLLVMType =
+      mlir::LLVM::LLVMArrayType::get(elemMlirType, arrType.get_size());
+  return mlir::LLVM::GEPOp::create(builder, location, llvmPtrTy(),
+                                     arrLLVMType, ptr,
+                                     llvm::ArrayRef<mlir::LLVM::GEPArg>{0, idx});
+}
+
 mlir::Value MLIRGenImpl::emitPtrArrayLoad(mlir::Value ptr, mlir::Value idx,
                                            const ArrayType &arrType,
                                            mlir::Location location) {
-  auto elemMlirType = convertType(arrType.get_element());
-  auto arrLLVMType = mlir::LLVM::LLVMArrayType::get(
-      elemMlirType, arrType.get_size());
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
-
-  auto gepOp = mlir::LLVM::GEPOp::create(
-      builder, location, ptrTy, arrLLVMType, ptr,
-      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, idx});
-  return mlir::LLVM::LoadOp::create(builder, location, elemMlirType, gepOp);
+  auto gepOp = emitPtrArrayGEP(ptr, idx, arrType, location);
+  return mlir::LLVM::LoadOp::create(builder, location,
+                                     convertType(arrType.get_element()), gepOp);
 }
 
 void MLIRGenImpl::emitPtrArrayStore(mlir::Value ptr, mlir::Value idx,
                                      mlir::Value val,
                                      const ArrayType &arrType,
                                      mlir::Location location) {
-  auto elemMlirType = convertType(arrType.get_element());
-  auto arrLLVMType = mlir::LLVM::LLVMArrayType::get(
-      elemMlirType, arrType.get_size());
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
-
-  auto gepOp = mlir::LLVM::GEPOp::create(
-      builder, location, ptrTy, arrLLVMType, ptr,
-      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, idx});
+  auto gepOp = emitPtrArrayGEP(ptr, idx, arrType, location);
   mlir::LLVM::StoreOp::create(builder, location, val, gepOp);
 }
 
@@ -539,7 +537,7 @@ mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
   // Arrays are still memref<NxT> — extract pointer from memref
   if (mlir::isa<mlir::MemRefType>(val.getType())) {
     auto location = loc(ast);
-    auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+    auto ptrTy = llvmPtrTy();
     auto idxVal =
         mlir::memref::ExtractAlignedPointerAsIndexOp::create(
             builder, location, val);
@@ -563,7 +561,7 @@ mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
   auto &ptrType = std::get<PointerType>(ast->type.type_data);
   int64_t elemSize = getTypeSize(ptrType.get_pointee());
 
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
   auto i64Ty = builder.getI64Type();
 
   auto elemSizeVal = mlir::arith::ConstantIntOp::create(

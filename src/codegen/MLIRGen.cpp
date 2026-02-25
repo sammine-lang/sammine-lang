@@ -34,7 +34,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   declareRuntimeFunctions();
 
   // Register the closure struct type: { ptr, ptr }
-  auto closurePtrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto closurePtrTy = llvmPtrTy();
   closureType = mlir::LLVM::LLVMStructType::getIdentified(
       builder.getContext(), "sammine.closure");
   (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
@@ -113,10 +113,10 @@ mlir::Location MLIRGenImpl::loc(AST::AstBase *ast) {
 
 void MLIRGenImpl::declareRuntimeFunctions() {
   auto unknownLoc = builder.getUnknownLoc();
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
   auto i32Ty = builder.getI32Type();
   auto i64Ty = builder.getI64Type();
-  auto voidTy = mlir::LLVM::LLVMVoidType::get(builder.getContext());
+  auto voidTy = llvmVoidTy();
 
   builder.setInsertionPointToEnd(theModule.getBody());
 
@@ -159,9 +159,9 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     return builder.getF64Type();
   case TypeKind::String:
     // String is a pointer to i8 in LLVM
-    return mlir::LLVM::LLVMPointerType::get(builder.getContext());
+    return llvmPtrTy();
   case TypeKind::Pointer:
-    return mlir::LLVM::LLVMPointerType::get(builder.getContext());
+    return llvmPtrTy();
   case TypeKind::Function:
     // Function-typed values are represented as closure fat pointers
     return closureType;
@@ -324,18 +324,21 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   }
 
   // All non-array variables: llvm.alloca + llvm.store (uniform model)
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
-  auto elemType = convertType(ast->type);
-  auto one = mlir::arith::ConstantIntOp::create(builder, loc(ast),
-                                                  builder.getI64Type(), 1);
-  auto alloca =
-      mlir::LLVM::AllocaOp::create(builder, loc(ast), ptrTy, elemType, one);
+  auto alloca = emitAllocaOne(convertType(ast->type), loc(ast));
   mlir::LLVM::StoreOp::create(builder, loc(ast), initVal, alloca);
   symbolTable.registerNameT(ast->TypedVar->name, alloca);
   return initVal;
 }
 
 // ===--- Helpers ---===
+
+mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
+                                        mlir::Location location) {
+  auto one = mlir::arith::ConstantIntOp::create(builder, location,
+                                                  builder.getI64Type(), 1);
+  return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
+                                        elemType, one);
+}
 
 int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   switch (type.type_kind) {
@@ -393,7 +396,7 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
     std::string nullTerminated = value.str();
     nullTerminated.push_back('\0');
 
-    auto savedIP = builder.saveInsertionPoint();
+    mlir::OpBuilder::InsertionGuard guard(builder);
     builder.setInsertionPointToStart(theModule.getBody());
 
     auto strType = mlir::LLVM::LLVMArrayType::get(
@@ -403,12 +406,10 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
         builder, location, strType, /*isConstant=*/true,
         mlir::LLVM::Linkage::Internal, name,
         builder.getStringAttr(nullTerminated));
-
-    builder.restoreInsertionPoint(savedIP);
   }
 
   // Get address of the global
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
   return mlir::LLVM::AddressOfOp::create(builder, location, ptrTy, name);
 }
 

@@ -47,14 +47,14 @@ MLIRGenImpl::getClosureFuncType(const FunctionType &ft) {
   if (retType.type_kind == TypeKind::Array)
     sammine_util::abort("MLIRGen: closure returning array not supported");
 
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
   llvm::SmallVector<mlir::Type> params;
   params.push_back(ptrTy); // env ptr
   for (auto &p : ft.get_params_types())
     params.push_back(convertType(p));
   if (retType.type_kind == TypeKind::Unit)
     return mlir::LLVM::LLVMFunctionType::get(
-        mlir::LLVM::LLVMVoidType::get(builder.getContext()), params);
+        llvmVoidTy(), params);
   return mlir::LLVM::LLVMFunctionType::get(convertType(retType), params);
 }
 
@@ -69,7 +69,7 @@ MLIRGenImpl::getOrCreateClosureWrapper(const std::string &funcName,
   auto wrapperFnTy = getClosureFuncType(ft);
   auto wrapperLoc = builder.getUnknownLoc();
 
-  auto savedIP = builder.saveInsertionPoint();
+  mlir::OpBuilder::InsertionGuard guard(builder);
   builder.setInsertionPointToEnd(theModule.getBody());
 
   auto wrapperOp = mlir::LLVM::LLVMFuncOp::create(
@@ -83,21 +83,27 @@ MLIRGenImpl::getOrCreateClosureWrapper(const std::string &funcName,
   for (size_t i = 1; i < entryBlock.getNumArguments(); i++)
     forwardArgs.push_back(entryBlock.getArgument(i));
 
-  auto retType = ft.get_return_type();
-  if (retType.type_kind == TypeKind::Unit) {
-    mlir::func::CallOp::create(builder, wrapperLoc, funcName,
-                                mlir::TypeRange{}, forwardArgs);
-    mlir::LLVM::ReturnOp::create(builder, wrapperLoc, mlir::ValueRange{});
-  } else {
-    auto callOp = mlir::func::CallOp::create(
-        builder, wrapperLoc, funcName,
-        mlir::TypeRange{convertType(retType)}, forwardArgs);
-    mlir::LLVM::ReturnOp::create(builder, wrapperLoc, callOp.getResults());
-  }
+  emitFuncCallAndLLVMReturn(funcName, ft.get_return_type(), forwardArgs,
+                            wrapperLoc);
 
-  builder.restoreInsertionPoint(savedIP);
   closureWrappers[funcName] = wrapperName;
   return wrapperName;
+}
+
+void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
+                                             const Type &retType,
+                                             mlir::ValueRange args,
+                                             mlir::Location location) {
+  if (retType.type_kind == TypeKind::Unit) {
+    mlir::func::CallOp::create(builder, location, callee,
+                                mlir::TypeRange{}, args);
+    mlir::LLVM::ReturnOp::create(builder, location, mlir::ValueRange{});
+  } else {
+    auto callOp = mlir::func::CallOp::create(
+        builder, location, callee,
+        mlir::TypeRange{convertType(retType)}, args);
+    mlir::LLVM::ReturnOp::create(builder, location, callOp.getResults());
+  }
 }
 
 // ===--- Function emission ---===
@@ -151,11 +157,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
       // Array/sret params: register memref directly
       symbolTable.registerNameT(param->name, argVal);
     } else {
-      auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
-      auto one = mlir::arith::ConstantIntOp::create(builder, loc(ast),
-                                                      builder.getI64Type(), 1);
-      auto alloca = mlir::LLVM::AllocaOp::create(builder, loc(ast), ptrTy,
-                                                   argVal.getType(), one);
+      auto alloca = emitAllocaOne(argVal.getType(), loc(ast));
       mlir::LLVM::StoreOp::create(builder, loc(ast), argVal, alloca);
       symbolTable.registerNameT(param->name, alloca);
     }
@@ -231,7 +233,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     auto retType = funcTypeData.get_return_type();
     mlir::Type llvmRetType;
     if (retType.type_kind == TypeKind::Unit)
-      llvmRetType = mlir::LLVM::LLVMVoidType::get(builder.getContext());
+      llvmRetType = llvmVoidTy();
     else
       llvmRetType = convertType(retType);
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(
@@ -256,7 +258,7 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
       std::get<FunctionType>(ast->callee_func_type->type_data);
   auto allParams = fullFt.get_params_types();
   size_t boundCount = boundArgs.size();
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
 
   // 1. Create env struct type and stack-allocate it
   llvm::SmallVector<mlir::Type> envFields;
@@ -266,10 +268,7 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
       mlir::LLVM::LLVMStructType::getLiteral(builder.getContext(),
                                               envFields);
 
-  auto one = mlir::arith::ConstantIntOp::create(builder, location,
-                                                  builder.getI64Type(), 1);
-  auto envAlloca = mlir::LLVM::AllocaOp::create(builder, location, ptrTy,
-                                                  envStructTy, one);
+  auto envAlloca = emitAllocaOne(envStructTy, location);
 
   // Store bound args into env
   for (size_t i = 0; i < boundCount; i++) {
@@ -289,50 +288,42 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
   mlir::Type llvmRet =
       retType.type_kind == TypeKind::Unit
           ? mlir::Type(
-                mlir::LLVM::LLVMVoidType::get(builder.getContext()))
+                llvmVoidTy())
           : convertType(retType);
   auto wrapperFnTy =
       mlir::LLVM::LLVMFunctionType::get(llvmRet, wrapperParams);
   auto wrapperName = fmt::format("__partial_{}", partialCounter++);
 
-  auto savedIP = builder.saveInsertionPoint();
-  builder.setInsertionPointToEnd(theModule.getBody());
+  // 2. Generate the wrapper body in a separate scope so InsertionGuard
+  //    restores the insertion point before we build the closure.
+  {
+    mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToEnd(theModule.getBody());
 
-  auto wrapperOp = mlir::LLVM::LLVMFuncOp::create(
-      builder, location, wrapperName, wrapperFnTy,
-      mlir::LLVM::Linkage::Internal);
-  auto &entryBlock = *wrapperOp.addEntryBlock(builder);
-  builder.setInsertionPointToStart(&entryBlock);
+    auto wrapperOp = mlir::LLVM::LLVMFuncOp::create(
+        builder, location, wrapperName, wrapperFnTy,
+        mlir::LLVM::Linkage::Internal);
+    auto &entryBlock = *wrapperOp.addEntryBlock(builder);
+    builder.setInsertionPointToStart(&entryBlock);
 
-  // Load bound args from env
-  auto envArg = entryBlock.getArgument(0);
-  llvm::SmallVector<mlir::Value> fullArgs;
-  for (size_t i = 0; i < boundCount; i++) {
-    auto gep = mlir::LLVM::GEPOp::create(
-        builder, location, ptrTy, envStructTy, envArg,
-        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)});
-    auto loaded = mlir::LLVM::LoadOp::create(builder, location,
-                                               envFields[i], gep);
-    fullArgs.push_back(loaded);
+    // Load bound args from env
+    auto envArg = entryBlock.getArgument(0);
+    llvm::SmallVector<mlir::Value> fullArgs;
+    for (size_t i = 0; i < boundCount; i++) {
+      auto gep = mlir::LLVM::GEPOp::create(
+          builder, location, ptrTy, envStructTy, envArg,
+          llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)});
+      auto loaded = mlir::LLVM::LoadOp::create(builder, location,
+                                                 envFields[i], gep);
+      fullArgs.push_back(loaded);
+    }
+    // Forward remaining args
+    for (size_t i = 1; i < entryBlock.getNumArguments(); i++)
+      fullArgs.push_back(entryBlock.getArgument(i));
+
+    // Call original function and return
+    emitFuncCallAndLLVMReturn(calleeName, retType, fullArgs, location);
   }
-  // Forward remaining args
-  for (size_t i = 1; i < entryBlock.getNumArguments(); i++)
-    fullArgs.push_back(entryBlock.getArgument(i));
-
-  // Call original function
-  if (retType.type_kind == TypeKind::Unit) {
-    mlir::func::CallOp::create(builder, location, calleeName,
-                                mlir::TypeRange{}, fullArgs);
-    mlir::LLVM::ReturnOp::create(builder, location, mlir::ValueRange{});
-  } else {
-    auto callResult = mlir::func::CallOp::create(
-        builder, location, calleeName,
-        mlir::TypeRange{convertType(retType)}, fullArgs);
-    mlir::LLVM::ReturnOp::create(builder, location,
-                                  callResult.getResults());
-  }
-
-  builder.restoreInsertionPoint(savedIP);
 
   // 3. Build closure: { wrapper_addr, env_alloca }
   auto wrapperAddr = mlir::LLVM::AddressOfOp::create(builder, location,
@@ -355,7 +346,7 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
                                               closureType, closureVal);
 
   // Extract code_ptr and env_ptr
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  auto ptrTy = llvmPtrTy();
   auto codePtr = mlir::LLVM::ExtractValueOp::create(
       builder, location, ptrTy, closureVal,
       llvm::ArrayRef<int64_t>{0});

@@ -46,6 +46,14 @@ public:
 
   mlir::Value currentSretBuffer = nullptr;
 
+  // --- Inline type helpers ---
+  mlir::LLVM::LLVMPointerType llvmPtrTy() {
+    return mlir::LLVM::LLVMPointerType::get(builder.getContext());
+  }
+  mlir::LLVM::LLVMVoidType llvmVoidTy() {
+    return mlir::LLVM::LLVMVoidType::get(builder.getContext());
+  }
+
   // --- Location helpers ---
   mlir::Location loc(AST::AstBase *ast);
 
@@ -83,6 +91,8 @@ public:
                                      llvm::ArrayRef<mlir::Value> boundArgs);
   mlir::Value emitIndirectCall(AST::CallExprAST *ast,
                                llvm::ArrayRef<mlir::Value> operands);
+  void emitFuncCallAndLLVMReturn(llvm::StringRef callee, const Type &retType,
+                                 mlir::ValueRange args, mlir::Location loc);
   mlir::Value emitReturnExpr(AST::ReturnExprAST *ast);
 
   // --- Expression emission (MLIRGenExpr.cpp) ---
@@ -96,6 +106,9 @@ public:
   mlir::Value emitStringExpr(AST::StringExprAST *ast);
   mlir::Value emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast);
   mlir::Value emitIndexExpr(AST::IndexExprAST *ast);
+  mlir::Value emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
+                              const ArrayType &arrType,
+                              mlir::Location location);
   mlir::Value emitPtrArrayLoad(mlir::Value ptr, mlir::Value idx,
                                const ArrayType &arrType,
                                mlir::Location location);
@@ -115,6 +128,7 @@ public:
                                   mlir::Location location);
 
   // --- Helpers (MLIRGen.cpp) ---
+  mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
   int64_t getTypeSize(const Type &type);
   mlir::Value getOrCreateGlobalString(llvm::StringRef name,
                                       llvm::StringRef value,
