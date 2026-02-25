@@ -31,6 +31,11 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
       register_typeclass_instance(tci);
   }
 
+  // Register compiler-builtin operator instances for primitive types
+  // (Add/Sub/Mul/Div/Mod on i32, i64, f64, char) — no source bodies,
+  // codegen emits inline ops for these.
+  register_builtin_op_instances();
+
   // Second pass: full type checking of everything
   for (auto &def : ast->DefinitionVec)
     def->accept_vis(this);
@@ -447,6 +452,40 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   std::string key =
       ast->class_name + "$" + ast->concrete_type.to_string();
   type_class_instances[key] = std::move(inst_info);
+}
+
+void BiTypeCheckerVisitor::register_builtin_op_instances() {
+  struct BuiltinEntry {
+    const char *class_name;
+    const char *method_name;
+    Type type;
+  };
+
+  static const BuiltinEntry entries[] = {
+      {"Add", "add", Type::I32_t()}, {"Add", "add", Type::I64_t()},
+      {"Add", "add", Type::F64_t()}, {"Add", "add", Type::Char()},
+      {"Sub", "sub", Type::I32_t()}, {"Sub", "sub", Type::I64_t()},
+      {"Sub", "sub", Type::F64_t()}, {"Mul", "mul", Type::I32_t()},
+      {"Mul", "mul", Type::I64_t()}, {"Mul", "mul", Type::F64_t()},
+      {"Div", "div", Type::I32_t()}, {"Div", "div", Type::I64_t()},
+      {"Div", "div", Type::F64_t()}, {"Mod", "mod", Type::I32_t()},
+      {"Mod", "mod", Type::I64_t()},
+  };
+
+  for (auto &e : entries) {
+    std::string type_str = e.type.to_string();
+    std::string key = std::string(e.class_name) + "$" + type_str;
+    if (type_class_instances.contains(key))
+      continue;
+
+    TypeClassInstanceInfo info;
+    info.class_name = e.class_name;
+    info.concrete_type = e.type;
+    std::string mangled =
+        std::string(e.class_name) + "$" + type_str + "$" + e.method_name;
+    info.method_mangled_names[e.method_name] = mangled;
+    type_class_instances[key] = std::move(info);
+  }
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
@@ -882,13 +921,47 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     return ast->type = Type::Unit();
   }
 
+  // Logical operators — not typeclass-dispatched
+  if (ast->Op->is_logical()) {
+    return ast->type = ast->LHS->type;
+  }
+
+  // Arithmetic operators dispatch through typeclasses
+  static const std::unordered_map<int, std::pair<std::string, std::string>>
+      op_to_class = {
+          {TokADD, {"Add", "add"}}, {TokSUB, {"Sub", "sub"}},
+          {TokMUL, {"Mul", "mul"}}, {TokDIV, {"Div", "div"}},
+          {TokMOD, {"Mod", "mod"}},
+      };
+
+  auto it = op_to_class.find(ast->Op->tok_type);
+  if (it != op_to_class.end()) {
+    auto &[class_name, method_name] = it->second;
+    std::string key = class_name + "$" + ast->LHS->type.to_string();
+    auto inst_it = type_class_instances.find(key);
+    if (inst_it == type_class_instances.end()) {
+      add_error(ast->Op->get_location(),
+                fmt::format("No instance of {}<{}> — cannot use '{}' on this "
+                            "type",
+                            class_name, ast->LHS->type.to_string(),
+                            ast->Op->lexeme));
+      return ast->type = Type::Poisoned();
+    }
+    auto method_it = inst_it->second.method_mangled_names.find(method_name);
+    if (method_it != inst_it->second.method_mangled_names.end()) {
+      ast->resolved_op_method = method_it->second;
+    }
+    return ast->type = ast->LHS->type;
+  }
+
   return ast->type = ast->LHS->type;
 }
 
 Type BiTypeCheckerVisitor::synthesize(StringExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
-  return ast->type = Type::String(ast->string_content);
+  // String literals are char pointers at runtime
+  return ast->type = Type::Pointer(Type::Char());
 }
 
 Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {

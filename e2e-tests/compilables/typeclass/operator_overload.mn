@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# CHECK: 30 40
+
+import std;
+
+struct Vec2 {
+  x: i32,
+  y: i32,
+};
+
+instance Add<Vec2> {
+  let add(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2 { x: a.x + b.x, y: a.y + b.y }
+  }
+}
+
+let main() -> i32 {
+  let a: Vec2 = Vec2 { x: 10, y: 15 };
+  let b: Vec2 = Vec2 { x: 20, y: 25 };
+  let c: Vec2 = a + b;
+  std::printf("%d %d\n", c.x, c.y);
+  return 0;
+}

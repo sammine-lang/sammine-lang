@@ -321,28 +321,40 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       ast->val = resPtr->Builder->CreateAdd(L, R, "add_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFAdd(L, R, "add_expr");
-    else
+    else if (!ast->resolved_op_method.empty()) {
+      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+      ast->val = resPtr->Builder->CreateCall(fn, {L, R});
+    } else
       this->abort();
   } else if (tok == TokenType::TokSUB) {
     if (is_int)
       ast->val = resPtr->Builder->CreateSub(L, R, "sub_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFSub(L, R, "sub_expr");
-    else
+    else if (!ast->resolved_op_method.empty()) {
+      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+      ast->val = resPtr->Builder->CreateCall(fn, {L, R});
+    } else
       this->abort();
   } else if (tok == TokenType::TokMUL) {
     if (is_int)
       ast->val = resPtr->Builder->CreateMul(L, R, "mul_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFMul(L, R, "mul_expr");
-    else
+    else if (!ast->resolved_op_method.empty()) {
+      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+      ast->val = resPtr->Builder->CreateCall(fn, {L, R});
+    } else
       this->abort();
   } else if (tok == TokenType::TokDIV) {
     if (is_int)
       ast->val = resPtr->Builder->CreateSDiv(L, R, "div_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFDiv(L, R, "div_expr");
-    else
+    else if (!ast->resolved_op_method.empty()) {
+      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+      ast->val = resPtr->Builder->CreateCall(fn, {L, R});
+    } else
       this->abort();
   } else if (tok == TokOR) {
     ast->val = resPtr->Builder->CreateLogicalOr(L, R);
@@ -356,7 +368,13 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
           type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
     }
   } else if (tok == TokMOD) {
-    ast->val = resPtr->Builder->CreateSRem(L, R);
+    if (is_int)
+      ast->val = resPtr->Builder->CreateSRem(L, R);
+    else if (!ast->resolved_op_method.empty()) {
+      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+      ast->val = resPtr->Builder->CreateCall(fn, {L, R});
+    } else
+      this->abort();
   } else {
     LOG({ fmt::print(stderr, "{}\n", ast->Op->lexeme); });
     this->abort();
@@ -380,6 +398,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
     break;
   case TypeKind::Unit:
   case TypeKind::Bool:
+  case TypeKind::Char:
   case TypeKind::Function:
   case TypeKind::Pointer:
   case TypeKind::Array:
@@ -398,6 +417,10 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
 void CgVisitor::preorder_walk(BoolExprAST *ast) {
   ast->val = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*resPtr->Context),
                                     ast->b ? 1 : 0);
+}
+void CgVisitor::preorder_walk(CharExprAST *ast) {
+  ast->val = llvm::ConstantInt::get(llvm::Type::getInt8Ty(*resPtr->Context),
+                                    static_cast<uint8_t>(ast->value));
 }
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
   auto *alloca = this->allocaValues.top()[ast->variableName];
@@ -462,6 +485,12 @@ void CgVisitor::visit(IfExprAST *ast) {
         ast->bool_expr->val,
         llvm::ConstantFP::get(*resPtr->Context, llvm::APFloat(0.0)),
         "ifcond_f64");
+    break;
+  case TypeKind::Char:
+    ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
+        ast->bool_expr->val,
+        llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(8, 0)),
+        "ifcond_char");
     break;
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

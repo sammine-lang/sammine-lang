@@ -321,6 +321,19 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
     }
   }
 
+  // User-defined operator via typeclass instance — emit a function call
+  if (!ast->resolved_op_method.empty()) {
+    auto funcOp =
+        theModule.lookupSymbol<mlir::func::FuncOp>(ast->resolved_op_method);
+    if (!funcOp)
+      funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(ast->resolved_op_method);
+    if (funcOp) {
+      auto callOp = mlir::func::CallOp::create(builder, location, funcOp,
+                                                 mlir::ValueRange{lhs, rhs});
+      return callOp.getResult(0);
+    }
+  }
+
   sammine_util::abort(
       fmt::format("MLIRGen: unsupported binary operator '{}'",
                   ast->Op->lexeme));

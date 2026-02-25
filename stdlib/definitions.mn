@@ -17,3 +17,23 @@ instance Sized<f64> {
 instance Sized<bool> {
   let sizeof() -> i64 { 1i64 }
 }
+
+typeclass Add<T> {
+  add(a: T, b: T) -> T;
+}
+
+typeclass Sub<T> {
+  sub(a: T, b: T) -> T;
+}
+
+typeclass Mul<T> {
+  mul(a: T, b: T) -> T;
+}
+
+typeclass Div<T> {
+  div(a: T, b: T) -> T;
+}
+
+typeclass Mod<T> {
+  mod(a: T, b: T) -> T;
+}
