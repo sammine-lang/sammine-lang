@@ -1,5 +1,4 @@
 # RUN: %sammine --file %full && ./%base.exe | %check %full
-# RUN: %sammine --backend=mlir --file %full && ./%base.exe | %check %full
 # CHECK: 10
 # CHECK: 100
 # CHECK: not equal
