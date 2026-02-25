@@ -361,10 +361,10 @@ void AstPrinterVisitor::preorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::preorder_walk(FuncDefAST *ast) {}
 void AstPrinterVisitor::preorder_walk(StructDefAST *ast) {
   // print the record’s name at the current indent
-  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name));
+  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.display()));
 }
 void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
-  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName));
+  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.display()));
 }
 void AstPrinterVisitor::preorder_walk(CallExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(ReturnExprAST *ast) {

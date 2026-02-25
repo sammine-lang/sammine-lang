@@ -15,7 +15,7 @@ llvm::AllocaInst *CodegenUtils::CreateEntryBlockAlloca(
   return TmpB.CreateAlloca(type, nullptr, VarName);
 }
 bool CodegenUtils::isFunctionMain(FuncDefAST *ast) {
-  return ast->Prototype->functionName == "main";
+  return ast->Prototype->functionName.name == "main";
 }
 bool CodegenUtils::hasFunctionMain(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec)

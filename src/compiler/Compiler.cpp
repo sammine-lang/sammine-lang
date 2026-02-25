@@ -155,7 +155,7 @@ void Compiler::parse() {
 
   for (auto &def : programAST->DefinitionVec)
     if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get()))
-      if (fd->Prototype->functionName == "main") {
+      if (fd->Prototype->functionName.name == "main") {
         has_main = true;
         break;
       }
@@ -212,8 +212,12 @@ void Compiler::resolve_imports() {
     for (auto it = mni_program->DefinitionVec.rbegin();
          it != mni_program->DefinitionVec.rend(); ++it) {
       (*it)->set_location(import.location);
-      if (auto *ext = dynamic_cast<AST::ExternAST *>(it->get()))
+      if (auto *ext = dynamic_cast<AST::ExternAST *>(it->get())) {
         ext->Prototype->set_location(import.location);
+        ext->Prototype->functionName =
+            sammine_util::QualifiedName::from_mangled(
+                ext->Prototype->functionName.name);
+      }
       programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                        std::move(*it));
     }
@@ -397,8 +401,8 @@ void Compiler::codegen_mlir() {
     for (auto &def : programAST->DefinitionVec) {
       auto *ext = dynamic_cast<AST::ExternAST *>(def.get());
       if (!ext) continue;
-      std::string cName = ext->Prototype->functionName;
-      std::string mangled = moduleName + "$" + cName;
+      std::string cName = ext->Prototype->functionName.mangled();
+      std::string mangled = ext->Prototype->functionName.with_module(moduleName).mangled();
       auto *fn = llvmModule->getFunction(cName);
       if (!fn || llvmModule->getNamedValue(mangled)) continue;
 
@@ -555,14 +559,14 @@ void Compiler::emit_interface() {
     if (auto *func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
       if (!func_def->is_exported)
         continue;
-      std::string mangled = stem + "$" + func_def->Prototype->functionName;
+      std::string mangled = func_def->Prototype->functionName.with_module(stem).mangled();
       emit_proto(mangled, func_def->Prototype.get(),
                  func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = dynamic_cast<AST::ExternAST *>(def.get())) {
       if (!extern_def->is_exposed)
         continue;
       std::string mangled =
-          stem + "$" + extern_def->Prototype->functionName;
+          extern_def->Prototype->functionName.with_module(stem).mangled();
       emit_proto(mangled, extern_def->Prototype.get(),
                  extern_def->Prototype->is_var_arg);
     }

@@ -30,7 +30,7 @@ void CgVisitor::forward_declare(PrototypeAST *ast) {
   if (ast->is_generic())
     return;
 
-  std::string llvm_name = ast->functionName;
+  std::string llvm_name = ast->functionName.mangled();
 
   if (resPtr->Module->getFunction(llvm_name))
     return;
@@ -56,10 +56,10 @@ void CgVisitor::forward_declare(PrototypeAST *ast) {
 void CgVisitor::preorder_walk(PrototypeAST *ast) {
   // Compute the LLVM symbol name: mangle library functions with module$func
   // Externs keep their C names — aliases handle the mangled lookup.
-  std::string llvm_name = ast->functionName;
-  if (!module_name.empty() && ast->functionName != "main" && !in_reuse &&
+  std::string llvm_name = ast->functionName.mangled();
+  if (!module_name.empty() && ast->functionName.name != "main" && !in_reuse &&
       !current_func_exported)
-    llvm_name = module_name + "$" + ast->functionName;
+    llvm_name = ast->functionName.with_module(module_name).mangled();
 
   // If the function is already declared in the module (e.g. runtime builtins
   // like printf), reuse the existing declaration instead of creating a
@@ -106,7 +106,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
   assert(F);
   LOG({
     fmt::print(stderr, "[codegen] register function '{}' with {} params\n",
-               ast->functionName, ast->parameterVectors.size());
+               ast->functionName.display(), ast->parameterVectors.size());
   });
 }
 
@@ -121,7 +121,7 @@ void CgVisitor::postorder_walk(FuncDefAST *ast) {
   // the mangled name (module$func) while C code uses the plain name.
   if (ast->is_exported && !module_name.empty()) {
     auto *fn = getCurrentFunction();
-    std::string mangled = module_name + "$" + ast->Prototype->functionName;
+    std::string mangled = ast->Prototype->functionName.with_module(module_name).mangled();
 
     auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
     auto *resolverTy = llvm::FunctionType::get(ptrTy, false);

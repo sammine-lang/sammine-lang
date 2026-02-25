@@ -208,9 +208,9 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
   // IFuncs work portably: ELF resolves at load time, MachO uses
   // .symbol_resolver stubs.
   if (!module_name.empty()) {
-    auto *fn = resPtr->Module->getFunction(ast->Prototype->functionName);
+    auto *fn = resPtr->Module->getFunction(ast->Prototype->functionName.mangled());
     if (fn) {
-      std::string mangled = module_name + "$" + ast->Prototype->functionName;
+      std::string mangled = ast->Prototype->functionName.with_module(module_name).mangled();
 
       // Create resolver: define ptr @resolve_<mangled>() { ret ptr @fn }
       auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);

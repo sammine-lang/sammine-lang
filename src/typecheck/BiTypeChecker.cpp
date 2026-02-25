@@ -52,7 +52,7 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->accept_synthesis(this);
 
   if (is_generic) {
-    generic_func_defs[ast->Prototype->functionName] = ast;
+    generic_func_defs[ast->Prototype->functionName.mangled()] = ast;
   } else {
     ast->Block->accept_vis(this);
   }
@@ -64,8 +64,8 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   ast->accept_synthesis(this);
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
-  id_to_type.parent_scope()->registerNameT(ast->functionName, ast->type);
-  if (ast->functionName == "main") {
+  id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(), ast->type);
+  if (ast->functionName.name == "main") {
     auto fn_type = std::get<FunctionType>(ast->type.type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type != Type::I32_t()) {
@@ -180,10 +180,10 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   }
 
   auto struct_type =
-      Type::Struct(ast->struct_name, std::move(field_names),
+      Type::Struct(ast->struct_name.mangled(), std::move(field_names),
                    std::move(field_types));
   ast->type = struct_type;
-  typename_to_type.registerNameT(ast->struct_name, struct_type);
+  typename_to_type.registerNameT(ast->struct_name.mangled(), struct_type);
 }
 
 void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
@@ -409,7 +409,7 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   for (auto &proto : ast->methods) {
     proto->accept_synthesis(this);
     info.methods.push_back(proto.get());
-    method_to_class[proto->functionName] = ast->class_name;
+    method_to_class[proto->functionName.mangled()] = ast->class_name;
   }
 
   exit_new_scope();
@@ -434,10 +434,10 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   inst_info.concrete_type = ast->concrete_type;
 
   for (auto &method : ast->methods) {
-    std::string original_name = method->Prototype->functionName;
+    std::string original_name = method->Prototype->functionName.name;
     std::string mangled = ast->class_name + "$" +
                           ast->concrete_type.to_string() + "$" + original_name;
-    method->Prototype->functionName = mangled;
+    method->Prototype->functionName = sammine_util::QualifiedName::local(mangled);
     inst_info.method_mangled_names[original_name] = mangled;
   }
 
@@ -578,7 +578,7 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
 
   LOG({
     fmt::print(stderr, "[typecheck] synthesize PrototypeAST: '{}' -> {}\n",
-               ast->functionName, ast->type.to_string());
+               ast->functionName.display(), ast->type.to_string());
   });
   return ast->type;
 }
@@ -613,7 +613,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       // Find the method prototype in the type class
       PrototypeAST *method_proto = nullptr;
       for (auto *p : tc.methods) {
-        if (p->functionName == method_name) {
+        if (p->functionName.mangled() == method_name) {
           method_proto = p;
           break;
         }

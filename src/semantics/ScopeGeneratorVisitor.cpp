@@ -21,13 +21,13 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
   sammine_util::Location loc;
   for (auto &def : ast->DefinitionVec) {
     if (auto fn_def = dynamic_cast<FuncDefAST *>(def.get())) {
-      fn_name = fn_def->Prototype->functionName;
+      fn_name = fn_def->Prototype->functionName.mangled();
       loc = fn_def->Prototype->get_location();
     } else if (auto extern_def = dynamic_cast<ExternAST *>(def.get())) {
-      fn_name = extern_def->Prototype->functionName;
+      fn_name = extern_def->Prototype->functionName.mangled();
       loc = extern_def->Prototype->get_location();
     } else if (auto record_def = dynamic_cast<StructDefAST *>(def.get())) {
-      fn_name = record_def->struct_name;
+      fn_name = record_def->struct_name.mangled();
       loc = record_def->get_location();
     } else if (dynamic_cast<TypeClassDeclAST *>(def.get()) ||
                dynamic_cast<TypeClassInstanceAST *>(def.get())) {
@@ -90,7 +90,7 @@ void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
-  auto var_name = ast->functionName;
+  auto var_name = ast->functionName.mangled();
   if (can_see_parent(var_name) == nameNotFound)
     register_name_parent(var_name, ast->get_location());
 

@@ -36,6 +36,21 @@ struct QualifiedName {
       return name;
     return module + "::" + name;
   }
+
+  // Parse a mangled "module$name" string back into a QualifiedName
+  static QualifiedName from_mangled(const std::string &mangled) {
+    auto pos = mangled.find('$');
+    if (pos == std::string::npos)
+      return local(mangled);
+    return qualified(mangled.substr(0, pos), mangled.substr(pos + 1));
+  }
+
+  // Return a copy with module set (if not already qualified)
+  QualifiedName with_module(const std::string &mod) const {
+    if (!module.empty())
+      return *this;
+    return qualified(mod, name);
+  }
 };
 
 } // namespace sammine_util

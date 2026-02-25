@@ -146,7 +146,7 @@ public:
 class PrototypeAST : public AstBase, public Printable {
 public:
   llvm::Function *function;
-  std::string functionName;
+  sammine_util::QualifiedName functionName;
   std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
   std::vector<std::string> type_params;
@@ -159,7 +159,7 @@ public:
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
       : return_type_expr(std::move(return_type_expr)) {
     assert(functionName);
-    this->functionName = functionName->lexeme;
+    this->functionName = sammine_util::QualifiedName::local(functionName->lexeme);
     this->join_location(functionName);
     if (this->return_type_expr)
       this->join_location(this->return_type_expr->location);
@@ -176,7 +176,7 @@ public:
       std::shared_ptr<Token> functionName,
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors) {
     assert(functionName);
-    this->functionName = functionName->lexeme;
+    this->functionName = sammine_util::QualifiedName::local(functionName->lexeme);
     this->join_location(functionName);
 
     this->parameterVectors = std::move(parameterVectors);
@@ -235,7 +235,7 @@ public:
         ->join_location(this->Block.get());
   }
 
-  std::string getFunctionName() const { return Prototype->functionName; }
+  std::string getFunctionName() const { return Prototype->functionName.mangled(); }
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
 
@@ -245,14 +245,14 @@ public:
 // struct id { typed_var }
 class StructDefAST : public DefinitionAST {
 public:
-  std::string struct_name;
+  sammine_util::QualifiedName struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
 
   explicit StructDefAST(std::shared_ptr<Token> struct_id,
                         decltype(struct_members) struct_members)
       : struct_members(std::move(struct_members)) {
     if (struct_id)
-      struct_name = struct_id->lexeme;
+      struct_name = sammine_util::QualifiedName::local(struct_id->lexeme);
 
     this->join_location(struct_id);
     for (auto &m : struct_members)

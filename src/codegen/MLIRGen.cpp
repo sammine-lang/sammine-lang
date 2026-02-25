@@ -243,10 +243,8 @@ private:
     return builder.getFunctionType(argTypes, retTypes);
   }
 
-  std::string mangleName(const std::string &name) {
-    if (!moduleName.empty())
-      return moduleName + "$" + name;
-    return name;
+  std::string mangleName(const sammine_util::QualifiedName &qn) {
+    return qn.with_module(moduleName).mangled();
   }
 
   void forwardDeclareFunc(AST::PrototypeAST *proto) {
@@ -442,7 +440,7 @@ private:
   }
 
   void emitExtern(AST::ExternAST *ast) {
-    std::string funcName = ast->Prototype->functionName;
+    std::string funcName = ast->Prototype->functionName.mangled();
 
     // Skip if already declared (e.g. by declareRuntimeFunctions)
     if (theModule.lookupSymbol(funcName))
@@ -575,7 +573,9 @@ private:
 
     // Not in symbol table — check if it's a module-level function used as a value
     if (ast->type.type_kind == TypeKind::Function) {
-      auto funcName = mangleName(ast->variableName);
+      auto funcName = ast->variableName;
+      if (!theModule.lookupSymbol<mlir::func::FuncOp>(funcName))
+        funcName = mangleName(sammine_util::QualifiedName::local(funcName));
       if (theModule.lookupSymbol<mlir::func::FuncOp>(funcName)) {
         auto &ft = std::get<FunctionType>(ast->type.type_data);
         auto wrapperName = getOrCreateClosureWrapper(funcName, ft);
@@ -985,20 +985,19 @@ private:
         operands.push_back(val);
     }
 
-    // Resolve callee name — use resolved_generic_name if set by monomorphizer
+    // Resolve callee name — use the qualified name directly, matching
+    // the LLVM backend. Names already include module prefixes where needed
+    // (e.g. "math$add" for imports, "wrapper" for local calls).
     std::string callee;
     if (ast->resolved_generic_name.has_value())
-      callee = mangleName(*ast->resolved_generic_name);
+      callee = *ast->resolved_generic_name;
     else
-      callee = mangleName(ast->functionName.mangled());
+      callee = ast->functionName.mangled();
 
-    // If the mangled callee isn't declared, fall back to the base name.
-    // This handles imported C externs: call site uses "std$printf" but
-    // the extern is declared as "printf".
+    // Imported C externs are declared with their base name (e.g. "printf")
     if (!theModule.lookupSymbol(callee)) {
-      auto baseName = ast->functionName.name;
-      if (theModule.lookupSymbol(baseName))
-        callee = baseName;
+      if (theModule.lookupSymbol(ast->functionName.name))
+        callee = ast->functionName.name;
     }
 
     // Path 1: Direct call (not partial) — callee found in module
