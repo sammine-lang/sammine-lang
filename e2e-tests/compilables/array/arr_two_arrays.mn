@@ -1,0 +1,26 @@
+# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --backend=mlir --file %full && ./%base.exe | %check %full
+# CHECK: 10
+# CHECK: 100
+# CHECK: not equal
+# CHECK: equal
+
+import std;
+
+let main() -> i32 {
+  let a : [i32;3] = [10, 20, 30];
+  let b : [i32;3] = [100, 200, 300];
+  std::printf("%d\n", (*&a)[0]);
+  std::printf("%d\n", (*&b)[0]);
+  if &a == &b {
+    std::printf("equal\n");
+  } else {
+    std::printf("not equal\n");
+  };
+  if &a == &a {
+    std::printf("equal\n");
+  } else {
+    std::printf("not equal\n");
+  };
+  return 0;
+}
