@@ -7,6 +7,8 @@ target_link_libraries(CodegenVisitor PRIVATE project_options)
 
 add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGen.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MLIRGenExpr.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRLowering.cpp
 )
 target_include_directories(MLIRBackend PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
