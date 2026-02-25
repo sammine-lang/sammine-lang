@@ -165,8 +165,41 @@ FuncDefAST, ExternAST, NumberExprAST, BoolExprAST, BinaryExprAST (all arith + co
 - `scf.if` chosen over `cf.cond_br` for structured semantics + future optimization (Phase 7 tensor work)
 - `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not yet supported
 
-### Not yet implemented (Phase 3+)
-StringExprAST, pointers (deref/addrof/alloc/free), arrays (literal/index/len), structs, closures, partial application, module system/imports
+### File split
+- `MLIRGenImpl.h` — class declaration, inline helpers, named constants
+- `MLIRGen.cpp` — `generate()`, `convertType()`, `emitDefinition()`, `emitVarDef()`, `emitBlock()`, `getTypeSize()`, `getOrCreateGlobalString()`, `emitAllocaOne()`
+- `MLIRGenFunction.cpp` — `emitFunction()`, `emitExtern()`, closure wrappers, partial application, `emitCallExpr()`, `emitFuncCallAndLLVMReturn()`
+- `MLIRGenExpr.cpp` — all expression emission (number, bool, string, binary, unary, if, array, pointer, struct, field access)
+- `MLIRLowering.cpp` — `lowerMLIRToLLVMIR()` lowering pipeline
+
+### Named constants (`MLIRGenImpl.h`)
+```cpp
+kClosureTypeName  = "sammine.closure"    kStructTypePrefix = "sammine.struct."
+kWrapperPrefix    = "__wrap_"            kPartialPrefix    = "__partial_"
+kStringPrefix     = ".str."              kMallocFunc       = "malloc"
+kFreeFunc         = "free"               kExitFunc         = "exit"
+```
+
+### Inline helpers (`MLIRGenImpl.h`)
+- `llvmPtrTy()` — returns `LLVM::LLVMPointerType::get(ctx)` (replaces 14+ repeated calls)
+- `llvmVoidTy()` — returns `LLVM::LLVMVoidType::get(ctx)` (replaces 4+ repeated calls)
+
+### Extracted helpers
+- `emitAllocaOne(elemType, loc)` — 1-element alloca: `ConstantIntOp(1, i64)` + `LLVM::AllocaOp`
+- `emitPtrArrayGEP(ptr, idx, arrType, loc)` — GEP through pointer into array element (used by load/store)
+- `emitFuncCallAndLLVMReturn(callee, retType, args, loc)` — call + void-vs-value LLVM return pattern (used in wrappers/partial)
+
+### RAII patterns
+- Use `mlir::OpBuilder::InsertionGuard` instead of manual `saveInsertionPoint()`/`restoreInsertionPoint()`
+- In `emitPartialApplication`, scope the guard in a `{}` block so it restores before the closure-building code that follows
+
+### `getTypeSize()` alignment
+- Struct sizes use `llvm::alignTo()` for ABI-correct padding (e.g. `{i32, f64}` = 16 bytes, not 12)
+- Function type = 16 bytes (two pointers for closure struct)
+- Array type = element_size * count
+
+### Not yet implemented
+Module system/imports
 
 ## Build & Test
 ```bash
