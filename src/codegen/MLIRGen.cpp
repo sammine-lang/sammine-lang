@@ -16,6 +16,7 @@
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "fmt/core.h"
@@ -211,6 +212,9 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     // Emit each instance method as a regular function
     for (auto &method : tci->methods)
       emitFunction(method.get());
+  } else {
+    sammine_util::abort(fmt::format(
+        "MLIRGen: unknown definition type '{}'", def->getTreeName()));
   }
 }
 
@@ -348,11 +352,28 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   case TypeKind::Pointer:
   case TypeKind::String:
     return 8;
+  case TypeKind::Function:
+    return 16; // closure struct: two pointers
+  case TypeKind::Array: {
+    auto &arr = std::get<ArrayType>(type.type_data);
+    return getTypeSize(arr.get_element()) * static_cast<int64_t>(arr.get_size());
+  }
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(type.type_data);
     int64_t size = 0;
-    for (auto &ft : st.get_field_types())
-      size += getTypeSize(ft);
+    for (auto &ft : st.get_field_types()) {
+      int64_t fieldSize = getTypeSize(ft);
+      int64_t align = fieldSize; // natural alignment
+      size = llvm::alignTo(size, align);
+      size += fieldSize;
+    }
+    // Align total to largest field alignment
+    if (!st.get_field_types().empty()) {
+      int64_t maxAlign = 0;
+      for (auto &ft : st.get_field_types())
+        maxAlign = std::max(maxAlign, getTypeSize(ft));
+      size = llvm::alignTo(size, maxAlign);
+    }
     return size;
   }
   default:

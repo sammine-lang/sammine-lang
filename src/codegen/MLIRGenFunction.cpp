@@ -184,12 +184,17 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
       mlir::func::ReturnOp::create(builder, loc(ast),
                                    mlir::ValueRange{bodyResult});
     } else {
-      // If we have a return type but no result, something went wrong.
-      // Emit a return with a zero/null constant as fallback.
+      // If we have a return type but no result, something went wrong —
+      // this indicates a compiler bug. Emit a zero/null fallback and abort.
       auto retType = funcType.getResult(0);
       mlir::Value zeroVal;
       if (mlir::isa<mlir::LLVM::LLVMPointerType>(retType))
         zeroVal = mlir::LLVM::ZeroOp::create(builder, loc(ast), retType);
+      else if (mlir::isa<mlir::FloatType>(retType))
+        zeroVal = mlir::arith::ConstantFloatOp::create(
+                      builder, loc(ast), mlir::cast<mlir::FloatType>(retType),
+                      llvm::APFloat(0.0))
+                      .getResult();
       else
         zeroVal =
             mlir::arith::ConstantIntOp::create(
@@ -197,6 +202,9 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
                 .getResult();
       mlir::func::ReturnOp::create(builder, loc(ast),
                                    mlir::ValueRange{zeroVal});
+      sammine_util::abort(fmt::format(
+          "MLIRGen: non-void function '{}' has no return value — compiler bug",
+          funcName));
     }
   }
 

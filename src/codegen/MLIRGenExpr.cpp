@@ -225,7 +225,8 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
             .getResult();
       default:
         sammine_util::abort(fmt::format(
-            "MLIRGen: unsupported integer comparison operator"));
+            "MLIRGen: unsupported integer comparison operator '{}'",
+            ast->Op->lexeme));
       }
       return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
           .getResult();
@@ -254,7 +255,8 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         break;
       default:
         sammine_util::abort(fmt::format(
-            "MLIRGen: unsupported float comparison operator"));
+            "MLIRGen: unsupported float comparison operator '{}'",
+            ast->Op->lexeme));
       }
       return mlir::arith::CmpFOp::create(builder, location, pred, lhs, rhs)
           .getResult();
