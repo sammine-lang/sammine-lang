@@ -1,7 +1,6 @@
 # RUN: %sammine --file %dir/Inputs/has_extern_c.mn && cat has_extern_c.mni | %check %full
 
-# reuse re-exports a C binding — both the reuse and let-functions
-# should appear in .mni with mangled names
+# export reuse and export let appear in .mni with mangled names
 # CHECK: reuse has_extern_c$printf
 # CHECK: reuse has_extern_c$greet
 

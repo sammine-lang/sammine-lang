@@ -184,15 +184,8 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   auto export_tok = expect(TokenType::TokExport);
   bool is_exported = export_tok != nullptr;
 
-  // 'export reuse' is an error — reuse always re-exports
-  if (is_exported && !tokStream->isEnd() &&
-      tokStream->peek()->tok_type == TokReuse) {
-    imm_warn("'export reuse' is not needed; reuse is always visible to "
-              "importers",
-              export_tok->get_location());
-  }
-
-  // 'reuse' — parse as ExternAST (always re-exported)
+  // 'reuse' — parse as ExternAST
+  // plain 'reuse' = module-private, 'export reuse' = re-exported
   if (auto reuse_tok = expect(TokenType::TokReuse)) {
     auto [prototype, result] = ParsePrototype();
     if (result == SUCCESS) {
@@ -200,7 +193,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
         imm_error("Expected ';' after reuse declaration",
                   reuse_tok->get_location());
       auto node = std::make_unique<ExternAST>(std::move(prototype));
-      node->is_exposed = true;
+      node->is_exposed = is_exported;
       return {std::move(node), SUCCESS};
     }
     emit_if_uncommitted(result,
@@ -208,7 +201,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
                           reuse_tok->get_location());
     (void)expect(TokenType::TokSemiColon);
     auto node = std::make_unique<ExternAST>(std::move(prototype));
-    node->is_exposed = true;
+    node->is_exposed = is_exported;
     return {std::move(node), FAILED};
   }
 
@@ -517,7 +510,43 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
 }
 
 auto Parser::ParseAllocExpr() -> p<ExprAST> {
-  return ParseBuiltinCallExpr<AllocExprAST>(TokAlloc, "alloc");
+  auto kw_tok = expect(TokAlloc);
+  if (!kw_tok)
+    return {nullptr, NONCOMMITTED};
+
+  // Parse <TypeExpr>
+  REQUIRE(_lt, TokLESS, "Expected '<' after 'alloc'", kw_tok->get_location(),
+          {nullptr, FAILED});
+  auto type_arg = ParseTypeExpr();
+  if (!type_arg) {
+    imm_error("Expected type in alloc<...>", kw_tok->get_location());
+    return {nullptr, FAILED};
+  }
+  if (!consumeClosingAngleBracket()) {
+    imm_error("Expected '>' to close alloc<...>", kw_tok->get_location());
+    return {nullptr, FAILED};
+  }
+
+  // Parse (count_expr)
+  REQUIRE(_lp, TokLeftParen, "Expected '(' after alloc<T>",
+          kw_tok->get_location(), {nullptr, FAILED});
+  auto [operand, result] = ParseExpr();
+  if (result == NONCOMMITTED) {
+    imm_error("Expected expression inside alloc<T>()", kw_tok->get_location());
+    return {nullptr, FAILED};
+  }
+  if (result != SUCCESS)
+    return {std::make_unique<AllocExprAST>(kw_tok, std::move(type_arg),
+                                           std::move(operand)),
+            FAILED};
+  REQUIRE(_rp, TokRightParen, "Expected ')' to close alloc<T>()",
+          kw_tok->get_location(),
+          {std::make_unique<AllocExprAST>(kw_tok, std::move(type_arg),
+                                          std::move(operand)),
+           FAILED});
+  return {std::make_unique<AllocExprAST>(kw_tok, std::move(type_arg),
+                                         std::move(operand)),
+          SUCCESS};
 }
 
 auto Parser::ParseFreeExpr() -> p<ExprAST> {

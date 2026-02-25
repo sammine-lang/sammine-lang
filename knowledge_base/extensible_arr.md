@@ -272,22 +272,16 @@ Currently returns compile-time constant for fixed arrays. For fat pointer:
 
 The current design hardcodes `malloc`/`free`. The fat pointer representation `{ptr, len}` is allocator-agnostic — it doesn't care where the memory came from.
 
-When traits/interfaces are added to the language, `alloc`/`free` can be extended to accept an allocator:
+**Note:** The typeclass system now exists (see `type_checking.md` and `imports.md`). A custom allocator could be modeled as a typeclass:
 
 ```
-# Option A: explicit allocator argument (no traits needed)
-let arena = Arena::new(4096);
-let p : ptr<[i32]> = alloc(32, arena);
-free(p, arena);
-
-# Option B: allocator trait (requires trait system)
-trait Allocator {
-  let alloc(size: i64) -> ptr<i32>;
-  let free(p: ptr<i32>) -> ();
+typeclass Allocator<A> {
+  tc_alloc(size: i64) -> ptr<i32>;
+  tc_free(p: ptr<i32>) -> ();
 }
 ```
 
-No changes to the fat pointer type or indexing/bounds-checking logic are needed — only the allocation/deallocation backend changes. This is an orthogonal concern to be addressed when the trait system lands.
+No changes to the fat pointer type or indexing/bounds-checking logic would be needed — only the allocation/deallocation backend changes.
 
 ---
 

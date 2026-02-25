@@ -4,7 +4,8 @@
 import std;
 
 let main() -> i32 {
-  let p : ptr<f64> = alloc(3.14);
+  let p : ptr<f64> = alloc<f64>(1);
+  *p = 3.14;
   let y : f64 = *p;
   free(p);
   std::printf("%f\n", y);

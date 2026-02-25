@@ -559,22 +559,30 @@ void CgVisitor::postorder_walk(DerefExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(AllocExprAST *ast) {
-  auto *operand_val = ast->operand->val;
-  auto *operand_llvm_type = type_converter.get_type(ast->operand->type);
+  // Extract element type T from ptr<T>
+  auto pointee_type =
+      std::get<PointerType>(ast->type.type_data).get_pointee();
+  auto *elem_llvm_type = type_converter.get_type(pointee_type);
 
   // Compute sizeof(T) using DataLayout
   auto &data_layout = resPtr->Module->getDataLayout();
-  auto size = data_layout.getTypeAllocSize(operand_llvm_type);
-  auto *size_val =
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*resPtr->Context), size);
+  auto elem_size = data_layout.getTypeAllocSize(elem_llvm_type);
+  auto *elem_size_val =
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*resPtr->Context), elem_size);
 
-  // Call malloc(size)
+  // Compute total size = sizeof(T) * count
+  auto *count_val = ast->operand->val;
+  // Extend count to i64 if it's i32
+  if (count_val->getType()->isIntegerTy(32))
+    count_val = resPtr->Builder->CreateZExt(
+        count_val, llvm::Type::getInt64Ty(*resPtr->Context), "count_ext");
+  auto *total_size =
+      resPtr->Builder->CreateMul(elem_size_val, count_val, "alloc_size");
+
+  // Call malloc(total_size)
   auto *malloc_fn = resPtr->Module->getFunction("malloc");
   auto *malloc_ptr =
-      resPtr->Builder->CreateCall(malloc_fn, {size_val}, "alloc_ptr");
-
-  // Store the operand value through the opaque pointer
-  resPtr->Builder->CreateStore(operand_val, malloc_ptr);
+      resPtr->Builder->CreateCall(malloc_fn, {total_size}, "alloc_ptr");
 
   ast->val = malloc_ptr;
 }

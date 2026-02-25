@@ -1043,8 +1043,23 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
-  auto operand_type = ast->operand->accept_synthesis(this);
-  return ast->type = Type::Pointer(operand_type);
+  // Resolve the element type from alloc<T>
+  auto element_type = resolve_type_expr(ast->type_arg.get());
+  if (element_type.type_kind == TypeKind::Poisoned)
+    return ast->type = Type::Poisoned();
+
+  // The count operand must be an integer
+  auto count_type = ast->operand->accept_synthesis(this);
+  if (count_type.type_kind != TypeKind::I32_t &&
+      count_type.type_kind != TypeKind::I64_t &&
+      count_type.type_kind != TypeKind::Integer) {
+    this->add_error(ast->operand->get_location(),
+                    fmt::format("alloc count must be an integer, got '{}'",
+                                count_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  return ast->type = Type::Pointer(element_type);
 }
 
 Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {

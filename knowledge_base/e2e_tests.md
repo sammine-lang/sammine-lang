@@ -60,8 +60,9 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
 | `misc/`     | General tests, compiler flag tests (`hello`, `llvm_ir_pre`, etc.) |
 
-| `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, etc.) |
-| `import/`   | Module import tests (`import_basic`, `import_missing`); library sources in `Inputs/` |
+| `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, `explicit_type_args`, etc.) |
+| `import/`   | Module import tests using `reuse` keyword (`import_basic`, `import_export_let`, `no_transitive_leak`, etc.); library sources in `Inputs/` |
+| `typeclass/` | Typeclass declarations & instances (`sizeof_basic`, `sizeof_struct`, `user_typeclass`, `generic_calls_typeclass`, `typeclass_ordering`, `missing_instance`) |
 
 Other directories:
 - `e2e-tests/euler/` — Project Euler solutions used as integration tests
@@ -76,6 +77,8 @@ Naming convention: `feature_variant.mn` (e.g. `ptr_nested.mn`, `alloc_type_misma
 - Compile the library first (produces `.o` + `.mni` in CWD), then compile the importing file
 - Library sources go in `Inputs/` subdirectory (excluded from lit discovery via `config.excludes`)
 - Use `%dir` to locate sibling files relative to the test
+- Import syntax uses `reuse` keyword (not `extern`): `reuse func_name(params) -> ret;`
+- Use `export let` in library files to explicitly export user-defined functions
 
 ## README Demo
 The file `e2e-tests/compilables/misc/readme_demo.mn` mirrors the code in the README's "Language Features" block.

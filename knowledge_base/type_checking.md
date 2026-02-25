@@ -62,10 +62,66 @@
 6. Handle in all `switch(type_kind)` statements (compiler warns via `-Wswitch`)
 7. Add `case` to `TypeConverter::get_type()` and `get_cmp_func()`
 
+## Typeclasses
+
+### Overview
+Typeclasses provide ad-hoc polymorphism — defining method contracts (`typeclass`) with concrete implementations (`instance`). Methods are dispatched via explicit type arguments: `sizeof<i32>()`.
+
+### Data Structures (`BiTypeChecker.h`)
+- `TypeClassInfo`: `name`, `type_param` (string), `methods` (vector of `PrototypeAST*`)
+- `TypeClassInstanceInfo`: `class_name`, `concrete_type` (resolved Type), `method_mangled_names` (map: original name → mangled)
+- `type_class_defs`: map from class name → `TypeClassInfo`
+- `type_class_instances`: map from `"ClassName$ConcreteType"` → `TypeClassInstanceInfo`
+- `method_to_class`: map from method name → class name (for fast dispatch lookup)
+
+### Two-Pass Registration
+In `visit(ProgramAST*)`, type checking uses two passes:
+1. **First pass**: register structs, `register_typeclass_decl()`, `register_typeclass_instance()` — populates all three maps above
+2. **Second pass**: full type checking of all definitions (including typeclass instance method bodies)
+
+### Method Name Mangling
+Instance methods are renamed during registration: `methodName` → `ClassName$ConcreteType$methodName`
+- Example: `sizeof` in `Sized<i32>` → `Sized$i32$sizeof`
+- The mangled name becomes the function's actual name for codegen
+
+### `register_typeclass_decl()`
+- Creates `TypeClassInfo` with type param and method prototypes
+- Opens a temporary scope, registers `type_param` as `TypeParam`, synthesizes each prototype
+- Populates `method_to_class` for each method
+
+### `register_typeclass_instance()`
+- Resolves `concrete_type_expr` to a `Type`
+- Validates the class name exists in `type_class_defs`
+- Mangles each method name and updates `FuncDefAST::Prototype::functionName`
+- Stores in `type_class_instances` with key `"ClassName$ConcreteType"`
+
+### Typeclass Method Dispatch (`synthesize(CallExprAST*)`)
+When `explicit_type_args` is non-empty:
+1. Look up method name in `method_to_class`
+2. If found → this is a typeclass call:
+   - Resolve the explicit type arg to a concrete `Type`
+   - Build instance key `"ClassName$ConcreteType"`, find instance
+   - Error if no matching instance found
+   - Validate argument count against prototype
+   - Set `resolved_generic_name` to the mangled instance method name
+   - Set `is_typeclass_call = true`
+   - Substitute type param in return type with concrete type
+3. If not in `method_to_class` → falls through to generic function handling (explicit type args also work for generics)
+
+### Typeclass + Generics Interaction
+A generic function can call typeclass methods:
+```
+let print_size(x: T) -> i64 { sizeof<T>() }
+```
+When `print_size` is monomorphized for `i32`, the `sizeof<T>()` call resolves `T` → `i32` and dispatches to `Sized$i32$sizeof`.
+
 ## Monomorphized Generics
 
 ### Overview
-Generic functions use **implicit type parameter discovery** (no `<T>` syntax) and **monomorphization** (concrete copies per type combination). Unknown type names in function signatures are auto-discovered as type parameters.
+Generic functions use **implicit type parameter discovery** (no `<T>` syntax in the definition) and **monomorphization** (concrete copies per type combination). Unknown type names in function signatures are auto-discovered as type parameters.
+
+### Explicit Type Arguments
+Generic functions can also be called with explicit type args: `identity<i32>(42)`. In `synthesize(CallExprAST*)`, if `explicit_type_args` is non-empty and the name is NOT in `method_to_class`, the explicit type is used to build type bindings directly instead of inferring from arguments.
 
 ### Key Types & Fields
 - `TypeKind::TypeParam`: represents an unresolved type parameter; uses `std::string` variant of `TypeData`

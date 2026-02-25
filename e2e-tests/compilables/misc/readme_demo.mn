@@ -44,9 +44,10 @@ let main() -> i32 {
   let size = len(a);                         # array length
 
   # --- Pointers & memory ---
-  let p: ptr<i32> = alloc(42);              # heap allocation
+  let p: ptr<i32> = alloc<i32>(1);          # heap allocation (count)
+  *p = 42;                                   # write through pointer
   let val = *p;                              # dereference
-  *p = 100;                                  # write through pointer
+  *p = 100;                                  # overwrite
   free(p);                                   # manual deallocation
 
   let q: ptr<i32> = &x;                     # address-of (stack pointer)

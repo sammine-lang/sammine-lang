@@ -17,6 +17,7 @@ enum compiler_option_enum {
   CHECK,
   TIME,
   ARGV0,
+  BACKEND,
 };
 
 class CompilerRunner {

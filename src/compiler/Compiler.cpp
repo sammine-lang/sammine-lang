@@ -6,6 +6,14 @@
 #include "ast/Ast.h"
 #include "codegen/CodegenVisitor.h"
 #include "codegen/LLVMRes.h"
+#include "codegen/MLIRGen.h"
+#include "codegen/MLIRLowering.h"
+#include "mlir/IR/MLIRContext.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -54,6 +62,7 @@ class Compiler {
   void typecheck();
   void dump_ast();
   void codegen();
+  void codegen_mlir();
   void optimize();
   void emit_object();
   void emit_interface();
@@ -346,12 +355,50 @@ void Compiler::codegen() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
                "Start code-gen stage...\n");
   });
+
+  if (compiler_options[compiler_option_enum::BACKEND] == "mlir") {
+    codegen_mlir();
+    return;
+  }
+
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   auto vs = sammine_lang::AST::CgVisitor(resPtr, has_main ? "" : stem);
   programAST->accept_vis(&vs);
 
   reporter.report(vs);
   this->error = vs.has_errors();
+}
+
+void Compiler::codegen_mlir() {
+  mlir::MLIRContext mlirCtx;
+  mlirCtx.getOrLoadDialect<mlir::arith::ArithDialect>();
+  mlirCtx.getOrLoadDialect<mlir::func::FuncDialect>();
+  mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
+  mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
+  mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
+
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string moduleName = has_main ? "" : stem;
+
+  auto mlirModule = mlirGen(mlirCtx, programAST.get(), moduleName);
+  if (!mlirModule) {
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+               "MLIR generation failed\n");
+    this->error = true;
+    return;
+  }
+
+  auto llvmModule = lowerMLIRToLLVMIR(*mlirModule, *resPtr->Context);
+  if (!llvmModule) {
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+               "MLIR lowering to LLVM IR failed\n");
+    this->error = true;
+    return;
+  }
+
+  llvmModule->setDataLayout(resPtr->Module->getDataLayout());
+  llvmModule->setTargetTriple(resPtr->Module->getTargetTriple());
+  resPtr->Module = std::move(llvmModule);
 }
 
 void Compiler::optimize() {
@@ -484,12 +531,14 @@ void Compiler::emit_interface() {
 
   for (auto &def : this->programAST->DefinitionVec) {
     if (auto *func_def = dynamic_cast<AST::FuncDefAST *>(def.get())) {
-      // let functions get mangled: module$func
+      if (!func_def->is_exported)
+        continue;
       std::string mangled = stem + "$" + func_def->Prototype->functionName;
       emit_proto(mangled, func_def->Prototype.get(),
                  func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = dynamic_cast<AST::ExternAST *>(def.get())) {
-      // reuse always re-exports: mangled name module$func
+      if (!extern_def->is_exposed)
+        continue;
       std::string mangled =
           stem + "$" + extern_def->Prototype->functionName;
       emit_proto(mangled, extern_def->Prototype.get(),

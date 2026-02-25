@@ -1,5 +1,5 @@
 import math as m;
 
-let wrapper(a: i32, b: i32) -> i32 {
+export let wrapper(a: i32, b: i32) -> i32 {
   m::add(a, b)
 }

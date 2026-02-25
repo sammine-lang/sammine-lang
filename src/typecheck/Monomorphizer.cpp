@@ -167,6 +167,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 
   if (auto *alloc = dynamic_cast<AllocExprAST *>(expr)) {
     return std::make_unique<AllocExprAST>(make_tok("alloc"),
+                                          clone_type_expr(alloc->type_arg.get()),
                                           clone_expr(alloc->operand.get()));
   }
 

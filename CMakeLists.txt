@@ -35,6 +35,20 @@ foreach(target ${LLVM_TARGETS_TO_BUILD})
   list(APPEND llvm_targets "LLVM${target}CodeGen")
 endforeach()
 
+# MLIR
+if(APPLE AND NOT DEFINED MLIR_DIR)
+  if(NOT BREW_PREFIX_LLVM)
+    execute_process(
+      COMMAND brew --prefix llvm
+      OUTPUT_VARIABLE BREW_PREFIX_LLVM
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+  endif()
+  set(MLIR_DIR "${BREW_PREFIX_LLVM}/lib/cmake/mlir" CACHE PATH "Path to MLIRConfig.cmake")
+endif()
+find_package(MLIR REQUIRED CONFIG)
+include_directories(SYSTEM ${MLIR_INCLUDE_DIRS})
+
 
 
 

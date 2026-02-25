@@ -5,6 +5,9 @@
 - Token types defined in `include/lex/Token.h` — add to `TokenType` enum and `TokenMap`
 - Existing operator tokens reused for pointer ops: `TokMUL` = `*` (deref), `TokAndLogical` = `&` (addr-of), `TokLESS`/`TokGREATER` = `<`/`>` (for `ptr<T>`)
 - Keyword tokens for built-in functions: `TokAlloc` = `alloc`, `TokFree` = `free`, `TokMUT` = `mut`
+- Keyword tokens for imports: `TokReuse` = `reuse`, `TokExport` = `export` (replaces old `TokExtern`)
+- Keyword tokens for typeclasses: `TokTypeclass` = `typeclass`, `TokInstance` = `instance`
+- Removed: `TokSizeOf` — `sizeof` is now a regular typeclass method call, not a keyword
 - Number literals support type suffixes: `42i32`, `600851475143i64`, `3.14f64` — the lexer consumes any alphanumeric suffix after digits, stored as part of the `TokNum` lexeme
 
 ### Adding a New Operator Token Checklist
@@ -22,6 +25,16 @@
 - `ParseTypeExpr()` handles compound types recursively (e.g. `ptr<ptr<i32>>`)
 - Type annotations parsed as `TypeExprAST` hierarchy (not strings), avoiding double-parsing
 - `alloc(expr)` and `free(expr)` follow the `keyword(expr)` pattern: expect keyword, `(`, parse inner expression, expect `)`
+- `ParseTypeClassDecl()` parses `typeclass Name<T> { method_sig; ... }` — method signatures are prototypes only (no bodies)
+- `ParseTypeClassInstance()` parses `instance Name<ConcreteType> { let method() -> T { body } ... }` — method implementations are full `FuncDefAST`
+- Top-level `ParseDefinition()` tries `ParseTypeClassDecl` and `ParseTypeClassInstance` alongside `ParseFuncDef`, `ParseStructDef`, etc.
+
+### Explicit Type Argument Parsing (`f<T>(args)`)
+- `ParseCallExpr()` uses **speculative parsing with rollback** for `<TypeExpr>` after an identifier
+- After consuming `name`, if next token is `<`: mark rollback point, try to parse `<TypeExpr>`, check for `>` then `(`
+- If all succeed → keep the `explicit_type_args`, discard rollback
+- If any step fails → rollback token stream to before `<`, treat `<` as a comparison operator
+- `consumeClosingAngleBracket()` handles the `>>` token splitting for nested generics (e.g. `f<ptr<i32>>()`)
 
 ## QualifiedName (`include/util/QualifiedName.h`)
 - `QualifiedName` struct carries module + name separately instead of eagerly mangling `m::add` → `math$add`
@@ -40,6 +53,9 @@
 - `TypedVarAST` has `bool is_mutable` — set from `mut` prefix in `ParseTypedVar()` (for function params)
 - `TypedVarAST` stores `unique_ptr<TypeExprAST> type_expr` (nullptr = no annotation)
 - `PrototypeAST` stores `unique_ptr<TypeExprAST> return_type_expr` (nullptr = unit return)
+- `TypeClassDeclAST` (DefinitionAST): `class_name`, `type_param` (string, e.g. "T"), `vector<unique_ptr<PrototypeAST>> methods`
+- `TypeClassInstanceAST` (DefinitionAST): `class_name`, `concrete_type_expr` (TypeExprAST), `concrete_type` (resolved during typecheck), `vector<unique_ptr<FuncDefAST>> methods`
+- `CallExprAST` extensions: `explicit_type_args` (vector of TypeExprAST for `f<i32>()` syntax), `is_typeclass_call` (bool, flags typeclass dispatch)
 
 ## Adding a New AST Node Checklist
 1. Forward declare in `include/ast/AstDecl.h`

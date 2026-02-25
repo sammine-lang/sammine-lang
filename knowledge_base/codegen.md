@@ -79,6 +79,18 @@ Both read and assignment through dereferenced pointers to arrays are supported:
 - Unique names via `CgVisitor::partial_counter`
 - **Stack limitation**: partial closures cannot escape their defining scope (env is on the stack)
 
+## Forward Declarations
+- `preorder_walk(ProgramAST*)` now emits **forward declarations** for ALL user-defined functions before codegen
+- Iterates `DefinitionVec`, finds every `FuncDefAST`, and calls `Module->getOrInsertFunction()` with the correct type
+- This eliminates definition-ordering constraints — functions can call each other regardless of source order
+- Typeclass instance methods (with mangled names like `Sized$i32$sizeof`) are included in this forward declaration pass
+
+## Typeclass Codegen
+- Instance methods are codegen'd as regular functions with mangled names (e.g. `Sized$i32$sizeof`)
+- `TypeClassDeclAST` and `TypeClassInstanceAST` have no-op visitor stubs — all real work happens via the mangled `FuncDefAST`s
+- Calls to typeclass methods use `resolved_generic_name` (the mangled name) for direct function lookup — no vtable, no indirection
+- When `is_typeclass_call` is set, codegen uses the mangled name from `resolved_generic_name` instead of `functionName`
+
 ## Runtime Function Declarations
 - `malloc`, `free`, `printf`, and `exit` are declared in `preorder_walk(ProgramAST*)` alongside the `%sammine.closure` struct type
 - `CodegenUtils::declare_malloc()` and `CodegenUtils::declare_free()` in `src/codegen/CodegenUtils.cpp`
@@ -98,7 +110,72 @@ Both read and assignment through dereferenced pointers to arrays are supported:
 4. `ScopeGeneratorVisitor` (`src/semantics/ScopeGeneratorVisitor.cpp`) — empty pre/post stubs
 5. `GeneralSemanticsVisitor` (`include/semantics/GeneralSemanticsVisitor.h`) — empty pre/post stubs (inline)
 
+## MLIR Backend (`src/codegen/MLIRGen.cpp`, `src/codegen/MLIRLowering.cpp`)
+
+### Architecture
+- **Not** using the visitor pattern — direct recursive dispatch (`emitExpr` → `dynamic_cast` to subtypes)
+- Public API: `mlirGen(MLIRContext&, ProgramAST*, moduleName)` → `OwningOpRef<ModuleOp>`
+- Lowering: `lowerMLIRToLLVMIR(ModuleOp, LLVMContext&)` → `unique_ptr<llvm::Module>`
+- Both backends coexist; selected via `--backend=mlir` (default is `llvm`)
+
+### Dialect mapping
+| sammine construct | MLIR dialect |
+|---|---|
+| Arithmetic (+,-,*,/,%,cmp) | `arith` |
+| Function defs, calls, return | `func` |
+| if/else (Phase 2) | `scf` |
+| Variables, arrays (Phase 2-3) | `memref` |
+| Closures, structs, strings, pointers | `llvm` |
+
+### Type conversion (`MLIRGenImpl::convertType`)
+- `I32_t`/`I64_t` → `builder.getI32Type()`/`getI64Type()`
+- `F64_t` → `builder.getF64Type()`, `Bool` → `getI1Type()`
+- `String`/`Pointer` → `LLVM::LLVMPointerType::get(ctx)`
+- `Function` → `builder.getFunctionType(params, results)` (extracts param/return types from `FunctionType`)
+- `Unit` → `NoneType` (functions returning unit have 0 results)
+
+### Key patterns
+- `proto->type` is the full `FunctionType` — must extract return type via `std::get<FunctionType>(proto->type.type_data).get_return_type()`
+- Uses existing `LexicalStack<mlir::Value, std::monostate>` for scoped variable tracking
+- Generic functions skipped (same as CgVisitor — only monomorphized copies)
+- Extern functions emitted as `func.func` declarations with `Private` visibility
+
+### Lowering pipeline (Phase 2)
+```
+scf-to-cf → arith-to-llvm → memref-to-llvm → cf-to-llvm → func-to-llvm → reconcile-unrealized-casts → translateModuleToLLVMIR
+```
+Pass order matters: SCF must lower to CF before CF→LLVM; MemRef must lower before the final reconcile pass.
+
+### CMake setup
+- MLIR found via `-DMLIR_DIR=...` (not hardcoded)
+- `MLIRBackend` OBJECT library links: `MLIRIR`, `MLIRParser`, `MLIRSupport`, `MLIRPass`, `MLIRArithDialect`, `MLIRFuncDialect`, `MLIRSCFDialect`, `MLIRMemRefDialect`, `MLIRArithToLLVM`, `MLIRFuncToLLVM`, `MLIRSCFToControlFlow`, `MLIRControlFlowToLLVM`, `MLIRMemRefToLLVM`, `MLIRReconcileUnrealizedCasts`, `MLIRTargetLLVMIRExport`, `MLIRLLVMToLLVMIRTranslation`, `MLIRBuiltinToLLVMIRTranslation`, `MLIRLLVMDialect`
+- Compiler.cpp loads 5 dialects: `arith::ArithDialect`, `func::FuncDialect`, `LLVM::LLVMDialect`, `scf::SCFDialect`, `memref::MemRefDialect`
+
+### Phase 1 implemented expressions
+FuncDefAST, ExternAST, NumberExprAST, BoolExprAST, BinaryExprAST (all arith + comparisons), VariableExprAST (immutable SSA), CallExprAST (direct only), ReturnExprAST, BlockAST, VarDefAST (SSA-only), UnaryNegExprAST
+
+### Phase 2 implemented expressions
+- **VarDefAST (mutable)** — `let mut x = ...` → `memref.alloca` + `memref.store`; immutable `let` stays SSA
+- **VariableExprAST (mutable)** — checks if stored value is `MemRefType` → `memref.load`, else direct SSA
+- **IfExprAST** — `scf.if %cond -> (type) { scf.yield %val } else { scf.yield %val }`; Unit-typed if has no result types
+- **Assignment** — `x = expr` in `emitBinaryExpr` → `memref.store` to LHS variable's memref
+
+### Phase 2 design notes
+- Mutable vs immutable distinguished by the MLIR type of the stored value in `LexicalStack` — `MemRefType` means mutable, else SSA
+- `scf.if` chosen over `cf.cond_br` for structured semantics + future optimization (Phase 7 tensor work)
+- `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not yet supported
+
+### Not yet implemented (Phase 3+)
+StringExprAST, pointers (deref/addrof/alloc/free), arrays (literal/index/len), structs, closures, partial application, module system/imports
+
 ## Build & Test
 ```bash
+# Default backend (LLVM)
 cmake --build build -j --target unit-tests e2e-tests
+
+# MLIR backend (requires -DMLIR_DIR when configuring)
+cmake -B build -DSAMMINE_TEST=ON \
+  -DLLVM_DIR=/path/to/llvm-project/build/lib/cmake/llvm \
+  -DMLIR_DIR=/path/to/llvm-project/build/lib/cmake/mlir
+./build/bin/sammine -f test.mn --backend=mlir
 ```

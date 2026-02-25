@@ -59,10 +59,9 @@ private:
 
     Module = std::make_unique<llvm::Module>("KaleidoscopeJIT", *Context);
     assert(Module);
-    auto TargetTripleStr = LLVMGetDefaultTargetTriple();
-    llvm::Triple TargetTriple(TargetTripleStr);
+    llvm::Triple TargetTriple(LLVMGetDefaultTargetTriple());
     std::string Error;
-    auto Target = llvm::TargetRegistry::lookupTarget(TargetTripleStr, Error);
+    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
 
     auto CPU = "generic";
     auto Features = "";

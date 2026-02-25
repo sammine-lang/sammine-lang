@@ -64,6 +64,10 @@ int main(int argc, char *argv[]) {
       .help("Print compilation timing. Also accepts: sparse (per-phase table), "
             "coarse (per-phase + all LLVM passes)");
 
+  program.add_argument("--backend")
+      .default_value(std::string("llvm"))
+      .help("Code generation backend: llvm (default) or mlir");
+
   if (argc < 1) {
     std::cerr << program;
     return 1;
@@ -94,6 +98,19 @@ int main(int argc, char *argv[]) {
       compiler_options[TIME] = (val == "false") ? "simple" : val;
     } else {
       compiler_options[TIME] = "false";
+    }
+    if (program.is_used("--backend")) {
+      auto val = program.get("--backend");
+      if (val != "llvm" && val != "mlir") {
+        fmt::print(stderr,
+                   sammine_util::styled(fmt::terminal_color::bright_red),
+                   "Error: --backend requires a value: llvm or mlir\n");
+        std::cerr << program;
+        return 1;
+      }
+      compiler_options[BACKEND] = val;
+    } else {
+      compiler_options[BACKEND] = "llvm";
     }
   } catch (const std::exception &err) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),

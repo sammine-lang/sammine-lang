@@ -1,7 +1,6 @@
 # RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
-# CHECK: Type mismatch in variable definition: Synthesized ptr<f64>, checked against ptr<i32>.
+# CHECK: alloc count must be an integer
 let main() -> i32 {
-  let p : ptr<f64> = alloc(42);
-  let p : ptr<[i32]> = alloc(42);
+  let p : ptr<f64> = alloc<f64>(3.14);
   return 0;
 }

@@ -453,10 +453,12 @@ public:
 };
 class AllocExprAST : public ExprAST {
 public:
-  std::unique_ptr<ExprAST> operand;
+  std::unique_ptr<TypeExprAST> type_arg; // the T in alloc<T>(count)
+  std::unique_ptr<ExprAST> operand;      // the count expression
   explicit AllocExprAST(std::shared_ptr<Token> tok,
+                        std::unique_ptr<TypeExprAST> type_arg,
                         std::unique_ptr<ExprAST> operand)
-      : operand(std::move(operand)) {
+      : type_arg(std::move(type_arg)), operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   AST_NODE_METHODS("AllocExprAST")
