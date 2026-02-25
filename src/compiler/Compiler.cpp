@@ -102,9 +102,9 @@ Compiler::Compiler(
   } else if (!this->file_name.empty()) {
     this->input = sammine_util::get_string_from_file(this->file_name);
   } else {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "[Error during compiler initial phase]\n");
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "[Both the file name and the string input is empty]\n");
 
     std::abort();
@@ -132,7 +132,7 @@ Compiler::Compiler(
 
 void Compiler::lex() {
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start lexing stage...\n");
   });
   lexer = std::make_unique<Lexer>(input);
@@ -141,7 +141,7 @@ void Compiler::lex() {
 
 void Compiler::parse() {
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start parsing stage...\n");
   });
   Parser psr = Parser(tokStream, reporter);
@@ -166,7 +166,7 @@ void Compiler::resolve_imports() {
     return;
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start resolve imports stage...\n");
   });
 
@@ -246,7 +246,7 @@ void Compiler::load_definitions() {
     return;
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start load definitions stage...\n");
   });
 
@@ -277,7 +277,7 @@ void Compiler::semantics() {
     }
     LOG({
       fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::bright_green),
+                 sammine_util::styled(fmt::terminal_color::green),
                  "Start scope checking stage...\n");
     });
     auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
@@ -293,7 +293,7 @@ void Compiler::semantics() {
       return;
     LOG({
       fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::bright_green),
+                 sammine_util::styled(fmt::terminal_color::green),
                  "Start general semantics stage...\n");
     });
     auto vs = sammine_lang::AST::GeneralSemanticsVisitor();
@@ -309,7 +309,7 @@ void Compiler::typecheck() {
     return;
   }
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start bi-direcitonal type checking stage...\n");
   });
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
@@ -331,7 +331,7 @@ void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
     LOG({
       fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::bright_green),
+                 sammine_util::styled(fmt::terminal_color::green),
                  "Start dumping ast-ir stage...\n");
     });
     AST::ASTPrinter::print(programAST.get());
@@ -339,7 +339,7 @@ void Compiler::dump_ast() {
   if (this->error) {
     LOG({
       fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::bright_green),
+                 sammine_util::styled(fmt::terminal_color::green),
                  "There were errors in previous stages. Aborting now\n");
     });
     std::exit(1);
@@ -352,14 +352,14 @@ void Compiler::codegen() {
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
     LOG({
       fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::bright_green),
+                 sammine_util::styled(fmt::terminal_color::green),
                  "Finished checking. Stopping at codegen stage with compiler's "
                  "--check flag. \n");
     });
     std::exit(0);
   }
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start code-gen stage...\n");
   });
 
@@ -380,7 +380,7 @@ void Compiler::codegen_mlir() {
 
   auto mlirModule = mlirGen(mlirCtx, programAST.get(), moduleName);
   if (!mlirModule) {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
     this->error = true;
     return;
@@ -388,7 +388,7 @@ void Compiler::codegen_mlir() {
 
   auto llvmModule = lowerMLIRToLLVMIR(*mlirModule, *resPtr->Context);
   if (!llvmModule) {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
     this->error = true;
     return;
@@ -433,7 +433,7 @@ void Compiler::optimize() {
   }
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start optimize stage...\n");
   });
   std::string llvm_ir_mode = compiler_options[compiler_option_enum::LLVM_IR];
@@ -497,7 +497,7 @@ void Compiler::emit_object() {
   }
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start emit object stage...\n");
   });
 
@@ -524,7 +524,7 @@ void Compiler::emit_interface() {
     return;
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start emit interface stage...\n");
   });
 
@@ -579,7 +579,7 @@ void Compiler::link() {
   }
 
   LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_green),
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start link stage...\n");
   });
 
