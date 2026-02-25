@@ -46,6 +46,10 @@ int main(int argc, char *argv[]) {
       .default_value(std::string("false"))
       .nargs(1)
       .help("Emit LLVM IR. Required value: pre, post, or diff");
+  g_diag.add_argument("", "--mlir-ir")
+      .default_value(std::string("false"))
+      .implicit_value(std::string("true"))
+      .help("Dump MLIR before lowering to LLVM IR (requires --backend=mlir)");
   g_diag.add_argument("", "--ast-ir")
       .default_value(std::string("false"))
       .implicit_value(std::string("true"))
@@ -91,6 +95,7 @@ int main(int argc, char *argv[]) {
       compiler_options[LLVM_IR] = "false";
     }
     compiler_options[AST_IR] = program.get("--ast-ir");
+    compiler_options[MLIR_IR] = program.get("--mlir-ir");
     compiler_options[DIAGNOSTIC] = program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");
     if (program.is_used("--time")) {

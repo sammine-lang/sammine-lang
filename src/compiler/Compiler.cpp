@@ -387,6 +387,14 @@ void Compiler::codegen_mlir() {
     return;
   }
 
+  if (compiler_options[compiler_option_enum::MLIR_IR] == "true") {
+    mlir::OpPrintingFlags flags;
+    flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
+    mlirModule->print(llvm::outs(), flags);
+    llvm::outs() << "\n";
+    std::exit(0);
+  }
+
   auto llvmModule = lowerMLIRToLLVMIR(*mlirModule, *resPtr->Context);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),

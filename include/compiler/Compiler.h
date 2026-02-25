@@ -18,6 +18,7 @@ enum compiler_option_enum {
   TIME,
   ARGV0,
   BACKEND,
+  MLIR_IR,
 };
 
 class CompilerRunner {
