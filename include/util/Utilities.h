@@ -197,8 +197,9 @@ public:
   using IndexPair = std::pair<int64_t, int64_t>;
   using DiagnosticData = std::vector<std::pair<std::int64_t, std::string_view>>;
 
-private:
   static DiagnosticData get_diagnostic_data(std::string_view str);
+
+private:
   inline static fmt::terminal_color LINE_COLOR =
       fmt::terminal_color::bright_magenta;
 

@@ -378,7 +378,8 @@ void Compiler::codegen_mlir() {
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   std::string moduleName = has_main ? "" : stem;
 
-  auto mlirModule = mlirGen(mlirCtx, programAST.get(), moduleName);
+  auto mlirModule =
+      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input);
   if (!mlirModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");

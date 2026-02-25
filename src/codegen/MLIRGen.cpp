@@ -4,6 +4,7 @@
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
@@ -19,6 +20,7 @@
 
 #include "fmt/core.h"
 
+#include <algorithm>
 #include <string>
 
 namespace sammine_lang {
@@ -81,8 +83,29 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
 // ===--- Location helpers ---===
 
 mlir::Location MLIRGenImpl::loc(AST::AstBase *ast) {
-  (void)ast;
-  return builder.getUnknownLoc();
+  if (!ast)
+    return builder.getUnknownLoc();
+
+  auto srcLoc = ast->get_location();
+  if (srcLoc.source_start <= 0 && srcLoc.source_end <= 0)
+    return builder.getUnknownLoc();
+
+  if (diagnosticData.empty())
+    return builder.getUnknownLoc();
+
+  // Binary search: find the line containing source_start
+  auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
+  auto it = std::ranges::upper_bound(
+      diagnosticData,
+      std::make_pair(srcLoc.source_start, std::string_view("")), cmp);
+  int64_t lineIdx =
+      std::max(int64_t(it - diagnosticData.begin()), int64_t(1)) - 1;
+  int64_t col = srcLoc.source_start - diagnosticData[lineIdx].first;
+
+  // FileLineColLoc uses 1-based line and 0-based column
+  return mlir::FileLineColLoc::get(builder.getContext(), fileName,
+                                   static_cast<unsigned>(lineIdx + 1),
+                                   static_cast<unsigned>(col));
 }
 
 // ===--- Runtime function declarations ---===
@@ -372,8 +395,10 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
 
 mlir::OwningOpRef<mlir::ModuleOp>
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
-        const std::string &moduleName) {
-  return MLIRGenImpl(context, moduleName).generate(program);
+        const std::string &moduleName, const std::string &fileName,
+        const std::string &sourceText) {
+  return MLIRGenImpl(context, moduleName, fileName, sourceText)
+      .generate(program);
 }
 
 } // namespace sammine_lang

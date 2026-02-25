@@ -21,6 +21,7 @@ namespace sammine_lang {
 /// module, or nullptr on failure.
 mlir::OwningOpRef<mlir::ModuleOp>
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
-        const std::string &moduleName);
+        const std::string &moduleName, const std::string &fileName,
+        const std::string &sourceText);
 
 } // namespace sammine_lang

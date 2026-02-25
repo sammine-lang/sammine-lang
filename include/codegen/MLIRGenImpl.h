@@ -18,8 +18,11 @@ namespace sammine_lang {
 /// MLIRGen.cpp, MLIRGenFunction.cpp, and MLIRGenExpr.cpp.
 class MLIRGenImpl {
 public:
-  MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName)
-      : builder(&context), moduleName(moduleName) {}
+  MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName,
+              const std::string &fileName, const std::string &sourceText)
+      : builder(&context), moduleName(moduleName), fileName(fileName),
+        diagnosticData(
+            sammine_util::Reporter::get_diagnostic_data(sourceText)) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 
@@ -28,6 +31,8 @@ public:
   mlir::ModuleOp theModule;
   mlir::OpBuilder builder;
   std::string moduleName;
+  std::string fileName;
+  sammine_util::Reporter::DiagnosticData diagnosticData;
 
   AST::LexicalStack<mlir::Value, std::monostate> symbolTable;
 
