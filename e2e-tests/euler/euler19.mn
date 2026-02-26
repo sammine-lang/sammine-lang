@@ -1,0 +1,40 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 171
+
+# Project Euler Problem 19: Counting Sundays
+# How many Sundays fell on the first of the month
+# from 1 Jan 1901 to 31 Dec 2000?
+# 1 Jan 1900 was a Monday (dow=0, Sunday=6)
+
+import std;
+
+let is_leap(y: i32) -> i32 {
+  if y % 400 == 0 { 1 }
+  else if y % 100 == 0 { 0 }
+  else if y % 4 == 0 { 1 }
+  else { 0 }
+}
+
+let days_in_month(y: i32, m: i32) -> i32 {
+  if m == 2 { 28 + is_leap(y) }
+  else if m == 4 || m == 6 || m == 9 || m == 11 { 30 }
+  else { 31 }
+}
+
+let count_sundays(y: i32, m: i32, dow: i32, count: i32) -> i32 {
+  if y > 2000 {
+    count
+  } else if m > 12 {
+    count_sundays(y + 1, 1, dow, count)
+  } else if y >= 1901 && dow == 6 {
+    count_sundays(y, m + 1, (dow + days_in_month(y, m)) % 7, count + 1)
+  } else {
+    count_sundays(y, m + 1, (dow + days_in_month(y, m)) % 7, count)
+  }
+}
+
+let main() -> i32 {
+  let result: i32 = count_sundays(1900, 1, 0, 0);
+  std::printf("%d\n", result);
+  return 0;
+}
