@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Expected 1 type argument(s) for 'identity', got 2
+
+let identity<T>(x: T) -> T { x }
+
+let main() -> i32 {
+  let a = identity<i32, f64>(42);
+  return 0;
+}

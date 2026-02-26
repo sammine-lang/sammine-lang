@@ -3,7 +3,7 @@
 
 import std;
 
-let identity(x: T) -> T { x }
+let identity<T>(x: T) -> T { x }
 
 let main() -> i32 {
   let a = identity(7);

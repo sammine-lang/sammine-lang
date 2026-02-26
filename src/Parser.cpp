@@ -821,8 +821,8 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     qn = resolveQualifiedName(id->lexeme, member_id->lexeme);
   }
 
-  // Speculative parse: f<TypeExpr>(args) — generic call with explicit type arg.
-  // We try to parse <type_arg> and check that a '(' follows.
+  // Speculative parse: f<TypeExpr, ...>(args) — generic call with explicit type args.
+  // We try to parse <type_arg, ...> and check that a '(' follows.
   // If any step fails, we rollback and fall through to normal parsing.
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   if (tokStream->peek()->tok_type == TokLESS) {
@@ -831,9 +831,23 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     tokStream->consume(); // consume '<'
 
     bool speculative_ok = true;
-    auto type_arg = ParseTypeExpr();
-    if (!type_arg)
+    std::vector<std::unique_ptr<TypeExprAST>> parsed_types;
+
+    auto first_type = ParseTypeExpr();
+    if (!first_type)
       speculative_ok = false;
+    else
+      parsed_types.push_back(std::move(first_type));
+
+    while (speculative_ok && tokStream->peek()->tok_type == TokComma) {
+      tokStream->consume(); // consume ','
+      auto next_type = ParseTypeExpr();
+      if (!next_type) {
+        speculative_ok = false;
+        break;
+      }
+      parsed_types.push_back(std::move(next_type));
+    }
 
     if (speculative_ok && !consumeClosingAngleBracket())
       speculative_ok = false;
@@ -846,7 +860,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
       tokStream->rollback();
       split_greater_depth = saved_split_greater_depth;
     } else {
-      explicit_type_args.push_back(std::move(type_arg));
+      explicit_type_args = std::move(parsed_types);
     }
   }
 
@@ -987,6 +1001,32 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!id)
     return {nullptr, NONCOMMITTED};
 
+  // Parse optional explicit type parameters: <T, U, ...>
+  std::vector<std::string> type_params;
+  if (expect(TokLESS)) {
+    auto first = expect(TokID);
+    if (!first) {
+      this->imm_error("Expected type parameter name after '<'",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+    type_params.push_back(first->lexeme);
+    while (expect(TokComma)) {
+      auto next = expect(TokID);
+      if (!next) {
+        this->imm_error("Expected type parameter name after ','",
+                        id->get_location());
+        return {nullptr, FAILED};
+      }
+      type_params.push_back(next->lexeme);
+    }
+    if (!consumeClosingAngleBracket()) {
+      this->imm_error("Expected '>' after type parameter list",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+  }
+
   auto [params, result] = ParseParams();
   if (result != SUCCESS) {
     emit_if_uncommitted(
@@ -1001,6 +1041,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!arrow) {
     auto proto = std::make_unique<PrototypeAST>(id, std::move(params));
     proto->is_var_arg = var_arg;
+    proto->type_params = std::move(type_params);
     return {std::move(proto), SUCCESS};
   }
 
@@ -1011,6 +1052,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   auto proto = std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
                                               std::move(params));
   proto->is_var_arg = var_arg;
+  proto->type_params = std::move(type_params);
   return {std::move(proto), has_return_type ? SUCCESS : FAILED};
 }
 

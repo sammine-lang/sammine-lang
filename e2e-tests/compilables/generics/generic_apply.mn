@@ -5,7 +5,7 @@ import std;
 
 let double(x: i32) -> i32 { x + x }
 
-let apply(f: (T) -> U, x: T) -> U { f(x) }
+let apply<T, U>(f: (T) -> U, x: T) -> U { f(x) }
 
 let main() -> i32 {
   let result = apply(double, 5);

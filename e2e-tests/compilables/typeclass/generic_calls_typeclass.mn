@@ -6,7 +6,7 @@
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 
-let print_size(x: T) -> i64 {
+let print_size<T>(x: T) -> i64 {
   sizeof<T>()
 }
 

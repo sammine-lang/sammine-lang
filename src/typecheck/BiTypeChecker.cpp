@@ -96,10 +96,18 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
         "for C interop, not on function definitions");
   }
 
-  bool is_generic = discover_type_params(ast->Prototype.get());
+  // Register explicitly-declared type parameters before visiting the prototype
+  for (auto &tp_name : ast->Prototype->type_params) {
+    auto tp = Type::TypeParam(tp_name);
+    typename_to_type.registerNameT(tp_name, tp);
+  }
+
+  // Visit prototype (resolves param/return types, registers function name)
+  // Previously done inside discover_type_params().
+  ast->Prototype->accept_vis(this);
   ast->accept_synthesis(this);
 
-  if (is_generic) {
+  if (ast->Prototype->is_generic()) {
     generic_func_defs[ast->Prototype->functionName.mangled()] = ast;
   } else {
     ast->Block->accept_vis(this);
@@ -197,8 +205,7 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
 
 void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   enter_new_scope();
-  bool is_generic = discover_type_params(ast->Prototype.get());
-  if (is_generic) {
+  if (ast->Prototype->is_generic()) {
     this->add_error(
         ast->Prototype->get_location(),
         "Generic reuse declarations are not supported; generics require a "
@@ -735,14 +742,23 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
   std::unordered_map<std::string, Type> bindings;
 
   if (!ast->explicit_type_args.empty()) {
-    // Explicit type argument: f<T>(args)
+    // Explicit type arguments: f<T, U>(args) — must provide all
     auto &type_params = generic_def->Prototype->type_params;
-    assert(type_params.size() == 1 && "Only single type parameter supported");
-
-    Type resolved = resolve_type_expr(ast->explicit_type_args[0].get());
-    if (resolved.type_kind == TypeKind::Poisoned)
+    if (ast->explicit_type_args.size() != type_params.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Expected {} type argument(s) for '{}', got {}",
+                      type_params.size(), ast->functionName.display(),
+                      ast->explicit_type_args.size()));
       return ast->type = Type::Poisoned();
-    bindings[type_params[0]] = resolved;
+    }
+
+    for (size_t i = 0; i < type_params.size(); i++) {
+      Type resolved = resolve_type_expr(ast->explicit_type_args[i].get());
+      if (resolved.type_kind == TypeKind::Poisoned)
+        return ast->type = Type::Poisoned();
+      bindings[type_params[i]] = resolved;
+    }
 
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto arg_type = ast->arguments[i]->accept_synthesis(this);

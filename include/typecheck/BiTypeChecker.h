@@ -33,16 +33,6 @@ public:
   TypeMapOrdering type_map_ordering;
 
   // Generic function support
-  bool in_prototype_context = false;
-  std::vector<std::string> discovered_type_params;
-  bool discover_type_params(PrototypeAST *proto) {
-    in_prototype_context = true;
-    discovered_type_params.clear();
-    proto->accept_vis(this);
-    in_prototype_context = false;
-    proto->type_params = std::move(discovered_type_params);
-    return !proto->type_params.empty();
-  }
   std::unordered_map<std::string, FuncDefAST *> generic_func_defs;
   std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
   std::set<std::string> instantiated_functions;
@@ -287,18 +277,6 @@ public:
       auto mangled = simple->name.mangled();
       auto get_type_opt = this->get_typename_type(mangled);
       if (!get_type_opt.has_value()) {
-        if (in_prototype_context) {
-          // Auto-discover as type parameter
-          auto tp = Type::TypeParam(mangled);
-          typename_to_type.registerNameT(mangled, tp);
-          // Only add if not already discovered
-          if (std::find(discovered_type_params.begin(),
-                        discovered_type_params.end(),
-                        mangled) == discovered_type_params.end()) {
-            discovered_type_params.push_back(mangled);
-          }
-          return tp;
-        }
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",
                                     simple->name.display()));

@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK: Generic reuse declarations are not supported
 
-reuse generic_func(x: T) -> T;
+reuse generic_func<T>(x: T) -> T;
 
 let main() -> i32 {
   return 0;

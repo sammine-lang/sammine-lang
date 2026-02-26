@@ -1,9 +1,10 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK: Type 'T' not found in the current scope.
 
-let use_t(x: i32) -> T { x }
+# Using T without declaring <T> should be an error.
+let identity(x: T) -> T { x }
 
 let main() -> i32 {
-  let a = use_t(42);
+  let a = identity(42);
   return 0;
 }

@@ -1,14 +1,14 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 42
+# CHECK: 10
 
 import std;
 
-let deref_val<T>(p: ptr<T>) -> T { *p }
+let double(x: i32) -> i32 { x + x }
+
+let apply<T, U>(f: (T) -> U, x: T) -> U { f(x) }
 
 let main() -> i32 {
-  let x = 42;
-  let p = &x;
-  let result = deref_val(p);
+  let result = apply<i32, i32>(double, 5);
   std::printf("%d", result);
   return 0;
 }
