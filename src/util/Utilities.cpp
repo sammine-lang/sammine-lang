@@ -308,9 +308,16 @@ void Reporter::report(const Reportee &reports) const {
     for (size_t gi : cluster.group_indices) {
       const auto &g = groups[gi];
       Locator locator(g.loc, context_radius, diagnostic_data);
-      if (!locator.is_on_singular_line())
-        continue;
-      auto [row, cs, ce] = locator.get_start_end_of_singular_line_token();
+      int64_t row, cs, ce;
+      if (locator.is_on_singular_line()) {
+        std::tie(row, cs, ce) = locator.get_start_end_of_singular_line_token();
+      } else {
+        // Multi-line span: annotate start line from start col to end of line
+        auto [r, c] = locator.get_row_col();
+        row = r;
+        cs = c;
+        ce = static_cast<int64_t>(diagnostic_data[r].second.size());
+      }
       auto msgs = g.msgs;
       if (dev_mode) {
         for (const auto &src : g.srcs) {
