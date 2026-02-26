@@ -118,20 +118,29 @@ When `print_size` is monomorphized for `i32`, the `sizeof<T>()` call resolves `T
 ## Monomorphized Generics
 
 ### Overview
-Generic functions use **implicit type parameter discovery** (no `<T>` syntax in the definition) and **monomorphization** (concrete copies per type combination). Unknown type names in function signatures are auto-discovered as type parameters.
+Generic functions require **explicit type parameter declaration** with `<T, U>` syntax and use **monomorphization** (concrete copies per type combination).
 
-### Explicit Type Arguments
-Generic functions can also be called with explicit type args: `identity<i32>(42)`. In `synthesize(CallExprAST*)`, if `explicit_type_args` is non-empty and the name is NOT in `method_to_class`, the explicit type is used to build type bindings directly instead of inferring from arguments.
+```
+let identity<T>(x: T) -> T { x }
+let apply<T, U>(f: (T) -> U, x: T) -> U { f(x) }
+```
+
+### Call-Site Syntax
+- **Inference**: `identity(42)` — T inferred as i32 from argument
+- **Explicit type args**: `identity<i32>(42)`, `apply<i32, f64>(func, 5)`
+- **Multiple explicit type args** must match the declared count exactly (all-or-nothing)
+- Type params shadow outer types: `<T>` in a function hides a struct named `T` within that function's scope
 
 ### Key Types & Fields
 - `TypeKind::TypeParam`: represents an unresolved type parameter; uses `std::string` variant of `TypeData`
-- `PrototypeAST::type_params`: populated during type checking (not parsing); `is_generic()` checks if non-empty
+- `PrototypeAST::type_params`: populated during **parsing** (from `<T, U>` syntax); `is_generic()` checks if non-empty
+- `CallExprAST::explicit_type_args`: vector of `TypeExprAST` for call-site `<i32, f64>` syntax
 - `CallExprAST::resolved_generic_name`: mangled name (e.g. `"identity.i32"`)
 - `CallExprAST::type_bindings`: e.g. `{"T": i32}`
 
 ### Type Checker Flow
-1. **Discovery** (`visit(FuncDefAST*)`): sets `in_prototype_context = true`, resolves prototype. In `resolve_type_expr()`, unknown `SimpleTypeExprAST` names are auto-registered as `TypeParam` and added to `discovered_type_params`. If any found → store in `generic_func_defs`, skip body.
-2. **Generic call** (`synthesize(CallExprAST*)`): checks `generic_func_defs` first. If found: synthesize arg types, `unify()` each against generic param types to build bindings, compute mangled name, `substitute()` return type.
+1. **Registration** (`visit(FuncDefAST*)`): registers each `type_params[i]` as `Type::TypeParam(name)` in `typename_to_type`, then visits the prototype. If `is_generic()` → store in `generic_func_defs`, skip body. Unknown type names in prototypes (not declared in `<>`) produce "Type not found" errors.
+2. **Generic call** (`synthesize_generic_call()`): checks `generic_func_defs` first. If found: either bind explicit type args (with count validation) or `unify()` each arg to infer bindings, compute mangled name, `substitute()` return type.
 3. **Monomorphization** (`visit(CallExprAST*)`): if `resolved_generic_name` set and not yet instantiated: `Monomorphizer::instantiate()` deep-clones AST with type substitution, runs `GeneralSemanticsVisitor` (implicit return wrapping), then type-checks the clone as a normal function. Stores in `monomorphized_defs`.
 4. **Injection** (`Compiler::typecheck()`): moves `monomorphized_defs` to front of `DefinitionVec` so they're codegen'd before call sites.
 5. **Codegen skip** (`CgVisitor::visit(FuncDefAST*)`): if `is_generic()`, return immediately.
@@ -155,6 +164,12 @@ Generic functions can also be called with explicit type args: `identity<i32>(42)
 - Generic functions only (not records/structs)
 - Type parameters only (no const generics — array sizes must be concrete)
 - No partial application of generic functions (all args must be provided)
+- Generic `reuse` declarations are rejected — generics require a body for monomorphization
+
+## Polymorphic Literal Binary Expressions
+- When both operands are polymorphic and the same kind (e.g. two bare `Integer` literals), the type checker skips typeclass dispatch and keeps the result polymorphic
+- This early-return is **excluded** for comparison and logical operators (`is_comparison()`, `is_logical()`), which must always return `Type::Bool()`
+- Without this exclusion, `3 < 5` would get type `Integer` instead of `Bool`, causing "If condition must be bool, got Integer" errors
 
 ## Compound Type Comparison Guards
 - `synthesize(BinaryExprAST*)` restricts comparison operators for Array and Pointer types

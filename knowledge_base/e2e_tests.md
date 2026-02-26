@@ -56,9 +56,9 @@ Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 | `arith/`    | Arithmetic & integer type tests (`arith`, `i32_*`) |
 | `func/`     | Function calls, recursion, naming (`call_func`, `fib`, `even`, etc.) |
 | `functions/`| First-class functions & partial application (`func_as_arg`, `partial_basic`, etc.) |
-| `control/`  | Control flow (`if`)                              |
+| `control/`  | Control flow (`if`, `nested_if`, `if_expr_value`) |
 | `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
-| `misc/`     | General tests, compiler flag tests (`hello`, `llvm_ir_pre`, etc.) |
+| `misc/`     | General tests, compiler flag tests (`llvm_ir_pre`, mutability, etc.) |
 
 | `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, `explicit_type_args`, etc.) |
 | `import/`   | Module import tests using `reuse` keyword (`import_basic`, `import_export_let`, `no_transitive_leak`, etc.); library sources in `Inputs/` |

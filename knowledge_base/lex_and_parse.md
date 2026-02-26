@@ -29,12 +29,18 @@
 - `ParseTypeClassInstance()` parses `instance Name<ConcreteType> { let method() -> T { body } ... }` — method implementations are full `FuncDefAST`
 - Top-level `ParseDefinition()` tries `ParseTypeClassDecl` and `ParseTypeClassInstance` alongside `ParseFuncDef`, `ParseStructDef`, etc.
 
-### Explicit Type Argument Parsing (`f<T>(args)`)
-- `ParseCallExpr()` uses **speculative parsing with rollback** for `<TypeExpr>` after an identifier
-- After consuming `name`, if next token is `<`: mark rollback point, try to parse `<TypeExpr>`, check for `>` then `(`
-- If all succeed → keep the `explicit_type_args`, discard rollback
+### Explicit Type Parameter Parsing (`let f<T, U>(...)`)
+- `ParsePrototype()` parses optional `<T, U, ...>` between function name and parameter list
+- After consuming `TokID` (function name), checks for `TokLESS`; if found, parses comma-separated `TokID` names, consumes closing `>` via `consumeClosingAngleBracket()`
+- Stores parsed names in `proto->type_params` (same field the type checker uses)
+- Applies to all `ParsePrototype()` call sites: `let` functions, `reuse` declarations, typeclass methods
+
+### Explicit Type Argument Parsing (`f<T, U>(args)`)
+- `ParseCallExpr()` uses **speculative parsing with rollback** for `<TypeExpr, ...>` after an identifier
+- After consuming `name`, if next token is `<`: mark rollback point, parse comma-separated `TypeExpr` list, check for `>` then `(`
+- If all succeed → keep the `explicit_type_args` vector, discard rollback
 - If any step fails → rollback token stream to before `<`, treat `<` as a comparison operator
-- `consumeClosingAngleBracket()` handles the `>>` token splitting for nested generics (e.g. `f<ptr<i32>>()`)
+- `consumeClosingAngleBracket()` handles the `>>` token splitting for nested generics (e.g. `f<ptr<i32>, f64>()`)
 
 ## QualifiedName (`include/util/QualifiedName.h`)
 - `QualifiedName` struct carries module + name separately instead of eagerly mangling `m::add` → `math$add`
