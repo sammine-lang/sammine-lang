@@ -1,8 +1,11 @@
 # RUN: %sammine --file %full %O && %T/readme_demo.exe | %check %full
-# CHECK: 34
+# CHECK:      34
+# CHECK-NEXT: (30, 40)
+# CHECK-NEXT: sizeof i32 = 4
+# CHECK-NEXT: A
 
 # Line comments start with #
-# Types: i32, i64, f64, bool, string, unit, etc
+# Types: i32, i64, f64, bool, char, unit, etc
 
 import std;                                   # import standard library (provides printf)
 
@@ -26,6 +29,16 @@ let apply<T, U>(f: (T) -> U, x: T) -> U {   # higher-order + generic
   f(x)                                       # (T) -> U is a function type
 }
 
+# --- Structs ---
+struct Vec2 { x: i32, y: i32, };
+
+# --- Operator overloading via typeclasses ---
+instance Add<Vec2> {
+  let add(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2 { x: a.x + b.x, y: a.y + b.y }
+  }
+}
+
 let main() -> i32 {
   # --- Variables ---
   let x: i32 = 5;                            # immutable, type-annotated
@@ -47,7 +60,6 @@ let main() -> i32 {
   let p: ptr<i32> = alloc<i32>(1);          # heap allocation (count)
   *p = 42;                                   # write through pointer
   let val = *p;                              # dereference
-  *p = 100;                                  # overwrite
   free(p);                                   # manual deallocation
 
   let q: ptr<i32> = &x;                     # address-of (stack pointer)
@@ -58,7 +70,7 @@ let main() -> i32 {
   let r2 = 5 |> identity |> add(3);         # chained pipes
 
   # --- Partial function application ---
-  let add5 = add(5);                         # fewer args -> new function
+  let add5 = add(5);                         # fewer args -> closure
   let eight = add5(3);                       # call the partially applied fn
 
   # --- Higher-order functions ---
@@ -66,9 +78,23 @@ let main() -> i32 {
   let res = apply(f, 42);                   # pass function as argument
 
   # --- Generics (monomorphized) ---
-  let a_i32 = identity(42);                 # instantiates identity.i32
-  let a_f64 = identity(3.14);               # instantiates identity.f64
+  let a_i32 = identity(42);                 # inferred: identity.i32
+  let a_f64 = identity<f64>(3.14);          # explicit type arg: identity.f64
 
-  std::printf("%d\n", fib(9));
+  # --- Structs + operator overloading ---
+  let v1: Vec2 = Vec2 { x: 10, y: 15 };    # struct literal
+  let v2: Vec2 = Vec2 { x: 20, y: 25 };
+  let v3: Vec2 = v1 + v2;                   # uses Add<Vec2> instance
+
+  # --- Sizeof (built-in typeclass) ---
+  let sz = sizeof<i32>();                    # compile-time size info
+
+  # --- Chars ---
+  let ch: char = 'A';
+
+  std::printf("%d\n", fib(9));              # 34
+  std::printf("(%d, %d)\n", v3.x, v3.y);   # (30, 40)
+  std::printf("sizeof i32 = %ld\n", sz);   # sizeof i32 = 4
+  std::printf("%c\n", ch);                  # A
   return 0;                                  # explicit return
 }
