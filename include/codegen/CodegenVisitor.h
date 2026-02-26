@@ -69,6 +69,7 @@ public:
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
+  virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
@@ -103,6 +104,7 @@ public:
   virtual void postorder_walk(ExternAST *ast) override;
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(StructDefAST *ast) override;
+  virtual void postorder_walk(EnumDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override {}
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;

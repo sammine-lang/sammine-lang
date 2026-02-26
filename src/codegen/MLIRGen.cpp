@@ -200,6 +200,8 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     emitExtern(externDef);
   else if (dynamic_cast<AST::StructDefAST *>(def))
     ; // Struct types registered in generate() pre-pass
+  else if (dynamic_cast<AST::EnumDefAST *>(def))
+    ; // Enum types registered in generate() pre-pass (TODO)
   else if (dynamic_cast<AST::TypeClassDeclAST *>(def))
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *tci = dynamic_cast<AST::TypeClassInstanceAST *>(def)) {

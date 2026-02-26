@@ -20,11 +20,13 @@ namespace sammine_lang::AST {
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
 
-  // First pass: register structs, typeclass declarations, and instances
+  // First pass: register structs, enums, typeclass declarations, and instances
   // so method bodies can reference any type/instance regardless of order.
   for (auto &def : ast->DefinitionVec) {
     if (auto *sd = dynamic_cast<StructDefAST *>(def.get()))
       sd->accept_vis(this);
+    else if (auto *ed = dynamic_cast<EnumDefAST *>(def.get()))
+      ed->accept_vis(this);
     else if (auto *tc = dynamic_cast<TypeClassDeclAST *>(def.get()))
       register_typeclass_decl(tc);
     else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get()))
@@ -505,6 +507,7 @@ void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(EnumDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -536,6 +539,7 @@ void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(EnumDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {}
@@ -600,6 +604,9 @@ Type BiTypeCheckerVisitor::synthesize(ExternAST *ast) {
   return Type::NonExistent();
 }
 Type BiTypeCheckerVisitor::synthesize(StructDefAST *ast) {
+  return Type::NonExistent();
+}
+Type BiTypeCheckerVisitor::synthesize(EnumDefAST *ast) {
   return Type::NonExistent();
 }
 Type BiTypeCheckerVisitor::synthesize(FuncDefAST *ast) {

@@ -57,6 +57,10 @@ public:
   virtual void preorder_walk(StructDefAST *ast) = 0;
   virtual void postorder_walk(StructDefAST *ast) = 0;
 
+  virtual void visit(EnumDefAST *ast);
+  virtual void preorder_walk(EnumDefAST *ast) = 0;
+  virtual void postorder_walk(EnumDefAST *ast) = 0;
+
   virtual void visit(PrototypeAST *ast);
   virtual void preorder_walk(PrototypeAST *ast) = 0;
   virtual void postorder_walk(PrototypeAST *ast) = 0;
@@ -219,6 +223,7 @@ public:
   virtual Type synthesize(ExternAST *ast) = 0;
   virtual Type synthesize(FuncDefAST *ast) = 0;
   virtual Type synthesize(StructDefAST *ast) = 0;
+  virtual Type synthesize(EnumDefAST *ast) = 0;
   virtual Type synthesize(PrototypeAST *ast) = 0;
   virtual Type synthesize(CallExprAST *ast) = 0;
   virtual Type synthesize(ReturnExprAST *ast) = 0;

@@ -235,6 +235,8 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
   }
 }
 void CgVisitor::postorder_walk(StructDefAST *ast) {}
+void CgVisitor::preorder_walk(EnumDefAST *ast) {}
+void CgVisitor::postorder_walk(EnumDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
   // INFO: If we cannot parse return expr, treat it as unit for now

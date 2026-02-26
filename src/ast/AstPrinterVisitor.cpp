@@ -46,6 +46,7 @@ public:
   virtual void visit(FuncDefAST *ast) override;
 
   virtual void visit(StructDefAST *ast) override;
+  virtual void visit(EnumDefAST *ast) override;
 
   virtual void visit(PrototypeAST *ast) override;
 
@@ -83,6 +84,7 @@ public:
   virtual void preorder_walk(ExternAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
+  virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
   virtual void preorder_walk(ReturnExprAST *ast) override;
@@ -115,6 +117,7 @@ public:
   virtual void postorder_walk(ExternAST *ast) override;
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(StructDefAST *ast) override;
+  virtual void postorder_walk(EnumDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override;
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;
@@ -207,6 +210,15 @@ void AstPrinterVisitor::visit(StructDefAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &t : ast->struct_members)
     safeguard_visit(t.get(), "!!nullptr!! struct_members (typed var)");
+  ast->walk_with_postorder(this);
+  this->exit_new_scope();
+  generic_postprint();
+}
+
+void AstPrinterVisitor::visit(EnumDefAST *ast) {
+  generic_preprintln(ast);
+  this->enter_new_scope();
+  ast->walk_with_preorder(this);
   ast->walk_with_postorder(this);
   this->exit_new_scope();
   generic_postprint();
@@ -365,6 +377,24 @@ void AstPrinterVisitor::preorder_walk(StructDefAST *ast) {
   // print the record’s name at the current indent
   add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.display()));
 }
+void AstPrinterVisitor::preorder_walk(EnumDefAST *ast) {
+  std::string variants_str;
+  for (size_t i = 0; i < ast->variants.size(); i++) {
+    variants_str += ast->variants[i].name;
+    if (!ast->variants[i].payload_types.empty()) {
+      variants_str += "(";
+      for (size_t j = 0; j < ast->variants[i].payload_types.size(); j++) {
+        variants_str += ast->variants[i].payload_types[j]->to_string();
+        if (j + 1 < ast->variants[i].payload_types.size())
+          variants_str += ", ";
+      }
+      variants_str += ")";
+    }
+    if (i + 1 < ast->variants.size())
+      variants_str += " | ";
+  }
+  add_to_rep(fmt::format("{}enum_name: \"{}\" = {}", tabs(), ast->enum_name.display(), variants_str));
+}
 void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
   add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.display()));
 }
@@ -417,6 +447,7 @@ void AstPrinterVisitor::postorder_walk(VarDefAST *ast) {}
 void AstPrinterVisitor::postorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FuncDefAST *ast) {}
 void AstPrinterVisitor::postorder_walk(StructDefAST *ast) {}
+void AstPrinterVisitor::postorder_walk(EnumDefAST *ast) {}
 
 void AstPrinterVisitor::postorder_walk(PrototypeAST *ast) {}
 void AstPrinterVisitor::postorder_walk(CallExprAST *ast) {}

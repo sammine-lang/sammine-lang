@@ -81,6 +81,7 @@ enum TokenType {
   TokEllipsis,  // ...
   TokTypeclass, // typeclass
   TokInstance,  // instance
+  TokEnum,      // enum
   // TokID
   TokID,  // Representing an identifier
   TokStr, // Representing a string
@@ -168,6 +169,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokEllipsis, "..."},
     {TokTypeclass, "typeclass"},
     {TokInstance, "instance"},
+    {TokEnum, "enum"},
     {TokID, "identifier"},
 
     {TokNum, "number"},

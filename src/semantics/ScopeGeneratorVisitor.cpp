@@ -29,6 +29,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
     } else if (auto record_def = dynamic_cast<StructDefAST *>(def.get())) {
       fn_name = record_def->struct_name.mangled();
       loc = record_def->get_location();
+    } else if (auto enum_def = dynamic_cast<EnumDefAST *>(def.get())) {
+      fn_name = enum_def->enum_name.mangled();
+      loc = enum_def->get_location();
     } else if (dynamic_cast<TypeClassDeclAST *>(def.get()) ||
                dynamic_cast<TypeClassInstanceAST *>(def.get())) {
       // Type class decls/instances don't register top-level names in scope
@@ -88,6 +91,7 @@ void ScopeGeneratorVisitor::visit(ExternAST *ast) {
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
   auto var_name = ast->functionName.mangled();
@@ -138,6 +142,7 @@ void ScopeGeneratorVisitor::postorder_walk(VarDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(EnumDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   // Type class calls (e.g. sizeof<i32>()) have explicit type args and are
