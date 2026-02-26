@@ -1117,6 +1117,18 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                         "Use 'let mut' or 'mut' to declare it as mutable",
                         var->variableName));
       }
+    } else if (auto *idx = dynamic_cast<IndexExprAST *>(ast->LHS.get())) {
+      if (auto *arr_var =
+              dynamic_cast<VariableExprAST *>(idx->array_expr.get())) {
+        if (!arr_var->type.is_mutable) {
+          this->add_error(
+              ast->Op->get_location(),
+              fmt::format(
+                  "Cannot write to index of immutable array '{}'. "
+                  "Use 'let mut' to declare it as mutable",
+                  arr_var->variableName));
+        }
+      }
     }
     return ast->type = Type::Unit();
   }
