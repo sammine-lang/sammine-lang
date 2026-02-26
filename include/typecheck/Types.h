@@ -40,8 +40,6 @@ class FunctionType {
 public:
   bool operator==(const FunctionType &t) const;
 
-  bool operator<(const FunctionType &t) const;
-
   std::span<const Type> get_params_types() const;
   Type get_return_type() const;
   bool is_var_arg() const { return var_arg; }
@@ -53,7 +51,6 @@ class PointerType {
 
 public:
   bool operator==(const PointerType &t) const;
-  bool operator<(const PointerType &t) const;
   Type get_pointee() const;
   PointerType(Type pointee);
 };
@@ -63,7 +60,6 @@ class ArrayType {
 
 public:
   bool operator==(const ArrayType &t) const;
-  bool operator<(const ArrayType &t) const;
   Type get_element() const;
   size_t get_size() const;
   ArrayType(Type element, size_t size);
@@ -75,7 +71,6 @@ class StructType {
 
 public:
   bool operator==(const StructType &t) const;
-  bool operator<(const StructType &t) const;
   const std::string &get_name() const { return name; }
   const std::vector<std::string> &get_field_names() const {
     return field_names;
@@ -227,8 +222,11 @@ struct Type {
 };
 
 struct TypeMapOrdering {
+  // TODO: Planned for future subtyping support — don't remove
   std::map<Type, Type> type_map;
+  // TODO: Planned for future subtyping support — don't remove
   std::vector<Type> visit_ancestor(const Type &t) const;
+  // TODO: Planned for future subtyping support — don't remove
   std::optional<Type> lowest_common_type(const Type &a, const Type &b) const;
 
   bool compatible_to_from(const Type &a, const Type &b) const;

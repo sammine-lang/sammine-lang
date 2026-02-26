@@ -4,17 +4,6 @@
 #include <span>
 //! \file Types.cpp
 //! \brief Implements the core Type system for Sammine
-bool FunctionType::operator<(const FunctionType &t) const {
-  if (total_types.size() != t.total_types.size())
-    return false;
-
-  for (size_t i = 0; i < total_types.size(); i++) {
-    if (!(total_types[i] < t.total_types[i]))
-      return false;
-  }
-
-  return true;
-}
 bool FunctionType::operator==(const FunctionType &t) const {
   return total_types == t.total_types;
 }
@@ -32,17 +21,11 @@ PointerType::PointerType(Type pointee)
 bool PointerType::operator==(const PointerType &t) const {
   return *pointee == *t.pointee;
 }
-bool PointerType::operator<(const PointerType &t) const {
-  return *pointee == *t.pointee;
-}
 Type PointerType::get_pointee() const { return *pointee; }
 
 ArrayType::ArrayType(Type element, size_t size)
     : element(std::make_shared<Type>(std::move(element))), size(size) {}
 bool ArrayType::operator==(const ArrayType &t) const {
-  return *element == *t.element && size == t.size;
-}
-bool ArrayType::operator<(const ArrayType &t) const {
   return *element == *t.element && size == t.size;
 }
 Type ArrayType::get_element() const { return *element; }
@@ -54,9 +37,6 @@ StructType::StructType(std::string name, std::vector<std::string> field_names,
       field_types(std::move(field_types)) {}
 bool StructType::operator==(const StructType &t) const {
   return name == t.name; // nominal typing
-}
-bool StructType::operator<(const StructType &t) const {
-  return name < t.name;
 }
 std::optional<size_t>
 StructType::get_field_index(const std::string &field) const {
@@ -72,8 +52,15 @@ Type Type::Function(std::vector<Type> params, bool var_arg) {
   return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
 bool Type::operator!=(const Type &other) const { return !(operator==(other)); }
-bool Type::operator<(const Type &t) const { return this->operator==(t); }
-bool Type::operator>(const Type &t) const { return this->operator==(t); }
+bool Type::operator<(const Type &t) const {
+  if (type_kind != t.type_kind)
+    return static_cast<int>(type_kind) < static_cast<int>(t.type_kind);
+  if (type_kind == TypeKind::TypeParam || type_kind == TypeKind::String)
+    return std::get<std::string>(type_data) < std::get<std::string>(t.type_data);
+  // Same TypeKind with no sub-ordering (scalars, compounds) — equal for ordering
+  return false;
+}
+bool Type::operator>(const Type &t) const { return t < *this; }
 // Compares fundamental type structure only (TypeKind + TypeData).
 // Qualifiers like is_mutable are intentionally ignored — use
 // compatible_to_from() for directional compatibility checks.
