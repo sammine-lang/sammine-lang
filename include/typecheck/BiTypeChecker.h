@@ -159,6 +159,9 @@ public:
   std::unordered_map<std::string, TypeClassInstanceInfo> type_class_instances;
   std::unordered_map<std::string, std::string> method_to_class;
 
+  // Enum variant constructors: variant_name → (enum_type, variant_index)
+  std::unordered_map<std::string, std::pair<Type, size_t>> variant_constructors;
+
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);

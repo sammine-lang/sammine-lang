@@ -598,6 +598,10 @@ void Compiler::emit_interface() {
       auto &st = std::get<StructType>(t.type_data);
       return QualifiedName::local(st.get_name()).with_module(stem).mangled();
     }
+    case TypeKind::Enum: {
+      auto &et = std::get<EnumType>(t.type_data);
+      return et.get_name().with_module(stem).mangled();
+    }
     case TypeKind::Pointer:
       return "ptr<" +
              qualify_type(std::get<PointerType>(t.type_data).get_pointee()) +

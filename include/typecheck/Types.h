@@ -1,4 +1,5 @@
 #pragma once
+#include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include <map>
 #include <memory>
@@ -21,6 +22,7 @@ enum class TypeKind {
   Pointer,
   Array,
   Struct,
+  Enum,
   Never,
   NonExistent,
   Poisoned,
@@ -87,8 +89,29 @@ public:
   StructType(std::string name, std::vector<std::string> field_names,
              std::vector<Type> field_types);
 };
+class EnumType {
+  sammine_util::QualifiedName name;
+
+public:
+  struct VariantInfo {
+    std::string name;
+    std::vector<Type> payload_types;
+  };
+
+private:
+  std::vector<VariantInfo> variants;
+
+public:
+  bool operator==(const EnumType &t) const;
+  const sammine_util::QualifiedName &get_name() const { return name; }
+  const std::vector<VariantInfo> &get_variants() const { return variants; }
+  std::optional<size_t> get_variant_index(const std::string &variant_name) const;
+  const VariantInfo &get_variant(size_t idx) const { return variants[idx]; }
+  size_t variant_count() const { return variants.size(); }
+  EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants);
+};
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
-                              std::string, std::monostate>;
+                              EnumType, std::string, std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -127,6 +150,11 @@ struct Type {
                 StructType(std::move(name), std::move(field_names),
                            std::move(field_types))};
   }
+  static Type Enum(sammine_util::QualifiedName name,
+                   std::vector<EnumType::VariantInfo> variants) {
+    return Type{TypeKind::Enum,
+                EnumType(std::move(name), std::move(variants))};
+  }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
     return this->type_kind != TypeKind::Poisoned;
@@ -156,6 +184,8 @@ struct Type {
       return "()";
     case TypeKind::Struct:
       return std::get<StructType>(type_data).get_name();
+    case TypeKind::Enum:
+      return std::get<EnumType>(type_data).get_name().display();
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Char:

@@ -44,6 +44,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
         fmt::format("Struct '{}' not registered in TypeConverter",
                     st.get_name()));
   }
+  case TypeKind::Enum:
+    sammine_util::abort("Enum codegen not yet implemented");
   case TypeKind::Never:
     sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:
@@ -149,6 +151,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::Integer:
   case TypeKind::Flt:
   case TypeKind::Struct:
+  case TypeKind::Enum:
   case TypeKind::TypeParam:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));

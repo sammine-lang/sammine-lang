@@ -167,6 +167,7 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     auto &st = std::get<StructType>(type.type_data);
     return structTypes.at(st.get_name());
   }
+  case TypeKind::Enum:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

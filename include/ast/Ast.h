@@ -398,6 +398,8 @@ public:
   std::unordered_map<std::string, Type> type_bindings;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   bool is_typeclass_call = false;
+  bool is_enum_constructor = false;
+  size_t enum_variant_index = 0;
   explicit CallExprAST(
       std::shared_ptr<Token> tok,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
@@ -458,6 +460,8 @@ public:
 class VariableExprAST : public ExprAST {
 public:
   std::string variableName;
+  bool is_enum_unit_variant = false;
+  size_t enum_variant_index = 0;
   VariableExprAST(std::shared_ptr<Token> var) {
     join_location(var);
     if (var)
