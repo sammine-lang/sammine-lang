@@ -143,5 +143,15 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
     return false;
   }
 
+  // Polymorphic integer literal can flow into concrete integer types
+  if (b.type_kind == TypeKind::Integer) {
+    return a.type_kind == TypeKind::I32_t || a.type_kind == TypeKind::I64_t ||
+           a.type_kind == TypeKind::Integer;
+  }
+  // Polymorphic float literal can flow into any concrete float type
+  if (b.type_kind == TypeKind::Flt) {
+    return a.type_kind == TypeKind::F64_t || a.type_kind == TypeKind::Flt;
+  }
+
   return a == b;
 }

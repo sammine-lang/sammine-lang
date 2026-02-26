@@ -219,6 +219,10 @@ struct Type {
     }
   }
 
+  bool is_polymorphic_numeric() const {
+    return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
+  }
+
   operator std::string() const { return to_string(); }
 };
 

@@ -15,6 +15,49 @@
 //!        traverses the AST to synthesize node types, perform bidirectional
 //!        consistency checks, and register functions and variables.
 namespace sammine_lang::AST {
+
+// --- Numeric literal type inference helpers ---
+
+/// Default a polymorphic numeric type to its concrete default:
+/// Integer → I32_t, Flt → F64_t. Non-polymorphic types pass through unchanged.
+static Type default_polymorphic_type(const Type &t) {
+  if (t.type_kind == TypeKind::Integer)
+    return Type::I32_t();
+  if (t.type_kind == TypeKind::Flt)
+    return Type::F64_t();
+  return t;
+}
+
+/// Recursively resolve polymorphic literal types in an expression tree
+/// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
+/// and BlockAST to reach all leaf literals.
+static void resolve_literal_type(ExprAST *expr, const Type &target) {
+  if (!expr || !expr->type.is_polymorphic_numeric())
+    return;
+
+  expr->type = target;
+
+  if (auto *unary = dynamic_cast<UnaryNegExprAST *>(expr)) {
+    resolve_literal_type(unary->operand.get(), target);
+  } else if (auto *binary = dynamic_cast<BinaryExprAST *>(expr)) {
+    resolve_literal_type(binary->LHS.get(), target);
+    resolve_literal_type(binary->RHS.get(), target);
+  } else if (auto *if_expr = dynamic_cast<IfExprAST *>(expr)) {
+    if (if_expr->thenBlockAST && !if_expr->thenBlockAST->Statements.empty()) {
+      auto *last_then = if_expr->thenBlockAST->Statements.back().get();
+      resolve_literal_type(last_then, target);
+      if_expr->thenBlockAST->type = target;
+    }
+    if (if_expr->elseBlockAST && !if_expr->elseBlockAST->Statements.empty()) {
+      auto *last_else = if_expr->elseBlockAST->Statements.back().get();
+      resolve_literal_type(last_else, target);
+      if_expr->elseBlockAST->type = target;
+    }
+  }
+  // For all other expression types (NumberExprAST, CallExprAST, IndexExprAST,
+  // etc.), the type is already set above — no children to recurse into.
+}
+
 // visit overrides — explicit traversal order
 
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
@@ -104,6 +147,9 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
             if (error_count == 0)
               first_error_idx = i;
             error_count++;
+          } else {
+            // Resolve polymorphic element to declared element type
+            resolve_literal_type(arr_lit->elements[i].get(), expected_elem);
           }
         }
         if (error_count > 0) {
@@ -144,6 +190,8 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
                                 "but variable declared as {}",
                                 from.to_string(), to.to_string()));
     ast->type = Type::Poisoned();
+  } else if (from.is_polymorphic_numeric()) {
+    resolve_literal_type(ast->Expression.get(), to);
   }
 }
 
@@ -283,6 +331,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
                                   i + 1, ast->functionName.display(),
                                   params[i].to_string(),
                                   ast->arguments[i]->type.to_string()));
+    } else if (ast->arguments[i]->type.is_polymorphic_numeric()) {
+      resolve_literal_type(ast->arguments[i].get(), params[i]);
     }
   }
 }
@@ -295,12 +345,14 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   auto scope_fn = this->id_to_type.top().s.value();
   auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
   auto return_type = fn_type.get_return_type();
-  if (t != return_type) {
+  if (!type_map_ordering.compatible_to_from(return_type, t)) {
     this->add_error(ast->get_location(),
                     fmt::format("Wrong return type for function {}, expected "
                                 "{} but got {}",
                                 scope_fn->getFunctionName(),
                                 return_type.to_string(), t.to_string()));
+  } else if (t.is_polymorphic_numeric()) {
+    resolve_literal_type(ast->return_expr.get(), return_type);
   }
 }
 
@@ -578,9 +630,15 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
 
   if (ast->TypedVar->type_expr != nullptr)
     ast->type = ast->TypedVar->accept_synthesis(this);
-  else if (ast->Expression)
+  else if (ast->Expression) {
     ast->type = ast->Expression->accept_synthesis(this);
-  else {
+    // No annotation: default polymorphic literals (Integer→i32, Flt→f64)
+    if (ast->type.is_polymorphic_numeric()) {
+      auto concrete = default_polymorphic_type(ast->type);
+      resolve_literal_type(ast->Expression.get(), concrete);
+      ast->type = concrete;
+    }
+  } else {
     this->add_error(ast->get_location(),
                     "Variable declared without initializer");
     ast->type = Type::Poisoned();
@@ -747,6 +805,11 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
         auto arg_type = ast->arguments[i]->accept_synthesis(this);
         if (arg_type.type_kind == TypeKind::Poisoned)
           return ast->type = Type::Poisoned();
+        // Default polymorphic literals before generic unification
+        if (arg_type.is_polymorphic_numeric()) {
+          arg_type = default_polymorphic_type(arg_type);
+          resolve_literal_type(ast->arguments[i].get(), arg_type);
+        }
         if (!unify(params[i], arg_type, bindings)) {
           auto expected = substitute(params[i], bindings);
           this->add_error(ast->arguments[i]->get_location(),
@@ -886,6 +949,23 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     return ast->type = Type::Never();
   }
 
+  // Both operands polymorphic and same kind: keep polymorphic, skip typeclass
+  if (ast->LHS->type.is_polymorphic_numeric() &&
+      ast->RHS->type.is_polymorphic_numeric() &&
+      ast->LHS->type.type_kind == ast->RHS->type.type_kind) {
+    return ast->type = ast->LHS->type;
+  }
+  // One polymorphic, one concrete: resolve polymorphic to concrete
+  if (ast->LHS->type.is_polymorphic_numeric() &&
+      !ast->RHS->type.is_polymorphic_numeric()) {
+    if (type_map_ordering.compatible_to_from(ast->RHS->type, ast->LHS->type))
+      resolve_literal_type(ast->LHS.get(), ast->RHS->type);
+  } else if (ast->RHS->type.is_polymorphic_numeric() &&
+             !ast->LHS->type.is_polymorphic_numeric()) {
+    if (type_map_ordering.compatible_to_from(ast->LHS->type, ast->RHS->type))
+      resolve_literal_type(ast->RHS.get(), ast->LHS->type);
+  }
+
   if (!this->type_map_ordering.compatible_to_from(ast->LHS->type,
                                                   ast->RHS->type)) {
     this->add_error(
@@ -998,9 +1078,9 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
           true,
           fmt::format("invalid type suffix '{}' on number literal", suffix));
   } else if (ast->number.find('.') == std::string::npos)
-    ast->type = Type::I32_t();
+    ast->type = Type::Integer();
   else
-    ast->type = Type::F64_t();
+    ast->type = Type::Flt();
 
   return ast->type;
 }
@@ -1078,6 +1158,17 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
 
   // Both branches must have compatible types
   if (then_type != else_type) {
+    if (type_map_ordering.compatible_to_from(else_type, then_type)) {
+      resolve_literal_type(ast->thenBlockAST->Statements.back().get(),
+                           else_type);
+      ast->thenBlockAST->type = else_type;
+      return ast->type = else_type;
+    } else if (type_map_ordering.compatible_to_from(then_type, else_type)) {
+      resolve_literal_type(ast->elseBlockAST->Statements.back().get(),
+                           then_type);
+      ast->elseBlockAST->type = then_type;
+      return ast->type = then_type;
+    }
     this->add_error(
         ast->elseBlockAST->get_location(),
         fmt::format("If branches have incompatible types: then has {}, else "
@@ -1180,6 +1271,14 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
     }
   }
 
+  // Default polymorphic element type (annotation resolution happens in visit(VarDefAST*))
+  if (first_type.is_polymorphic_numeric()) {
+    auto concrete = default_polymorphic_type(first_type);
+    for (auto &elem : ast->elements)
+      resolve_literal_type(elem.get(), concrete);
+    first_type = concrete;
+  }
+
   return ast->type = Type::Array(first_type, ast->elements.size());
 }
 Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
@@ -1195,6 +1294,10 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   }
 
   auto idx_type = ast->index_expr->accept_synthesis(this);
+  if (idx_type.type_kind == TypeKind::Integer) {
+    resolve_literal_type(ast->index_expr.get(), Type::I32_t());
+    idx_type = Type::I32_t();
+  }
   if (idx_type.type_kind != TypeKind::I32_t &&
       idx_type.type_kind != TypeKind::I64_t) {
     this->add_error(ast->get_location(),
@@ -1240,7 +1343,9 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::I32_t &&
       operand_type.type_kind != TypeKind::I64_t &&
-      operand_type.type_kind != TypeKind::F64_t) {
+      operand_type.type_kind != TypeKind::F64_t &&
+      operand_type.type_kind != TypeKind::Integer &&
+      operand_type.type_kind != TypeKind::Flt) {
     this->add_error(ast->get_location(),
                     fmt::format("Cannot negate non-numeric type '{}'",
                                 operand_type.to_string()));
