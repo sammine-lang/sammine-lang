@@ -1,0 +1,30 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+
+import std;
+
+let is_even(n : i32) -> i32 {
+  if n == 0 {
+    1
+  } else {
+    is_odd(n - 1)
+  }
+}
+
+let is_odd(n : i32) -> i32 {
+  if n == 0 {
+    0
+  } else {
+    is_even(n - 1)
+  }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", is_even(4));
+  std::printf("%d\n", is_odd(3));
+  std::printf("%d\n", is_even(3));
+  return 0;
+}
+
+# CHECK: 1
+# CHECK: 1
+# CHECK: 0

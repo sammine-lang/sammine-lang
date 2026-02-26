@@ -152,6 +152,9 @@ public:
   // Enum variant constructors: variant_name → (enum_type, variant_index)
   std::unordered_map<std::string, std::pair<Type, size_t>> variant_constructors;
 
+  // Pre-register a function signature so later definitions can reference it
+  void pre_register_function(PrototypeAST *ast);
+
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);

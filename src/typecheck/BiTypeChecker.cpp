@@ -60,6 +60,21 @@ static void resolve_literal_type(ExprAST *expr, const Type &target) {
 
 // visit overrides — explicit traversal order
 
+void BiTypeCheckerVisitor::pre_register_function(PrototypeAST *ast) {
+  // Build the function type by resolving type expressions directly,
+  // without calling accept_synthesis (which would mark TypedVarASTs
+  // as synthesized and prevent parameter re-registration in the full pass).
+  std::vector<Type> types;
+  for (auto &param : ast->parameterVectors)
+    types.push_back(resolve_type_expr(param->type_expr.get()));
+  if (ast->returnsUnit())
+    types.push_back(Type::Unit());
+  else
+    types.push_back(resolve_type_expr(ast->return_type_expr.get()));
+  auto fn_type = Type::Function(std::move(types), ast->is_var_arg);
+  id_to_type.registerNameT(ast->functionName.mangled(), fn_type);
+}
+
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
 
@@ -81,7 +96,24 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   // codegen emits inline ops for these.
   register_builtin_op_instances();
 
-  // Second pass: full type checking of everything
+  // Second pass: pre-register all function signatures so mutual recursion works
+  for (auto &def : ast->DefinitionVec) {
+    if (auto *fd = dynamic_cast<FuncDefAST *>(def.get())) {
+      if (fd->Prototype->is_generic())
+        generic_func_defs[fd->Prototype->functionName.mangled()] = fd;
+      else
+        pre_register_function(fd->Prototype.get());
+    } else if (auto *ext = dynamic_cast<ExternAST *>(def.get())) {
+      if (!ext->Prototype->is_generic())
+        pre_register_function(ext->Prototype.get());
+    } else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+      for (auto &method : tci->methods)
+        if (!method->Prototype->is_generic())
+          pre_register_function(method->Prototype.get());
+    }
+  }
+
+  // Third pass: full type checking of everything
   for (auto &def : ast->DefinitionVec)
     def->accept_vis(this);
 }
