@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: inner_true
+# CHECK-NEXT: outer_false
+
+import std;
+
+let main() -> i32 {
+  let x : i32 = 10;
+  if x > 5 {
+    if x > 8 {
+      std::printf("inner_true\n");
+    } else {
+      std::printf("inner_false\n");
+    };
+  } else {
+    std::printf("outer_false\n");
+  };
+  if x < 5 {
+    std::printf("fail\n");
+  } else {
+    std::printf("outer_false\n");
+  };
+  return 0;
+}

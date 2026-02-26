@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: true_branch
+# CHECK-NEXT: false_branch
+
+import std;
+
+let main() -> i32 {
+  let t : bool = true;
+  let f : bool = false;
+  if t { std::printf("true_branch\n"); } else { std::printf("fail\n"); };
+  if f { std::printf("fail\n"); } else { std::printf("false_branch\n"); };
+  return 0;
+}

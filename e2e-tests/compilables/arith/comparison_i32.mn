@@ -1,0 +1,28 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: less
+# CHECK-NEXT: less_equal
+# CHECK-NEXT: greater
+# CHECK-NEXT: greater_equal
+# CHECK-NEXT: lit_less
+# CHECK-NEXT: lit_less_equal
+# CHECK-NEXT: lit_greater
+# CHECK-NEXT: lit_greater_equal
+
+import std;
+
+let main() -> i32 {
+  # typed variables
+  let a : i32 = 3;
+  let b : i32 = 5;
+  if a < b { std::printf("less\n"); } else { std::printf("fail\n"); };
+  if a <= a { std::printf("less_equal\n"); } else { std::printf("fail\n"); };
+  if b > a { std::printf("greater\n"); } else { std::printf("fail\n"); };
+  if b >= b { std::printf("greater_equal\n"); } else { std::printf("fail\n"); };
+
+  # bare integer literals
+  if 3 < 5 { std::printf("lit_less\n"); } else { std::printf("fail\n"); };
+  if 3 <= 3 { std::printf("lit_less_equal\n"); } else { std::printf("fail\n"); };
+  if 5 > 3 { std::printf("lit_greater\n"); } else { std::printf("fail\n"); };
+  if 5 >= 5 { std::printf("lit_greater_equal\n"); } else { std::printf("fail\n"); };
+  return 0;
+}

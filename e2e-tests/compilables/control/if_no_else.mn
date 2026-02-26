@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: yes
+# CHECK-NEXT: done
+
+import std;
+
+let print_yes() {
+  std::printf("yes\n");
+}
+
+let main() -> i32 {
+  let x : i32 = 5;
+  if x > 3 {
+    print_yes();
+  };
+  std::printf("done\n");
+  return 0;
+}

@@ -1,0 +1,29 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: and_true
+# CHECK-NEXT: and_false
+# CHECK-NEXT: or_true
+# CHECK-NEXT: or_false
+# CHECK-NEXT: lit_and_true
+# CHECK-NEXT: lit_and_false
+# CHECK-NEXT: lit_or_true
+# CHECK-NEXT: lit_or_false
+
+import std;
+
+let main() -> i32 {
+  # typed variables
+  let a : i32 = 1;
+  let b : i32 = 2;
+  let c : i32 = 3;
+  if a == a && b == b { std::printf("and_true\n"); } else { std::printf("fail\n"); };
+  if a == a && b == c { std::printf("fail\n"); } else { std::printf("and_false\n"); };
+  if a == b || b == b { std::printf("or_true\n"); } else { std::printf("fail\n"); };
+  if a == b || b == c { std::printf("fail\n"); } else { std::printf("or_false\n"); };
+
+  # bare integer literals
+  if 1 == 1 && 2 == 2 { std::printf("lit_and_true\n"); } else { std::printf("fail\n"); };
+  if 1 == 1 && 2 == 3 { std::printf("fail\n"); } else { std::printf("lit_and_false\n"); };
+  if 1 == 2 || 2 == 2 { std::printf("lit_or_true\n"); } else { std::printf("fail\n"); };
+  if 1 == 2 || 2 == 3 { std::printf("fail\n"); } else { std::printf("lit_or_false\n"); };
+  return 0;
+}

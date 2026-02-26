@@ -1,0 +1,17 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 14.0
+# CHECK-NEXT: 7.0
+# CHECK-NEXT: 36.75
+# CHECK-NEXT: 3.0
+
+import std;
+
+let main() -> i32 {
+  let a : f64 = 10.5;
+  let b : f64 = 3.5;
+  std::printf("%f\n", a + b);
+  std::printf("%f\n", a - b);
+  std::printf("%f\n", a * b);
+  std::printf("%f\n", a / b);
+  return 0;
+}

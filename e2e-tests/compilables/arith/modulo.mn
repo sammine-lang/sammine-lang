@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1
+# CHECK-NEXT: 0
+# CHECK-NEXT: 3
+
+import std;
+
+let main() -> i32 {
+  std::printf("%d\n", 10 % 3);
+  std::printf("%d\n", 6 % 2);
+  std::printf("%d\n", 3 % 5);
+  return 0;
+}

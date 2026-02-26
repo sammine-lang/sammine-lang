@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 15 24
+
+import std;
+
+struct Vec2 {
+  x: i32,
+  y: i32,
+};
+
+instance Mul<Vec2> {
+  let mul(lhs: Vec2, rhs: Vec2) -> Vec2 {
+    Vec2 { x: lhs.x * rhs.x, y: lhs.y * rhs.y }
+  }
+}
+
+let main() -> i32 {
+  let a : Vec2 = Vec2 { x: 3, y: 4 };
+  let b : Vec2 = Vec2 { x: 5, y: 6 };
+  let c : Vec2 = a * b;
+  std::printf("%d %d\n", c.x, c.y);
+  return 0;
+}

@@ -1,0 +1,21 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 8
+# CHECK-NEXT: 12
+# CHECK-NEXT: 5
+
+# Test using a partially applied function multiple times with
+# different arguments, verifying the captured value is stable.
+
+import std;
+
+let add(a: i32, b: i32) -> i32 {
+  return a + b;
+}
+
+let main() -> i32 {
+  let add5 : (i32) -> i32 = add(5);
+  std::printf("%d\n", add5(3));
+  std::printf("%d\n", add5(7));
+  std::printf("%d\n", add5(0));
+  return 0;
+}

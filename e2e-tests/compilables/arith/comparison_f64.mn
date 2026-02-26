@@ -1,0 +1,17 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: less
+# CHECK-NEXT: less_equal
+# CHECK-NEXT: greater
+# CHECK-NEXT: greater_equal
+
+import std;
+
+let main() -> i32 {
+  let a : f64 = 1.5;
+  let b : f64 = 2.5;
+  if a < b { std::printf("less\n"); } else { std::printf("fail\n"); };
+  if a <= a { std::printf("less_equal\n"); } else { std::printf("fail\n"); };
+  if b > a { std::printf("greater\n"); } else { std::printf("fail\n"); };
+  if b >= b { std::printf("greater_equal\n"); } else { std::printf("fail\n"); };
+  return 0;
+}

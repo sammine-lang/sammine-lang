@@ -1,0 +1,16 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: The name `x` has been introduced before
+
+import std;
+
+let main() -> i32 {
+  let x : i32 = 5;
+  if true {
+    let x : i32 = 10;
+    std::printf("%d\n", x);
+  } else {
+    std::printf("fail\n");
+  };
+  std::printf("%d\n", x);
+  return 0;
+}

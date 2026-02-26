@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 20 25
+
+import std;
+
+struct Vec2 {
+  x: i32,
+  y: i32,
+};
+
+instance Sub<Vec2> {
+  let sub(lhs: Vec2, rhs: Vec2) -> Vec2 {
+    Vec2 { x: lhs.x - rhs.x, y: lhs.y - rhs.y }
+  }
+}
+
+let main() -> i32 {
+  let a : Vec2 = Vec2 { x: 30, y: 40 };
+  let b : Vec2 = Vec2 { x: 10, y: 15 };
+  let c : Vec2 = a - b;
+  std::printf("%d %d\n", c.x, c.y);
+  return 0;
+}

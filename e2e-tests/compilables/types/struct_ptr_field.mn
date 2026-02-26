@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      99
+# CHECK-NEXT: 7
+
+import std;
+
+struct Wrapper {
+  data: ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let p : ptr<i32> = alloc<i32>(1);
+  *p = 99;
+  let w : Wrapper = Wrapper { data: p, tag: 7 };
+  std::printf("%d\n", *(w.data));
+  std::printf("%d\n", w.tag);
+  free(p);
+  return 0;
+}

@@ -1,0 +1,14 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1.100000
+# CHECK-NEXT: 2.200000
+# CHECK-NEXT: 3.300000
+
+import std;
+
+let main() -> i32 {
+  let a : [f64; 3] = [1.1, 2.2, 3.3];
+  std::printf("%f\n", a[0]);
+  std::printf("%f\n", a[1]);
+  std::printf("%f\n", a[2]);
+  return 0;
+}

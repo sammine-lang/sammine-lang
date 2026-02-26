@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Incompatible
+
+let main() -> i32 {
+  let a : i32 = 5;
+  let b : f64 = 3.14;
+  let c = a + b;
+  return 0;
+}

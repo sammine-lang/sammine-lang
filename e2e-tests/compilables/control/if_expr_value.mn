@@ -1,0 +1,19 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 10
+# CHECK-NEXT: 20
+
+import std;
+
+let pick(x : i32) -> i32 {
+  if x > 0 {
+    10
+  } else {
+    20
+  }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", pick(5));
+  std::printf("%d\n", pick(0));
+  return 0;
+}

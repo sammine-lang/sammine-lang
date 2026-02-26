@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: -100
+# CHECK-NEXT: 100
+
+import std;
+
+let main() -> i32 {
+  let x : i64 = 100;
+  std::printf("%ld\n", -x);
+  std::printf("%ld\n", -(-x));
+  return 0;
+}

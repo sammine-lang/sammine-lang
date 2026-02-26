@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: t_eq
+# CHECK-NEXT: f_eq
+# CHECK-NEXT: t_neq
+
+import std;
+
+let main() -> i32 {
+  let t : bool = true;
+  let f : bool = false;
+  if t == true { std::printf("t_eq\n"); } else { std::printf("fail\n"); };
+  if f == false { std::printf("f_eq\n"); } else { std::printf("fail\n"); };
+  if t != false { std::printf("t_neq\n"); } else { std::printf("fail\n"); };
+  return 0;
+}

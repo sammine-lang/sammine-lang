@@ -1,0 +1,22 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      10
+# CHECK-NEXT: 42
+
+import std;
+
+struct Inner {
+  value: i32,
+};
+
+struct Outer {
+  inner: Inner,
+  x: i32,
+};
+
+let main() -> i32 {
+  let i : Inner = Inner { value: 42 };
+  let o : Outer = Outer { inner: i, x: 10 };
+  std::printf("%d\n", o.x);
+  std::printf("%d\n", o.inner.value);
+  return 0;
+}
