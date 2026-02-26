@@ -11,11 +11,11 @@ typeclass MySize<T> {
 }
 
 instance MySize<i32> {
-  let mysize() -> i64 { 4i64 }
+  let mysize() -> i64 { 4 }
 }
 
 instance MySize<i64> {
-  let mysize() -> i64 { 8i64 }
+  let mysize() -> i64 { 8 }
 }
 
 let main() -> i32 {

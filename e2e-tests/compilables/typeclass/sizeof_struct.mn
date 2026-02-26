@@ -10,7 +10,7 @@ reuse printf(fmt : ptr<char>, ...) -> i32;
 struct T { val : i32, };
 
 instance Sized<T> {
-  let sizeof() -> i64 { 99i64 }
+  let sizeof() -> i64 { 99 }
 }
 
 let main() -> i32 {

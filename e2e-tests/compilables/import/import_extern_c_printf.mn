@@ -4,6 +4,6 @@
 import has_extern_c as he;
 
 let main() -> i32 {
-  he::printf("%d\n", 99i32);
+  he::printf("%d\n", 99);
   return 0;
 }

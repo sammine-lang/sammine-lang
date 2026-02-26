@@ -20,7 +20,7 @@ instance DoubleSized<i32> {
 }
 
 instance Doubled<i32> {
-  let doubled() -> i64 { 8i64 }
+  let doubled() -> i64 { 8 }
 }
 
 let main() -> i32 {

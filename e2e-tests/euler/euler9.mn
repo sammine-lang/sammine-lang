@@ -7,27 +7,27 @@
 import std;
 
 let check_b(a: i64, b: i64) -> i64 {
-  let c : i64 = 1000i64 - a - b;
+  let c : i64 = 1000 - a - b;
   if b >= c {
-    0i64
+    0
   } else if a * a + b * b == c * c {
     a * b * c
   } else {
-    check_b(a, b + 1i64)
+    check_b(a, b + 1)
   }
 }
 
 let check_a(a: i64) -> i64 {
-  let result : i64 = check_b(a, a + 1i64);
-  if result > 0i64 {
+  let result : i64 = check_b(a, a + 1);
+  if result > 0 {
     result
   } else {
-    check_a(a + 1i64)
+    check_a(a + 1)
   }
 }
 
 let main() -> i32 {
-  let result : i64 = check_a(1i64);
+  let result : i64 = check_a(1);
   std::printf("%lld\n", result);
   return 0;
 }

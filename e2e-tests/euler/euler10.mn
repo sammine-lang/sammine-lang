@@ -7,34 +7,34 @@ import std;
 
 let is_prime_h(n: i64, d: i64) -> i64 {
   if d * d > n {
-    1i64
-  } else if n % d == 0i64 {
-    0i64
+    1
+  } else if n % d == 0 {
+    0
   } else {
-    is_prime_h(n, d + 1i64)
+    is_prime_h(n, d + 1)
   }
 }
 
 let is_prime(n: i64) -> i64 {
-  if n < 2i64 {
-    0i64
+  if n < 2 {
+    0
   } else {
-    is_prime_h(n, 2i64)
+    is_prime_h(n, 2)
   }
 }
 
 let sum_primes(n: i64, limit: i64, acc: i64) -> i64 {
   if n >= limit {
     acc
-  } else if is_prime(n) > 0i64 {
-    sum_primes(n + 1i64, limit, acc + n)
+  } else if is_prime(n) > 0 {
+    sum_primes(n + 1, limit, acc + n)
   } else {
-    sum_primes(n + 1i64, limit, acc)
+    sum_primes(n + 1, limit, acc)
   }
 }
 
 let main() -> i32 {
-  let result : i64 = sum_primes(2i64, 2000000i64, 0i64);
+  let result : i64 = sum_primes(2, 2000000, 0);
   std::printf("%lld\n", result);
   0
 }
