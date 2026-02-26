@@ -1,13 +1,21 @@
-# RUN: %sammine --file %full %O
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1
+# CHECK-NEXT: 0
+# CHECK-NEXT: 1
+
+import std;
 
 let even(x : i32) -> i32 {
   if x % 2 == 0 {
-    return 0;
-  } else {
     return 1;
+  } else {
+    return 0;
   };
-
 }
+
 let main() -> i32 {
+  std::printf("%d\n", even(4));
+  std::printf("%d\n", even(7));
+  std::printf("%d\n", even(0));
   return 0;
 }

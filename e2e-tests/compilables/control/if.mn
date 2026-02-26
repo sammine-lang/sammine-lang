@@ -1,10 +1,19 @@
-# RUN: %sammine --file %full %O --check --diagnostics
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 2
+# CHECK-NEXT: 3
 
-# this is a function
+import std;
+
 let f(x : i32) -> i32 {
   if x > 0 {
     2
   } else {
     3
   }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", f(5));
+  std::printf("%d\n", f(0));
+  return 0;
 }

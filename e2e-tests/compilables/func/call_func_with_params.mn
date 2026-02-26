@@ -1,10 +1,14 @@
-# RUN: %sammine --file %full %O  --diagnostics
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+
+import std;
+
 let foo(i: i32) -> i32 {
   return i;
 }
 
 let main() -> i32 {
-  let i : i32 = 0;
-  foo(i);
+  let result : i32 = foo(42);
+  std::printf("%d\n", result);
   return 0;
 }

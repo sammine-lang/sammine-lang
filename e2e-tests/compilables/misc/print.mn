@@ -1,5 +1,0 @@
-# RUN: %sammine --file %full %O --check --diagnostics
-let main() -> i32 {
-  # add sth like print here
-  return 0;
-}

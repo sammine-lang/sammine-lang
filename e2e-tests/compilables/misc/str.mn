@@ -1,5 +1,10 @@
-# RUN: %sammine --file %full %O  --check --diagnostics
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: abc
+
+import std;
+
 let main() -> i32 {
-    let x = "abc";
-    return 0;
+  let x = "abc";
+  std::printf("%s\n", x);
+  return 0;
 }

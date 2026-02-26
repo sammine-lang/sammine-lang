@@ -1,3 +1,13 @@
-# RUN: ! %sammine --file %full %O   --diagnostics
-fn f() {}
-fn f() {}
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: has been introduced before
+let f() -> i32 {
+  return 0;
+}
+
+let f() -> i32 {
+  return 1;
+}
+
+let main() -> i32 {
+  return 0;
+}
