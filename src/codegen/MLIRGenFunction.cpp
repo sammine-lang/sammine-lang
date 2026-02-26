@@ -387,6 +387,10 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
 }
 
 mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
+  // Enum constructor — handled separately
+  if (ast->is_enum_constructor)
+    return emitEnumConstructor(ast);
+
   auto location = loc(ast);
 
   // Emit arguments

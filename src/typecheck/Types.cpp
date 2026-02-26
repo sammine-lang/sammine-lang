@@ -55,6 +55,21 @@ StructType::get_field_index(const std::string &field) const {
 }
 Type StructType::get_field_type(size_t idx) const { return field_types[idx]; }
 
+EnumType::EnumType(sammine_util::QualifiedName name,
+                   std::vector<VariantInfo> variants)
+    : name(std::move(name)), variants(std::move(variants)) {}
+bool EnumType::operator==(const EnumType &t) const {
+  return name.mangled() == t.name.mangled(); // nominal typing
+}
+std::optional<size_t>
+EnumType::get_variant_index(const std::string &variant_name) const {
+  for (size_t i = 0; i < variants.size(); i++) {
+    if (variants[i].name == variant_name)
+      return i;
+  }
+  return std::nullopt;
+}
+
 Type Type::Function(std::vector<Type> params, bool var_arg) {
   return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
@@ -78,6 +93,7 @@ bool Type::operator==(const Type &other) const {
       this->type_kind == TypeKind::Pointer ||
       this->type_kind == TypeKind::Array ||
       this->type_kind == TypeKind::Struct ||
+      this->type_kind == TypeKind::Enum ||
       this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 

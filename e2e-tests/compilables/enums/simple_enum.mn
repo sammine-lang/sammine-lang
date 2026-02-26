@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 0
+
+import std;
+
+enum Color = Red | Green | Blue;
+
+let main() -> i32 {
+  let c: Color = Color::Green;
+  std::printf("%d\n", 0);
+  return 0;
+}

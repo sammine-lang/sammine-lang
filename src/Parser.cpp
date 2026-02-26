@@ -99,7 +99,7 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
 auto Parser::ParseDefinition() -> p<DefinitionAST> {
   auto result = tryParsers<DefinitionAST>(
       &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
-      &Parser::ParseStructDef, &Parser::ParseFuncDef);
+      &Parser::ParseStructDef, &Parser::ParseEnumDef, &Parser::ParseFuncDef);
   if (result.failed() && result.node)
     result.node->pe = true;
   return result;
@@ -179,6 +179,78 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
           SUCCESS};
 }
 
+// enum Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
+auto Parser::ParseEnumDef() -> p<DefinitionAST> {
+  auto enum_tok = expect(TokEnum);
+  if (!enum_tok)
+    return {nullptr, NONCOMMITTED};
+
+  REQUIRE(id, TokID, "Expected an identifier after 'enum'",
+          enum_tok->get_location(), {nullptr, FAILED});
+
+  REQUIRE(_eq, TokASSIGN,
+          fmt::format("Expected '=' after enum name '{}'", id->lexeme),
+          id->get_location(), {nullptr, FAILED});
+
+  // Parse variants separated by |
+  std::vector<EnumVariantDef> variants;
+  while (!tokStream->isEnd()) {
+    auto variant_id = expect(TokID);
+    if (!variant_id) {
+      imm_error("Expected variant name in enum definition",
+                variants.empty() ? id->get_location()
+                                 : variants.back().location);
+      return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
+    }
+
+    EnumVariantDef variant;
+    variant.name = variant_id->lexeme;
+    variant.location = variant_id->get_location();
+
+    // Optional payload: (Type, Type, ...)
+    if (expect(TokLeftParen)) {
+      if (tokStream->peek()->tok_type != TokRightParen) {
+        auto first_type = ParseTypeExpr();
+        if (!first_type) {
+          imm_error(fmt::format("Expected type in payload of variant '{}'",
+                                variant.name),
+                    variant.location);
+          return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
+        }
+        variant.payload_types.push_back(std::move(first_type));
+
+        while (expect(TokComma)) {
+          auto next_type = ParseTypeExpr();
+          if (!next_type) {
+            imm_error("Expected type after ',' in variant payload",
+                      variant.location);
+            return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+                    FAILED};
+          }
+          variant.payload_types.push_back(std::move(next_type));
+        }
+      }
+      REQUIRE(_rp, TokRightParen,
+              fmt::format("Expected ')' to close payload of variant '{}'",
+                          variant.name),
+              variant.location,
+              {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED});
+    }
+
+    variants.push_back(std::move(variant));
+
+    // | means more variants, otherwise done
+    if (!expect(TokORLogical))
+      break;
+  }
+
+  if (!expect(TokSemiColon))
+    imm_error("Expected ';' after enum definition",
+              variants.empty() ? id->get_location() : variants.back().location);
+
+  return {std::make_unique<EnumDefAST>(id, std::move(variants)), SUCCESS};
+}
+
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   // Try optional 'export' prefix
   auto export_tok = expect(TokenType::TokExport);
@@ -215,11 +287,21 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     return {std::move(node), result};
   }
 
+  // 'export enum' — delegate to enum parsing with export flag
+  if (is_exported && tokStream->peek()->tok_type == TokEnum) {
+    auto [node, result] = ParseEnumDef();
+    if (node) {
+      if (auto *ed = dynamic_cast<EnumDefAST *>(node.get()))
+        ed->is_exported = true;
+    }
+    return {std::move(node), result};
+  }
+
   // 'let' (possibly preceded by 'export')
   auto fn = expect(TokenType::TokLet);
   if (!fn) {
     if (is_exported) {
-      imm_error("Expected 'let' or 'struct' after 'export'",
+      imm_error("Expected 'let', 'struct', or 'enum' after 'export'",
                 export_tok->get_location());
       return {std::make_unique<FuncDefAST>(nullptr, nullptr), FAILED};
     }
@@ -895,8 +977,13 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     call->explicit_type_args = std::move(explicit_type_args);
     return {std::move(call), SUCCESS};
   }
-  if (result == NONCOMMITTED)
+  if (result == NONCOMMITTED) {
+    // Qualified name without args (e.g. Color::Red) — preserve as CallExprAST
+    // so the qualified name isn't lost
+    if (qn.is_qualified())
+      return {std::make_unique<CallExprAST>(qn, qn_loc), SUCCESS};
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
+  }
   auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
   call->explicit_type_args = std::move(explicit_type_args);
   return {std::move(call), FAILED};

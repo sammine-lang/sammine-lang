@@ -63,11 +63,13 @@ static void resolve_literal_type(ExprAST *expr, const Type &target) {
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
 
-  // First pass: register structs, typeclass declarations, and instances
+  // First pass: register structs, enums, typeclass declarations, and instances
   // so method bodies can reference any type/instance regardless of order.
   for (auto &def : ast->DefinitionVec) {
     if (auto *sd = dynamic_cast<StructDefAST *>(def.get()))
       sd->accept_vis(this);
+    else if (auto *ed = dynamic_cast<EnumDefAST *>(def.get()))
+      ed->accept_vis(this);
     else if (auto *tc = dynamic_cast<TypeClassDeclAST *>(def.get()))
       register_typeclass_decl(tc);
     else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get()))
@@ -246,10 +248,48 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   typename_to_type.registerNameT(ast->struct_name.mangled(), struct_type);
 }
 
+void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
+  std::vector<EnumType::VariantInfo> variant_infos;
+  bool had_error = false;
+
+  for (auto &variant : ast->variants) {
+    EnumType::VariantInfo info;
+    info.name = variant.name;
+    for (auto &type_expr : variant.payload_types) {
+      auto resolved = resolve_type_expr(type_expr.get());
+      if (resolved.type_kind == TypeKind::Poisoned)
+        had_error = true;
+      info.payload_types.push_back(resolved);
+    }
+    variant_infos.push_back(std::move(info));
+  }
+
+  if (had_error) {
+    ast->type = Type::Poisoned();
+    return;
+  }
+
+  auto enum_type =
+      Type::Enum(ast->enum_name, std::move(variant_infos));
+  ast->type = enum_type;
+  typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
+
+  // Register variant constructors (qualified access only: Enum::Variant)
+  auto &et = std::get<EnumType>(enum_type.type_data);
+  for (size_t i = 0; i < et.variant_count(); i++) {
+    auto &vi = et.get_variant(i);
+    variant_constructors[vi.name] = {enum_type, i};
+  }
+}
+
 void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
+
+  // Enum constructors are fully resolved during synthesis
+  if (ast->is_enum_constructor)
+    return;
 
   // Generic calls: trigger monomorphization if synthesis succeeded
   if (generic_func_defs.contains(ast->functionName.mangled())) {
@@ -569,6 +609,7 @@ void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(EnumDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -600,6 +641,7 @@ void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(EnumDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {}
@@ -672,6 +714,9 @@ Type BiTypeCheckerVisitor::synthesize(ExternAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(StructDefAST *ast) {
   return Type::NonExistent();
 }
+Type BiTypeCheckerVisitor::synthesize(EnumDefAST *ast) {
+  return Type::NonExistent();
+}
 Type BiTypeCheckerVisitor::synthesize(FuncDefAST *ast) {
   if (ast->synthesized())
     return ast->type;
@@ -700,6 +745,52 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
+
+  // --- Enum variant constructor (Enum::Variant syntax) ---
+  if (ast->functionName.is_qualified()) {
+    auto enum_type_opt = get_typename_type(ast->functionName.module);
+    if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
+      auto &enum_type = *enum_type_opt;
+      auto &et = std::get<EnumType>(enum_type.type_data);
+      auto variant_idx = et.get_variant_index(ast->functionName.name);
+      if (!variant_idx) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Enum '{}' has no variant '{}'",
+                        ast->functionName.module, ast->functionName.name));
+        return ast->type = Type::Poisoned();
+      }
+      auto &vi = et.get_variant(*variant_idx);
+
+      if (ast->arguments.size() != vi.payload_types.size()) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Enum variant '{}::{}' expects {} arguments, got {}",
+                        ast->functionName.module, vi.name,
+                        vi.payload_types.size(), ast->arguments.size()));
+        return ast->type = Type::Poisoned();
+      }
+
+      for (size_t i = 0; i < ast->arguments.size(); i++) {
+        auto arg_type = ast->arguments[i]->accept_synthesis(this);
+        if (!type_map_ordering.compatible_to_from(vi.payload_types[i],
+                                                  arg_type)) {
+          this->add_error(
+              ast->arguments[i]->get_location(),
+              fmt::format("Type mismatch in enum variant '{}::{}' argument {}: "
+                          "expected {}, got {}",
+                          ast->functionName.module, vi.name, i + 1,
+                          vi.payload_types[i].to_string(),
+                          arg_type.to_string()));
+          return ast->type = Type::Poisoned();
+        }
+      }
+
+      ast->is_enum_constructor = true;
+      ast->enum_variant_index = *variant_idx;
+      return ast->type = enum_type;
+    }
+  }
 
   // Try typeclass dispatch first (requires explicit type args)
   if (!ast->explicit_type_args.empty()) {

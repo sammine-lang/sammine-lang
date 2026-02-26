@@ -46,6 +46,7 @@ private:
                 llvm::ArrayRef<llvm::Value *> args, const llvm::Twine &name);
   void emitPartialApplication(CallExprAST *ast, llvm::Function *callee,
                               llvm::ArrayRef<llvm::Value *> boundArgs);
+  void emitEnumConstructor(CallExprAST *ast);
   void forward_declare(PrototypeAST *ast);
 
   // INFO: The collector is named Jasmine because she said on her discord status
@@ -69,6 +70,7 @@ public:
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
+  virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
@@ -103,6 +105,7 @@ public:
   virtual void postorder_walk(ExternAST *ast) override;
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(StructDefAST *ast) override;
+  virtual void postorder_walk(EnumDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override {}
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;

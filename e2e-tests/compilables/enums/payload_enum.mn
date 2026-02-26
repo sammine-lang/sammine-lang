@@ -1,0 +1,14 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 0
+
+import std;
+
+enum Shape = Circle(f64) | Rect(f64, f64) | Point;
+
+let main() -> i32 {
+  let s: Shape = Shape::Circle(3.14);
+  let r: Shape = Shape::Rect(2.0, 4.0);
+  let p: Shape = Shape::Point;
+  std::printf("%d\n", 0);
+  return 0;
+}

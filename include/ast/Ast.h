@@ -262,6 +262,32 @@ public:
   AST_NODE_METHODS("StructDefAST")
 };
 
+// enum Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
+struct EnumVariantDef {
+  std::string name;
+  std::vector<std::unique_ptr<TypeExprAST>> payload_types;
+  sammine_util::Location location;
+};
+
+class EnumDefAST : public DefinitionAST {
+public:
+  sammine_util::QualifiedName enum_name;
+  std::vector<EnumVariantDef> variants;
+  std::vector<std::string> type_params;
+  bool is_exported = false;
+
+  explicit EnumDefAST(std::shared_ptr<Token> enum_id,
+                      std::vector<EnumVariantDef> variants)
+      : variants(std::move(variants)) {
+    if (enum_id)
+      enum_name = sammine_util::QualifiedName::local(enum_id->lexeme);
+    this->join_location(enum_id);
+    for (auto &v : this->variants)
+      this->join_location(v.location);
+  }
+  AST_NODE_METHODS("EnumDefAST")
+};
+
 //! \brief A variable definition: "var x = expression;"
 class VarDefAST : public ExprAST {
 public:
@@ -372,6 +398,8 @@ public:
   std::unordered_map<std::string, Type> type_bindings;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   bool is_typeclass_call = false;
+  bool is_enum_constructor = false;
+  size_t enum_variant_index = 0;
   explicit CallExprAST(
       std::shared_ptr<Token> tok,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
@@ -432,6 +460,8 @@ public:
 class VariableExprAST : public ExprAST {
 public:
   std::string variableName;
+  bool is_enum_unit_variant = false;
+  size_t enum_variant_index = 0;
   VariableExprAST(std::shared_ptr<Token> var) {
     join_location(var);
     if (var)
