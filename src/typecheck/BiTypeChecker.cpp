@@ -303,6 +303,53 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
+  // Special case: array literal return — propagate function return type
+  // into array elements before they default to i32.
+  if (auto *arr_lit =
+          dynamic_cast<ArrayLiteralExprAST *>(ast->return_expr.get())) {
+    auto scope_fn = this->id_to_type.top().s.value();
+    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+    auto return_type = fn_type.get_return_type();
+    if (return_type.type_kind == TypeKind::Array) {
+      auto &arr_data = std::get<ArrayType>(return_type.type_data);
+      for (auto &elem : arr_lit->elements)
+        elem->accept_vis(this);
+      auto expected_elem = arr_data.get_element();
+      size_t first_error_idx = 0;
+      size_t error_count = 0;
+      for (size_t i = 0; i < arr_lit->elements.size(); i++) {
+        auto elem_type = arr_lit->elements[i]->accept_synthesis(this);
+        if (!type_map_ordering.compatible_to_from(expected_elem, elem_type)) {
+          if (error_count == 0)
+            first_error_idx = i;
+          error_count++;
+        } else {
+          resolve_literal_type(arr_lit->elements[i].get(), expected_elem);
+        }
+      }
+      if (error_count > 0) {
+        std::vector<std::string> msgs;
+        msgs.push_back(fmt::format(
+            "Array element type mismatch: expected {}, got {}",
+            expected_elem.to_string(),
+            arr_lit->elements[first_error_idx]
+                ->accept_synthesis(this)
+                .to_string()));
+        if (error_count > 1)
+          msgs.push_back(
+              fmt::format("{} more type mismatch {} in this array",
+                          error_count - 1,
+                          (error_count - 1 == 1) ? "error" : "errors"));
+        this->add_error(arr_lit->elements[first_error_idx]->get_location(),
+                        msgs);
+      }
+      arr_lit->type = return_type;
+      ast->accept_synthesis(this);
+      return;
+    }
+  }
+
+  // Normal case
   if (ast->return_expr)
     ast->return_expr->accept_vis(this);
   ast->accept_synthesis(this);
