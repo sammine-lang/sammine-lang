@@ -51,6 +51,7 @@ public:
   int strCounter = 0;
 
   std::map<std::string, mlir::LLVM::LLVMStructType> structTypes;
+  std::map<std::string, mlir::LLVM::LLVMStructType> enumTypes;
 
   mlir::LLVM::LLVMStructType closureType;
   std::map<std::string, std::string> closureWrappers;
@@ -134,6 +135,7 @@ public:
   mlir::Value emitFreeExpr(AST::FreeExprAST *ast);
   mlir::Value emitStructLiteralExpr(AST::StructLiteralExprAST *ast);
   mlir::Value emitFieldAccessExpr(AST::FieldAccessExprAST *ast);
+  mlir::Value emitEnumConstructor(AST::CallExprAST *ast);
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,

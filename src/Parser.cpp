@@ -963,8 +963,13 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     call->explicit_type_args = std::move(explicit_type_args);
     return {std::move(call), SUCCESS};
   }
-  if (result == NONCOMMITTED)
+  if (result == NONCOMMITTED) {
+    // Qualified name without args (e.g. Color::Red) — preserve as CallExprAST
+    // so the qualified name isn't lost
+    if (qn.is_qualified())
+      return {std::make_unique<CallExprAST>(qn, qn_loc), SUCCESS};
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
+  }
   auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
   call->explicit_type_args = std::move(explicit_type_args);
   return {std::move(call), FAILED};

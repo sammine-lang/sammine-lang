@@ -53,6 +53,29 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
         structTypes[st.get_name()] = structTy;
       }
+    } else if (auto *ed = dynamic_cast<AST::EnumDefAST *>(def.get())) {
+      if (ed->type.type_kind != TypeKind::Poisoned) {
+        auto &et = std::get<EnumType>(ed->type.type_data);
+        auto name = et.get_name().mangled();
+        // Compute max payload size across all variants
+        int64_t max_payload_size = 0;
+        for (auto &vi : et.get_variants()) {
+          int64_t variant_size = 0;
+          for (auto &pt : vi.payload_types)
+            variant_size += getTypeSize(pt);
+          max_payload_size = std::max(max_payload_size, variant_size);
+        }
+        // Enum layout: { i32 tag, [N x i8] payload }
+        llvm::SmallVector<mlir::Type> fields;
+        fields.push_back(builder.getI32Type());
+        if (max_payload_size > 0)
+          fields.push_back(mlir::LLVM::LLVMArrayType::get(
+              builder.getI8Type(), max_payload_size));
+        auto enumTy = mlir::LLVM::LLVMStructType::getIdentified(
+            builder.getContext(), "sammine.enum." + name);
+        (void)enumTy.setBody(fields, /*isPacked=*/false);
+        enumTypes[name] = enumTy;
+      }
     } else if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get())) {
       if (!fd->Prototype->is_generic())
         forwardDeclareFunc(fd->Prototype.get());
@@ -167,7 +190,10 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     auto &st = std::get<StructType>(type.type_data);
     return structTypes.at(st.get_name());
   }
-  case TypeKind::Enum:
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(type.type_data);
+    return enumTypes.at(et.get_name().mangled());
+  }
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -379,6 +405,17 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
       size = llvm::alignTo(size, maxAlign);
     }
     return size;
+  }
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(type.type_data);
+    int64_t max_payload = 0;
+    for (auto &vi : et.get_variants()) {
+      int64_t variant_size = 0;
+      for (auto &pt : vi.payload_types)
+        variant_size += getTypeSize(pt);
+      max_payload = std::max(max_payload, variant_size);
+    }
+    return 4 + max_payload; // i32 tag + payload
   }
   default:
     sammine_util::abort(

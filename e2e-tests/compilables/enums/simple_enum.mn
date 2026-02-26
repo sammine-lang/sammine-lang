@@ -6,6 +6,7 @@ import std;
 enum Color = Red | Green | Blue;
 
 let main() -> i32 {
+  let c: Color = Color::Green;
   std::printf("%d\n", 0);
   return 0;
 }

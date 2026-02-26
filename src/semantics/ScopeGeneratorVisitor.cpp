@@ -151,6 +151,10 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
     return;
 
   if (ast->functionName.is_unresolved()) {
+    // Allow qualified names where the prefix is an enum name in scope
+    // (e.g. Color::Red) — variant resolution deferred to type checker
+    if (can_see(ast->functionName.module) == nameFound)
+      return;
     add_error(ast->get_location(),
               fmt::format("Module '{}' is not imported",
                           ast->functionName.module));
@@ -159,6 +163,9 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
 
   auto var_name = ast->functionName.mangled();
   if (can_see(var_name) == nameNotFound) {
+    if (ast->functionName.is_qualified() &&
+        can_see(ast->functionName.module) == nameFound)
+      return;
     add_error(
         ast->get_location(),
         fmt::format(

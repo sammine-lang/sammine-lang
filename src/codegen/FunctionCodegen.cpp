@@ -226,7 +226,50 @@ void CgVisitor::emitPartialApplication(CallExprAST *ast,
   ast->val = buildClosure(wrapper, envAlloca);
 }
 
+void CgVisitor::emitEnumConstructor(CallExprAST *ast) {
+  auto &et = std::get<EnumType>(ast->type.type_data);
+  auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
+
+  // Alloca the enum struct
+  auto *alloca = CodegenUtils::CreateEntryBlockAlloca(
+      getCurrentFunction(), "enum_tmp", enum_ty);
+
+  // Store the discriminant tag
+  auto *tag_ptr =
+      resPtr->Builder->CreateStructGEP(enum_ty, alloca, 0, "tag_ptr");
+  resPtr->Builder->CreateStore(
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
+                             ast->enum_variant_index),
+      tag_ptr);
+
+  // Store payload fields into the byte buffer
+  if (enum_ty->getNumElements() > 1) {
+    auto *payload_ptr =
+        resPtr->Builder->CreateStructGEP(enum_ty, alloca, 1, "payload_ptr");
+    auto &vi = et.get_variant(ast->enum_variant_index);
+    size_t byte_offset = 0;
+    for (size_t i = 0; i < ast->arguments.size(); i++) {
+      auto *field_ty = type_converter.get_type(vi.payload_types[i]);
+      auto *dest = resPtr->Builder->CreateConstGEP1_64(
+          llvm::Type::getInt8Ty(*resPtr->Context), payload_ptr, byte_offset,
+          "field_ptr");
+      resPtr->Builder->CreateStore(ast->arguments[i]->val, dest);
+      byte_offset +=
+          resPtr->Module->getDataLayout().getTypeAllocSize(field_ty);
+    }
+  }
+
+  // Load and return the complete enum value
+  ast->val = resPtr->Builder->CreateLoad(enum_ty, alloca, "enum_val");
+}
+
 void CgVisitor::postorder_walk(CallExprAST *ast) {
+  // Enum payload variant constructor
+  if (ast->is_enum_constructor) {
+    emitEnumConstructor(ast);
+    return;
+  }
+
   // Collect argument values
   std::vector<llvm::Value *> ArgsVector;
   for (auto &arg : ast->arguments)

@@ -44,8 +44,15 @@ llvm::Type *TypeConverter::get_type(Type t) {
         fmt::format("Struct '{}' not registered in TypeConverter",
                     st.get_name()));
   }
-  case TypeKind::Enum:
-    sammine_util::abort("Enum codegen not yet implemented");
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(t.type_data);
+    auto *cached = get_enum_type(et.get_name().mangled());
+    if (cached)
+      return cached;
+    sammine_util::abort(
+        fmt::format("Enum '{}' not registered in TypeConverter",
+                    et.get_name().display()));
+  }
   case TypeKind::Never:
     sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:

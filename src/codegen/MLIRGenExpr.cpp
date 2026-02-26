@@ -647,6 +647,53 @@ MLIRGenImpl::emitFieldAccessExpr(AST::FieldAccessExprAST *ast) {
                                              objVal, fieldIdx.value());
 }
 
+mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
+  auto location = loc(ast);
+  auto &et = std::get<EnumType>(ast->type.type_data);
+  auto enumTy = enumTypes.at(et.get_name().mangled());
+
+  // Alloca the enum struct
+  auto one = mlir::arith::ConstantIntOp::create(builder, location,
+                                                  builder.getI64Type(), 1);
+  auto alloca = mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
+                                               enumTy, one);
+
+  // Store the discriminant tag
+  auto tagVal = mlir::arith::ConstantIntOp::create(
+      builder, location, builder.getI32Type(),
+      static_cast<int64_t>(ast->enum_variant_index));
+  auto tagPtr = mlir::LLVM::GEPOp::create(
+      builder, location, llvmPtrTy(), enumTy, alloca,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0});
+  mlir::LLVM::StoreOp::create(builder, location, tagVal, tagPtr);
+
+  // Store payload fields into the byte buffer
+  auto &vi = et.get_variant(ast->enum_variant_index);
+  if (!vi.payload_types.empty()) {
+    auto payloadPtr = mlir::LLVM::GEPOp::create(
+        builder, location, llvmPtrTy(), enumTy, alloca,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1});
+    int64_t byte_offset = 0;
+    for (size_t i = 0; i < ast->arguments.size(); i++) {
+      auto argVal = emitExpr(ast->arguments[i].get());
+      mlir::Value dest;
+      if (byte_offset == 0) {
+        dest = payloadPtr;
+      } else {
+        dest = mlir::LLVM::GEPOp::create(
+            builder, location, llvmPtrTy(), builder.getI8Type(), payloadPtr,
+            llvm::ArrayRef<mlir::LLVM::GEPArg>{
+                static_cast<int32_t>(byte_offset)});
+      }
+      mlir::LLVM::StoreOp::create(builder, location, argVal, dest);
+      byte_offset += getTypeSize(vi.payload_types[i]);
+    }
+  }
+
+  // Load and return the complete enum value
+  return mlir::LLVM::LoadOp::create(builder, location, enumTy, alloca);
+}
+
 // ===--- Bounds check and array comparison ---===
 
 void MLIRGenImpl::emitBoundsCheck(mlir::Value idx, size_t arrSize,

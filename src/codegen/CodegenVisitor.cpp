@@ -126,7 +126,7 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
                            false);
 
   // Forward-declare all functions so definition order doesn't matter.
-  // Struct types must be registered first since prototypes reference them.
+  // Struct and enum types must be registered first since prototypes reference them.
   for (auto &def : ast->DefinitionVec) {
     if (auto *sd = dynamic_cast<StructDefAST *>(def.get())) {
       if (sd->type.type_kind != TypeKind::Poisoned) {
@@ -140,6 +140,32 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
               *resPtr->Context, field_types,
               "sammine.struct." + st.get_name());
           type_converter.register_struct_type(st.get_name(), llvm_struct);
+        }
+      }
+    } else if (auto *ed = dynamic_cast<EnumDefAST *>(def.get())) {
+      if (ed->type.type_kind != TypeKind::Poisoned) {
+        auto &et = std::get<EnumType>(ed->type.type_data);
+        auto name = et.get_name().mangled();
+        if (!type_converter.get_enum_type(name)) {
+          // Compute max payload size across all variants
+          size_t max_payload_size = 0;
+          for (auto &vi : et.get_variants()) {
+            size_t variant_size = 0;
+            for (auto &pt : vi.payload_types)
+              variant_size +=
+                  resPtr->Module->getDataLayout().getTypeAllocSize(
+                      type_converter.get_type(pt));
+            max_payload_size = std::max(max_payload_size, variant_size);
+          }
+          // Enum layout: { i32 tag, [N x i8] payload }
+          std::vector<llvm::Type *> fields;
+          fields.push_back(llvm::Type::getInt32Ty(*resPtr->Context));
+          if (max_payload_size > 0)
+            fields.push_back(llvm::ArrayType::get(
+                llvm::Type::getInt8Ty(*resPtr->Context), max_payload_size));
+          auto *llvm_enum = llvm::StructType::create(
+              *resPtr->Context, fields, "sammine.enum." + name);
+          type_converter.register_enum_type(name, llvm_enum);
         }
       }
     }
@@ -235,7 +261,35 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
   }
 }
 void CgVisitor::postorder_walk(StructDefAST *ast) {}
-void CgVisitor::preorder_walk(EnumDefAST *ast) {}
+void CgVisitor::preorder_walk(EnumDefAST *ast) {
+  if (ast->type.type_kind == TypeKind::Poisoned)
+    return;
+
+  auto &et = std::get<EnumType>(ast->type.type_data);
+  auto name = et.get_name().mangled();
+
+  // Skip if already registered (e.g. by forward-declaration pass)
+  if (type_converter.get_enum_type(name))
+    return;
+
+  size_t max_payload_size = 0;
+  for (auto &vi : et.get_variants()) {
+    size_t variant_size = 0;
+    for (auto &pt : vi.payload_types)
+      variant_size += resPtr->Module->getDataLayout().getTypeAllocSize(
+          type_converter.get_type(pt));
+    max_payload_size = std::max(max_payload_size, variant_size);
+  }
+
+  std::vector<llvm::Type *> fields;
+  fields.push_back(llvm::Type::getInt32Ty(*resPtr->Context));
+  if (max_payload_size > 0)
+    fields.push_back(llvm::ArrayType::get(
+        llvm::Type::getInt8Ty(*resPtr->Context), max_payload_size));
+  auto *llvm_enum = llvm::StructType::create(*resPtr->Context, fields,
+                                             "sammine.enum." + name);
+  type_converter.register_enum_type(name, llvm_enum);
+}
 void CgVisitor::postorder_walk(EnumDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
@@ -426,6 +480,20 @@ void CgVisitor::preorder_walk(CharExprAST *ast) {
                                     static_cast<uint8_t>(ast->value));
 }
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
+  // Enum unit variant: build { tag, undef_payload }
+  if (ast->is_enum_unit_variant) {
+    auto &et = std::get<EnumType>(ast->type.type_data);
+    auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
+    llvm::Value *agg = llvm::UndefValue::get(enum_ty);
+    agg = resPtr->Builder->CreateInsertValue(
+        agg,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
+                               ast->enum_variant_index),
+        {0}, "enum_tag");
+    ast->val = agg;
+    return;
+  }
+
   auto *alloca = this->allocaValues.top()[ast->variableName];
 
   if (alloca) {

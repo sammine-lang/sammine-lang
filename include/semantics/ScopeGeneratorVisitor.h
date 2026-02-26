@@ -14,6 +14,8 @@ public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
+  // variant_name → enum_name (for tracking which enum owns each variant)
+  std::map<std::string, std::string> variant_to_enum;
   ScopeGeneratorVisitor() {
     scope_stack.push_context();
   }

@@ -219,23 +219,11 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   ast->type = enum_type;
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 
-  // Register variant constructors
+  // Register variant constructors (qualified access only: Enum::Variant)
   auto &et = std::get<EnumType>(enum_type.type_data);
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
     variant_constructors[vi.name] = {enum_type, i};
-
-    if (vi.payload_types.empty()) {
-      // Unit variant: register as the enum type value in id_to_type
-      id_to_type.registerNameT(vi.name, enum_type);
-    } else {
-      // Payload variant: register as a function (payload_types -> enum_type)
-      std::vector<Type> fn_types;
-      for (auto &pt : vi.payload_types)
-        fn_types.push_back(pt);
-      fn_types.push_back(enum_type);
-      id_to_type.registerNameT(vi.name, Type::Function(std::move(fn_types)));
-    }
   }
 }
 
@@ -243,6 +231,10 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   ast->accept_synthesis(this);
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
+
+  // Enum constructors are fully resolved during synthesis
+  if (ast->is_enum_constructor)
+    return;
 
   // If this is a generic call (successful or failed), skip normal arg checking
   if (generic_func_defs.contains(ast->functionName.mangled())) {
@@ -684,39 +676,50 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
-  // --- Enum payload variant constructor ---
-  auto vc_it = variant_constructors.find(ast->functionName.mangled());
-  if (vc_it != variant_constructors.end()) {
-    auto &[enum_type, variant_idx] = vc_it->second;
-    auto &et = std::get<EnumType>(enum_type.type_data);
-    auto &vi = et.get_variant(variant_idx);
-
-    if (ast->arguments.size() != vi.payload_types.size()) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Enum variant '{}' expects {} arguments, got {}",
-                      vi.name, vi.payload_types.size(),
-                      ast->arguments.size()));
-      return ast->type = Type::Poisoned();
-    }
-
-    for (size_t i = 0; i < ast->arguments.size(); i++) {
-      auto arg_type = ast->arguments[i]->accept_synthesis(this);
-      if (!type_map_ordering.compatible_to_from(vi.payload_types[i], arg_type)) {
+  // --- Enum variant constructor (Enum::Variant syntax) ---
+  if (ast->functionName.is_qualified()) {
+    auto enum_type_opt = get_typename_type(ast->functionName.module);
+    if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
+      auto &enum_type = *enum_type_opt;
+      auto &et = std::get<EnumType>(enum_type.type_data);
+      auto variant_idx = et.get_variant_index(ast->functionName.name);
+      if (!variant_idx) {
         this->add_error(
-            ast->arguments[i]->get_location(),
-            fmt::format("Type mismatch in enum variant '{}' argument {}: "
-                        "expected {}, got {}",
-                        vi.name, i + 1,
-                        vi.payload_types[i].to_string(),
-                        arg_type.to_string()));
+            ast->get_location(),
+            fmt::format("Enum '{}' has no variant '{}'",
+                        ast->functionName.module, ast->functionName.name));
         return ast->type = Type::Poisoned();
       }
-    }
+      auto &vi = et.get_variant(*variant_idx);
 
-    ast->is_enum_constructor = true;
-    ast->enum_variant_index = variant_idx;
-    return ast->type = enum_type;
+      if (ast->arguments.size() != vi.payload_types.size()) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Enum variant '{}::{}' expects {} arguments, got {}",
+                        ast->functionName.module, vi.name,
+                        vi.payload_types.size(), ast->arguments.size()));
+        return ast->type = Type::Poisoned();
+      }
+
+      for (size_t i = 0; i < ast->arguments.size(); i++) {
+        auto arg_type = ast->arguments[i]->accept_synthesis(this);
+        if (!type_map_ordering.compatible_to_from(vi.payload_types[i],
+                                                  arg_type)) {
+          this->add_error(
+              ast->arguments[i]->get_location(),
+              fmt::format("Type mismatch in enum variant '{}::{}' argument {}: "
+                          "expected {}, got {}",
+                          ast->functionName.module, vi.name, i + 1,
+                          vi.payload_types[i].to_string(),
+                          arg_type.to_string()));
+          return ast->type = Type::Poisoned();
+        }
+      }
+
+      ast->is_enum_constructor = true;
+      ast->enum_variant_index = *variant_idx;
+      return ast->type = enum_type;
+    }
   }
 
   // --- Type class method dispatch ---
@@ -1100,19 +1103,6 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->type = Type::Char();
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  // Check if this is an enum unit variant
-  auto vc_it = variant_constructors.find(ast->variableName);
-  if (vc_it != variant_constructors.end()) {
-    auto &[enum_type, variant_idx] = vc_it->second;
-    auto &et = std::get<EnumType>(enum_type.type_data);
-    auto &vi = et.get_variant(variant_idx);
-    if (vi.payload_types.empty()) {
-      ast->is_enum_unit_variant = true;
-      ast->enum_variant_index = variant_idx;
-      return ast->type = enum_type;
-    }
-  }
-
   ast->type = id_to_type.recursive_get_from_name(ast->variableName);
   LOG({
     fmt::print(stderr, "[typecheck] synthesize VariableExprAST: '{}' -> {}\n",
