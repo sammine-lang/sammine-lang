@@ -1060,9 +1060,11 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     return ast->type = Type::Never();
 
   // Both operands polymorphic and same kind: keep polymorphic, skip typeclass
+  // But NOT for comparison/logical operators, which must return Bool
   if (ast->LHS->type.is_polymorphic_numeric() &&
       ast->RHS->type.is_polymorphic_numeric() &&
-      ast->LHS->type.type_kind == ast->RHS->type.type_kind) {
+      ast->LHS->type.type_kind == ast->RHS->type.type_kind &&
+      !ast->Op->is_comparison() && !ast->Op->is_logical()) {
     return ast->type = ast->LHS->type;
   }
   // One polymorphic, one concrete: resolve polymorphic to concrete
