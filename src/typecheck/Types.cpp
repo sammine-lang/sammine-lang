@@ -5,16 +5,23 @@
 //! \file Types.cpp
 //! \brief Implements the core Type system for Sammine
 bool FunctionType::operator==(const FunctionType &t) const {
-  return total_types == t.total_types;
+  return param_types == t.param_types && *return_type == *t.return_type;
 }
+FunctionType::FunctionType(std::vector<Type> param_types, Type return_type,
+                           bool var_arg)
+    : param_types(std::move(param_types)),
+      return_type(std::make_shared<Type>(std::move(return_type))),
+      var_arg(var_arg) {}
 FunctionType::FunctionType(const std::vector<Type> &total_types, bool var_arg)
-    : total_types(total_types), var_arg(var_arg) {}
+    : param_types(total_types.begin(), total_types.end() - 1),
+      return_type(std::make_shared<Type>(total_types.back())),
+      var_arg(var_arg) {}
 
 std::span<const Type> FunctionType::get_params_types() const {
-  return std::span<const Type>(total_types.data(), total_types.size() - 1);
+  return std::span<const Type>(param_types);
 }
 
-Type FunctionType::get_return_type() const { return total_types.back(); }
+Type FunctionType::get_return_type() const { return *return_type; }
 
 PointerType::PointerType(Type pointee)
     : pointee(std::make_shared<Type>(std::move(pointee))) {}

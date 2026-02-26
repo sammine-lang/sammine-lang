@@ -70,15 +70,29 @@ Monomorphizer::clone_prototype(PrototypeAST *proto,
   return result;
 }
 
+std::vector<std::unique_ptr<ExprAST>> Monomorphizer::clone_expr_vec(
+    const std::vector<std::unique_ptr<ExprAST>> &exprs) {
+  std::vector<std::unique_ptr<ExprAST>> result;
+  result.reserve(exprs.size());
+  for (auto &e : exprs)
+    result.push_back(clone_expr(e.get()));
+  return result;
+}
+
 std::unique_ptr<BlockAST> Monomorphizer::clone_block(BlockAST *block) {
   if (!block)
     return nullptr;
   auto result = std::make_unique<BlockAST>();
-  for (auto &stmt : block->Statements)
-    result->Statements.push_back(clone_expr(stmt.get()));
+  result->Statements = clone_expr_vec(block->Statements);
   return result;
 }
 
+// Handled ExprAST subtypes (update when adding new ExprAST nodes):
+// NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
+// VariableExprAST, CallExprAST, BinaryExprAST, ReturnExprAST,
+// VarDefAST, IfExprAST, UnitExprAST, DerefExprAST, AddrOfExprAST,
+// AllocExprAST, FreeExprAST, ArrayLiteralExprAST, IndexExprAST,
+// LenExprAST, UnaryNegExprAST, StructLiteralExprAST, FieldAccessExprAST
 std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   if (!expr)
     return nullptr;
@@ -111,12 +125,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   if (auto *call = dynamic_cast<CallExprAST *>(expr)) {
-    std::vector<std::unique_ptr<ExprAST>> args;
-    for (auto &a : call->arguments)
-      args.push_back(clone_expr(a.get()));
-    auto result = std::make_unique<CallExprAST>(call->functionName,
-                                                call->get_location(),
-                                                std::move(args));
+    auto result = std::make_unique<CallExprAST>(
+        call->functionName, call->get_location(),
+        clone_expr_vec(call->arguments));
     for (auto &ta : call->explicit_type_args)
       result->explicit_type_args.push_back(clone_type_expr(ta.get()));
     return result;
@@ -181,10 +192,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   if (auto *arr_lit = dynamic_cast<ArrayLiteralExprAST *>(expr)) {
-    std::vector<std::unique_ptr<ExprAST>> elements;
-    for (auto &e : arr_lit->elements)
-      elements.push_back(clone_expr(e.get()));
-    return std::make_unique<ArrayLiteralExprAST>(std::move(elements));
+    return std::make_unique<ArrayLiteralExprAST>(
+        clone_expr_vec(arr_lit->elements));
   }
 
   if (auto *idx = dynamic_cast<IndexExprAST *>(expr)) {
@@ -203,11 +212,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   if (auto *sl = dynamic_cast<StructLiteralExprAST *>(expr)) {
-    std::vector<std::unique_ptr<ExprAST>> values;
-    for (auto &v : sl->field_values)
-      values.push_back(clone_expr(v.get()));
     return std::make_unique<StructLiteralExprAST>(
-        sl->struct_name, sl->get_location(), sl->field_names, std::move(values));
+        sl->struct_name, sl->get_location(), sl->field_names,
+        clone_expr_vec(sl->field_values));
   }
 
   if (auto *fa = dynamic_cast<FieldAccessExprAST *>(expr)) {

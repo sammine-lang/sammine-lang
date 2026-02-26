@@ -163,6 +163,20 @@ public:
   void register_typeclass_instance(TypeClassInstanceAST *ast);
   void register_builtin_op_instances();
 
+  // Call expression synthesis helpers
+  Type synthesize_typeclass_call(CallExprAST *ast);
+  Type synthesize_generic_call(CallExprAST *ast);
+  Type synthesize_normal_call(CallExprAST *ast);
+
+  // Binary expression synthesis helper
+  Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
+                                  const Type &rhs_type);
+
+  // VarDef array checking helper
+  bool check_array_literal_against_annotation(VarDefAST *ast,
+                                              ArrayLiteralExprAST *arr_lit,
+                                              const ArrayType &arr_type);
+
   // pre order
 
   virtual void preorder_walk(ProgramAST *ast) override;

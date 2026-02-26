@@ -27,6 +27,8 @@ private:
   clone_prototype(PrototypeAST *proto, const std::string &mangled_name);
   std::unique_ptr<BlockAST> clone_block(BlockAST *block);
   std::unique_ptr<ExprAST> clone_expr(ExprAST *expr);
+  std::vector<std::unique_ptr<ExprAST>>
+  clone_expr_vec(const std::vector<std::unique_ptr<ExprAST>> &exprs);
 
   // Helper to get the concrete type name for a type param
   std::string resolve_type_name(const std::string &name) const;

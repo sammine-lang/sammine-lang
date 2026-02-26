@@ -34,7 +34,8 @@ class FunctionType;
 
 using TypePtr = std::shared_ptr<Type>;
 class FunctionType {
-  std::vector<Type> total_types;
+  std::vector<Type> param_types;
+  TypePtr return_type; // shared_ptr because Type is incomplete here
   bool var_arg = false;
 
 public:
@@ -44,6 +45,9 @@ public:
   Type get_return_type() const;
   bool is_var_arg() const { return var_arg; }
 
+  FunctionType(std::vector<Type> param_types, Type return_type,
+               bool var_arg = false);
+  // Legacy: total_types = [params..., return_type]
   FunctionType(const std::vector<Type> &total_types, bool var_arg = false);
 };
 class PointerType {
