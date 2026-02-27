@@ -128,6 +128,14 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       }
     }
 
+    // Generic enum variant without explicit type args
+    // (e.g., Some(42) rewritten to Option::Some(42) by scope generator)
+    if (!enum_type_opt) {
+      auto vc_it = variant_constructors.find(ast->functionName.name);
+      if (vc_it != variant_constructors.end())
+        enum_type_opt = vc_it->second.first;
+    }
+
     if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
       auto &enum_type = *enum_type_opt;
       auto &et = std::get<EnumType>(enum_type.type_data);
@@ -168,33 +176,6 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       ast->is_enum_constructor = true;
       ast->enum_variant_index = *variant_idx;
       return ast->type = enum_type;
-    }
-  }
-
-  // Try unqualified enum variant constructor (e.g., Some(42))
-  if (!ast->functionName.is_qualified()) {
-    auto it = variant_constructors.find(ast->functionName.name);
-    if (it != variant_constructors.end()) {
-      auto &[enum_type, variant_idx] = it->second;
-      auto &et = std::get<EnumType>(enum_type.type_data);
-      auto &vi = et.get_variant(variant_idx);
-
-      if (ast->arguments.size() == vi.payload_types.size()) {
-        bool ok = true;
-        for (size_t i = 0; i < ast->arguments.size(); i++) {
-          auto arg_type = ast->arguments[i]->accept_synthesis(this);
-          if (!type_map_ordering.compatible_to_from(vi.payload_types[i],
-                                                    arg_type)) {
-            ok = false;
-            break;
-          }
-        }
-        if (ok) {
-          ast->is_enum_constructor = true;
-          ast->enum_variant_index = variant_idx;
-          return ast->type = enum_type;
-        }
-      }
     }
   }
 

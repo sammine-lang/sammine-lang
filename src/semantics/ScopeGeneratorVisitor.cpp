@@ -34,8 +34,10 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
       loc = enum_def->get_location();
       // Register variant names for unqualified access (e.g., Red, Some, None)
       for (auto &variant : enum_def->variants) {
-        if (can_see(variant.name) == nameNotFound)
+        if (can_see(variant.name) == nameNotFound) {
           register_name(variant.name, enum_def->get_location());
+          variant_to_enum[variant.name] = enum_def->enum_name.name;
+        }
       }
     } else if (llvm::isa<TypeClassDeclAST>(def.get()) ||
                llvm::isa<TypeClassInstanceAST>(def.get())) {
@@ -166,6 +168,16 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
               fmt::format("Module '{}' is not imported",
                           ast->functionName.module));
     return;
+  }
+
+  // Rewrite unqualified enum variant names to qualified form
+  if (!ast->functionName.is_qualified()) {
+    auto it = variant_to_enum.find(ast->functionName.name);
+    if (it != variant_to_enum.end()) {
+      ast->functionName = sammine_util::QualifiedName::qualified(
+          it->second, ast->functionName.name);
+      return;
+    }
   }
 
   auto var_name = ast->functionName.mangled();
