@@ -28,7 +28,7 @@ struct QualifiedName {
   std::string mangled() const {
     if (module.empty())
       return name;
-    return module + "$" + name;
+    return module + "__" + name;
   }
 
   std::string display() const {
@@ -37,12 +37,12 @@ struct QualifiedName {
     return module + "::" + name;
   }
 
-  // Parse a mangled "module$name" string back into a QualifiedName
+  // Parse a mangled "module__name" string back into a QualifiedName
   static QualifiedName from_mangled(const std::string &mangled) {
-    auto pos = mangled.find('$');
+    auto pos = mangled.find("__");
     if (pos == std::string::npos)
       return local(mangled);
-    return qualified(mangled.substr(0, pos), mangled.substr(pos + 1));
+    return qualified(mangled.substr(0, pos), mangled.substr(pos + 2));
   }
 
   // Return a copy with module set (if not already qualified)

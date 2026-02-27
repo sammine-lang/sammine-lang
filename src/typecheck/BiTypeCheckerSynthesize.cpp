@@ -200,7 +200,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   if (concrete.type_kind == TypeKind::Poisoned)
     return ast->type = Type::Poisoned();
 
-  std::string key = class_name + "$" + concrete.to_string();
+  std::string key = class_name + "__" + concrete.to_string();
   auto inst_it = type_class_instances.find(key);
   if (inst_it == type_class_instances.end()) {
     add_error(ast->get_location(),
@@ -504,7 +504,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   auto it = op_to_class.find(ast->Op->tok_type);
   if (it != op_to_class.end()) {
     auto &[class_name, method_name] = it->second;
-    std::string key = class_name + "$" + lhs_type.to_string();
+    std::string key = class_name + "__" + lhs_type.to_string();
     auto inst_it = type_class_instances.find(key);
     if (inst_it == type_class_instances.end()) {
       add_error(ast->Op->get_location(),

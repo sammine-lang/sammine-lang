@@ -583,14 +583,14 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.name;
-    std::string mangled = ast->class_name + "$" +
-                          ast->concrete_type.to_string() + "$" + original_name;
+    std::string mangled = ast->class_name + "__" +
+                          ast->concrete_type.to_string() + "__" + original_name;
     method->Prototype->functionName = sammine_util::QualifiedName::local(mangled);
     inst_info.method_mangled_names[original_name] = mangled;
   }
 
   std::string key =
-      ast->class_name + "$" + ast->concrete_type.to_string();
+      ast->class_name + "__" + ast->concrete_type.to_string();
   type_class_instances[key] = std::move(inst_info);
 }
 
@@ -614,7 +614,7 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
 
   for (auto &e : entries) {
     std::string type_str = e.type.to_string();
-    std::string key = std::string(e.class_name) + "$" + type_str;
+    std::string key = std::string(e.class_name) + "__" + type_str;
     if (type_class_instances.contains(key))
       continue;
 
@@ -622,7 +622,7 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
     info.class_name = e.class_name;
     info.concrete_type = e.type;
     std::string mangled =
-        std::string(e.class_name) + "$" + type_str + "$" + e.method_name;
+        std::string(e.class_name) + "__" + type_str + "__" + e.method_name;
     info.method_mangled_names[e.method_name] = mangled;
     type_class_instances[key] = std::move(info);
   }
