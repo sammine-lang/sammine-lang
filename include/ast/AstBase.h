@@ -9,6 +9,7 @@
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
+#include "llvm/Support/Casting.h"
 #include <stack>
 
 //! \file AstBase.h
@@ -21,6 +22,50 @@ class Function;
 
 namespace sammine_lang {
 namespace AST {
+
+enum class NodeKind {
+  // Direct AstBase children (not ExprAST, not DefinitionAST)
+  ProgramAST,
+  PrototypeAST,
+  TypedVarAST,
+  BlockAST,
+
+  // ExprAST subclasses [FirstExpr..LastExpr]
+  FirstExpr,
+  VarDefAST = FirstExpr,
+  NumberExprAST,
+  StringExprAST,
+  BoolExprAST,
+  CharExprAST,
+  BinaryExprAST,
+  CallExprAST,
+  ReturnExprAST,
+  UnitExprAST,
+  VariableExprAST,
+  IfExprAST,
+  DerefExprAST,
+  AddrOfExprAST,
+  AllocExprAST,
+  FreeExprAST,
+  ArrayLiteralExprAST,
+  IndexExprAST,
+  LenExprAST,
+  UnaryNegExprAST,
+  StructLiteralExprAST,
+  FieldAccessExprAST,
+  LastExpr = FieldAccessExprAST,
+
+  // DefinitionAST subclasses [FirstDef..LastDef]
+  FirstDef,
+  FuncDefAST = FirstDef,
+  ExternAST,
+  StructDefAST,
+  EnumDefAST,
+  TypeClassDeclAST,
+  TypeClassInstanceAST,
+  LastDef = TypeClassInstanceAST,
+};
+
 class Visitable;
 class AstBase;
 class ASTVisitor;
@@ -264,6 +309,8 @@ public:
 };
 
 class AstBase : public Visitable {
+  NodeKind kind;
+
   void change_location(sammine_util::Location loc) {
     if (first_location) {
       this->location = loc;
@@ -278,6 +325,8 @@ protected:
   sammine_util::Location location;
 
 public:
+  AstBase(NodeKind kind) : kind(kind) {}
+  NodeKind getKind() const { return kind; }
   // INFO: Parser error
   bool pe = false;
   llvm::Value *val;
