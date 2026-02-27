@@ -351,7 +351,7 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   if (!initVal)
     return nullptr;
 
-  // Arrays: the literal already returns a memref<NxT>, register it directly
+  // Arrays: the literal already returns an !llvm.ptr, register it directly
   if (ast->type.type_kind == TypeKind::Array) {
     symbolTable.registerNameT(ast->TypedVar->name, initVal);
     return initVal;

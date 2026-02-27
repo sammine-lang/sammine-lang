@@ -4,7 +4,6 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "llvm/ADT/SmallVector.h"
 
@@ -150,18 +149,13 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   }
 
   // Bind parameters in symbol table
-  // All non-array params get llvm.alloca + llvm.store (uniform model)
+  // All params get llvm.alloca + llvm.store (uniform model)
   for (size_t i = 0; i < ast->Prototype->parameterVectors.size(); ++i) {
     auto &param = ast->Prototype->parameterVectors[i];
     auto argVal = entryBlock.getArgument(i);
-    if (mlir::isa<mlir::MemRefType>(argVal.getType())) {
-      // Array/sret params: register memref directly
-      symbolTable.registerNameT(param->name, argVal);
-    } else {
-      auto alloca = emitAllocaOne(argVal.getType(), location);
-      mlir::LLVM::StoreOp::create(builder, location, argVal, alloca);
-      symbolTable.registerNameT(param->name, alloca);
-    }
+    auto alloca = emitAllocaOne(argVal.getType(), location);
+    mlir::LLVM::StoreOp::create(builder, location, argVal, alloca);
+    symbolTable.registerNameT(param->name, alloca);
   }
 
   // If sret, the last block argument is the output buffer
@@ -177,9 +171,14 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   if (currentBlock->empty() ||
       !currentBlock->back().hasTrait<mlir::OpTrait::IsTerminator>()) {
     if (isSret && bodyResult) {
-      // sret: copy array into output buffer, return void
-      mlir::memref::CopyOp::create(builder, location, bodyResult,
-                                    currentSretBuffer);
+      // sret: load whole array from source, store into output buffer
+      auto arrMlirType = convertType(
+          std::get<FunctionType>(ast->Prototype->type.type_data)
+              .get_return_type());
+      auto arrVal = mlir::LLVM::LoadOp::create(builder, location,
+                                                arrMlirType, bodyResult);
+      mlir::LLVM::StoreOp::create(builder, location, arrVal,
+                                   currentSretBuffer);
       mlir::func::ReturnOp::create(builder, location);
     } else if (funcType.getNumResults() == 0) {
       mlir::func::ReturnOp::create(builder, location);
@@ -393,12 +392,17 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
 
   auto location = loc(ast);
 
-  // Emit arguments
+  // Emit arguments — array args arrive as !llvm.ptr (alloca), load to get value
   llvm::SmallVector<mlir::Value, 4> operands;
   for (auto &arg : ast->arguments) {
     auto val = emitExpr(arg.get());
-    if (val)
+    if (val) {
+      if (arg->type.type_kind == TypeKind::Array &&
+          mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()))
+        val = mlir::LLVM::LoadOp::create(builder, location,
+                                          convertType(arg->type), val);
       operands.push_back(val);
+    }
   }
 
   // Resolve callee name — use the qualified name directly, matching
@@ -420,9 +424,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   if (theModule.lookupSymbol(callee) && !ast->is_partial) {
     // sret: if call returns an array, allocate local buffer, pass as extra arg
     if (ast->type.type_kind == TypeKind::Array) {
-      auto arrMlirType = mlir::cast<mlir::MemRefType>(convertType(ast->type));
-      auto localBuf = mlir::memref::AllocaOp::create(
-          builder, location, arrMlirType);
+      auto arrMlirType = convertType(ast->type);
+      auto localBuf = emitAllocaOne(arrMlirType, location);
       operands.push_back(localBuf);
       mlir::func::CallOp::create(
           builder, location, llvm::StringRef(callee),
@@ -468,9 +471,12 @@ mlir::Value MLIRGenImpl::emitReturnExpr(AST::ReturnExprAST *ast) {
   if (ast->return_expr) {
     auto val = emitExpr(ast->return_expr.get());
     if (currentSretBuffer && val) {
-      // sret: copy array into output buffer, return void
-      mlir::memref::CopyOp::create(builder, location, val,
-                                    currentSretBuffer);
+      // sret: load whole array from source, store into output buffer
+      auto arrMlirType = convertType(ast->return_expr->type);
+      auto arrVal = mlir::LLVM::LoadOp::create(builder, location,
+                                                arrMlirType, val);
+      mlir::LLVM::StoreOp::create(builder, location, arrVal,
+                                   currentSretBuffer);
       mlir::func::ReturnOp::create(builder, location);
     } else if (val) {
       mlir::func::ReturnOp::create(builder, location,

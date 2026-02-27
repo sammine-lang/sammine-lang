@@ -127,7 +127,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   auto location = loc(ast);
 
-  // Assignment: store RHS into LHS's memref
+  // Assignment: store RHS into LHS's alloca
   if (ast->Op->is_assign()) {
     // *p = val
     if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast->LHS.get())) {

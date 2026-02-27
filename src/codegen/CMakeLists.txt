@@ -15,9 +15,9 @@ target_include_directories(MLIRBackend PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INC
 target_link_libraries(MLIRBackend PRIVATE
   project_options
   MLIRIR MLIRParser MLIRSupport MLIRPass
-  MLIRArithDialect MLIRFuncDialect MLIRSCFDialect MLIRMemRefDialect
+  MLIRArithDialect MLIRFuncDialect MLIRSCFDialect
   MLIRArithToLLVM MLIRFuncToLLVM
-  MLIRSCFToControlFlow MLIRControlFlowToLLVM MLIRMemRefToLLVM
+  MLIRSCFToControlFlow MLIRControlFlowToLLVM
   MLIRReconcileUnrealizedCasts
   MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
   MLIRLLVMDialect
@@ -28,9 +28,9 @@ add_library(_codegen)
 target_include_directories(_codegen PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 target_link_libraries(_codegen SammineJIT CodegenVisitor TypeConverter MLIRBackend LLVMSupport ${llvm_libs} ${llvm_targets}
   MLIRIR MLIRParser MLIRSupport MLIRPass
-  MLIRArithDialect MLIRFuncDialect MLIRSCFDialect MLIRMemRefDialect
+  MLIRArithDialect MLIRFuncDialect MLIRSCFDialect
   MLIRArithToLLVM MLIRFuncToLLVM
-  MLIRSCFToControlFlow MLIRControlFlowToLLVM MLIRMemRefToLLVM
+  MLIRSCFToControlFlow MLIRControlFlowToLLVM
   MLIRReconcileUnrealizedCasts
   MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
   MLIRLLVMDialect
