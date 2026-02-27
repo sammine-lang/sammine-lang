@@ -26,6 +26,7 @@
 - Built-in types registered in `enter_new_scope()`: i32, i64, f64, bool, unit
 - All scope lookups use `QualifiedName::mangled()`, all error messages use `QualifiedName::display()`
 - Unresolved qualified names (unknown aliases) are checked early and produce "Module 'x' is not imported" errors
+- **Enum variant invariant**: all enum variant calls arrive pre-qualified by the scope generator (e.g. `Some(42)` → `Option::Some(42)`). The type checker does NOT resolve unqualified variant names — `synthesize(CallExprAST*)` only handles the qualified `Enum::Variant` path
 - `resolve_type_expr(TypeExprAST*)` resolves structured type AST nodes:
   - `nullptr` → `Type::NonExistent()`
   - `SimpleTypeExprAST` → check unresolved, then lookup `.mangled()` in `typename_to_type`

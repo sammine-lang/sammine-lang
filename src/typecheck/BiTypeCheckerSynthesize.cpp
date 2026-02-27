@@ -88,7 +88,11 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
-  // --- Enum variant constructor (Enum::Variant syntax) ---
+  // INFO: All enum variant calls arrive here in qualified form (Enum::Variant).
+  // The scope generator rewrites unqualified variant names (e.g. Some(42)) to
+  // qualified form (e.g. Option::Some(42)) via variant_to_enum. The type checker
+  // does NOT resolve unqualified enum variant names — that is the scope
+  // generator's responsibility.
   if (ast->functionName.is_qualified()) {
     auto enum_type_opt = get_typename_type(ast->functionName.module);
 
