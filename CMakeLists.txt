@@ -74,32 +74,30 @@ add_subdirectory(tools)
 set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/std.mn -O ${STDLIB_DIR}
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/std.mn
-  COMMENT "Compiling stdlib/std.mn"
-)
+set(STDLIB_COMPILED std str)
+set(STDLIB_COPIED definitions.mn)
 
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/str.o ${STDLIB_DIR}/str.mni
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/str.mn -O ${STDLIB_DIR}
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/str.mn
-  COMMENT "Compiling stdlib/str.mn"
-)
+foreach(mod ${STDLIB_COMPILED})
+  add_custom_command(
+    OUTPUT ${STDLIB_DIR}/${mod}.o ${STDLIB_DIR}/${mod}.mni
+    COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR}
+    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
+    COMMENT "Compiling stdlib/${mod}.mn"
+  )
+  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.o ${STDLIB_DIR}/${mod}.mni)
+endforeach()
 
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/definitions.mn
-  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/definitions.mn ${STDLIB_DIR}/definitions.mn
-  DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/definitions.mn
-  COMMENT "Copying stdlib/definitions.mn"
-)
+foreach(file ${STDLIB_COPIED})
+  add_custom_command(
+    OUTPUT ${STDLIB_DIR}/${file}
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/${file} ${STDLIB_DIR}/${file}
+    DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${file}
+    COMMENT "Copying stdlib/${file}"
+  )
+  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
+endforeach()
 
-add_custom_target(stdlib ALL DEPENDS
-  ${STDLIB_DIR}/std.o ${STDLIB_DIR}/std.mni
-  ${STDLIB_DIR}/str.o ${STDLIB_DIR}/str.mni
-  ${STDLIB_DIR}/definitions.mn
-)
+add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
 include(CTest)
