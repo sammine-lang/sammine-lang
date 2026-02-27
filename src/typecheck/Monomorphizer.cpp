@@ -21,22 +21,22 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   if (!expr)
     return nullptr;
 
-  if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(expr)) {
+  if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(expr)) {
     auto resolved = resolve_type_name(simple->name.mangled());
     return std::make_unique<SimpleTypeExprAST>(make_tok(resolved));
   }
 
-  if (auto *ptr = dynamic_cast<PointerTypeExprAST *>(expr)) {
+  if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(expr)) {
     return std::make_unique<PointerTypeExprAST>(
         clone_type_expr(ptr->pointee.get()));
   }
 
-  if (auto *arr = dynamic_cast<ArrayTypeExprAST *>(expr)) {
+  if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(expr)) {
     return std::make_unique<ArrayTypeExprAST>(
         clone_type_expr(arr->element.get()), arr->size);
   }
 
-  if (auto *fn = dynamic_cast<FunctionTypeExprAST *>(expr)) {
+  if (auto *fn = llvm::dyn_cast<FunctionTypeExprAST>(expr)) {
     std::vector<std::unique_ptr<TypeExprAST>> params;
     for (auto &p : fn->paramTypes)
       params.push_back(clone_type_expr(p.get()));
@@ -97,34 +97,34 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   if (!expr)
     return nullptr;
 
-  if (auto *num = dynamic_cast<NumberExprAST *>(expr)) {
+  if (auto *num = llvm::dyn_cast<NumberExprAST>(expr)) {
     auto result = std::make_unique<NumberExprAST>(make_tok(num->number));
     return result;
   }
 
-  if (auto *str = dynamic_cast<StringExprAST *>(expr)) {
+  if (auto *str = llvm::dyn_cast<StringExprAST>(expr)) {
     auto tok = make_tok(str->string_content);
     tok->tok_type = TokenType::TokStr;
     auto result = std::make_unique<StringExprAST>(tok);
     return result;
   }
 
-  if (auto *b = dynamic_cast<BoolExprAST *>(expr)) {
+  if (auto *b = llvm::dyn_cast<BoolExprAST>(expr)) {
     auto result = std::make_unique<BoolExprAST>(b->b, b->get_location());
     return result;
   }
 
-  if (auto *ch = dynamic_cast<CharExprAST *>(expr)) {
+  if (auto *ch = llvm::dyn_cast<CharExprAST>(expr)) {
     return std::make_unique<CharExprAST>(ch->value, ch->get_location());
   }
 
-  if (auto *var = dynamic_cast<VariableExprAST *>(expr)) {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr)) {
     auto result =
         std::make_unique<VariableExprAST>(make_tok(var->variableName));
     return result;
   }
 
-  if (auto *call = dynamic_cast<CallExprAST *>(expr)) {
+  if (auto *call = llvm::dyn_cast<CallExprAST>(expr)) {
     auto result = std::make_unique<CallExprAST>(
         call->functionName, call->get_location(),
         clone_expr_vec(call->arguments));
@@ -133,13 +133,13 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     return result;
   }
 
-  if (auto *bin = dynamic_cast<BinaryExprAST *>(expr)) {
+  if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr)) {
     auto result = std::make_unique<BinaryExprAST>(
         bin->Op, clone_expr(bin->LHS.get()), clone_expr(bin->RHS.get()));
     return result;
   }
 
-  if (auto *ret = dynamic_cast<ReturnExprAST *>(expr)) {
+  if (auto *ret = llvm::dyn_cast<ReturnExprAST>(expr)) {
     if (ret->is_implicit) {
       auto result =
           std::make_unique<ReturnExprAST>(clone_expr(ret->return_expr.get()));
@@ -150,74 +150,74 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     return result;
   }
 
-  if (auto *vd = dynamic_cast<VarDefAST *>(expr)) {
+  if (auto *vd = llvm::dyn_cast<VarDefAST>(expr)) {
     auto result = std::make_unique<VarDefAST>(
         make_tok("let"), clone_typed_var(vd->TypedVar.get()),
         clone_expr(vd->Expression.get()), vd->is_mutable);
     return result;
   }
 
-  if (auto *ife = dynamic_cast<IfExprAST *>(expr)) {
+  if (auto *ife = llvm::dyn_cast<IfExprAST>(expr)) {
     auto result = std::make_unique<IfExprAST>(
         clone_expr(ife->bool_expr.get()), clone_block(ife->thenBlockAST.get()),
         clone_block(ife->elseBlockAST.get()));
     return result;
   }
 
-  if (auto *unit = dynamic_cast<UnitExprAST *>(expr)) {
+  if (auto *unit = llvm::dyn_cast<UnitExprAST>(expr)) {
     if (unit->is_implicit)
       return std::make_unique<UnitExprAST>();
     return std::make_unique<UnitExprAST>(make_tok("("), make_tok(")"));
   }
 
-  if (auto *deref = dynamic_cast<DerefExprAST *>(expr)) {
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr)) {
     return std::make_unique<DerefExprAST>(make_tok("*"),
                                           clone_expr(deref->operand.get()));
   }
 
-  if (auto *addr = dynamic_cast<AddrOfExprAST *>(expr)) {
+  if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(expr)) {
     return std::make_unique<AddrOfExprAST>(make_tok("&"),
                                            clone_expr(addr->operand.get()));
   }
 
-  if (auto *alloc = dynamic_cast<AllocExprAST *>(expr)) {
+  if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr)) {
     return std::make_unique<AllocExprAST>(make_tok("alloc"),
                                           clone_type_expr(alloc->type_arg.get()),
                                           clone_expr(alloc->operand.get()));
   }
 
-  if (auto *free_e = dynamic_cast<FreeExprAST *>(expr)) {
+  if (auto *free_e = llvm::dyn_cast<FreeExprAST>(expr)) {
     return std::make_unique<FreeExprAST>(make_tok("free"),
                                          clone_expr(free_e->operand.get()));
   }
 
-  if (auto *arr_lit = dynamic_cast<ArrayLiteralExprAST *>(expr)) {
+  if (auto *arr_lit = llvm::dyn_cast<ArrayLiteralExprAST>(expr)) {
     return std::make_unique<ArrayLiteralExprAST>(
         clone_expr_vec(arr_lit->elements));
   }
 
-  if (auto *idx = dynamic_cast<IndexExprAST *>(expr)) {
+  if (auto *idx = llvm::dyn_cast<IndexExprAST>(expr)) {
     return std::make_unique<IndexExprAST>(clone_expr(idx->array_expr.get()),
                                           clone_expr(idx->index_expr.get()));
   }
 
-  if (auto *len = dynamic_cast<LenExprAST *>(expr)) {
+  if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
     return std::make_unique<LenExprAST>(make_tok("len"),
                                         clone_expr(len->operand.get()));
   }
 
-  if (auto *neg = dynamic_cast<UnaryNegExprAST *>(expr)) {
+  if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     return std::make_unique<UnaryNegExprAST>(make_tok("-"),
                                              clone_expr(neg->operand.get()));
   }
 
-  if (auto *sl = dynamic_cast<StructLiteralExprAST *>(expr)) {
+  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(expr)) {
     return std::make_unique<StructLiteralExprAST>(
         sl->struct_name, sl->get_location(), sl->field_names,
         clone_expr_vec(sl->field_values));
   }
 
-  if (auto *fa = dynamic_cast<FieldAccessExprAST *>(expr)) {
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr)) {
     return std::make_unique<FieldAccessExprAST>(
         clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
   }

@@ -281,7 +281,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   if (is_exported && tokStream->peek()->tok_type == TokStruct) {
     auto [node, result] = ParseStructDef();
     if (node) {
-      if (auto *sd = dynamic_cast<StructDefAST *>(node.get()))
+      if (auto *sd = llvm::dyn_cast<StructDefAST>(node.get()))
         sd->is_exported = true;
     }
     return {std::move(node), result};
@@ -291,7 +291,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   if (is_exported && tokStream->peek()->tok_type == TokEnum) {
     auto [node, result] = ParseEnumDef();
     if (node) {
-      if (auto *ed = dynamic_cast<EnumDefAST *>(node.get()))
+      if (auto *ed = llvm::dyn_cast<EnumDefAST>(node.get()))
         ed->is_exported = true;
     }
     return {std::move(node), result};
@@ -785,12 +785,12 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
       sammine_util::Location qn_loc;
       std::vector<std::unique_ptr<ExprAST>> new_args;
 
-      if (auto *call = dynamic_cast<CallExprAST *>(RHS.get())) {
+      if (auto *call = llvm::dyn_cast<CallExprAST>(RHS.get())) {
         qn = call->functionName;
         qn_loc = call->get_location();
         for (auto &arg : call->arguments)
           new_args.push_back(std::move(arg));
-      } else if (auto *var = dynamic_cast<VariableExprAST *>(RHS.get())) {
+      } else if (auto *var = llvm::dyn_cast<VariableExprAST>(RHS.get())) {
         qn = sammine_util::QualifiedName::local(var->variableName);
         qn_loc = var->get_location();
       } else {

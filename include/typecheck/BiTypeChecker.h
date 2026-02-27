@@ -277,7 +277,7 @@ public:
     if (!type_expr)
       return Type::NonExistent();
 
-    if (auto *simple = dynamic_cast<SimpleTypeExprAST *>(type_expr)) {
+    if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(type_expr)) {
       if (simple->name.is_unresolved()) {
         this->add_error(type_expr->location,
                         fmt::format("Module '{}' is not imported",
@@ -295,21 +295,21 @@ public:
       return get_type_opt.value();
     }
 
-    if (auto *ptr = dynamic_cast<PointerTypeExprAST *>(type_expr)) {
+    if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(type_expr)) {
       auto pointee = resolve_type_expr(ptr->pointee.get());
       if (pointee.type_kind == TypeKind::Poisoned)
         return Type::Poisoned();
       return Type::Pointer(pointee);
     }
 
-    if (auto *arr = dynamic_cast<ArrayTypeExprAST *>(type_expr)) {
+    if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(type_expr)) {
       auto elem = resolve_type_expr(arr->element.get());
       if (elem.type_kind == TypeKind::Poisoned)
         return Type::Poisoned();
       return Type::Array(elem, arr->size);
     }
 
-    if (auto *fn = dynamic_cast<FunctionTypeExprAST *>(type_expr)) {
+    if (auto *fn = llvm::dyn_cast<FunctionTypeExprAST>(type_expr)) {
       std::vector<Type> total_types;
       for (auto &param : fn->paramTypes) {
         auto pt = resolve_type_expr(param.get());

@@ -20,20 +20,20 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
   std::string fn_name;
   sammine_util::Location loc;
   for (auto &def : ast->DefinitionVec) {
-    if (auto fn_def = dynamic_cast<FuncDefAST *>(def.get())) {
+    if (auto fn_def = llvm::dyn_cast<FuncDefAST>(def.get())) {
       fn_name = fn_def->Prototype->functionName.mangled();
       loc = fn_def->Prototype->get_location();
-    } else if (auto extern_def = dynamic_cast<ExternAST *>(def.get())) {
+    } else if (auto extern_def = llvm::dyn_cast<ExternAST>(def.get())) {
       fn_name = extern_def->Prototype->functionName.mangled();
       loc = extern_def->Prototype->get_location();
-    } else if (auto record_def = dynamic_cast<StructDefAST *>(def.get())) {
+    } else if (auto record_def = llvm::dyn_cast<StructDefAST>(def.get())) {
       fn_name = record_def->struct_name.mangled();
       loc = record_def->get_location();
-    } else if (auto enum_def = dynamic_cast<EnumDefAST *>(def.get())) {
+    } else if (auto enum_def = llvm::dyn_cast<EnumDefAST>(def.get())) {
       fn_name = enum_def->enum_name.mangled();
       loc = enum_def->get_location();
-    } else if (dynamic_cast<TypeClassDeclAST *>(def.get()) ||
-               dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+    } else if (llvm::isa<TypeClassDeclAST>(def.get()) ||
+               llvm::isa<TypeClassInstanceAST>(def.get())) {
       // Type class decls/instances don't register top-level names in scope
       continue;
     } else

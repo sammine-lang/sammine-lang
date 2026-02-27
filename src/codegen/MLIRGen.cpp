@@ -42,7 +42,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   // Pre-pass: register struct types and forward-declare functions so that
   // references can find them even if the definition comes later.
   for (auto &def : program->DefinitionVec) {
-    if (auto *sd = dynamic_cast<AST::StructDefAST *>(def.get())) {
+    if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (sd->type.type_kind != TypeKind::Poisoned) {
         auto &st = std::get<StructType>(sd->type.type_data);
         llvm::SmallVector<mlir::Type> fieldTypes;
@@ -53,7 +53,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
         structTypes[st.get_name()] = structTy;
       }
-    } else if (auto *ed = dynamic_cast<AST::EnumDefAST *>(def.get())) {
+    } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (ed->type.type_kind != TypeKind::Poisoned) {
         auto &et = std::get<EnumType>(ed->type.type_data);
         auto name = et.get_name().mangled();
@@ -76,11 +76,11 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         (void)enumTy.setBody(fields, /*isPacked=*/false);
         enumTypes[name] = enumTy;
       }
-    } else if (auto *fd = dynamic_cast<AST::FuncDefAST *>(def.get())) {
+    } else if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!fd->Prototype->is_generic())
         forwardDeclareFunc(fd->Prototype.get());
     } else if (auto *tci =
-                   dynamic_cast<AST::TypeClassInstanceAST *>(def.get())) {
+                   llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
       for (auto &method : tci->methods)
         forwardDeclareFunc(method->Prototype.get());
     }
@@ -221,17 +221,17 @@ bool MLIRGenImpl::isBoolType(const Type &type) {
 // ===--- Definition emission ---===
 
 void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
-  if (auto *funcDef = dynamic_cast<AST::FuncDefAST *>(def))
+  if (auto *funcDef = llvm::dyn_cast<AST::FuncDefAST>(def))
     emitFunction(funcDef);
-  else if (auto *externDef = dynamic_cast<AST::ExternAST *>(def))
+  else if (auto *externDef = llvm::dyn_cast<AST::ExternAST>(def))
     emitExtern(externDef);
-  else if (dynamic_cast<AST::StructDefAST *>(def))
+  else if (llvm::isa<AST::StructDefAST>(def))
     ; // Struct types registered in generate() pre-pass
-  else if (dynamic_cast<AST::EnumDefAST *>(def))
+  else if (llvm::isa<AST::EnumDefAST>(def))
     ; // Enum types registered in generate() pre-pass (TODO)
-  else if (dynamic_cast<AST::TypeClassDeclAST *>(def))
+  else if (llvm::isa<AST::TypeClassDeclAST>(def))
     ; // Skip typeclass declarations (no codegen needed)
-  else if (auto *tci = dynamic_cast<AST::TypeClassInstanceAST *>(def)) {
+  else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {
     // Emit each instance method as a regular function
     for (auto &method : tci->methods)
       emitFunction(method.get());
@@ -270,47 +270,47 @@ MLIRGenImpl::mangleName(const sammine_util::QualifiedName &qn) const {
 // ===--- Expression dispatcher ---===
 
 mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
-  if (auto *num = dynamic_cast<AST::NumberExprAST *>(ast))
+  if (auto *num = llvm::dyn_cast<AST::NumberExprAST>(ast))
     return emitNumberExpr(num);
-  if (auto *boolE = dynamic_cast<AST::BoolExprAST *>(ast))
+  if (auto *boolE = llvm::dyn_cast<AST::BoolExprAST>(ast))
     return emitBoolExpr(boolE);
-  if (auto *charE = dynamic_cast<AST::CharExprAST *>(ast))
+  if (auto *charE = llvm::dyn_cast<AST::CharExprAST>(ast))
     return emitCharExpr(charE);
-  if (auto *unit = dynamic_cast<AST::UnitExprAST *>(ast))
+  if (auto *unit = llvm::dyn_cast<AST::UnitExprAST>(ast))
     return emitUnitExpr(unit);
-  if (auto *var = dynamic_cast<AST::VariableExprAST *>(ast))
+  if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
     return emitVariableExpr(var);
-  if (auto *bin = dynamic_cast<AST::BinaryExprAST *>(ast))
+  if (auto *bin = llvm::dyn_cast<AST::BinaryExprAST>(ast))
     return emitBinaryExpr(bin);
-  if (auto *call = dynamic_cast<AST::CallExprAST *>(ast))
+  if (auto *call = llvm::dyn_cast<AST::CallExprAST>(ast))
     return emitCallExpr(call);
-  if (auto *ret = dynamic_cast<AST::ReturnExprAST *>(ast))
+  if (auto *ret = llvm::dyn_cast<AST::ReturnExprAST>(ast))
     return emitReturnExpr(ret);
-  if (auto *varDef = dynamic_cast<AST::VarDefAST *>(ast))
+  if (auto *varDef = llvm::dyn_cast<AST::VarDefAST>(ast))
     return emitVarDef(varDef);
-  if (auto *ifE = dynamic_cast<AST::IfExprAST *>(ast))
+  if (auto *ifE = llvm::dyn_cast<AST::IfExprAST>(ast))
     return emitIfExpr(ifE);
-  if (auto *neg = dynamic_cast<AST::UnaryNegExprAST *>(ast))
+  if (auto *neg = llvm::dyn_cast<AST::UnaryNegExprAST>(ast))
     return emitUnaryNegExpr(neg);
-  if (auto *str = dynamic_cast<AST::StringExprAST *>(ast))
+  if (auto *str = llvm::dyn_cast<AST::StringExprAST>(ast))
     return emitStringExpr(str);
-  if (auto *arrLit = dynamic_cast<AST::ArrayLiteralExprAST *>(ast))
+  if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(ast))
     return emitArrayLiteralExpr(arrLit);
-  if (auto *idx = dynamic_cast<AST::IndexExprAST *>(ast))
+  if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(ast))
     return emitIndexExpr(idx);
-  if (auto *len = dynamic_cast<AST::LenExprAST *>(ast))
+  if (auto *len = llvm::dyn_cast<AST::LenExprAST>(ast))
     return emitLenExpr(len);
-  if (auto *deref = dynamic_cast<AST::DerefExprAST *>(ast))
+  if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))
     return emitDerefExpr(deref);
-  if (auto *addrOf = dynamic_cast<AST::AddrOfExprAST *>(ast))
+  if (auto *addrOf = llvm::dyn_cast<AST::AddrOfExprAST>(ast))
     return emitAddrOfExpr(addrOf);
-  if (auto *alloc = dynamic_cast<AST::AllocExprAST *>(ast))
+  if (auto *alloc = llvm::dyn_cast<AST::AllocExprAST>(ast))
     return emitAllocExpr(alloc);
-  if (auto *freeE = dynamic_cast<AST::FreeExprAST *>(ast))
+  if (auto *freeE = llvm::dyn_cast<AST::FreeExprAST>(ast))
     return emitFreeExpr(freeE);
-  if (auto *structLit = dynamic_cast<AST::StructLiteralExprAST *>(ast))
+  if (auto *structLit = llvm::dyn_cast<AST::StructLiteralExprAST>(ast))
     return emitStructLiteralExpr(structLit);
-  if (auto *fieldAccess = dynamic_cast<AST::FieldAccessExprAST *>(ast))
+  if (auto *fieldAccess = llvm::dyn_cast<AST::FieldAccessExprAST>(ast))
     return emitFieldAccessExpr(fieldAccess);
 
   sammine_util::abort(

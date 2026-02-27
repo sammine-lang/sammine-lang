@@ -97,7 +97,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   // Assignment: store RHS into LHS's memref
   if (ast->Op->is_assign()) {
     // *p = val
-    if (auto *deref = dynamic_cast<AST::DerefExprAST *>(ast->LHS.get())) {
+    if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast->LHS.get())) {
       auto ptr = emitExpr(deref->operand.get());
       auto rhs = emitExpr(ast->RHS.get());
       if (!ptr || !rhs)
@@ -108,7 +108,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
     // arr[i] = val  (or (*ptr)[i] = val)
     if (auto *idxExpr =
-            dynamic_cast<AST::IndexExprAST *>(ast->LHS.get())) {
+            llvm::dyn_cast<AST::IndexExprAST>(ast->LHS.get())) {
       auto arr = emitExpr(idxExpr->array_expr.get());
       auto idx = emitExpr(idxExpr->index_expr.get());
       auto rhs = emitExpr(ast->RHS.get());
@@ -136,7 +136,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
     if (!rhs)
       return nullptr;
 
-    if (auto *lhsVar = dynamic_cast<AST::VariableExprAST *>(ast->LHS.get())) {
+    if (auto *lhsVar = llvm::dyn_cast<AST::VariableExprAST>(ast->LHS.get())) {
       auto varPtr = symbolTable.get_from_name(lhsVar->variableName);
       mlir::LLVM::StoreOp::create(builder, location, rhs, varPtr);
       return rhs;
@@ -547,7 +547,7 @@ mlir::Value MLIRGenImpl::emitDerefExpr(AST::DerefExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
-  auto *varExpr = dynamic_cast<AST::VariableExprAST *>(ast->operand.get());
+  auto *varExpr = llvm::dyn_cast<AST::VariableExprAST>(ast->operand.get());
   if (!varExpr)
     sammine_util::abort("MLIRGen: address-of (&) requires a variable operand");
 

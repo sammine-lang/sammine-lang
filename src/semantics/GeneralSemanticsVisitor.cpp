@@ -28,7 +28,7 @@ void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {
         // Value-returning function: wrap last statement in implicit return
         auto last_stmt = std::move(ast->Statements.back());
         // Only wrap if not already a return
-        if (dynamic_cast<ReturnExprAST *>(last_stmt.get()) == nullptr &&
+        if (!llvm::isa<ReturnExprAST>(last_stmt.get()) &&
             last_stmt->is_statement == false) {
           ast->Statements.back() =
               std::make_unique<ReturnExprAST>(std::move(last_stmt));

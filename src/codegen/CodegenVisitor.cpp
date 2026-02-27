@@ -128,7 +128,7 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   // Forward-declare all functions so definition order doesn't matter.
   // Struct and enum types must be registered first since prototypes reference them.
   for (auto &def : ast->DefinitionVec) {
-    if (auto *sd = dynamic_cast<StructDefAST *>(def.get())) {
+    if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get())) {
       if (sd->type.type_kind != TypeKind::Poisoned) {
         auto &st = std::get<StructType>(sd->type.type_data);
         if (!llvm::StructType::getTypeByName(*resPtr->Context,
@@ -142,7 +142,7 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
           type_converter.register_struct_type(st.get_name(), llvm_struct);
         }
       }
-    } else if (auto *ed = dynamic_cast<EnumDefAST *>(def.get())) {
+    } else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get())) {
       if (ed->type.type_kind != TypeKind::Poisoned) {
         auto &et = std::get<EnumType>(ed->type.type_data);
         auto name = et.get_name().mangled();
@@ -171,11 +171,11 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
     }
   }
   for (auto &def : ast->DefinitionVec) {
-    if (auto *fd = dynamic_cast<FuncDefAST *>(def.get()))
+    if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get()))
       forward_declare(fd->Prototype.get());
-    else if (auto *ext = dynamic_cast<ExternAST *>(def.get()))
+    else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get()))
       forward_declare(ext->Prototype.get());
-    else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+    else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
       for (auto &method : tci->methods)
         forward_declare(method->Prototype.get());
     }
@@ -308,7 +308,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
     if (!R)
       this->abort("Failed to codegen RHS for tok assign");
 
-    if (auto *LHSE = dynamic_cast<VariableExprAST *>(ast->LHS.get())) {
+    if (auto *LHSE = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       auto *Var = this->allocaValues.top()[LHSE->variableName];
       if (!Var)
         this->abort("Unknown variable in LHS of tok assign");
@@ -317,7 +317,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       return;
     }
 
-    if (auto *deref = dynamic_cast<DerefExprAST *>(ast->LHS.get())) {
+    if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
       auto *ptr = deref->operand->val;
       if (!ptr)
         this->abort("Failed to codegen pointer for deref assignment");
@@ -326,10 +326,10 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       return;
     }
 
-    if (auto *idx_expr = dynamic_cast<IndexExprAST *>(ast->LHS.get())) {
+    if (auto *idx_expr = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
       // Handle (*ptr)[i] = val — assignment through dereferenced pointer
       if (auto *deref =
-              dynamic_cast<DerefExprAST *>(idx_expr->array_expr.get())) {
+              llvm::dyn_cast<DerefExprAST>(idx_expr->array_expr.get())) {
         auto *ptr_val = deref->operand->val;
         auto &arr_data = std::get<ArrayType>(deref->type.type_data);
         auto *arr_llvm_type = type_converter.get_type(deref->type);
@@ -344,7 +344,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
 
       // Direct variable case: arr[i] = val
       auto *var_expr =
-          dynamic_cast<VariableExprAST *>(idx_expr->array_expr.get());
+          llvm::dyn_cast<VariableExprAST>(idx_expr->array_expr.get());
       this->abort_if_not(var_expr,
                          "Array index assignment requires a variable");
       auto *alloca = this->allocaValues.top()[var_expr->variableName];
@@ -701,7 +701,7 @@ void CgVisitor::postorder_walk(FreeExprAST *ast) {
 void CgVisitor::visit(AddrOfExprAST *ast) {
   ast->walk_with_preorder(this);
   // Don't visit operand normally - we need the alloca, not the loaded value
-  auto *var_expr = dynamic_cast<VariableExprAST *>(ast->operand.get());
+  auto *var_expr = llvm::dyn_cast<VariableExprAST>(ast->operand.get());
   this->abort_if_not(var_expr, "Address-of (&) requires a variable operand");
   auto *alloca = this->allocaValues.top()[var_expr->variableName];
   this->abort_if_not(alloca, "Unknown variable in address-of expression");
@@ -749,7 +749,7 @@ void CgVisitor::visit(IndexExprAST *ast) {
   // If array_expr is (*ptr), visit only the operand to get the pointer value.
   // We skip the deref itself — we don't want to load the whole array,
   // we just need the pointer so postorder_walk can GEP into it.
-  if (auto *deref = dynamic_cast<DerefExprAST *>(ast->array_expr.get())) {
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->array_expr.get())) {
     deref->operand->accept_vis(this);
   }
   // Only visit index_expr to get the index value
@@ -759,7 +759,7 @@ void CgVisitor::visit(IndexExprAST *ast) {
 
 void CgVisitor::postorder_walk(IndexExprAST *ast) {
   // Handle (*ptr)[i] — array indexing through dereferenced pointer
-  if (auto *deref = dynamic_cast<DerefExprAST *>(ast->array_expr.get())) {
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->array_expr.get())) {
     auto *ptr_val =
         deref->operand->val; // pointer to the array (loaded by visit())
     // deref->type is the pointee type = the array type
@@ -775,7 +775,7 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
   }
 
   // Direct variable case: arr[i]
-  auto *var_expr = dynamic_cast<VariableExprAST *>(ast->array_expr.get());
+  auto *var_expr = llvm::dyn_cast<VariableExprAST>(ast->array_expr.get());
   this->abort_if_not(var_expr, "Array indexing requires a variable");
   auto *alloca = this->allocaValues.top()[var_expr->variableName];
   this->abort_if_not(alloca, "Unknown array variable");

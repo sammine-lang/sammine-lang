@@ -37,12 +37,12 @@ static void resolve_literal_type(ExprAST *expr, const Type &target) {
 
   expr->type = target;
 
-  if (auto *unary = dynamic_cast<UnaryNegExprAST *>(expr)) {
+  if (auto *unary = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     resolve_literal_type(unary->operand.get(), target);
-  } else if (auto *binary = dynamic_cast<BinaryExprAST *>(expr)) {
+  } else if (auto *binary = llvm::dyn_cast<BinaryExprAST>(expr)) {
     resolve_literal_type(binary->LHS.get(), target);
     resolve_literal_type(binary->RHS.get(), target);
-  } else if (auto *if_expr = dynamic_cast<IfExprAST *>(expr)) {
+  } else if (auto *if_expr = llvm::dyn_cast<IfExprAST>(expr)) {
     if (if_expr->thenBlockAST && !if_expr->thenBlockAST->Statements.empty()) {
       auto *last_then = if_expr->thenBlockAST->Statements.back().get();
       resolve_literal_type(last_then, target);
@@ -81,13 +81,13 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   // First pass: register structs, enums, typeclass declarations, and instances
   // so method bodies can reference any type/instance regardless of order.
   for (auto &def : ast->DefinitionVec) {
-    if (auto *sd = dynamic_cast<StructDefAST *>(def.get()))
+    if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get()))
       sd->accept_vis(this);
-    else if (auto *ed = dynamic_cast<EnumDefAST *>(def.get()))
+    else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get()))
       ed->accept_vis(this);
-    else if (auto *tc = dynamic_cast<TypeClassDeclAST *>(def.get()))
+    else if (auto *tc = llvm::dyn_cast<TypeClassDeclAST>(def.get()))
       register_typeclass_decl(tc);
-    else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get()))
+    else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
       register_typeclass_instance(tci);
   }
 
@@ -98,15 +98,15 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
 
   // Second pass: pre-register all function signatures so mutual recursion works
   for (auto &def : ast->DefinitionVec) {
-    if (auto *fd = dynamic_cast<FuncDefAST *>(def.get())) {
+    if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
       if (fd->Prototype->is_generic())
         generic_func_defs[fd->Prototype->functionName.mangled()] = fd;
       else
         pre_register_function(fd->Prototype.get());
-    } else if (auto *ext = dynamic_cast<ExternAST *>(def.get())) {
+    } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
       if (!ext->Prototype->is_generic())
         pre_register_function(ext->Prototype.get());
-    } else if (auto *tci = dynamic_cast<TypeClassInstanceAST *>(def.get())) {
+    } else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
       for (auto &method : tci->methods)
         if (!method->Prototype->is_generic())
           pre_register_function(method->Prototype.get());
@@ -205,7 +205,7 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   // Special case: array type annotation + array literal RHS
   if (ast->TypedVar->type_expr != nullptr) {
     if (auto *arr_lit =
-            dynamic_cast<ArrayLiteralExprAST *>(ast->Expression.get())) {
+            llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get())) {
       ast->accept_synthesis(this);
       if (ast->type.type_kind == TypeKind::Array) {
         auto &arr_data = std::get<ArrayType>(ast->type.type_data);
@@ -378,7 +378,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   // Special case: array literal return — propagate function return type
   // into array elements before they default to i32.
   if (auto *arr_lit =
-          dynamic_cast<ArrayLiteralExprAST *>(ast->return_expr.get())) {
+          llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
     auto scope_fn = this->id_to_type.top().s.value();
     auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
     auto return_type = fn_type.get_return_type();
@@ -1109,7 +1109,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   }
 
   if (ast->Op->is_assign()) {
-    if (auto *var = dynamic_cast<VariableExprAST *>(ast->LHS.get())) {
+    if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       if (!var->type.is_mutable) {
         this->add_error(
             ast->Op->get_location(),
@@ -1117,9 +1117,9 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                         "Use 'let mut' or 'mut' to declare it as mutable",
                         var->variableName));
       }
-    } else if (auto *idx = dynamic_cast<IndexExprAST *>(ast->LHS.get())) {
+    } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
       if (auto *arr_var =
-              dynamic_cast<VariableExprAST *>(idx->array_expr.get())) {
+              llvm::dyn_cast<VariableExprAST>(idx->array_expr.get())) {
         if (!arr_var->type.is_mutable) {
           this->add_error(
               ast->Op->get_location(),
@@ -1436,7 +1436,7 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   }
 
   auto &arr_data = std::get<ArrayType>(arr_type.type_data);
-  if (auto *num = dynamic_cast<NumberExprAST *>(ast->index_expr.get())) {
+  if (auto *num = llvm::dyn_cast<NumberExprAST>(ast->index_expr.get())) {
     int idx = std::stoi(num->number);
     int size = static_cast<int>(arr_data.get_size());
     if (idx < 0 || idx >= size) {

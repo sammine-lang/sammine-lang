@@ -19,7 +19,7 @@ bool CodegenUtils::isFunctionMain(FuncDefAST *ast) {
 }
 bool CodegenUtils::hasFunctionMain(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec)
-    if (auto func_def = dynamic_cast<FuncDefAST *>(def.get()))
+    if (auto func_def = llvm::dyn_cast<FuncDefAST>(def.get()))
       if (isFunctionMain(func_def))
         return true;
 
