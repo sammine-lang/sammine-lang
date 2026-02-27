@@ -120,6 +120,29 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
                       fmt::format("main must return i32, found {}",
                                   return_type.to_string()));
     }
+    // Validate parameters: either 0 args or (i32, ptr<ptr<char>>)
+    auto param_count = ast->parameterVectors.size();
+    if (param_count != 0 && param_count != 2) {
+      this->add_error(
+          ast->get_location(),
+          "main must take 0 or 2 parameters (argc: i32, argv: ptr<ptr<char>>)");
+    }
+    if (param_count == 2) {
+      auto argc_type = ast->parameterVectors[0]->type;
+      auto argv_type = ast->parameterVectors[1]->type;
+      if (argc_type != Type::I32_t()) {
+        this->add_error(ast->parameterVectors[0]->get_location(),
+                        fmt::format("main's first parameter must be i32 "
+                                    "(argc), found {}",
+                                    argc_type.to_string()));
+      }
+      if (argv_type != Type::Pointer(Type::Pointer(Type::Char()))) {
+        this->add_error(ast->parameterVectors[1]->get_location(),
+                        fmt::format("main's second parameter must be "
+                                    "ptr<ptr<char>> (argv), found {}",
+                                    argv_type.to_string()));
+      }
+    }
   }
 }
 

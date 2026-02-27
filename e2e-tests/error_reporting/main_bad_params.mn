@@ -1,0 +1,6 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: main must take 0 or 2 parameters
+
+let main(x: f64) -> i32 {
+  return 0;
+}
