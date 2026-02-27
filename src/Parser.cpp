@@ -188,6 +188,32 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'enum'",
           enum_tok->get_location(), {nullptr, FAILED});
 
+  // Parse optional type parameters: enum Option<T> = ...
+  std::vector<std::string> enum_type_params;
+  if (expect(TokLESS)) {
+    auto first = expect(TokID);
+    if (!first) {
+      this->imm_error("Expected type parameter name after '<'",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+    enum_type_params.push_back(first->lexeme);
+    while (expect(TokComma)) {
+      auto next = expect(TokID);
+      if (!next) {
+        this->imm_error("Expected type parameter name after ','",
+                        id->get_location());
+        return {nullptr, FAILED};
+      }
+      enum_type_params.push_back(next->lexeme);
+    }
+    if (!consumeClosingAngleBracket()) {
+      this->imm_error("Expected '>' after type parameter list",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+  }
+
   REQUIRE(_eq, TokASSIGN,
           fmt::format("Expected '=' after enum name '{}'", id->lexeme),
           id->get_location(), {nullptr, FAILED});
@@ -248,7 +274,9 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     imm_error("Expected ';' after enum definition",
               variants.empty() ? id->get_location() : variants.back().location);
 
-  return {std::make_unique<EnumDefAST>(id, std::move(variants)), SUCCESS};
+  auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
+  enum_def->type_params = std::move(enum_type_params);
+  return {std::move(enum_def), SUCCESS};
 }
 
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {
@@ -381,33 +409,23 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
 }
 
 auto Parser::consumeClosingAngleBracket() -> bool {
-  // Case 1: A child ParseTypeExpr already split a ">>" (TokSHR) and left
-  // one '>' for us. Claim it.
-  if (split_greater_depth > 0) {
-    split_greater_depth--;
+  if (tokStream->peek()->tok_type == TokGREATER)
+    return tokStream->consume(), true;
+  if (tokStream->peek()->tok_type == TokSHR) {
+    tokStream->split_current(TokGREATER, ">", TokGREATER, ">");
+    tokStream->consume();
     return true;
   }
-  // Case 2: A plain '>' token — consume it directly.
-  if (expect(TokenType::TokGREATER))
-    return true;
-  // Case 3: ">>" token (TokSHR) — consume it, use one '>' now,
-  // and save the other for our parent.
-  if (expect(TokenType::TokSHR)) {
-    split_greater_depth++;
+  if (tokStream->peek()->tok_type == TokGreaterEqual) {
+    tokStream->split_current(TokGREATER, ">", TokASSIGN, "=");
+    tokStream->consume();
     return true;
   }
   return false;
 }
 
 auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
-  auto result = ParseTypeExpr();
-  if (split_greater_depth > 0) {
-    split_greater_depth = 0;
-    this->imm_error("Extra '>' in type expression",
-                    tokStream->currentLocation());
-    return nullptr;
-  }
-  return result;
+  return ParseTypeExpr();
 }
 
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
@@ -485,17 +503,54 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto id = expect(TokenType::TokID)) {
-    // Handle qualified type names: alias::TypeName (e.g. m::Point)
+    // Build the base name (simple or qualified)
+    sammine_util::QualifiedName base_name =
+        sammine_util::QualifiedName::local(id->lexeme);
+    auto loc = id->get_location();
+
     if (tokStream->peek()->tok_type == TokDoubleColon) {
-      tokStream->consume(); // always consume the ::
+      tokStream->consume(); // consume ::
       REQUIRE(member_id, TokID,
               fmt::format("Expected type name after '{}::'", id->lexeme),
               id->get_location(), nullptr);
-      auto loc = id->get_location() | member_id->get_location();
-      return std::make_unique<SimpleTypeExprAST>(
-          resolveQualifiedName(id->lexeme, member_id->lexeme), loc);
+      base_name = resolveQualifiedName(id->lexeme, member_id->lexeme);
+      loc = id->get_location() | member_id->get_location();
     }
-    return std::make_unique<SimpleTypeExprAST>(id);
+
+    // Check for generic type args: Option<i32>, Result<i32, String>
+    if (tokStream->peek()->tok_type == TokLESS) {
+      tokStream->mark_rollback();
+      tokStream->consume(); // consume <
+
+      bool ok = true;
+      std::vector<std::unique_ptr<TypeExprAST>> type_args;
+      auto first_arg = ParseTypeExpr();
+      if (!first_arg)
+        ok = false;
+      else {
+        type_args.push_back(std::move(first_arg));
+        while (ok && tokStream->peek()->tok_type == TokComma) {
+          tokStream->consume(); // consume ,
+          auto next_arg = ParseTypeExpr();
+          if (!next_arg) {
+            ok = false;
+            break;
+          }
+          type_args.push_back(std::move(next_arg));
+        }
+        if (ok && !consumeClosingAngleBracket())
+          ok = false;
+      }
+
+      if (!ok) {
+        tokStream->rollback();
+      } else {
+        return std::make_unique<GenericTypeExprAST>(base_name,
+                                                    std::move(type_args), loc);
+      }
+    }
+
+    return std::make_unique<SimpleTypeExprAST>(base_name, loc);
   }
   return nullptr;
 }
@@ -910,7 +965,6 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   if (tokStream->peek()->tok_type == TokLESS) {
     tokStream->mark_rollback();
-    int saved_split_greater_depth = split_greater_depth;
     tokStream->consume(); // consume '<'
 
     bool speculative_ok = true;
@@ -935,15 +989,29 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     if (speculative_ok && !consumeClosingAngleBracket())
       speculative_ok = false;
 
-    // Must be followed by '(' for this to be a generic call
-    if (speculative_ok && tokStream->peek()->tok_type != TokLeftParen)
+    if (speculative_ok && tokStream->peek()->tok_type == TokDoubleColon) {
+      // ID<Types>::Variant — generic enum constructor
+      tokStream->consume(); // consume ::
+      auto variant_id = expect(TokID);
+      if (variant_id) {
+        // Build mangled enum name: Option.i32
+        std::string mangled = qn.mangled();
+        for (auto &ta : parsed_types)
+          mangled += "." + ta->to_string();
+        qn = sammine_util::QualifiedName::qualified(mangled, variant_id->lexeme);
+        qn_loc = id->get_location() | variant_id->get_location();
+      } else {
+        speculative_ok = false;
+      }
+    } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
+      // ID<Types>(args) — generic function call
+      explicit_type_args = std::move(parsed_types);
+    } else {
       speculative_ok = false;
+    }
 
     if (!speculative_ok) {
       tokStream->rollback();
-      split_greater_depth = saved_split_greater_depth;
-    } else {
-      explicit_type_args = std::move(parsed_types);
     }
   }
 
@@ -1075,6 +1143,37 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
       pattern.location = pat_tok->get_location();
     } else if (pat_tok->tok_type == TokID) {
       auto prefix_tok = tokStream->consume();
+      std::string enum_prefix = prefix_tok->lexeme;
+
+      // Handle generic enum pattern: Option<i32>::Some(v)
+      if (tokStream->peek()->tok_type == TokLESS) {
+        tokStream->consume(); // consume <
+        std::vector<std::unique_ptr<TypeExprAST>> type_args;
+        bool ok = true;
+        auto first_arg = ParseTypeExpr();
+        if (!first_arg)
+          ok = false;
+        else {
+          type_args.push_back(std::move(first_arg));
+          while (ok && tokStream->peek()->tok_type == TokComma) {
+            tokStream->consume();
+            auto next_arg = ParseTypeExpr();
+            if (!next_arg) { ok = false; break; }
+            type_args.push_back(std::move(next_arg));
+          }
+          if (ok && !consumeClosingAngleBracket())
+            ok = false;
+        }
+        if (!ok) {
+          imm_error("Expected type arguments in generic enum pattern",
+                    prefix_tok->get_location());
+          return {nullptr, FAILED};
+        }
+        // Build mangled name: Option.i32
+        for (auto &ta : type_args)
+          enum_prefix += "." + ta->to_string();
+      }
+
       auto dcolon = expect(TokenType::TokDoubleColon);
       if (!dcolon) {
         imm_error(
@@ -1091,7 +1190,7 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
       }
 
       pattern.variant_name =
-          resolveQualifiedName(prefix_tok->lexeme, variant_tok->lexeme);
+          sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
       pattern.location =
           prefix_tok->get_location() | variant_tok->get_location();
 

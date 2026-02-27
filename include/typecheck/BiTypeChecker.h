@@ -2,6 +2,7 @@
 
 #include "ast/Ast.h"
 #include "ast/AstBase.h"
+#include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include <set>
@@ -36,6 +37,11 @@ public:
   std::unordered_map<std::string, FuncDefAST *> generic_func_defs;
   std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
   std::set<std::string> instantiated_functions;
+
+  // Generic enum support
+  std::unordered_map<std::string, EnumDefAST *> generic_enum_defs;
+  std::vector<std::unique_ptr<EnumDefAST>> monomorphized_enum_defs;
+  std::set<std::string> instantiated_enums;
 
   // Unification and substitution helpers
   bool unify(const Type &pattern, const Type &concrete,
@@ -330,6 +336,75 @@ public:
         return Type::Poisoned();
       total_types.push_back(ret);
       return Type::Function(std::move(total_types));
+    }
+
+    if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(type_expr)) {
+      auto base_mangled = gen->base_name.mangled();
+
+      // Look up the generic enum definition
+      auto it = generic_enum_defs.find(base_mangled);
+      if (it == generic_enum_defs.end()) {
+        this->add_error(type_expr->location,
+                        fmt::format("'{}' is not a generic enum",
+                                    gen->base_name.display()));
+        return Type::Poisoned();
+      }
+
+      auto *generic_def = it->second;
+      if (gen->type_args.size() != generic_def->type_params.size()) {
+        this->add_error(
+            type_expr->location,
+            fmt::format("Generic enum '{}' expects {} type argument(s), got {}",
+                        gen->base_name.display(),
+                        generic_def->type_params.size(),
+                        gen->type_args.size()));
+        return Type::Poisoned();
+      }
+
+      // Resolve type arguments
+      Monomorphizer::SubstitutionMap bindings;
+      std::string mangled = base_mangled;
+      bool has_unresolved_type_param = false;
+      for (size_t i = 0; i < gen->type_args.size(); i++) {
+        auto resolved = resolve_type_expr(gen->type_args[i].get());
+        if (resolved.type_kind == TypeKind::Poisoned)
+          return Type::Poisoned();
+        if (resolved.type_kind == TypeKind::TypeParam)
+          has_unresolved_type_param = true;
+        bindings[generic_def->type_params[i]] = resolved;
+        mangled += "." + resolved.to_string();
+      }
+
+      // If type args contain unresolved type params (e.g. Option<T> inside
+      // a generic function), we can't instantiate yet — return a placeholder
+      // that will be resolved when the outer function is monomorphized.
+      if (has_unresolved_type_param) {
+        // Check if the typename is already registered (from a previous pass)
+        auto existing = this->get_typename_type(mangled);
+        if (existing.has_value())
+          return existing.value();
+        // Not yet — just return the type param so it propagates
+        return Type::Poisoned();
+      }
+
+      // Already instantiated?
+      if (instantiated_enums.contains(mangled)) {
+        auto existing = this->get_typename_type(mangled);
+        if (existing.has_value())
+          return existing.value();
+      }
+
+      // Instantiate the generic enum
+      auto cloned = Monomorphizer::instantiate_enum(generic_def, mangled,
+                                                     bindings);
+      cloned->accept_vis(this);
+      instantiated_enums.insert(mangled);
+      monomorphized_enum_defs.push_back(std::move(cloned));
+
+      auto result = this->get_typename_type(mangled);
+      if (result.has_value())
+        return result.value();
+      return Type::Poisoned();
     }
 
     return Type::NonExistent();

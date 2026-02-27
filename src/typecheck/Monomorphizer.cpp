@@ -44,6 +44,14 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
         std::move(params), clone_type_expr(fn->returnType.get()));
   }
 
+  if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(expr)) {
+    std::vector<std::unique_ptr<TypeExprAST>> cloned_args;
+    for (auto &arg : gen->type_args)
+      cloned_args.push_back(clone_type_expr(arg.get()));
+    return std::make_unique<GenericTypeExprAST>(
+        gen->base_name, std::move(cloned_args), gen->location);
+  }
+
   sammine_util::abort("Unknown TypeExprAST subclass in Monomorphizer");
 }
 
@@ -250,6 +258,29 @@ Monomorphizer::instantiate(FuncDefAST *generic, const std::string &mangled_name,
   auto proto = m.clone_prototype(generic->Prototype.get(), mangled_name);
   auto block = m.clone_block(generic->Block.get());
   return std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
+}
+
+std::unique_ptr<EnumDefAST>
+Monomorphizer::instantiate_enum(EnumDefAST *generic,
+                                const std::string &mangled_name,
+                                const SubstitutionMap &bindings) {
+  Monomorphizer m(bindings);
+
+  // Clone variant definitions with substituted payload types
+  std::vector<EnumVariantDef> cloned_variants;
+  for (auto &variant : generic->variants) {
+    EnumVariantDef cloned;
+    cloned.name = variant.name;
+    cloned.location = variant.location;
+    for (auto &type_expr : variant.payload_types)
+      cloned.payload_types.push_back(m.clone_type_expr(type_expr.get()));
+    cloned_variants.push_back(std::move(cloned));
+  }
+
+  auto result = std::make_unique<EnumDefAST>(make_tok(mangled_name),
+                                              std::move(cloned_variants));
+  // type_params left empty — this is a concrete instantiation
+  return result;
 }
 
 } // namespace sammine_lang::AST

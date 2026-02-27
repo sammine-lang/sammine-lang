@@ -44,6 +44,7 @@ enum class TypeExprKind {
   Pointer,
   Array,
   Function,
+  Generic,
 };
 
 class TypeExprAST {
@@ -123,6 +124,33 @@ public:
         res += ", ";
     }
     res += ") -> " + returnType->to_string();
+    return res;
+  }
+};
+
+// Generic type expression: Option<i32>, Result<i32, String>
+class GenericTypeExprAST : public TypeExprAST {
+public:
+  sammine_util::QualifiedName base_name;
+  std::vector<std::unique_ptr<TypeExprAST>> type_args;
+  GenericTypeExprAST(sammine_util::QualifiedName base_name,
+                     std::vector<std::unique_ptr<TypeExprAST>> type_args,
+                     sammine_util::Location loc)
+      : TypeExprAST(TypeExprKind::Generic), base_name(std::move(base_name)),
+        type_args(std::move(type_args)) {
+    location = loc;
+  }
+  static bool classof(const TypeExprAST *node) {
+    return node->getKind() == TypeExprKind::Generic;
+  }
+  std::string to_string() const override {
+    std::string res = base_name.display() + "<";
+    for (size_t i = 0; i < type_args.size(); i++) {
+      res += type_args[i]->to_string();
+      if (i != type_args.size() - 1)
+        res += ", ";
+    }
+    res += ">";
     return res;
   }
 };

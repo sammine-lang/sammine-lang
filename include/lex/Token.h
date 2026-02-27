@@ -1,6 +1,8 @@
 #pragma once
 #include "util/Utilities.h"
+#include <cassert>
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -220,14 +222,24 @@ public:
 //!
 //!
 class TokenStream {
-  std::vector<std::shared_ptr<Token>> TokStream;
-  size_t current_index;
-  size_t rollback_mark;
+  using TokenList = std::list<std::shared_ptr<Token>>;
+  using Iterator = TokenList::iterator;
+
+  TokenList TokStream;
+  Iterator cursor;
+  Iterator rollback_cursor;
   bool error;
   std::function<void()> tokenProducer;
 
-  void ensureTokenAt(size_t index) {
-    while (index >= TokStream.size() && tokenProducer)
+  struct SplitRecord {
+    Iterator inserted;
+    std::shared_ptr<Token> original;
+  };
+  std::vector<SplitRecord> pending_splits;
+  size_t splits_at_mark = 0;
+
+  void ensureToken() {
+    while (cursor == TokStream.end() && tokenProducer)
       tokenProducer();
   }
 
@@ -235,7 +247,8 @@ public:
   std::vector<std::shared_ptr<Token>> ErrStream;
 
   TokenStream()
-      : TokStream(), current_index(0), rollback_mark(0), error(false) {}
+      : cursor(TokStream.end()), rollback_cursor(TokStream.end()),
+        error(false) {}
 
   void setTokenProducer(std::function<void()> producer) {
     tokenProducer = std::move(producer);
@@ -245,9 +258,12 @@ public:
     if (token->tok_type == TokINVALID) {
       error = true;
       ErrStream.push_back(token);
-    } else {
-      TokStream.push_back(token);
+      return;
     }
+    bool was_at_end = (cursor == TokStream.end());
+    TokStream.push_back(token);
+    if (was_at_end)
+      cursor = std::prev(TokStream.end());
   }
 
   bool hasErrors() const { return error; }
@@ -255,60 +271,88 @@ public:
   void push_back(const Token &token) {
     this->push_back(std::make_shared<Token>(token));
   }
-  void mark_rollback() { this->rollback_mark = current_index; }
-  void rollback() { this->current_index = rollback_mark; }
+
+  void mark_rollback() {
+    rollback_cursor = cursor;
+    splits_at_mark = pending_splits.size();
+  }
+
+  void rollback() {
+    while (pending_splits.size() > splits_at_mark) {
+      auto &r = pending_splits.back();
+      *std::prev(r.inserted) = r.original;
+      TokStream.erase(r.inserted);
+      pending_splits.pop_back();
+    }
+    cursor = rollback_cursor;
+  }
 
   void rollback(size_t rollback_count) {
-    assert(current_index >= rollback_count &&
-           "Current index needs to be larger than rollback count");
-    this->current_index -= rollback_count;
+    for (size_t i = 0; i < rollback_count; ++i) {
+      assert(cursor != TokStream.begin() &&
+             "Cannot rollback past the beginning");
+      --cursor;
+    }
   }
 
   std::shared_ptr<Token> &exhaust_until(TokenType tokType) {
     if (tokType == TokenType::TokEOF) {
-      // Lex everything until EOF is produced
       while (tokenProducer) {
         if (!TokStream.empty() && TokStream.back()->tok_type == TokEOF)
           break;
         tokenProducer();
       }
-      current_index = TokStream.size() - 1;
+      cursor = std::prev(TokStream.end());
       return TokStream.back();
     }
     while (!isEnd()) {
-      ensureTokenAt(current_index);
-      if (TokStream[current_index]->tok_type == tokType)
-        return TokStream[current_index++];
-      else
-        current_index++;
+      ensureToken();
+      if ((*cursor)->tok_type == tokType) {
+        auto &ref = *cursor;
+        ++cursor;
+        return ref;
+      } else {
+        ++cursor;
+      }
     }
-
     return TokStream.back();
   }
 
   bool isEnd() {
-    ensureTokenAt(current_index);
-    return current_index < TokStream.size() &&
-           TokStream[current_index]->tok_type == TokEOF;
+    ensureToken();
+    return cursor != TokStream.end() && (*cursor)->tok_type == TokEOF;
   }
+
   std::shared_ptr<Token> peek() {
-    ensureTokenAt(current_index);
-    return TokStream[current_index];
+    ensureToken();
+    return *cursor;
   }
+
   std::shared_ptr<Token> consume() {
-    ensureTokenAt(current_index);
-    auto token = TokStream[current_index];
+    ensureToken();
+    auto token = *cursor;
     if (token->tok_type != TokEOF)
-      current_index++;
+      ++cursor;
     return token;
   }
 
   sammine_util::Location currentLocation() {
-    ensureTokenAt(current_index);
-    if (!TokStream.empty()) {
-      return TokStream[current_index]->get_location();
-    }
+    ensureToken();
+    if (!TokStream.empty())
+      return (*cursor)->get_location();
     return {};
+  }
+
+  void split_current(TokenType first_type, const std::string &first_lex,
+                     TokenType second_type, const std::string &second_lex) {
+    ensureToken();
+    auto original = *cursor;
+    auto loc = original->location;
+    *cursor = std::make_shared<Token>(first_type, first_lex, loc);
+    auto inserted = TokStream.insert(
+        std::next(cursor),
+        std::make_shared<Token>(second_type, second_lex, loc));
+    pending_splits.push_back({inserted, original});
   }
 };
 } // namespace sammine_lang

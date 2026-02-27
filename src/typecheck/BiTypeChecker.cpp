@@ -261,6 +261,15 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
+  // Generic enum: register as template, skip concrete registration
+  if (!ast->type_params.empty()) {
+    if (ast->type.type_kind == TypeKind::NonExistent) {
+      generic_enum_defs[ast->enum_name.mangled()] = ast;
+      ast->type = Type::Poisoned(); // mark as visited (not concretely usable)
+    }
+    return;
+  }
+
   std::vector<EnumType::VariantInfo> variant_infos;
   bool had_error = false;
 

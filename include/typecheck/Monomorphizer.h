@@ -16,6 +16,10 @@ public:
   instantiate(FuncDefAST *generic, const std::string &mangled_name,
               const SubstitutionMap &bindings);
 
+  static std::unique_ptr<EnumDefAST>
+  instantiate_enum(EnumDefAST *generic, const std::string &mangled_name,
+                   const SubstitutionMap &bindings);
+
 private:
   const SubstitutionMap &bindings;
   explicit Monomorphizer(const SubstitutionMap &bindings)

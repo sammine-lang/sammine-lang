@@ -168,10 +168,6 @@ public:
     return sammine_util::QualifiedName::unresolved_qualified(alias, member);
   }
 
-  // The lexer merges ">>" into a single TokSHR token. When parsing nested
-  // angle brackets (e.g. ptr<ptr<i32>>), the innermost closing '>' consumes
-  // the whole TokSHR and deposits one '>' here for its parent to pick up.
-  int split_greater_depth = 0;
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
   bool parsed_var_arg = false;
