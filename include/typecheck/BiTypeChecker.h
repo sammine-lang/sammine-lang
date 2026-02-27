@@ -311,7 +311,10 @@ public:
 
     if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(type_expr)) {
       auto pointee = resolve_type_expr(ptr->pointee.get());
-      return pointee.is_poisoned() ? pointee : Type::Pointer(pointee) ;
+      if (pointee.is_poisoned()) return pointee;
+      auto result = Type::Pointer(pointee);
+      result.is_linear = ptr->is_linear;
+      return result;
     }
 
     if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(type_expr)) {

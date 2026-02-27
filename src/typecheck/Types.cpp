@@ -153,11 +153,11 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
     return false;
   }
 
-  // Linearity check: linear and non-linear pointers are incompatible.
-  // 'ptr<T> cannot flow into ptr<T> and vice versa.
+  // Linearity check: linear and non-linear pointers are incompatible
   if (a.type_kind == TypeKind::Pointer && b.type_kind == TypeKind::Pointer) {
-    if (a.is_linear != b.is_linear)
+    if (a.is_linear != b.is_linear) {
       return false;
+    }
   }
 
   // Polymorphic integer literal can flow into concrete integer types

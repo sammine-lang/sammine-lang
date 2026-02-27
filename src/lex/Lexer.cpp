@@ -74,6 +74,13 @@ void Lexer::lexNextToken() {
 
 size_t Lexer::handleID(size_t i, const std::string &input) {
   if (input[i] == '\'') {
+    // Disambiguate: 'ptr<T> (tick for linear pointer) vs 'a' (char literal)
+    // If next char is alpha AND char after that is NOT ', it's a tick token
+    if (i + 2 < input.length() && isalpha(input[i + 1]) && input[i + 2] != '\'') {
+      i = advance(i); // consume the '
+      tokStream->push_back(Token(TokTick, "'", location));
+      return i; // leave the alpha char for the next token (e.g., "ptr")
+    }
     i = advance(i);
     char ch;
     if (input[i] == '\\') {

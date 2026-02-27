@@ -1,6 +1,6 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 # CHECK: alloc count must be an integer
 let main() -> i32 {
-  let p = alloc<f64>(3.14);
+  let p : 'ptr<f64> = alloc<f64>(3.14);
   return 0;
 }

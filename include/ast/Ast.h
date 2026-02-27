@@ -80,13 +80,16 @@ public:
 class PointerTypeExprAST : public TypeExprAST {
 public:
   std::unique_ptr<TypeExprAST> pointee;
-  explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee)
-      : TypeExprAST(TypeExprKind::Pointer), pointee(std::move(pointee)) {}
+  bool is_linear = false;
+  explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee,
+                              bool is_linear = false)
+      : TypeExprAST(TypeExprKind::Pointer), pointee(std::move(pointee)),
+        is_linear(is_linear) {}
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == TypeExprKind::Pointer;
   }
   std::string to_string() const override {
-    return "ptr<" + pointee->to_string() + ">";
+    return (is_linear ? "'" : "") + std::string("ptr<") + pointee->to_string() + ">";
   }
 };
 

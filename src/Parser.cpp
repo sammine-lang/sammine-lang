@@ -443,6 +443,32 @@ auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
 }
 
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
+  if (auto tick = expect(TokenType::TokTick)) {
+    if (auto ptr_tok = expect(TokenType::TokPtr)) {
+      REQUIRE(_lt, TokLESS, "Expected '<' after 'ptr'",
+              ptr_tok->get_location(), nullptr);
+      auto inner = ParseTypeExpr();
+      if (!inner) {
+        this->imm_error("Expected type inside 'ptr<...>'",
+                        ptr_tok->get_location());
+        return nullptr;
+      }
+      if (!consumeClosingAngleBracket()) {
+        this->imm_error("Expected '>' to close 'ptr<...>'",
+                        ptr_tok->get_location());
+        return nullptr;
+      }
+      auto result =
+          std::make_unique<PointerTypeExprAST>(std::move(inner), /*is_linear=*/true);
+      result->location = tick->get_location();
+      return result;
+    } else {
+      this->imm_error(
+          "Expected 'ptr' after tick (') for linear pointer type",
+          tick->get_location());
+      return nullptr;
+    }
+  }
   if (auto ptr_tok = expect(TokenType::TokPtr)) {
     REQUIRE(_lt, TokLESS, "Expected '<' after 'ptr'", ptr_tok->get_location(),
             nullptr);

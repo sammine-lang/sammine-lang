@@ -94,6 +94,7 @@ enum TokenType {
   TokTrue,  // Representing a boolean true
   TokFalse, // Representing a boolean false
   TokChar,  // Representing a char literal
+  TokTick,  // ' (linear pointer prefix)
   // TokIf
   TokIf,    // if
   TokElse,  // else
@@ -181,6 +182,7 @@ static const std::map<TokenType, std::string> TokenMap = {
 
     {TokNum, "number"},
     {TokChar, "char literal"},
+    {TokTick, "'"},
 
     {TokIf, "if"},
     {TokElse, "else"},

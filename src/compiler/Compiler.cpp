@@ -22,6 +22,7 @@
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
+#include "typecheck/LinearTypeChecker.h"
 #include "util/Logging.h"
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
@@ -66,6 +67,7 @@ class Compiler {
   void load_definitions();
   void semantics();
   void typecheck();
+  void linear_check();
   void dump_ast();
   void codegen();
   void codegen_mlir();
@@ -377,6 +379,19 @@ void Compiler::typecheck() {
   this->error = vs.has_errors();
 }
 
+void Compiler::linear_check() {
+  if (this->error)
+    return;
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
+               "Start linear type checking stage...\n");
+  });
+  auto lc = sammine_lang::AST::LinearTypeChecker();
+  lc.check(programAST.get());
+  reporter.report(lc);
+  this->error = lc.has_errors();
+}
+
 void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
     LOG({
@@ -610,7 +625,7 @@ void Compiler::emit_interface() {
       return et.get_name().with_module(stem).display();
     }
     case TypeKind::Pointer:
-      return "ptr<" +
+      return (t.is_linear ? "'" : "") + std::string("ptr<") +
              qualify_type(std::get<PointerType>(t.type_data).get_pointee()) +
              ">";
     case TypeKind::Array: {
@@ -740,6 +755,7 @@ void Compiler::start() {
       {"definitions", &Compiler::load_definitions},
       {"semantics", &Compiler::semantics},
       {"typecheck", &Compiler::typecheck},
+      {"linear_check", &Compiler::linear_check},
       {"dump_ast", &Compiler::dump_ast},
       {"codegen", &Compiler::codegen},
       {"optimize", &Compiler::optimize},
