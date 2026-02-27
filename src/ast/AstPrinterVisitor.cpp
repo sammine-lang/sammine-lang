@@ -78,6 +78,7 @@ public:
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
+  virtual void visit(CaseExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
@@ -108,6 +109,7 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(CaseExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -141,6 +143,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(CaseExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -564,6 +567,40 @@ void AstPrinterVisitor::visit(FieldAccessExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+
+void AstPrinterVisitor::visit(CaseExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->scrutinee.get(), "!!nullptr!! scrutinee");
+  for (auto &arm : ast->arms)
+    safeguard_visit(arm.body.get(), "!!nullptr!! arm body");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
+  std::string arms_str;
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto &arm = ast->arms[i];
+    if (arm.pattern.is_wildcard)
+      arms_str += "_";
+    else {
+      arms_str += arm.pattern.variant_name.display();
+      if (!arm.pattern.bindings.empty()) {
+        arms_str += "(";
+        for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
+          arms_str += arm.pattern.bindings[j];
+          if (j + 1 < arm.pattern.bindings.size())
+            arms_str += ", ";
+        }
+        arms_str += ")";
+      }
+    }
+    if (i + 1 < ast->arms.size())
+      arms_str += " | ";
+  }
+  add_to_rep(fmt::format("{}patterns: {}\n", tabs(), arms_str));
+}
+void AstPrinterVisitor::postorder_walk(CaseExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
   generic_preprintln(ast);

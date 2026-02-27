@@ -82,6 +82,8 @@ enum TokenType {
   TokTypeclass, // typeclass
   TokInstance,  // instance
   TokEnum,      // enum
+  TokCase,      // case
+  TokFatArrow,  // =>
   // TokID
   TokID,  // Representing an identifier
   TokStr, // Representing a string
@@ -170,6 +172,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokTypeclass, "typeclass"},
     {TokInstance, "instance"},
     {TokEnum, "enum"},
+    {TokCase, "case"},
+    {TokFatArrow, "=>"},
     {TokID, "identifier"},
 
     {TokNum, "number"},

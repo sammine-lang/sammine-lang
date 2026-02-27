@@ -48,6 +48,11 @@ public:
   // INFO: CheckAndReg variable name
   virtual void preorder_walk(VarDefAST *ast) override;
 
+  // Case expressions: arm bodies contain pattern bindings not known at scope-gen time
+  virtual void visit(CaseExprAST *ast) override {
+    ast->scrutinee->accept_vis(this);
+  }
+
   // Type class decls/instances: skip scope checking for their methods
   virtual void visit(TypeClassDeclAST *ast) override {}
   virtual void visit(TypeClassInstanceAST *ast) override {}
@@ -87,6 +92,7 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(CaseExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -121,6 +127,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(CaseExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 };

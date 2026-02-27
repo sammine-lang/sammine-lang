@@ -984,4 +984,136 @@ llvm::Value *CgVisitor::buildClosure(llvm::Value *codePtr,
   return closure;
 }
 
+void CgVisitor::visit(CaseExprAST *ast) {
+  // 1. Emit scrutinee
+  ast->scrutinee->accept_vis(this);
+  auto *scrutinee_val = ast->scrutinee->val;
+  this->abort_if_not(scrutinee_val, "Failed to codegen case scrutinee");
+
+  auto &et = std::get<EnumType>(ast->scrutinee->type.type_data);
+  auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
+  this->abort_if_not(enum_ty, "Unknown enum type in case expression");
+
+  // Alloca the scrutinee so we can GEP into it for payload extraction
+  auto *scrutinee_alloca = CodegenUtils::CreateEntryBlockAlloca(
+      getCurrentFunction(), "case_scrutinee", enum_ty);
+  resPtr->Builder->CreateStore(scrutinee_val, scrutinee_alloca);
+
+  // 2. Extract the tag
+  auto *tag_ptr =
+      resPtr->Builder->CreateStructGEP(enum_ty, scrutinee_alloca, 0, "case_tag_ptr");
+  auto *tag = resPtr->Builder->CreateLoad(
+      llvm::Type::getInt32Ty(*resPtr->Context), tag_ptr, "case_tag");
+
+  auto *function = resPtr->Builder->GetInsertBlock()->getParent();
+  auto *merge_bb = BasicBlock::Create(*resPtr->Context, "case_merge");
+
+  // 3. Create basic blocks for each arm
+  std::vector<BasicBlock *> arm_bbs;
+  BasicBlock *default_bb = nullptr;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto *bb = BasicBlock::Create(*resPtr->Context,
+        ast->arms[i].pattern.is_wildcard ? "case_wildcard" :
+        "case_arm_" + std::to_string(ast->arms[i].pattern.variant_index),
+        function);
+    arm_bbs.push_back(bb);
+    if (ast->arms[i].pattern.is_wildcard)
+      default_bb = bb;
+  }
+
+  // If no wildcard, create an unreachable default
+  if (!default_bb) {
+    default_bb = BasicBlock::Create(*resPtr->Context, "case_unreachable", function);
+    resPtr->Builder->SetInsertPoint(default_bb);
+    resPtr->Builder->CreateUnreachable();
+  }
+
+  // 4. Emit the switch instruction
+  resPtr->Builder->SetInsertPoint(tag->getParent());
+  // Position after the tag load — need to set insert point after tag extraction
+  resPtr->Builder->SetInsertPoint(tag->getParent(), tag->getParent()->end());
+  auto *switch_inst = resPtr->Builder->CreateSwitch(tag, default_bb,
+      static_cast<unsigned>(ast->arms.size()));
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    if (ast->arms[i].pattern.is_wildcard)
+      continue;
+    switch_inst->addCase(
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
+                               ast->arms[i].pattern.variant_index),
+        arm_bbs[i]);
+  }
+
+  // 5. Emit each arm body
+  // Track values and ending blocks for the PHI node
+  std::vector<std::pair<llvm::Value *, BasicBlock *>> phi_entries;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto &arm = ast->arms[i];
+    resPtr->Builder->SetInsertPoint(arm_bbs[i]);
+
+    // Extract payload bindings (if not wildcard and has bindings)
+    if (!arm.pattern.is_wildcard && !arm.pattern.bindings.empty() &&
+        enum_ty->getNumElements() > 1) {
+      auto &vi = et.get_variant(arm.pattern.variant_index);
+      auto *payload_ptr = resPtr->Builder->CreateStructGEP(
+          enum_ty, scrutinee_alloca, 1, "case_payload_ptr");
+
+      size_t byte_offset = 0;
+      for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
+        auto *field_ty = type_converter.get_type(vi.payload_types[j]);
+        auto *field_ptr = resPtr->Builder->CreateConstGEP1_64(
+            llvm::Type::getInt8Ty(*resPtr->Context), payload_ptr, byte_offset,
+            "case_field_ptr");
+        auto *field_val = resPtr->Builder->CreateLoad(
+            field_ty, field_ptr, arm.pattern.bindings[j]);
+
+        // Store in an alloca so the binding is accessible by name
+        auto *binding_alloca = CodegenUtils::CreateEntryBlockAlloca(
+            getCurrentFunction(), arm.pattern.bindings[j], field_ty);
+        resPtr->Builder->CreateStore(field_val, binding_alloca);
+        this->allocaValues.top()[arm.pattern.bindings[j]] = binding_alloca;
+
+        byte_offset +=
+            resPtr->Module->getDataLayout().getTypeAllocSize(field_ty);
+      }
+    }
+
+    // Emit arm body
+    arm.body->accept_vis(this);
+
+    // Get the result value (last statement in the block)
+    llvm::Value *arm_val = nullptr;
+    if (!arm.body->Statements.empty())
+      arm_val = arm.body->Statements.back()->val;
+
+    // Check if the block already has a terminator (e.g. return)
+    auto *end_bb = resPtr->Builder->GetInsertBlock();
+    if (!end_bb->getTerminator())
+      resPtr->Builder->CreateBr(merge_bb);
+
+    if (arm_val && arm.body->type.type_kind != TypeKind::Never)
+      phi_entries.push_back({arm_val, end_bb});
+  }
+
+  // 6. Merge block with PHI node
+  if (merge_bb->hasNPredecessorsOrMore(1)) {
+    function->insert(function->end(), merge_bb);
+    resPtr->Builder->SetInsertPoint(merge_bb);
+
+    if (!phi_entries.empty() && ast->type.type_kind != TypeKind::Unit &&
+        ast->type.type_kind != TypeKind::Never) {
+      auto *phi = resPtr->Builder->CreatePHI(
+          type_converter.get_type(ast->type),
+          static_cast<unsigned>(phi_entries.size()), "case_result");
+      for (auto &[val, bb] : phi_entries)
+        phi->addIncoming(val, bb);
+      ast->val = phi;
+    }
+  } else {
+    delete merge_bb;
+  }
+}
+
 } // namespace sammine_lang::AST

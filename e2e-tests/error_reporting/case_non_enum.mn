@@ -1,0 +1,10 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK-ERR: Case expression requires an enum type
+
+let main() -> i32 {
+  let x: i32 = 42;
+  case x {
+    _ => 0,
+  };
+  return 0;
+}

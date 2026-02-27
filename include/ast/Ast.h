@@ -672,6 +672,40 @@ public:
   AST_NODE_METHODS("FieldAccessExprAST", NodeKind::FieldAccessExprAST)
 };
 
+struct CasePattern {
+  sammine_util::QualifiedName variant_name =
+      sammine_util::QualifiedName::local("");
+  std::vector<std::string> bindings;
+  bool is_wildcard = false;
+  sammine_util::Location location;
+  size_t variant_index = 0;
+};
+
+struct CaseArm {
+  CasePattern pattern;
+  std::unique_ptr<BlockAST> body;
+};
+
+class CaseExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> scrutinee;
+  std::vector<CaseArm> arms;
+
+  explicit CaseExprAST(std::shared_ptr<Token> case_tok,
+                       std::unique_ptr<ExprAST> scrutinee,
+                       std::vector<CaseArm> arms)
+      : ExprAST(NodeKind::CaseExprAST), scrutinee(std::move(scrutinee)),
+        arms(std::move(arms)) {
+    this->join_location(case_tok)->join_location(this->scrutinee.get());
+    for (auto &arm : this->arms) {
+      if (arm.body)
+        this->join_location(arm.body.get());
+    }
+  }
+
+  AST_NODE_METHODS("CaseExprAST", NodeKind::CaseExprAST)
+};
+
 class TypeClassDeclAST : public DefinitionAST {
 public:
   std::string class_name;

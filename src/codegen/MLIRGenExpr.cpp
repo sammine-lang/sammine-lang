@@ -820,4 +820,167 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
   return result;
 }
 
+mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
+  auto location = loc(ast);
+
+  // 1. Emit scrutinee
+  auto scrutineeVal = emitExpr(ast->scrutinee.get());
+  auto &et = std::get<EnumType>(ast->scrutinee->type.type_data);
+  auto enumTy = enumTypes.at(et.get_name().mangled());
+
+  // Alloca the scrutinee so we can GEP into it
+  auto one = mlir::arith::ConstantIntOp::create(builder, location,
+                                                  builder.getI64Type(), 1);
+  auto scrutineeAlloca = mlir::LLVM::AllocaOp::create(
+      builder, location, llvmPtrTy(), enumTy, one);
+  mlir::LLVM::StoreOp::create(builder, location, scrutineeVal, scrutineeAlloca);
+
+  // 2. Extract the tag
+  auto tagPtr = mlir::LLVM::GEPOp::create(
+      builder, location, llvmPtrTy(), enumTy, scrutineeAlloca,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0});
+  auto tag = mlir::LLVM::LoadOp::create(builder, location,
+                                          builder.getI32Type(), tagPtr);
+
+  bool hasResult = ast->type.type_kind != TypeKind::Unit &&
+                   ast->type.type_kind != TypeKind::Never;
+
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+
+  // 3. Create blocks for each arm + merge
+  std::vector<mlir::Block *> armBlocks;
+  mlir::Block *defaultBlock = nullptr;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto *bb = new mlir::Block();
+    armBlocks.push_back(bb);
+    if (ast->arms[i].pattern.is_wildcard)
+      defaultBlock = bb;
+  }
+
+  auto *mergeBlock = new mlir::Block();
+  if (hasResult)
+    mergeBlock->addArgument(convertType(ast->type), location);
+
+  // If no wildcard, create an unreachable default
+  if (!defaultBlock) {
+    defaultBlock = new mlir::Block();
+    parentRegion->push_back(defaultBlock);
+    builder.setInsertionPointToStart(defaultBlock);
+    mlir::LLVM::UnreachableOp::create(builder, location);
+  }
+
+  // 4. Emit switch via cascading cmpi + cond_br
+  // (LLVM::SwitchOp is not always available in LLVM dialect, so use cf branches)
+  builder.setInsertionPointAfter(tag.getOperation());
+
+  // Build a chain: for each non-wildcard arm, compare tag and branch
+  // Final fallthrough goes to default block
+  std::vector<size_t> nonWildcardIndices;
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    if (!ast->arms[i].pattern.is_wildcard)
+      nonWildcardIndices.push_back(i);
+  }
+
+  for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
+    size_t i = nonWildcardIndices[ci];
+    auto &arm = ast->arms[i];
+    auto tagConst = mlir::arith::ConstantIntOp::create(
+        builder, location, builder.getI32Type(),
+        static_cast<int64_t>(arm.pattern.variant_index));
+    auto cmp = mlir::arith::CmpIOp::create(
+        builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);
+
+    // If this is the last non-wildcard, the false branch goes to default
+    mlir::Block *falseTarget;
+    if (ci + 1 < nonWildcardIndices.size()) {
+      // Create a new comparison block for the next arm
+      auto *nextCmpBlock = new mlir::Block();
+      parentRegion->push_back(nextCmpBlock);
+      falseTarget = nextCmpBlock;
+    } else {
+      falseTarget = defaultBlock;
+    }
+
+    mlir::cf::CondBranchOp::create(builder, location, cmp,
+                                    armBlocks[i], {},
+                                    falseTarget, {});
+
+    if (ci + 1 < nonWildcardIndices.size()) {
+      builder.setInsertionPointToStart(falseTarget);
+    }
+  }
+
+  // If there are no non-wildcard arms, branch directly to default
+  if (nonWildcardIndices.empty()) {
+    mlir::cf::BranchOp::create(builder, location, defaultBlock);
+  }
+
+  // 5. Emit each arm body
+  bool allTerminated = true;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto &arm = ast->arms[i];
+    auto *armBlock = armBlocks[i];
+    parentRegion->push_back(armBlock);
+    builder.setInsertionPointToStart(armBlock);
+
+    // Extract payload bindings
+    if (!arm.pattern.is_wildcard && !arm.pattern.bindings.empty()) {
+      auto &vi = et.get_variant(arm.pattern.variant_index);
+      auto payloadPtr = mlir::LLVM::GEPOp::create(
+          builder, location, llvmPtrTy(), enumTy, scrutineeAlloca,
+          llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1});
+
+      int64_t byte_offset = 0;
+      for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
+        auto fieldMlirTy = convertType(vi.payload_types[j]);
+        mlir::Value fieldPtr;
+        if (byte_offset == 0) {
+          fieldPtr = payloadPtr;
+        } else {
+          fieldPtr = mlir::LLVM::GEPOp::create(
+              builder, location, llvmPtrTy(), builder.getI8Type(), payloadPtr,
+              llvm::ArrayRef<mlir::LLVM::GEPArg>{
+                  static_cast<int32_t>(byte_offset)});
+        }
+        auto fieldVal = mlir::LLVM::LoadOp::create(
+            builder, location, fieldMlirTy, fieldPtr);
+
+        // Register in symbol table
+        symbolTable.registerNameT(arm.pattern.bindings[j], fieldVal);
+
+        byte_offset += getTypeSize(vi.payload_types[j]);
+      }
+    }
+
+    // Emit body
+    auto armVal = emitBlock(arm.body.get());
+
+    auto *armEnd = builder.getInsertionBlock();
+    bool armTerminated = !armEnd->empty() &&
+                         armEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
+    if (!armTerminated) {
+      if (hasResult)
+        mlir::cf::BranchOp::create(builder, location, mergeBlock,
+                                    mlir::ValueRange{armVal});
+      else
+        mlir::cf::BranchOp::create(builder, location, mergeBlock);
+      allTerminated = false;
+    } else {
+      allTerminated = allTerminated && true;
+    }
+  }
+
+  // 6. Merge block
+  if (!allTerminated) {
+    parentRegion->push_back(mergeBlock);
+    builder.setInsertionPointToStart(mergeBlock);
+    return hasResult ? mergeBlock->getArgument(0) : nullptr;
+  } else {
+    delete mergeBlock;
+    return nullptr;
+  }
+}
+
 } // namespace sammine_lang

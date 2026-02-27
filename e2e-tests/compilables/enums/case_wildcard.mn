@@ -1,0 +1,28 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: is red
+# CHECK: not red
+# CHECK: not red
+
+import std;
+
+enum Color = Red | Green | Blue;
+
+let is_red(c: Color) -> i32 {
+  case c {
+    Color::Red => {
+      std::printf("is red\n");
+      return 1;
+    },
+    _ => {
+      std::printf("not red\n");
+      return 0;
+    },
+  }
+}
+
+let main() -> i32 {
+  is_red(Color::Red);
+  is_red(Color::Green);
+  is_red(Color::Blue);
+  return 0;
+}

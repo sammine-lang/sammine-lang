@@ -898,6 +898,127 @@ Type BiTypeCheckerVisitor::synthesize(TypeClassInstanceAST *ast) {
   return Type::NonExistent();
 }
 
+Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+
+  // 1. Synthesize scrutinee — must be an enum type
+  auto scrutinee_type = ast->scrutinee->accept_synthesis(this);
+  if (scrutinee_type.type_kind == TypeKind::Poisoned)
+    return ast->type = Type::Poisoned();
+
+  if (scrutinee_type.type_kind != TypeKind::Enum) {
+    this->add_error(ast->scrutinee->get_location(),
+                    fmt::format("Case expression requires an enum type, got {}",
+                                scrutinee_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
+
+  auto &et = std::get<EnumType>(scrutinee_type.type_data);
+
+  // 2. Process each arm: validate pattern, type-check body with bindings in scope
+  // Capture the enclosing function scope so return statements work inside arms
+  auto enclosing_scope = id_to_type.top().s;
+
+  Type result_type = Type::Never();
+  bool had_error = false;
+
+  for (auto &arm : ast->arms) {
+    if (arm.pattern.is_wildcard) {
+      // Wildcard: no bindings, just type-check the body
+      enter_new_scope();
+      if (enclosing_scope.has_value())
+        id_to_type.top().setScope(enclosing_scope.value());
+      arm.body->accept_vis(this);
+      auto arm_type = arm.body->accept_synthesis(this);
+      exit_new_scope();
+
+      // Unify with result type
+      if (result_type.type_kind == TypeKind::Never) {
+        result_type = arm_type;
+      } else if (arm_type.type_kind != TypeKind::Never &&
+                 arm_type != result_type) {
+        if (type_map_ordering.compatible_to_from(result_type, arm_type)) {
+          // arm_type is compatible with result_type, keep result_type
+        } else if (type_map_ordering.compatible_to_from(arm_type, result_type)) {
+          result_type = arm_type;
+        } else {
+          this->add_error(
+              arm.body->get_location(),
+              fmt::format(
+                  "Case arms have incompatible types: expected {}, got {}",
+                  result_type.to_string(), arm_type.to_string()));
+          had_error = true;
+        }
+      }
+      continue;
+    }
+
+    // Non-wildcard: look up variant in enum
+    auto variant_name = arm.pattern.variant_name.name;
+    auto variant_idx = et.get_variant_index(variant_name);
+    if (!variant_idx.has_value()) {
+      this->add_error(arm.pattern.location,
+                      fmt::format("Enum '{}' has no variant '{}'",
+                                  et.get_name().display(), variant_name));
+      had_error = true;
+      continue;
+    }
+
+    // Store the resolved variant index for codegen
+    arm.pattern.variant_index = variant_idx.value();
+    auto &vi = et.get_variant(variant_idx.value());
+
+    // Validate binding count
+    if (arm.pattern.bindings.size() != vi.payload_types.size()) {
+      this->add_error(
+          arm.pattern.location,
+          fmt::format("Pattern '{}::{}' expects {} bindings, got {}",
+                      et.get_name().display(), variant_name,
+                      vi.payload_types.size(), arm.pattern.bindings.size()));
+      had_error = true;
+      continue;
+    }
+
+    // Enter a new scope and register bindings with their payload types
+    enter_new_scope();
+    if (enclosing_scope.has_value())
+      id_to_type.top().setScope(enclosing_scope.value());
+    for (size_t i = 0; i < arm.pattern.bindings.size(); i++) {
+      id_to_type.registerNameT(arm.pattern.bindings[i], vi.payload_types[i]);
+    }
+
+    // Type-check the arm body
+    arm.body->accept_vis(this);
+    auto arm_type = arm.body->accept_synthesis(this);
+    exit_new_scope();
+
+    // Unify with result type (same Never logic as IfExprAST)
+    if (result_type.type_kind == TypeKind::Never) {
+      result_type = arm_type;
+    } else if (arm_type.type_kind != TypeKind::Never &&
+               arm_type != result_type) {
+      if (type_map_ordering.compatible_to_from(result_type, arm_type)) {
+        // arm_type is compatible with result_type, keep result_type
+      } else if (type_map_ordering.compatible_to_from(arm_type, result_type)) {
+        result_type = arm_type;
+      } else {
+        this->add_error(
+            arm.body->get_location(),
+            fmt::format(
+                "Case arms have incompatible types: expected {}, got {}",
+                result_type.to_string(), arm_type.to_string()));
+        had_error = true;
+      }
+    }
+  }
+
+  if (had_error)
+    return ast->type = Type::Poisoned();
+
+  return ast->type = result_type;
+}
+
 // --- Generic support: unification, substitution ---
 
 bool BiTypeCheckerVisitor::contains_type_param(const Type &type,

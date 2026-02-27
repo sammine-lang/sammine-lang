@@ -312,6 +312,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitStructLiteralExpr(structLit);
   if (auto *fieldAccess = llvm::dyn_cast<AST::FieldAccessExprAST>(ast))
     return emitFieldAccessExpr(fieldAccess);
+  if (auto *caseExpr = llvm::dyn_cast<AST::CaseExprAST>(ast))
+    return emitCaseExpr(caseExpr);
 
   sammine_util::abort(
       fmt::format("MLIRGen: unsupported expression type '{}'",

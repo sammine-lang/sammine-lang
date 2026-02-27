@@ -53,7 +53,8 @@ enum class NodeKind {
   UnaryNegExprAST,
   StructLiteralExprAST,
   FieldAccessExprAST,
-  LastExpr = FieldAccessExprAST,
+  CaseExprAST,
+  LastExpr = CaseExprAST,
 
   // DefinitionAST subclasses [FirstDef..LastDef]
   FirstDef,
@@ -198,6 +199,10 @@ public:
   virtual void preorder_walk(FieldAccessExprAST *ast) = 0;
   virtual void postorder_walk(FieldAccessExprAST *ast) = 0;
 
+  virtual void visit(CaseExprAST *ast);
+  virtual void preorder_walk(CaseExprAST *ast) = 0;
+  virtual void postorder_walk(CaseExprAST *ast) = 0;
+
   virtual void visit(TypeClassDeclAST *ast);
   virtual void preorder_walk(TypeClassDeclAST *ast) = 0;
   virtual void postorder_walk(TypeClassDeclAST *ast) = 0;
@@ -292,6 +297,7 @@ public:
   virtual Type synthesize(UnaryNegExprAST *ast) = 0;
   virtual Type synthesize(StructLiteralExprAST *ast) = 0;
   virtual Type synthesize(FieldAccessExprAST *ast) = 0;
+  virtual Type synthesize(CaseExprAST *ast) = 0;
   virtual Type synthesize(TypeClassDeclAST *ast) = 0;
   virtual Type synthesize(TypeClassInstanceAST *ast) = 0;
 

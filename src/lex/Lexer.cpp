@@ -174,6 +174,7 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
         {"import", TokImport}, {"as", TokAs},
         {"typeclass", TokTypeclass}, {"instance", TokInstance},
         {"enum", TokEnum},
+        {"case", TokCase},
     };
     auto it = keywords.find(IdentifierStr);
     tokStream->push_back(Token(it != keywords.end() ? it->second : TokID,
@@ -293,7 +294,7 @@ static const OpRule operatorRules[] = {
     {'^', TokXOR, "^",        {}},
     {'<', TokLESS, "<",       {{'<', TokSHL, "<<"}, {'=', TokLessEqual, "<="}}},
     {'>', TokGREATER, ">",    {{'>', TokSHR, ">>"}, {'=', TokGreaterEqual, ">="}}},
-    {'=', TokASSIGN, "=",     {{'=', TokEQUAL, "=="}}},
+    {'=', TokASSIGN, "=",     {{'=', TokEQUAL, "=="}, {'>', TokFatArrow, "=>"}}},
     {'!', TokNOT, "!",        {{'=', TokNOTEqual, "!="}}},
 };
 // clang-format on

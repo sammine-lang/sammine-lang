@@ -35,6 +35,7 @@ class LenExprAST;
 class UnaryNegExprAST;
 class StructLiteralExprAST;
 class FieldAccessExprAST;
+class CaseExprAST;
 class EnumDefAST;
 class TypeClassDeclAST;
 class TypeClassInstanceAST;

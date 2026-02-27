@@ -189,6 +189,15 @@ void ASTVisitor::visit(FieldAccessExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(CaseExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->scrutinee->accept_vis(this);
+  for (auto &arm : ast->arms) {
+    arm.body->accept_vis(this);
+  }
+  ast->walk_with_postorder(this);
+}
+
 void ASTVisitor::visit(TypeClassDeclAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &method : ast->methods)

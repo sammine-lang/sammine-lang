@@ -222,6 +222,19 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
         clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
   }
 
+  if (auto *ce = llvm::dyn_cast<CaseExprAST>(expr)) {
+    std::vector<CaseArm> cloned_arms;
+    for (auto &arm : ce->arms) {
+      CaseArm cloned_arm;
+      cloned_arm.pattern = arm.pattern; // copy pattern (POD + strings)
+      cloned_arm.body = clone_block(arm.body.get());
+      cloned_arms.push_back(std::move(cloned_arm));
+    }
+    return std::make_unique<CaseExprAST>(
+        make_tok("case"), clone_expr(ce->scrutinee.get()),
+        std::move(cloned_arms));
+  }
+
   sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");
 }
 

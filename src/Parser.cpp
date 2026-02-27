@@ -691,7 +691,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       &Parser::ParseAddrOfExpr, &Parser::ParseAllocExpr, &Parser::ParseFreeExpr,
       &Parser::ParseLenExpr,
       &Parser::ParseArrayLiteralExpr, &Parser::ParseCallExpr,
-      &Parser::ParseParenExpr, &Parser::ParseIfExpr,
+      &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
       &Parser::ParseNumberExpr, &Parser::ParseBoolExpr,
       &Parser::ParseCharExpr, &Parser::ParseStringExpr);
   if (!result.ok())
@@ -1039,6 +1039,136 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
   }
   return {std::make_unique<IfExprAST>(std::move(cond), std::move(then_block),
                                       std::move(else_block)),
+          SUCCESS};
+}
+
+auto Parser::ParseCaseExpr() -> p<ExprAST> {
+  auto case_tok = expect(TokenType::TokCase);
+  if (!case_tok)
+    return {nullptr, NONCOMMITTED};
+
+  auto [scrutinee, scrut_result] = ParseExpr();
+  if (scrut_result != SUCCESS) {
+    emit_if_uncommitted(scrut_result, "Expected expression after 'case'",
+                        case_tok->get_location());
+    return {nullptr, FAILED};
+  }
+
+  auto left_curly = expect(TokenType::TokLeftCurly);
+  if (!left_curly) {
+    imm_error("Expected '{' after case scrutinee",
+              scrutinee->get_location());
+    return {nullptr, FAILED};
+  }
+
+  std::vector<CaseArm> arms;
+  while (!tokStream->isEnd() &&
+         tokStream->peek()->tok_type != TokenType::TokRightCurly) {
+    CasePattern pattern;
+    auto pat_tok = tokStream->peek();
+
+    if (pat_tok->tok_type == TokID && pat_tok->lexeme == "_") {
+      tokStream->consume();
+      pattern.is_wildcard = true;
+      pattern.variant_name = sammine_util::QualifiedName::local("_");
+      pattern.location = pat_tok->get_location();
+    } else if (pat_tok->tok_type == TokID) {
+      auto prefix_tok = tokStream->consume();
+      auto dcolon = expect(TokenType::TokDoubleColon);
+      if (!dcolon) {
+        imm_error(
+            fmt::format("Expected '::' after '{}' in case pattern",
+                        prefix_tok->lexeme),
+            prefix_tok->get_location());
+        return {nullptr, FAILED};
+      }
+      auto variant_tok = expect(TokenType::TokID);
+      if (!variant_tok) {
+        imm_error("Expected variant name after '::'",
+                  dcolon->get_location());
+        return {nullptr, FAILED};
+      }
+
+      pattern.variant_name =
+          resolveQualifiedName(prefix_tok->lexeme, variant_tok->lexeme);
+      pattern.location =
+          prefix_tok->get_location() | variant_tok->get_location();
+
+      if (auto lparen = expect(TokenType::TokLeftParen)) {
+        while (!tokStream->isEnd() &&
+               tokStream->peek()->tok_type != TokenType::TokRightParen) {
+          auto binding_tok = expect(TokenType::TokID);
+          if (!binding_tok) {
+            imm_error("Expected binding name in pattern",
+                      lparen->get_location());
+            return {nullptr, FAILED};
+          }
+          pattern.bindings.push_back(binding_tok->lexeme);
+          pattern.location = pattern.location | binding_tok->get_location();
+          if (!expect(TokenType::TokComma))
+            break;
+        }
+        auto rparen = expect(TokenType::TokRightParen);
+        if (!rparen) {
+          imm_error("Expected ')' to close pattern bindings",
+                    lparen->get_location());
+          return {nullptr, FAILED};
+        }
+        pattern.location = pattern.location | rparen->get_location();
+      }
+    } else {
+      imm_error("Expected pattern in case arm", pat_tok->get_location());
+      return {nullptr, FAILED};
+    }
+
+    auto arrow = expect(TokenType::TokFatArrow);
+    if (!arrow) {
+      imm_error("Expected '=>' after case pattern", pattern.location);
+      return {nullptr, FAILED};
+    }
+
+    CaseArm arm;
+    arm.pattern = std::move(pattern);
+    if (tokStream->peek()->tok_type == TokenType::TokLeftCurly) {
+      auto [block, block_result] = ParseBlock();
+      if (block_result != SUCCESS) {
+        emit_if_uncommitted(block_result, "Expected block in case arm",
+                            arrow->get_location());
+        return {nullptr, FAILED};
+      }
+      arm.body = std::move(block);
+    } else {
+      auto [expr, expr_result] = ParseExpr();
+      if (expr_result != SUCCESS) {
+        emit_if_uncommitted(expr_result, "Expected expression in case arm",
+                            arrow->get_location());
+        return {nullptr, FAILED};
+      }
+      auto block = std::make_unique<BlockAST>();
+      block->join_location(expr.get());
+      block->Statements.push_back(std::move(expr));
+      arm.body = std::move(block);
+    }
+    arms.push_back(std::move(arm));
+
+    if (!expect(TokenType::TokComma))
+      break;
+  }
+
+  auto right_curly = expect(TokenType::TokRightCurly);
+  if (!right_curly) {
+    imm_error("Expected '}' to close case expression",
+              case_tok->get_location());
+    return {nullptr, FAILED};
+  }
+
+  if (arms.empty()) {
+    imm_error("Case expression must have at least one arm",
+              case_tok->get_location());
+  }
+
+  return {std::make_unique<CaseExprAST>(case_tok, std::move(scrutinee),
+                                        std::move(arms)),
           SUCCESS};
 }
 
