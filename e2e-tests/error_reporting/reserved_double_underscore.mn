@@ -1,0 +1,10 @@
+# RUN: ! %sammine --file %full %O --check 2>&1 | %check %full
+# CHECK: reserved for C interop name mangling
+# CHECK: Please use single underscore '_'
+let my__func() -> i32 {
+  return 0;
+}
+
+let main() -> i32 {
+  return 0;
+}

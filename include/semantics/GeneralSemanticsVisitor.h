@@ -23,6 +23,10 @@ public:
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
   GeneralSemanticsVisitor() { scope_stack.push_context(); }
 
+  // Check if name contains "__" (reserved for C mangling)
+  void check_reserved_identifier(const std::string &name,
+                                 sammine_util::Location loc);
+
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
 
@@ -35,11 +39,11 @@ public:
 
   virtual void preorder_walk(ProgramAST *ast) override {}
 
-  virtual void preorder_walk(VarDefAST *ast) override {}
+  virtual void preorder_walk(VarDefAST *ast) override;
 
   virtual void preorder_walk(ExternAST *ast) override {}
-  virtual void preorder_walk(StructDefAST *ast) override {}
-  virtual void preorder_walk(EnumDefAST *ast) override {}
+  virtual void preorder_walk(StructDefAST *ast) override;
+  virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override {}
   virtual void preorder_walk(CallExprAST *ast) override {}
   virtual void preorder_walk(BinaryExprAST *ast) override {}
