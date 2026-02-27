@@ -891,6 +891,18 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   return ast->type = st.get_field_type(idx.value());
 }
 
+Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
+  if (!ast->condition || !ast->body)
+    return ast->type = Type::Poisoned();
+  auto cond_type = ast->condition->accept_synthesis(this);
+  if (cond_type != Type::Bool() && cond_type != Type::Poisoned()) {
+    this->add_error(ast->condition->get_location(),
+                    fmt::format("while condition must be bool, found {}",
+                                cond_type.to_string()));
+  }
+  return ast->type = Type::Unit();
+}
+
 Type BiTypeCheckerVisitor::synthesize(TypeClassDeclAST *ast) {
   return Type::NonExistent();
 }

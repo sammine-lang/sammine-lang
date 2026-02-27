@@ -142,6 +142,7 @@ public:
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCaseExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseWhileExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseNumberExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStringExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseVariableExpr() -> p<ExprAST>;

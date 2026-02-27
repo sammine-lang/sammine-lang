@@ -63,6 +63,7 @@ public:
   virtual void preorder_walk(StructLiteralExprAST *ast) override {}
   virtual void preorder_walk(FieldAccessExprAST *ast) override {}
   virtual void preorder_walk(CaseExprAST *ast) override {}
+  virtual void preorder_walk(WhileExprAST *ast) override {}
   using ScopedASTVisitor::visit;
   // Type class declarations: no-op (only prototypes, no bodies)
   virtual void visit(TypeClassDeclAST *ast) override {}
@@ -104,6 +105,7 @@ public:
   virtual void postorder_walk(StructLiteralExprAST *ast) override {}
   virtual void postorder_walk(FieldAccessExprAST *ast) override {}
   virtual void postorder_walk(CaseExprAST *ast) override {}
+  virtual void postorder_walk(WhileExprAST *ast) override {}
   virtual void postorder_walk(TypeClassDeclAST *ast) override {}
   virtual void postorder_walk(TypeClassInstanceAST *ast) override {}
 };

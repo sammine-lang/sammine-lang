@@ -79,6 +79,7 @@ public:
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
   virtual void visit(CaseExprAST *ast) override;
+  virtual void visit(WhileExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
@@ -110,6 +111,7 @@ public:
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
   virtual void preorder_walk(CaseExprAST *ast) override;
+  virtual void preorder_walk(WhileExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -144,6 +146,7 @@ public:
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
   virtual void postorder_walk(CaseExprAST *ast) override;
+  virtual void postorder_walk(WhileExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -601,6 +604,17 @@ void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
   add_to_rep(fmt::format("{}patterns: {}\n", tabs(), arms_str));
 }
 void AstPrinterVisitor::postorder_walk(CaseExprAST *ast) {}
+
+void AstPrinterVisitor::visit(WhileExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->condition.get(), "!!nullptr!! condition\n");
+  safeguard_visit(ast->body.get(), "!!nullptr!! body\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(WhileExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(WhileExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
   generic_preprintln(ast);

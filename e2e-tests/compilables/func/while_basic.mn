@@ -1,0 +1,17 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 5
+# CHECK: 4
+# CHECK: 3
+# CHECK: 2
+# CHECK: 1
+
+import std;
+
+let main() -> i32 {
+  let mut i: i32 = 5;
+  while i > 0 {
+    std::printf("%d\n", i);
+    i = i - 1;
+  };
+  return 0;
+}

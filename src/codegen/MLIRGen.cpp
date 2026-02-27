@@ -290,6 +290,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitVarDef(varDef);
   if (auto *ifE = llvm::dyn_cast<AST::IfExprAST>(ast))
     return emitIfExpr(ifE);
+  if (auto *whileE = llvm::dyn_cast<AST::WhileExprAST>(ast))
+    return emitWhileExpr(whileE);
   if (auto *neg = llvm::dyn_cast<AST::UnaryNegExprAST>(ast))
     return emitUnaryNegExpr(neg);
   if (auto *str = llvm::dyn_cast<AST::StringExprAST>(ast))

@@ -173,7 +173,7 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
         {"alloc", TokAlloc},   {"free", TokFree},     {"len", TokLen},
         {"import", TokImport}, {"as", TokAs},
         {"typeclass", TokTypeclass}, {"instance", TokInstance},
-        {"enum", TokEnum},
+        {"enum", TokEnum},           {"while", TokWhile},
         {"case", TokCase},
     };
     auto it = keywords.find(IdentifierStr);

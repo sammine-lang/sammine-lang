@@ -692,6 +692,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       &Parser::ParseLenExpr,
       &Parser::ParseArrayLiteralExpr, &Parser::ParseCallExpr,
       &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
+      &Parser::ParseWhileExpr,
       &Parser::ParseNumberExpr, &Parser::ParseBoolExpr,
       &Parser::ParseCharExpr, &Parser::ParseStringExpr);
   if (!result.ok())
@@ -1170,6 +1171,31 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
   return {std::make_unique<CaseExprAST>(case_tok, std::move(scrutinee),
                                         std::move(arms)),
           SUCCESS};
+}
+
+auto Parser::ParseWhileExpr() -> p<ExprAST> {
+  auto while_tok = expect(TokenType::TokWhile);
+  if (!while_tok)
+    return {nullptr, NONCOMMITTED};
+
+  auto [cond, cond_result] = ParseExpr();
+  if (cond_result != SUCCESS) {
+    emit_if_uncommitted(cond_result, "Expected a condition after 'while'",
+                        while_tok->get_location());
+    return {std::make_unique<WhileExprAST>(std::move(cond), nullptr), FAILED};
+  }
+
+  auto [body, body_result] = ParseBlock();
+  if (body_result != SUCCESS) {
+    emit_if_uncommitted(body_result, "Expected a block after 'while' condition",
+                        cond->get_location());
+    return {std::make_unique<WhileExprAST>(std::move(cond), std::move(body)),
+            FAILED};
+  }
+
+  auto result = std::make_unique<WhileExprAST>(std::move(cond), std::move(body));
+  result->join_location(while_tok);
+  return {std::move(result), SUCCESS};
 }
 
 auto Parser::ParseStringExpr() -> p<ExprAST> {

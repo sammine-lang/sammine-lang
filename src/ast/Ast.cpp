@@ -198,6 +198,14 @@ void ASTVisitor::visit(CaseExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(WhileExprAST *ast) {
+  ast->walk_with_preorder(this);
+  if (ast->condition)
+    ast->condition->accept_vis(this);
+  if (ast->body)
+    ast->body->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
 void ASTVisitor::visit(TypeClassDeclAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &method : ast->methods)

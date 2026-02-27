@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: while condition must be bool
+
+let main() -> i32 {
+  while 42 {
+    return 0;
+  };
+  return 0;
+}
