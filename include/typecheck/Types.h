@@ -104,7 +104,8 @@ public:
   bool operator==(const EnumType &t) const;
   const sammine_util::QualifiedName &get_name() const { return name; }
   const std::vector<VariantInfo> &get_variants() const { return variants; }
-  std::optional<size_t> get_variant_index(const std::string &variant_name) const;
+  std::optional<size_t>
+  get_variant_index(const std::string &variant_name) const;
   const VariantInfo &get_variant(size_t idx) const { return variants[idx]; }
   size_t variant_count() const { return variants.size(); }
   EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants);
@@ -151,8 +152,7 @@ struct Type {
   }
   static Type Enum(sammine_util::QualifiedName name,
                    std::vector<EnumType::VariantInfo> variants) {
-    return Type{TypeKind::Enum,
-                EnumType(std::move(name), std::move(variants))};
+    return Type{TypeKind::Enum, EnumType(std::move(name), std::move(variants))};
   }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
@@ -228,6 +228,8 @@ struct Type {
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
   }
+
+  bool is_poisoned() const { return this->type_kind == TypeKind::Poisoned; }
 
   bool is_literal() const {
     switch (type_kind) {

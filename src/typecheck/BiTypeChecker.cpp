@@ -11,7 +11,8 @@
 #include "util/Logging.h"
 
 //! \file BiTypeChecker.cpp
-//! \brief Implementation of BiTypeCheckerVisitor: visit() methods, registration,
+//! \brief Implementation of BiTypeCheckerVisitor: visit() methods,
+//! registration,
 //!        and helpers. Synthesize methods are in BiTypeCheckerSynthesize.cpp.
 namespace sammine_lang::AST {
 
@@ -111,7 +112,8 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   ast->accept_synthesis(this);
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
-  id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(), ast->type);
+  id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(),
+                                           ast->type);
   if (ast->functionName.name == "main") {
     auto fn_type = std::get<FunctionType>(ast->type.type_data);
     auto return_type = fn_type.get_return_type();
@@ -238,24 +240,21 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
 
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Skip if already registered (e.g. by first pass)
-  if (ast->type.type_kind != TypeKind::NonExistent)
+
+  if (ast->type.synthesized())
     return;
 
   std::vector<std::string> field_names;
   std::vector<Type> field_types;
-  bool had_error = false;
 
   for (auto &member : ast->struct_members) {
     auto ft = resolve_type_expr(member->type_expr.get());
-    if (ft.type_kind == TypeKind::Poisoned)
-      had_error = true;
     field_names.push_back(member->name);
     field_types.push_back(ft);
-  }
-
-  if (had_error) {
-    ast->type = Type::Poisoned();
-    return;
+    if (ft.type_kind == TypeKind::Poisoned) {
+      ast->type = Type::Poisoned();
+      return;
+    }
   }
 
   auto struct_type =
@@ -268,7 +267,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
 void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Generic enum: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
-    if (ast->type.type_kind == TypeKind::NonExistent) {
+    if (!ast->type.synthesized()) {
       generic_enum_defs[ast->enum_name.mangled()] = ast;
       ast->type = Type::Poisoned(); // mark as visited (not concretely usable)
     }
@@ -276,31 +275,27 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   }
 
   std::vector<EnumType::VariantInfo> variant_infos;
-  bool had_error = false;
 
   for (auto &variant : ast->variants) {
     EnumType::VariantInfo info;
     info.name = variant.name;
     for (auto &type_expr : variant.payload_types) {
       auto resolved = resolve_type_expr(type_expr.get());
-      if (resolved.type_kind == TypeKind::Poisoned)
-        had_error = true;
+      if (resolved.type_kind == TypeKind::Poisoned) {
+        ast->type = Type::Poisoned();
+        return;
+      }
       info.payload_types.push_back(resolved);
     }
     variant_infos.push_back(std::move(info));
   }
 
-  if (had_error) {
-    ast->type = Type::Poisoned();
-    return;
-  }
-
-  auto enum_type =
-      Type::Enum(ast->enum_name, std::move(variant_infos));
+  auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos));
   ast->type = enum_type;
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 
-  // Register variant constructors (qualified access only: Enum::Variant)
+  // Register variant constructors for qualified generic enum resolution
+  // and VariableExprAST unit variant lookup
   auto &et = std::get<EnumType>(enum_type.type_data);
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
@@ -339,8 +334,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   // Typeclass calls: rewrite call target to mangled instance method name
   if (ast->is_typeclass_call) {
     if (ast->resolved_generic_name.has_value())
-      ast->functionName =
-          sammine_util::QualifiedName::local(ast->resolved_generic_name.value());
+      ast->functionName = sammine_util::QualifiedName::local(
+          ast->resolved_generic_name.value());
     return;
   }
 
@@ -355,8 +350,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 
   auto params = func.get_params_types();
   for (size_t i = 0; i < ast->arguments.size(); i++) {
-    if (!this->type_map_ordering.compatible_to_from(
-            params[i], ast->arguments[i]->type)) {
+    if (!this->type_map_ordering.compatible_to_from(params[i],
+                                                    ast->arguments[i]->type)) {
       this->add_error(ast->arguments[i]->get_location(),
                       fmt::format("Argument {} to '{}': expected {}, got {}",
                                   i + 1, ast->functionName.display(),
@@ -395,17 +390,16 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
       }
       if (error_count > 0) {
         std::vector<std::string> msgs;
-        msgs.push_back(fmt::format(
-            "Array element type mismatch: expected {}, got {}",
-            expected_elem.to_string(),
-            arr_lit->elements[first_error_idx]
-                ->accept_synthesis(this)
-                .to_string()));
+        msgs.push_back(
+            fmt::format("Array element type mismatch: expected {}, got {}",
+                        expected_elem.to_string(),
+                        arr_lit->elements[first_error_idx]
+                            ->accept_synthesis(this)
+                            .to_string()));
         if (error_count > 1)
-          msgs.push_back(
-              fmt::format("{} more type mismatch {} in this array",
-                          error_count - 1,
-                          (error_count - 1 == 1) ? "error" : "errors"));
+          msgs.push_back(fmt::format(
+              "{} more type mismatch {} in this array", error_count - 1,
+              (error_count - 1 == 1) ? "error" : "errors"));
         this->add_error(arr_lit->elements[first_error_idx]->get_location(),
                         msgs);
       }
@@ -572,7 +566,7 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
 void BiTypeCheckerVisitor::register_typeclass_instance(
     TypeClassInstanceAST *ast) {
   ast->concrete_type = resolve_type_expr(ast->concrete_type_expr.get());
-  if (ast->concrete_type.type_kind == TypeKind::Poisoned)
+  if (ast->concrete_type.is_poisoned())
     return;
 
   auto it = type_class_defs.find(ast->class_name);
@@ -590,12 +584,12 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     std::string original_name = method->Prototype->functionName.name;
     std::string mangled = ast->class_name + "__" +
                           ast->concrete_type.to_string() + "__" + original_name;
-    method->Prototype->functionName = sammine_util::QualifiedName::local(mangled);
+    method->Prototype->functionName =
+        sammine_util::QualifiedName::local(mangled);
     inst_info.method_mangled_names[original_name] = mangled;
   }
 
-  std::string key =
-      ast->class_name + "__" + ast->concrete_type.to_string();
+  std::string key = ast->class_name + "__" + ast->concrete_type.to_string();
   type_class_instances[key] = std::move(inst_info);
 }
 

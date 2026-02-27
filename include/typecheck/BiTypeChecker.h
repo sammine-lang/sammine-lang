@@ -311,28 +311,24 @@ public:
 
     if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(type_expr)) {
       auto pointee = resolve_type_expr(ptr->pointee.get());
-      if (pointee.type_kind == TypeKind::Poisoned)
-        return Type::Poisoned();
-      return Type::Pointer(pointee);
+      return pointee.is_poisoned() ? pointee : Type::Pointer(pointee) ;
     }
 
     if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(type_expr)) {
       auto elem = resolve_type_expr(arr->element.get());
-      if (elem.type_kind == TypeKind::Poisoned)
-        return Type::Poisoned();
-      return Type::Array(elem, arr->size);
+      return elem.is_poisoned() ? elem : Type::Array(elem, arr->size) ;
     }
 
     if (auto *fn = llvm::dyn_cast<FunctionTypeExprAST>(type_expr)) {
       std::vector<Type> total_types;
       for (auto &param : fn->paramTypes) {
         auto pt = resolve_type_expr(param.get());
-        if (pt.type_kind == TypeKind::Poisoned)
+        if (pt.is_poisoned())
           return Type::Poisoned();
         total_types.push_back(pt);
       }
       auto ret = resolve_type_expr(fn->returnType.get());
-      if (ret.type_kind == TypeKind::Poisoned)
+      if (ret.is_poisoned())
         return Type::Poisoned();
       total_types.push_back(ret);
       return Type::Function(std::move(total_types));
@@ -367,7 +363,7 @@ public:
       bool has_unresolved_type_param = false;
       for (size_t i = 0; i < gen->type_args.size(); i++) {
         auto resolved = resolve_type_expr(gen->type_args[i].get());
-        if (resolved.type_kind == TypeKind::Poisoned)
+        if (resolved.is_poisoned())
           return Type::Poisoned();
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
@@ -404,9 +400,7 @@ public:
       monomorphized_enum_defs.push_back(std::move(cloned));
 
       auto result = this->get_typename_type(mangled);
-      if (result.has_value())
-        return result.value();
-      return Type::Poisoned();
+      return result.has_value() ? result.value() : Type::Poisoned();
     }
 
     return Type::NonExistent();
