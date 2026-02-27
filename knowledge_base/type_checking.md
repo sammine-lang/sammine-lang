@@ -1,183 +1,159 @@
 # Type Checking Patterns
 
 ## Type System (`include/typecheck/Types.h`)
-- `TypeKind` enum: `I32_t`, `I64_t`, `F64_t`, `Unit`, `Bool`, `String`, `Function`, `Pointer`, `Array`, `Record`, `Never`, `NonExistent`, `Poisoned`, `Integer`, `Flt`
-- `TypeData` variant: `std::variant<FunctionType, PointerType, ArrayType, std::string, std::monostate>`
-- Factory methods: `Type::I32_t()`, `Type::Pointer(pointee)`, `Type::Function(params)`, etc.
-- `PointerType` stores pointee as `std::shared_ptr<Type>` (not by value) because `Type` is forward-declared when `PointerType` is defined. `FunctionType` avoids this with `std::vector<Type>` (heap-allocated internally).
 
-## Equality & Qualifiers
-- `Type::operator==` compares fundamental type structure only (`type_kind` + `type_data`). Qualifiers like `is_mutable` are intentionally ignored — use `compatible_to_from()` for directional checks.
-- `Type::is_mutable`: tracks whether the binding is mutable (`let mut` or `mut` param). Default `false`.
-- `Type::is_literal()`: returns `true` for primitive types (i32, i64, f64, bool, unit, string, Integer, Flt). Primitive types bypass the mutability check in `compatible_to_from` since they are always by-value.
-- `compatible_to_from(to, from)` rejects `immut → mut` for non-primitive types: `to.is_mutable && !from.is_mutable && !from.is_literal()`
+| `TypeKind` | `TypeData` variant | Factory |
+|---|---|---|
+| `I32_t`, `I64_t`, `F64_t`, `Unit`, `Bool`, `Char`, `String`, `Never`, `NonExistent`, `Poisoned` | `std::monostate` | `Type::I32_t()`, etc. |
+| `Integer`, `Flt` | `std::monostate` | Polymorphic literals — default to `I32_t`/`F64_t` via `default_polymorphic_type()` |
+| `Function` | `FunctionType` | `Type::Function(params)` |
+| `Pointer` | `PointerType` (`shared_ptr<Type>` — forward-decl needs indirection) | `Type::Pointer(pointee)` |
+| `Array` | `ArrayType` | `Type::Array(elem, size)` |
+| `Struct` | `StructType` | `Type::Struct(name, members)` |
+| `Enum` | `EnumType` | `Type::Enum(name, variants)` |
+| `TypeParam` | `std::string` | `Type::TypeParam(name)` |
 
-## Mutability
-- Variables are **immutable by default**: `let x: i32 = 5;`
-- Use `let mut` for mutable locals: `let mut x: i32 = 5; x = 10;`
-- Use `mut` for mutable function params: `let f(mut x: i32) -> i32 { x = x + 1; ... }`
-- Reassigning an immutable variable emits a type-check error with location at the `=` token
-- Mutability is set on `Type::is_mutable` during `synthesize(VarDefAST*)` and `synthesize(TypedVarAST*)`
-- Assignment check in `synthesize(BinaryExprAST*)`: if LHS is a `VariableExprAST` with `!type.is_mutable`, error
+- `TypeData` = `std::variant<FunctionType, PointerType, ArrayType, StructType, EnumType, std::string, std::monostate>`
+- `PointerType` uses `shared_ptr<Type>` (forward-decl needs indirection); `FunctionType`/`ArrayType` use `vector<Type>` (heap-backed, no forward-decl issue)
+- `operator==` compares `type_kind` + `type_data` only — ignores `is_mutable`. Use `compatible_to_from(to, from)` for directional checks; rejects `immut → mut` for non-primitives. `is_literal()` types bypass this (always by-value).
+- Immutable by default (`let x`); `let mut` for mutable locals, `mut` for mutable params. Set on `Type::is_mutable` during `synthesize(VarDefAST*)`/`synthesize(TypedVarAST*)`. Assignment to immutable LHS → error at `=` token.
 
 ## BiTypeChecker (`include/typecheck/BiTypeChecker.h`)
-- Bidirectional: `synthesize()` produces types bottom-up, `postorder_walk()` checks consistency top-down
-- Two lexical stacks: `id_to_type` (variable/function names) and `typename_to_type` (type names like "i32", "f64")
-- Built-in types registered in `enter_new_scope()`: i32, i64, f64, bool, unit
-- All scope lookups use `QualifiedName::mangled()`, all error messages use `QualifiedName::display()`
-- Unresolved qualified names (unknown aliases) are checked early and produce "Module 'x' is not imported" errors
-- **Enum variant invariant**: all enum variant calls arrive pre-qualified by the scope generator (e.g. `Some(42)` → `Option::Some(42)`). The type checker does NOT resolve unqualified variant names — `synthesize(CallExprAST*)` only handles the qualified `Enum::Variant` path
-- `resolve_type_expr(TypeExprAST*)` resolves structured type AST nodes:
-  - `nullptr` → `Type::NonExistent()`
-  - `SimpleTypeExprAST` → check unresolved, then lookup `.mangled()` in `typename_to_type`
-  - `PointerTypeExprAST` → recursive resolve, wrap in `Type::Pointer()`
-  - `ArrayTypeExprAST` → recursive resolve, wrap in `Type::Array()`
-  - `FunctionTypeExprAST` → recursive resolve params + return, wrap in `Type::Function()`
-- Default integer (no decimal point) synthesizes as `I32_t`; with decimal → `F64_t`
-- Number literal type suffixes (`i32`, `i64`, `f64`) override the default: `synthesize(NumberExprAST*)` finds the first alpha char, extracts the suffix, strips it from `ast->number`, and sets the type — invalid suffixes abort with an error
-- `main` function must return `i32` (checked in `postorder_walk(PrototypeAST*)`)
+- Bidirectional: `synthesize()` → types bottom-up, `postorder_walk()` → consistency top-down
+- Two lexical stacks: `id_to_type` (variable/function names), `typename_to_type` (type names); built-ins (i32/i64/f64/bool/char/unit) registered in `enter_new_scope()`
+- All lookups use `QualifiedName::mangled()`, all errors use `.display()`
+- **Enum variant invariant**: all variant calls arrive pre-qualified by scope generator. Type checker does NOT resolve unqualified variants.
 
-## Scope Lookup Helpers
-- `get_type_from_id(str)`: current scope only (aborts if not found)
-- `get_type_from_id_parent(str)`: parent scope only (aborts if not found)
-- `try_get_callee_type(str)`: recursive search through current + all parent scopes (returns `nullopt` if not found) — used for call expressions and variable references
-- `synthesize(VariableExprAST*)` uses `recursive_get_from_name()` to find names in any ancestor scope
+### `resolve_type_expr(TypeExprAST*)`
 
-## First-Class Functions & Partial Application
-- `CallExprAST` has `callee_func_type` (the resolved `Type` of the callee) and `is_partial` flag
-- **Partial detection** happens in `synthesize(CallExprAST*)`: if `args.size() < params.size()`, set `is_partial = true`
-- **Partial type**: `Type::Function(remaining_params..., return_type)` — e.g. `add(5)` where `add: (i32, i32) -> i32` → type is `(i32) -> i32`
-- **Full call type**: just the function's return type (existing behavior)
-- `visit(CallExprAST*)` uses `try_get_callee_type()` to search all scopes — fixes lookup for function-typed parameters in current scope
+| Input | Resolution |
+|---|---|
+| `nullptr` | `Type::NonExistent()` |
+| `SimpleTypeExprAST` | check unresolved → lookup `.mangled()` in `typename_to_type` |
+| `Pointer/Array/FunctionTypeExprAST` | recursive resolve → wrap in corresponding `Type::` factory |
+| `GenericTypeExprAST` | resolve type args → lookup `generic_enum_defs` → validate count → `Monomorphizer::instantiate_enum()` → register; unresolved type params defer |
 
-## Alloc/Free Type Rules
-- `alloc(expr)`: operand type T synthesized first, result type = `ptr<T>`
-- `free(expr)`: operand must be `ptr<T>`, errors if not pointer, result type = `unit`
+### Literal Synthesis
+- Integer (no decimal) → `Integer`; with decimal → `Flt` — defaulted when no context narrows
+- Number suffixes (`i32`/`i64`/`f64`): extract suffix, strip from `ast->number`, set type; invalid → abort
+- `StringExprAST` → `ptr<char>`, `CharExprAST` → `Char`
+- `main`: must return `i32`, take 0 or 2 params (`(i32, ptr<ptr<char>>)`)
 
-## Adding a New Type Checklist
-1. Add to `TypeKind` enum in `Types.h`
-2. Add class to `TypeData` variant if compound (like `PointerType`, `FunctionType`)
-3. Add factory method on `Type` struct
-4. Add `to_string()` case
-5. Register in `enter_new_scope()` if it's a named type
-6. Handle in all `switch(type_kind)` statements (compiler warns via `-Wswitch`)
-7. Add `case` to `TypeConverter::get_type()` and `get_cmp_func()`
+### Scope Lookup Helpers
+
+| Helper | Scope | On failure |
+|---|---|---|
+| `get_type_from_id(str)` | current only | abort |
+| `get_type_from_id_parent(str)` | parent only | abort |
+| `try_get_callee_type(str)` | recursive (all ancestors) | `nullopt` |
+
+`synthesize(VariableExprAST*)` uses `recursive_get_from_name()` for ancestor lookup.
+
+## Partial Application & First-Class Functions
+- Partial detection in `synthesize(CallExprAST*)`: `args.size() < params.size()` → `is_partial = true`, type = `Function(remaining_params..., ret)`
+- Full call → return type. `visit(CallExprAST*)` uses `try_get_callee_type()` for all-scope lookup.
+
+## Alloc/Free
+- `alloc<T>(count)`: resolve `T` via `resolve_type_expr`, count must be integer → `ptr<T>` (`is_linear = true`)
+- `free(expr)`: operand must be `ptr<T>` → `unit`
+
+## Enum Types
+- `EnumType`: `QualifiedName` + vector of `VariantInfo`; nominal equality (by name)
+- `variant_constructors` map: `variant_name → (enum_type, variant_index)` — populated in `visit(EnumDefAST*)`
+- **Construction** (`synthesize(CallExprAST*)`): qualified path → lookup module in `typename_to_type` → resolve variant; fallback → `variant_constructors`. Validates args, sets `is_enum_constructor`/`enum_variant_index`.
+- **Unit variants** (`synthesize(VariableExprAST*)`): name not in `id_to_type` → try `variant_constructors`; empty payload → `is_enum_unit_variant`; has payload → abort
+- **Generic enums**: `generic_enum_defs` → instantiated via `Monomorphizer::instantiate_enum()` → tracked in `instantiated_enums`/`monomorphized_enum_defs`
+
+## Case Expressions / Pattern Matching
+- Scrutinee must be enum. Each arm opens new scope with payload bindings in `id_to_type`.
+- Wildcard `_` matches any variant; non-wildcard: `et.get_variant_index()` → validate binding count → set `variant_index`
+- **Arm type unification**: starts `Never`; adopt first non-Never; skip Never arms; `compatible_to_from` bidirectional (same as `IfExprAST`)
+- **Exhaustiveness**: all variants covered or wildcard present; reports missing names
+
+## While Expressions
+Condition must be `bool` (skip if `Poisoned`), result always `unit`.
+
+## Arithmetic Operator Dispatch
+
+| Op | Method | Built-in instances |
+|---|---|---|
+| `+` | `Add::add` | i32, i64, f64, char |
+| `-` | `Sub::sub` | i32, i64, f64 |
+| `*` | `Mul::mul` | i32, i64, f64 |
+| `/` | `Div::div` | i32, i64, f64 |
+| `%` | `Mod::mod` | i32, i64 |
+
+`synthesize_binary_operator()`: lookup `ClassName__lhs_type` in `type_class_instances` → set `resolved_op_method` (e.g. `Add__i32__add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
+
+## Three-Pass Registration (`visit(ProgramAST*)`)
+1. **Types + typeclasses**: structs, enums, typeclass decls/instances, builtin ops → type maps, `variant_constructors`, typeclass data
+2. **Function signatures**: `pre_register_function()` for func/extern/instance-methods → mutual recursion. Resolves types via `resolve_type_expr()` directly (not `accept_synthesis`). Generics → `generic_func_defs` instead.
+3. **Full type checking**: all definitions (structs/enums skip if already visited)
 
 ## Typeclasses
-
-### Overview
-Typeclasses provide ad-hoc polymorphism — defining method contracts (`typeclass`) with concrete implementations (`instance`). Methods are dispatched via explicit type arguments: `sizeof<i32>()`.
-
-### Data Structures (`BiTypeChecker.h`)
-- `TypeClassInfo`: `name`, `type_param` (string), `methods` (vector of `PrototypeAST*`)
-- `TypeClassInstanceInfo`: `class_name`, `concrete_type` (resolved Type), `method_mangled_names` (map: original name → mangled)
-- `type_class_defs`: map from class name → `TypeClassInfo`
-- `type_class_instances`: map from `"ClassName$ConcreteType"` → `TypeClassInstanceInfo`
-- `method_to_class`: map from method name → class name (for fast dispatch lookup)
-
-### Two-Pass Registration
-In `visit(ProgramAST*)`, type checking uses two passes:
-1. **First pass**: register structs, `register_typeclass_decl()`, `register_typeclass_instance()` — populates all three maps above
-2. **Second pass**: full type checking of all definitions (including typeclass instance method bodies)
-
-### Method Name Mangling
-Instance methods are renamed during registration: `methodName` → `ClassName$ConcreteType$methodName`
-- Example: `sizeof` in `Sized<i32>` → `Sized$i32$sizeof`
-- The mangled name becomes the function's actual name for codegen
-
-### `register_typeclass_decl()`
-- Creates `TypeClassInfo` with type param and method prototypes
-- Opens a temporary scope, registers `type_param` as `TypeParam`, synthesizes each prototype
-- Populates `method_to_class` for each method
-
-### `register_typeclass_instance()`
-- Resolves `concrete_type_expr` to a `Type`
-- Validates the class name exists in `type_class_defs`
-- Mangles each method name and updates `FuncDefAST::Prototype::functionName`
-- Stores in `type_class_instances` with key `"ClassName$ConcreteType"`
-
-### Typeclass Method Dispatch (`synthesize(CallExprAST*)`)
-When `explicit_type_args` is non-empty:
-1. Look up method name in `method_to_class`
-2. If found → this is a typeclass call:
-   - Resolve the explicit type arg to a concrete `Type`
-   - Build instance key `"ClassName$ConcreteType"`, find instance
-   - Error if no matching instance found
-   - Validate argument count against prototype
-   - Set `resolved_generic_name` to the mangled instance method name
-   - Set `is_typeclass_call = true`
-   - Substitute type param in return type with concrete type
-3. If not in `method_to_class` → falls through to generic function handling (explicit type args also work for generics)
-
-### Typeclass + Generics Interaction
-A generic function can call typeclass methods:
-```
-let print_size(x: T) -> i64 { sizeof<T>() }
-```
-When `print_size` is monomorphized for `i32`, the `sizeof<T>()` call resolves `T` → `i32` and dispatches to `Sized$i32$sizeof`.
+- `TypeClassInfo`: `name`, `type_param`, `methods`. `TypeClassInstanceInfo`: `class_name`, `concrete_type`, `method_mangled_names`.
+- Maps: `type_class_defs` (name → info), `type_class_instances` (`"Class__Type"` → info), `method_to_class` (method → class)
+- **Mangling**: `method` → `Class__Type__method` (e.g. `Sized__i32__sizeof`) — becomes the codegen function name
+- `register_typeclass_decl()`: temp scope with `type_param` as `TypeParam`, synthesize prototypes, populate `method_to_class`
+- `register_typeclass_instance()`: resolve concrete type, validate class, mangle names, update prototypes
+- **Dispatch** (`synthesize(CallExprAST*)` with `explicit_type_args`): lookup in `method_to_class` → resolve type arg → find instance → set `resolved_generic_name` + `is_typeclass_call`; not found → fall through to generic handling
+- Monomorphizing `print_size<T>` for `i32` resolves inner `sizeof<T>()` → `Sized__i32__sizeof`
 
 ## Monomorphized Generics
 
-### Overview
-Generic functions require **explicit type parameter declaration** with `<T, U>` syntax and use **monomorphization** (concrete copies per type combination).
+### Flow
+1. **Registration** (`visit(FuncDefAST*)`): register `type_params` as `TypeParam` → if generic, store in `generic_func_defs`, skip body
+2. **Generic call** (`synthesize_generic_call()`): check `generic_func_defs` → bind explicit type args or `unify()` to infer → mangled name → `substitute()` return type
+3. **Instantiation** (`visit(CallExprAST*)`): `Monomorphizer::instantiate()` deep-clones AST → `GeneralSemanticsVisitor` → type-check clone → `monomorphized_defs`
+4. **Injection**: `monomorphized_defs` → front of `DefinitionVec`
+5. **Codegen**: `is_generic()` → skip
 
-```
-let identity<T>(x: T) -> T { x }
-let apply<T, U>(f: (T) -> U, x: T) -> U { f(x) }
-```
-
-### Call-Site Syntax
-- **Inference**: `identity(42)` — T inferred as i32 from argument
-- **Explicit type args**: `identity<i32>(42)`, `apply<i32, f64>(func, 5)`
-- **Multiple explicit type args** must match the declared count exactly (all-or-nothing)
-- Type params shadow outer types: `<T>` in a function hides a struct named `T` within that function's scope
-
-### Key Types & Fields
-- `TypeKind::TypeParam`: represents an unresolved type parameter; uses `std::string` variant of `TypeData`
-- `PrototypeAST::type_params`: populated during **parsing** (from `<T, U>` syntax); `is_generic()` checks if non-empty
-- `CallExprAST::explicit_type_args`: vector of `TypeExprAST` for call-site `<i32, f64>` syntax
-- `CallExprAST::resolved_generic_name`: mangled name (e.g. `"identity.i32"`)
-- `CallExprAST::type_bindings`: e.g. `{"T": i32}`
-
-### Type Checker Flow
-1. **Registration** (`visit(FuncDefAST*)`): registers each `type_params[i]` as `Type::TypeParam(name)` in `typename_to_type`, then visits the prototype. If `is_generic()` → store in `generic_func_defs`, skip body. Unknown type names in prototypes (not declared in `<>`) produce "Type not found" errors.
-2. **Generic call** (`synthesize_generic_call()`): checks `generic_func_defs` first. If found: either bind explicit type args (with count validation) or `unify()` each arg to infer bindings, compute mangled name, `substitute()` return type.
-3. **Monomorphization** (`visit(CallExprAST*)`): if `resolved_generic_name` set and not yet instantiated: `Monomorphizer::instantiate()` deep-clones AST with type substitution, runs `GeneralSemanticsVisitor` (implicit return wrapping), then type-checks the clone as a normal function. Stores in `monomorphized_defs`.
-4. **Injection** (`Compiler::typecheck()`): moves `monomorphized_defs` to front of `DefinitionVec` so they're codegen'd before call sites.
-5. **Codegen skip** (`CgVisitor::visit(FuncDefAST*)`): if `is_generic()`, return immediately.
-
-### Unification (`unify(pattern, concrete, bindings)`)
-- `TypeParam` vs concrete → bind (with occurs check and consistency check)
-- Same `TypeKind` → recurse into children (Pointer pointee, Array element+size, Function params+return)
-- Different `TypeKind` → return false
-
-### Substitution (`substitute(type, bindings)`)
-- `TypeParam` → look up in bindings, return concrete type
-- Compound types → recurse into children
-- Concrete types → return as-is
-
-### Monomorphizer (`include/typecheck/Monomorphizer.h`)
-- `Monomorphizer::instantiate(generic, mangled_name, bindings)` → deep-clones `FuncDefAST`
-- Replaces `SimpleTypeExprAST` names according to bindings (e.g. `"T"` → `"i32"`)
-- Sets cloned prototype's `functionName` to `mangled_name`, leaves `type_params` empty
+### Unification / Substitution
+- `unify(pattern, concrete, bindings)`: `TypeParam` → bind (occurs + consistency check); same kind → recurse; different → false
+- `substitute(type, bindings)`: `TypeParam` → lookup; compound → recurse; concrete → as-is
 
 ### Limitations
-- Generic functions only (not records/structs)
-- Type parameters only (no const generics — array sizes must be concrete)
-- No partial application of generic functions (all args must be provided)
-- Generic `reuse` declarations are rejected — generics require a body for monomorphization
+Generic functions and enums only (not structs). No const generics, no partial application of generics, no generic `reuse`.
 
-## Polymorphic Literal Binary Expressions
-- When both operands are polymorphic and the same kind (e.g. two bare `Integer` literals), the type checker skips typeclass dispatch and keeps the result polymorphic
-- This early-return is **excluded** for comparison and logical operators (`is_comparison()`, `is_logical()`), which must always return `Type::Bool()`
-- Without this exclusion, `3 < 5` would get type `Integer` instead of `Bool`, causing "If condition must be bool, got Integer" errors
+### Type Param Shadowing
+Type params shadow outer types — e.g. a struct named `T` is hidden by `<T>` inside a generic function. `PrototypeAST::type_params` is populated during **parsing**; type checker registers them in `typename_to_type` before visiting the body.
 
-## Compound Type Comparison Guards
-- `synthesize(BinaryExprAST*)` restricts comparison operators for Array and Pointer types
-- Only `==` and `!=` are allowed; `<`, `>`, `<=`, `>=` emit a type error and return `Type::Poisoned()`
-- Guard checks `ast->LHS->type.type_kind` after the `compatible_to_from` check, before returning `Type::Bool()`
+## Edge Cases
+- **Polymorphic literal binops**: both operands polymorphic + same kind → skip dispatch, keep polymorphic. Excluded for comparison/logical ops (must return `Bool`).
+- **Compound comparison guards**: Array/Pointer only allow `==`/`!=`; others → error + `Poisoned`.
+
+## Adding a New Type Checklist
+1. Add to `TypeKind` enum in `Types.h`
+2. Add class to `TypeData` variant if compound
+3. Add factory method on `Type`
+4. Add `to_string()` case
+5. Register in `enter_new_scope()` if named
+6. Handle all `switch(type_kind)` (`-Wswitch` enforces)
+7. Add case to `TypeConverter::get_type()` and `get_cmp_func()`
 
 ## Adding a New AST Node to Type Checker
-1. Add `synthesize()` declaration in `BiTypeChecker.h`
-2. Add `preorder_walk()` and `postorder_walk()` declarations in `BiTypeChecker.h`
+1. Add `synthesize()` in `BiTypeChecker.h`
+2. Add `preorder_walk()` and `postorder_walk()` in `BiTypeChecker.h`
 3. Implement all three in `BiTypeChecker.cpp`
+
+## Linear Type Checker (`src/typecheck/LinearTypeChecker.cpp`)
+
+Separate pass after BiTypeChecker — enforces that `'ptr<T>` (heap-allocated) pointers are consumed exactly once.
+
+### Dispatch (`check_stmt`)
+Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnExprAST`, `IfExprAST`, `WhileExprAST`, `CaseExprAST`, `StructLiteralExprAST`, `ArrayLiteralExprAST`.
+
+### Consumption Rules
+- `free(p)`, `let q = p` (move), `return p` (ownership transfer), passing as linear param, moving into struct field or array element
+- NOT consumption: `*p` (deref), comparison, struct field access
+
+### Struct/Array Literal Consumption
+- `check_struct_literal()`: walks each field value; if a `VariableExprAST` references a linear var, consumes it (moved into struct)
+- `check_array_literal()`: walks each element; same pattern
+- `'ptr<T>` syntax works everywhere `ParseTypeExpr()` is called, including struct fields (`data: 'ptr<i32>`) and array element types (`['ptr<i32>;1]`). `compatible_to_from()` rejects `'ptr<T>` → `ptr<T>` mismatches, so field/element type annotations must match linearity.
+
+### Branch Consistency
+All branches of `if`/`case` must agree — either all consume a linear var or none do.
+
+### Loop Restriction
+Outer linear vars cannot be consumed inside loops (would be consumed multiple times).

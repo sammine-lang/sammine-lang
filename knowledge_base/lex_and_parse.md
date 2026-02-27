@@ -1,72 +1,168 @@
 # Lexer & Parser Patterns
 
 ## Lexer
-- Keywords are recognized in `handleID()` in `src/lex/Lexer.cpp` — add string-to-token mapping there
-- Token types defined in `include/lex/Token.h` — add to `TokenType` enum and `TokenMap`
-- Existing operator tokens reused for pointer ops: `TokMUL` = `*` (deref), `TokAndLogical` = `&` (addr-of), `TokLESS`/`TokGREATER` = `<`/`>` (for `ptr<T>`)
-- Keyword tokens for built-in functions: `TokAlloc` = `alloc`, `TokFree` = `free`, `TokMUT` = `mut`
-- Keyword tokens for imports: `TokReuse` = `reuse`, `TokExport` = `export` (replaces old `TokExtern`)
-- Keyword tokens for typeclasses: `TokTypeclass` = `typeclass`, `TokInstance` = `instance`
-- Removed: `TokSizeOf` — `sizeof` is now a regular typeclass method call, not a keyword
-- Number literals support type suffixes: `42i32`, `600851475143i64`, `3.14f64` — the lexer consumes any alphanumeric suffix after digits, stored as part of the `TokNum` lexeme
 
-### Adding a New Operator Token Checklist
+Keywords recognized in `handleID()` (`src/lex/Lexer.cpp`). Token types defined in `include/lex/Token.h` (`TokenType` enum + `TokenMap`).
+
+| Token(s) | Keyword / Symbol |
+|---|---|
+| `TokMUL`, `TokAndLogical`, `TokLESS`/`TokGREATER` | `*` (deref), `&` (addr-of), `<`/`>` (generics) — reused operator tokens |
+| `TokAlloc`, `TokFree`, `TokLen`, `TokMUT` | `alloc`, `free`, `len`, `mut` |
+| `TokReuse`, `TokExport`, `TokImport`, `TokAs` | `reuse`, `export`, `import`, `as` |
+| `TokTypeclass`, `TokInstance` | `typeclass`, `instance` |
+| `TokEnum`, `TokCase`, `TokFatArrow` | `enum`, `case`, `=>` |
+| `TokIf`, `TokElse`, `TokWhile` | `if`, `else`, `while` |
+| `TokPipe`, `TokEllipsis` | `\|>`, `...` |
+| `TokNum` | Number literals with optional suffix (`42i32`, `3.14f64`) — suffix consumed as part of lexeme |
+| `TokStr`, `TokChar` | Double-quoted / single-quoted literals with escape sequences |
+
+Removed: `TokSizeOf` — `sizeof` is now a typeclass method call.
+
+### New Operator Token Checklist
 1. Add enum value to `TokenType` in `include/lex/Token.h`
 2. Add `{TokFoo, "foo"}` to `TokenMap` in `include/lex/Token.h`
-3. If comparison: add `tok_type == TokFoo` to `Token::is_comparison()`
-4. Add lexer handler logic in `src/lex/Lexer.cpp` — multi-char operators need lookahead (e.g. `!=` checks `input[i+1] == '='` before falling back to `!`)
+3. If comparison: add to `Token::is_comparison()`
+4. Add lexer handler in `src/lex/Lexer.cpp` — multi-char ops need lookahead
 5. Add `{TokenType::TokFoo, precedence}` to `binopPrecedence` in `src/Parser.cpp`
-6. Add codegen case to `TypeConverter::get_cmp_func()` or binary op handler as needed
+6. Add codegen case to `TypeConverter::get_cmp_func()` or binary op handler
 
 ## Parser
-- Parser uses committed/non-committed error model: `SUCCESS`, `COMMITTED_NO_MORE_ERROR`, `COMMITTED_EMIT_MORE_ERROR`, `NONCOMMITTED`
-- Return type: `p<T>` = `pair<unique_ptr<T>, ParserError>`
-- `ParsePrimaryExpr()` tries parsers in order — unary operators (deref, addr-of) and keyword expressions (alloc, free) go before `ParseCallExpr` since they start with operator/keyword tokens, not TokID
-- `ParseTypeExpr()` handles compound types recursively (e.g. `ptr<ptr<i32>>`)
-- Type annotations parsed as `TypeExprAST` hierarchy (not strings), avoiding double-parsing
-- `alloc(expr)` and `free(expr)` follow the `keyword(expr)` pattern: expect keyword, `(`, parse inner expression, expect `)`
-- `ParseTypeClassDecl()` parses `typeclass Name<T> { method_sig; ... }` — method signatures are prototypes only (no bodies)
-- `ParseTypeClassInstance()` parses `instance Name<ConcreteType> { let method() -> T { body } ... }` — method implementations are full `FuncDefAST`
-- Top-level `ParseDefinition()` tries `ParseTypeClassDecl` and `ParseTypeClassInstance` alongside `ParseFuncDef`, `ParseStructDef`, etc.
 
-### Explicit Type Parameter Parsing (`let f<T, U>(...)`)
-- `ParsePrototype()` parses optional `<T, U, ...>` between function name and parameter list
-- After consuming `TokID` (function name), checks for `TokLESS`; if found, parses comma-separated `TokID` names, consumes closing `>` via `consumeClosingAngleBracket()`
-- Stores parsed names in `proto->type_params` (same field the type checker uses)
-- Applies to all `ParsePrototype()` call sites: `let` functions, `reuse` declarations, typeclass methods
+- Committed/non-committed error model: `SUCCESS`, `FAILED`, `NONCOMMITTED`
+- `p<T>` = `ParseResult<T>` — contains `node` (`unique_ptr<T>`), `status` (`ParserError`), helpers `.ok()`, `.failed()`, `.uncommitted()`
+- `tryParsers<T>(Fns...)` — variadic template, returns first non-`NONCOMMITTED` result
 
-### Explicit Type Argument Parsing (`f<T, U>(args)`)
-- `ParseCallExpr()` uses **speculative parsing with rollback** for `<TypeExpr, ...>` after an identifier
-- After consuming `name`, if next token is `<`: mark rollback point, parse comma-separated `TypeExpr` list, check for `>` then `(`
-- If all succeed → keep the `explicit_type_args` vector, discard rollback
-- If any step fails → rollback token stream to before `<`, treat `<` as a comparison operator
-- `consumeClosingAngleBracket()` handles the `>>` token splitting for nested generics (e.g. `f<ptr<i32>, f64>()`)
+### `ParsePrimaryExpr()` Order
+```
+ParseUnaryNegExpr, ParseDerefExpr, ParseAddrOfExpr, ParseAllocExpr,
+ParseFreeExpr, ParseLenExpr, ParseArrayLiteralExpr, ParseCallExpr,
+ParseParenExpr, ParseIfExpr, ParseCaseExpr, ParseWhileExpr,
+ParseNumberExpr, ParseBoolExpr, ParseCharExpr, ParseStringExpr
+```
+Unary/keyword parsers go before `ParseCallExpr` (start with operator/keyword tokens, not `TokID`). After primary parse → `parsePostfixOps()` for `[index]` and `.field`.
+
+### Key Parse Rules
+
+| Syntax | Parser / AST | Notes |
+|---|---|---|
+| `alloc<T>(count)` | `ParseAllocExpr` → `AllocExprAST` | Type arg in angle brackets, then count expr |
+| `free(expr)`, `len(expr)` | `ParseFreeExpr`/`ParseLenExpr` | Simple `keyword(expr)` pattern |
+| `x \|> f` / `x \|> f(y,z)` | Desugared in `ParseBinaryExpr()` | → `f(x)` / `f(x,y,z)` at parse time. Precedence 1 (lowest). No special typecheck/codegen. |
+| `while cond { body }` | `ParseWhileExpr` → `WhileExprAST` | Unit-typed expression |
+| `import mod;` / `import mod as alias;` | `ParseImport` → `ImportDecl` | `alias_to_module` map resolves `alias::member` → `module__member` |
+| `export let`/`struct`/`enum`/`reuse` | Prefix flag | `is_exported` / `is_exposed` on respective AST nodes |
+| `typeclass Name<T> { sig; ... }` | `ParseTypeClassDecl` → `TypeClassDeclAST` | Method signatures only (no bodies) |
+| `instance Name<Type> { let m() { } }` | `ParseTypeClassInstance` → `TypeClassInstanceAST` | Full `FuncDefAST` method implementations |
+
+Top-level `ParseDefinition()` tries: `ParseTypeClassDecl`, `ParseTypeClassInstance`, `ParseFuncDef`, `ParseStructDef`, `ParseEnumDef`, etc.
+
+### Generic Type Parameters & Arguments
+- **Definitions** `let f<T, U>(...)`: `ParsePrototype()` parses optional `<T, U, ...>` between name and params → stored in `proto->type_params`
+- **Call sites** `f<i32, f64>(args)`: `ParseCallExpr()` uses speculative parsing with rollback for `<TypeExpr, ...>`. If parse fails → rollback, treat `<` as comparison.
+- `consumeClosingAngleBracket()` splits `>>` → `>` + `>` and `>=` → `>` + `=` for nested generics
+
+### Enum Definitions & Case Expressions
+- `enum Name = V1(Type) | V2;` — pipe-separated variants (`TokORLogical`). Generic: `enum Option<T> = Some(T) | None;`
+- `case expr { Pattern => body, ... }` — expression returning a value
+- Patterns: qualified `Color::Red`, unqualified `Red` (scope generator rewrites to qualified), wildcard `_`, payload `Some(v)`, generic `Option<i32>::Some(v)`
+- See `type_checking.md` for enum type resolution details
+
+### Struct Literals & Field Access
+- `Name { field: value, ... }` → `StructLiteralExprAST` — lookahead in `ParseCallExpr` distinguishes from blocks
+- `expr.field` → `FieldAccessExprAST` via `parsePostfixOps()`
+
+### Arrays & Indexing
+- `[expr, ...]` → `ArrayLiteralExprAST` | `expr[index]` → `IndexExprAST` via `parsePostfixOps()` | `[T;N]` → `ArrayTypeExprAST`
 
 ## QualifiedName (`include/util/QualifiedName.h`)
-- `QualifiedName` struct carries module + name separately instead of eagerly mangling `m::add` → `math$add`
-- Factory methods: `QualifiedName::local("add")`, `::qualified("math", "add")`, `::unresolved_qualified("x", "add")`
-- `.mangled()` → `"math$add"` (for scope lookups, codegen), `.display()` → `"math::add"` (for error messages)
-- `.is_unresolved()` → true when alias wasn't found in `alias_to_module` — enables "Module 'x' is not imported" errors
-- Used by: `CallExprAST::functionName`, `StructLiteralExprAST::struct_name`, `SimpleTypeExprAST::name`
-- NOT used by (always local definitions): `PrototypeAST::functionName`, `StructDefAST::struct_name`, `VariableExprAST::variableName`
-- Parser always consumes `::` when seen after ID — never silently skips it for unknown aliases
 
-## AST Nodes
-- All AST nodes extend `AstBase` (via `ExprAST` or `DefinitionAST`) and implement `Visitable`
-- Each node needs: `getTreeName()`, `accept_vis()`, `walk_with_preorder()`, `walk_with_postorder()`, `accept_synthesis()`
-- `TypeExprAST` hierarchy (`SimpleTypeExprAST`, `PointerTypeExprAST`) is NOT part of the visitor pattern — resolved directly by type checker via `dynamic_cast`
-- `VarDefAST` has `bool is_mutable` — set from `let mut` in `ParseVarDef()`
-- `TypedVarAST` has `bool is_mutable` — set from `mut` prefix in `ParseTypedVar()` (for function params)
-- `TypedVarAST` stores `unique_ptr<TypeExprAST> type_expr` (nullptr = no annotation)
-- `PrototypeAST` stores `unique_ptr<TypeExprAST> return_type_expr` (nullptr = unit return)
-- `TypeClassDeclAST` (DefinitionAST): `class_name`, `type_param` (string, e.g. "T"), `vector<unique_ptr<PrototypeAST>> methods`
-- `TypeClassInstanceAST` (DefinitionAST): `class_name`, `concrete_type_expr` (TypeExprAST), `concrete_type` (resolved during typecheck), `vector<unique_ptr<FuncDefAST>> methods`
-- `CallExprAST` extensions: `explicit_type_args` (vector of TypeExprAST for `f<i32>()` syntax), `is_typeclass_call` (bool, flags typeclass dispatch)
+| Method | Returns |
+|---|---|
+| `::local("add")` | Unqualified local name |
+| `::qualified("math", "add")` | Module-qualified name |
+| `::unresolved_qualified("x", "add")` | Alias not found in `alias_to_module` — enables import errors |
+| `.mangled()` | `"math__add"` — for scope lookups and codegen |
+| `.display()` | `"math::add"` — for error messages |
+| `.from_mangled("math__add")` | Parse mangled string back to QualifiedName |
+| `.with_module("mod")` | Copy with module set (if not already qualified) |
 
-## Adding a New AST Node Checklist
+**QualifiedName fields**: `CallExprAST::functionName`, `StructLiteralExprAST::struct_name`, `SimpleTypeExprAST::name`, `PrototypeAST::functionName`, `StructDefAST::struct_name`, `EnumDefAST::enum_name`
+**Plain string**: `VariableExprAST::variableName`
+Parser always consumes `::` after ID — never silently skips for unknown aliases.
+
+## Type Expression Hierarchy
+
+| Kind | Class | Syntax | Fields |
+|---|---|---|---|
+| `Simple` | `SimpleTypeExprAST` | `i32`, `math::Color` | `name` (QualifiedName) |
+| `Pointer` | `PointerTypeExprAST` | `ptr<T>` | `pointee` |
+| `Array` | `ArrayTypeExprAST` | `[T;N]` | `element`, `size` |
+| `Function` | `FunctionTypeExprAST` | `(T, U) -> V` | `paramTypes`, `returnType` |
+| `Generic` | `GenericTypeExprAST` | `Option<i32>` | `base_name` (QualifiedName), `type_args` |
+
+Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern — resolved via `dynamic_cast` in type checker.
+
+## AST Node Infrastructure
+- `NodeKind` enum with LLVM-style RTTI in `include/ast/AstBase.h`
+- `AST_NODE_METHODS(tree_name, kind_val)` macro → `getTreeName`, `classof`, `accept_vis`, `walk_with_preorder`, `walk_with_postorder`, `accept_synthesis`
+- All nodes extend `AstBase` (via `ExprAST` or `DefinitionAST`) and implement `Visitable`
+- ExprAST range: `FirstExpr` (VarDefAST) through `LastExpr` (WhileExprAST)
+- DefinitionAST range: `FirstDef` (FuncDefAST) through `LastDef` (TypeClassInstanceAST)
+- Non-range: `ProgramAST`, `PrototypeAST`, `TypedVarAST`, `BlockAST`
+
+## AST Nodes — Quick Reference
+
+### Definition Nodes
+| Node | Key Fields |
+|---|---|
+| `FuncDefAST` | `Prototype`, `Block`, `is_exported` |
+| `ExternAST` | `Prototype`, `is_exposed` |
+| `StructDefAST` | `struct_name` (QN), `struct_members` (vec of TypedVarAST), `is_exported` |
+| `EnumDefAST` | `enum_name` (QN), `variants` (vec of EnumVariantDef), `type_params`, `is_exported` |
+| `TypeClassDeclAST` | `class_name`, `type_param` (string), `methods` (vec of PrototypeAST) |
+| `TypeClassInstanceAST` | `class_name`, `concrete_type_expr`, `concrete_type`, `methods` (vec of FuncDefAST) |
+
+### Expression Nodes
+| Node | Key Fields |
+|---|---|
+| `VarDefAST` | `is_mutable`, `TypedVar`, `Expression` |
+| `NumberExprAST` | `number` (string, e.g. "42i32") |
+| `StringExprAST` | `string_content` |
+| `BoolExprAST` | `b` (bool) |
+| `CharExprAST` | `value` (char) |
+| `BinaryExprAST` | `Op` (Token), `LHS`, `RHS`, `resolved_op_method` |
+| `CallExprAST` | `functionName` (QN), `arguments`, `callee_func_type`, `is_partial`, `resolved_generic_name`, `type_bindings`, `explicit_type_args`, `is_typeclass_call`, `is_enum_constructor`, `enum_variant_index` |
+| `ReturnExprAST` | `is_implicit`, `return_expr` |
+| `UnitExprAST` | `is_implicit` — explicit `()` or implicit (empty block) |
+| `VariableExprAST` | `variableName` (string), `is_enum_unit_variant`, `enum_variant_index` |
+| `IfExprAST` | `bool_expr`, `thenBlockAST`, `elseBlockAST` |
+| `DerefExprAST` | `operand` — prefix `*expr` |
+| `AddrOfExprAST` | `operand` — prefix `&expr` |
+| `AllocExprAST` | `type_arg` (TypeExprAST), `operand` (count) |
+| `FreeExprAST` | `operand` |
+| `ArrayLiteralExprAST` | `elements` (vec of ExprAST) |
+| `IndexExprAST` | `array_expr`, `index_expr` |
+| `LenExprAST` | `operand` |
+| `UnaryNegExprAST` | `operand` — prefix `-expr` |
+| `StructLiteralExprAST` | `struct_name` (QN), `field_names`, `field_values` |
+| `FieldAccessExprAST` | `object_expr`, `field_name` |
+| `CaseExprAST` | `scrutinee`, `arms` (vec of CaseArm) |
+| `WhileExprAST` | `condition`, `body` |
+
+### Supporting Nodes
+| Node | Key Fields |
+|---|---|
+| `ProgramAST` | `imports` (vec of ImportDecl), `DefinitionVec` |
+| `PrototypeAST` | `functionName` (QN), `return_type_expr`, `parameterVectors`, `type_params`, `is_var_arg` |
+| `TypedVarAST` | `name`, `is_mutable`, `type_expr` (nullable = no annotation) |
+| `BlockAST` | `Statements` (vec of ExprAST) |
+| `ImportDecl` | `module_name`, `alias`, `location` |
+
+## New AST Node Checklist
 1. Forward declare in `include/ast/AstDecl.h`
-2. Define class in `include/ast/Ast.h` (with all visitor methods)
-3. Add visitor methods to `AstBase.h` (`ASTVisitor` + `TypeCheckerVisitor`)
-4. Add default `visit()` in `src/ast/Ast.cpp`
-5. Add parser function in `Parser.h` and `Parser.cpp`
-6. Wire into `ParsePrimaryExpr()` (for expressions)
+2. Add `NodeKind` entry in `include/ast/AstBase.h` (update `FirstExpr`/`LastExpr` or `FirstDef`/`LastDef` ranges)
+3. Define class in `include/ast/Ast.h` (use `AST_NODE_METHODS` macro)
+4. Add visitor methods to `AstBase.h` (`ASTVisitor` + `TypeCheckerVisitor`)
+5. Add default `visit()` in `src/ast/Ast.cpp`
+6. Add parser function in `Parser.h` and `Parser.cpp`
+7. Wire into `ParsePrimaryExpr()` (expressions) or `ParseDefinition()` (definitions)

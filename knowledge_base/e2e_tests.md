@@ -1,89 +1,76 @@
 # E2E Test Conventions
 
-## Runner
-Tests use LLVM's `lit` framework. Config lives in `e2e-tests/lit.cfg.py`.
+LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`.
+
+## Running Tests
+Always use cmake targets — never run test binaries directly:
+```bash
+cmake --build build -j --target unit-tests e2e-tests
+```
 
 ## Substitutions
-| Placeholder  | Expands to                        |
-|-------------|-----------------------------------|
-| `%sammine`  | Path to the `sammine` binary       |
-| `%check`    | Path to the `SammineCheck` binary  |
-| `%dir`      | Directory containing the current `.mn` file |
-| `%full`     | Full path to the current `.mn` file (`%s`) |
-| `%base`     | Basename without `.mn` extension   |
+| Placeholder | Expands to |
+|-------------|------------|
+| `%sammine` / `%check` | `sammine` / `SammineCheck` binary paths |
+| `%full` / `%dir` / `%base` | Full `.mn` path / its directory / basename without `.mn` |
+| `%O` / `%I` | `-O %T` / `-I %T` — output dir / import search dir flags |
+| `%T` | (lit built-in) Per-test temp output dir |
+
+## CHECK Directives
+`# CHECK:` match line, `# CHECK-NEXT:` match next line, `# CHECK-ERR:` match error output, `# CHECK-NOT:` assert absence.
 
 ## Test Patterns
 
-### Success test (compile + run + check stdout)
+**Success** — compile + run + check stdout:
 ```
-# RUN: %sammine --file %full && ./%base.exe | %check %full
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 # CHECK: expected output line
-# CHECK-NEXT: next expected line
 ```
 
-### Error test (expect compilation failure + check diagnostic)
+**Error** — `!` → must fail, `2>&1` → capture stderr:
 ```
-# RUN: ! %sammine --file %full --diagnostics 2>&1 | %check %full
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK: Expected error message substring
 ```
-Key details:
-- `!` before `%sammine` means the command must fail (non-zero exit)
-- `--diagnostics` enables error reporting output
-- `2>&1` captures stderr into the pipe so `SammineCheck` can match it
+Variants: `--diagnostics` (semantic/type errors, `compilables/`), `--check` (ariadne pretty errors, `error_reporting/`), `--diagnostics=dev` (source file/line — debug only, not in tests).
 
-### Stderr diagnostic test (compiler flag output)
+**Stderr diagnostic** — compiler succeeds but emits to stderr (e.g. `--llvm-ir pre/post/diff`):
 ```
-# RUN: %sammine --file %full --llvm-ir pre 2>&1 | %check %full
-# CHECK: define i32 @main()
-# CHECK: alloca i32
+# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
 ```
-Use this pattern when testing compiler flags that emit to stderr (e.g. `--llvm-ir pre/post/diff`).
-The compiler still succeeds (exit 0), but `2>&1` captures the diagnostic stderr output for CHECK matching.
+For invalid flag values, prefix with `!`.
 
-For flags that should reject invalid values:
+**Multi-file import** — compile library first → `.o` + `.mni` in `%T`:
 ```
-# RUN: ! %sammine --file %full --llvm-ir invalid 2>&1 | %check %full
-# CHECK: --llvm-ir requires a value: pre, post, or diff
+# RUN: %sammine --file %dir/Inputs/math.mn %O && %sammine --file %full %O %I && %T/import_basic.exe | %check %full
 ```
+Library sources in `Inputs/` (excluded from lit). `%dir` locates sibling files. Syntax: `import module_name as alias;`, C bindings: `reuse func(params) -> ret;`, exports: `export let`.
 
 ## File Organization
-Tests are organized into feature subfolders under `e2e-tests/compilables/`:
 
-| Subfolder   | Contents                                         |
-|-------------|--------------------------------------------------|
-| `array/`    | Fixed-size array tests (`arr_basic`, `arr_oob`, etc.) |
-| `ptr/`      | Pointer & alloc/free tests (`ptr_basic`, `alloc_basic`, etc.) |
-| `arith/`    | Arithmetic & integer type tests (`arith`, `i32_*`) |
-| `func/`     | Function calls, recursion, naming (`call_func`, `fib`, `even`, etc.) |
-| `functions/`| First-class functions & partial application (`func_as_arg`, `partial_basic`, etc.) |
-| `control/`  | Control flow (`if`, `nested_if`, `if_expr_value`) |
-| `types/`    | Type system tests (`simple_var_types`, `simple_record`, etc.) |
-| `misc/`     | General tests, compiler flag tests (`llvm_ir_pre`, mutability, etc.) |
+Tests in `e2e-tests/compilables/` by feature. Naming: `feature_variant.mn`.
 
-| `generics/` | Monomorphized generic functions (`identity`, `generic_apply`, `explicit_type_args`, etc.) |
-| `import/`   | Module import tests using `reuse` keyword (`import_basic`, `import_export_let`, `no_transitive_leak`, etc.); library sources in `Inputs/` |
-| `typeclass/` | Typeclass declarations & instances (`sizeof_basic`, `sizeof_struct`, `user_typeclass`, `generic_calls_typeclass`, `typeclass_ordering`, `missing_instance`) |
+| Subfolder | Contents |
+|-----------|----------|
+| `array/` | Fixed-size arrays |
+| `ptr/` | Pointers & alloc/free |
+| `arith/` | Arithmetic & integer types |
+| `func/` | Function calls, recursion |
+| `functions/` | First-class functions & partial application |
+| `control/` | Control flow (if, nested_if, if_expr_value) |
+| `types/` | Type system (var types, records, ...) |
+| `misc/` | General tests, compiler flags |
+| `generics/` | Monomorphized generics |
+| `enums/` | Enum decls, case/match, payloads, generics, unqualified variants |
+| `type_inference/` | Type inference, numeric literal resolution |
+| `import/` | Module imports; library sources in `Inputs/` |
+| `typeclass/` | Typeclass decls & instances |
 
-Other directories:
-- `e2e-tests/euler/` — Project Euler solutions used as integration tests
-
-Naming convention: `feature_variant.mn` (e.g. `ptr_nested.mn`, `alloc_type_mismatch.mn`)
-
-### Multi-file import test
-```
-# RUN: %sammine --file %dir/Inputs/math.mn && %sammine --file %full && ./import_basic.exe | %check %full
-# CHECK: 7
-```
-- Compile the library first (produces `.o` + `.mni` in CWD), then compile the importing file
-- Library sources go in `Inputs/` subdirectory (excluded from lit discovery via `config.excludes`)
-- Use `%dir` to locate sibling files relative to the test
-- Import syntax uses `reuse` keyword (not `extern`): `reuse func_name(params) -> ret;`
-- Use `export let` in library files to explicitly export user-defined functions
+Other dirs: `error_reporting/` — diagnostic rendering tests. `euler/` — Project Euler integration tests.
 
 ## README Demo
-The file `e2e-tests/compilables/misc/readme_demo.mn` mirrors the code in the README's "Language Features" block.
-**Every time you update the README code example, update `readme_demo.mn` to match (and vice versa), then verify it compiles and passes.**
+`e2e-tests/compilables/misc/readme_demo.mn` mirrors the README "Language Features" block. **Keep both in sync; verify compilation after changes.**
 
 ## Gotchas
-- `if/else` blocks used as **statements** (not the last expression in a block) need a trailing semicolon: `if cond { ... } else { ... };` — without it, the parser errors on the next token
-- Auxiliary test inputs in `Inputs/` directories are excluded from lit discovery
+- `if/else` as **statements** (not last expr in block) need trailing `;` — parser errors without it.
+- Auxiliary inputs in `Inputs/` dirs are excluded from lit discovery.
