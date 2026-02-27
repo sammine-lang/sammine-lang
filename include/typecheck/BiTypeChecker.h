@@ -327,5 +327,47 @@ public:
     return Type::NonExistent();
   }
 };
+// --- Numeric literal type inference helpers (shared across .cpp files) ---
+
+/// Default a polymorphic numeric type to its concrete default:
+/// Integer → I32_t, Flt → F64_t. Non-polymorphic types pass through unchanged.
+inline Type default_polymorphic_type(const Type &t) {
+  if (t.type_kind == TypeKind::Integer)
+    return Type::I32_t();
+  if (t.type_kind == TypeKind::Flt)
+    return Type::F64_t();
+  return t;
+}
+
+/// Recursively resolve polymorphic literal types in an expression tree
+/// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
+/// and BlockAST to reach all leaf literals.
+inline void resolve_literal_type(ExprAST *expr, const Type &target) {
+  if (!expr || !expr->type.is_polymorphic_numeric())
+    return;
+
+  expr->type = target;
+
+  if (auto *unary = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
+    resolve_literal_type(unary->operand.get(), target);
+  } else if (auto *binary = llvm::dyn_cast<BinaryExprAST>(expr)) {
+    resolve_literal_type(binary->LHS.get(), target);
+    resolve_literal_type(binary->RHS.get(), target);
+  } else if (auto *if_expr = llvm::dyn_cast<IfExprAST>(expr)) {
+    if (if_expr->thenBlockAST && !if_expr->thenBlockAST->Statements.empty()) {
+      auto *last_then = if_expr->thenBlockAST->Statements.back().get();
+      resolve_literal_type(last_then, target);
+      if_expr->thenBlockAST->type = target;
+    }
+    if (if_expr->elseBlockAST && !if_expr->elseBlockAST->Statements.empty()) {
+      auto *last_else = if_expr->elseBlockAST->Statements.back().get();
+      resolve_literal_type(last_else, target);
+      if_expr->elseBlockAST->type = target;
+    }
+  }
+  // For all other expression types (NumberExprAST, CallExprAST, IndexExprAST,
+  // etc.), the type is already set above — no children to recurse into.
+}
+
 } // namespace AST
 } // namespace sammine_lang
