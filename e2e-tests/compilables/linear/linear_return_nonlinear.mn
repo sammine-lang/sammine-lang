@@ -1,0 +1,13 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'p' of type 'ptr<i32>': non-linear ptr<i32>
+
+# Test: returning a stack pointer (non-linear) is an error — may dangle
+let bad() -> ptr<i32> {
+  let mut x : i32 = 42;
+  let p : ptr<i32> = &x;
+  return p;
+}
+
+let main() -> i32 {
+  return 0;
+}
