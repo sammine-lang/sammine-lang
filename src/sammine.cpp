@@ -49,7 +49,7 @@ int main(int argc, char *argv[]) {
   g_diag.add_argument("", "--mlir-ir")
       .default_value(std::string("false"))
       .implicit_value(std::string("true"))
-      .help("Dump MLIR before lowering to LLVM IR (requires --backend=mlir)");
+      .help("Dump MLIR before lowering to LLVM IR");
   g_diag.add_argument("", "--ast-ir")
       .default_value(std::string("false"))
       .implicit_value(std::string("true"))
@@ -67,10 +67,6 @@ int main(int argc, char *argv[]) {
       .nargs(0, 1)
       .help("Print compilation timing. Also accepts: sparse (per-phase table), "
             "coarse (per-phase + all LLVM passes)");
-
-  program.add_argument("--backend")
-      .default_value(std::string("llvm"))
-      .help("Code generation backend: llvm (default) or mlir");
 
   program.add_argument("-O")
       .default_value(std::string(""))
@@ -113,19 +109,7 @@ int main(int argc, char *argv[]) {
     } else {
       compiler_options[TIME] = "false";
     }
-    if (program.is_used("--backend")) {
-      auto val = program.get("--backend");
-      if (val != "llvm" && val != "mlir") {
-        fmt::print(stderr,
-                   sammine_util::styled(fmt::terminal_color::bright_red),
-                   "Error: --backend requires a value: llvm or mlir\n");
-        std::cerr << program;
-        return 1;
-      }
-      compiler_options[BACKEND] = val;
-    } else {
-      compiler_options[BACKEND] = "llvm";
-    }
+    compiler_options[BACKEND] = "mlir";
   } catch (const std::exception &err) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "Error while parsing arguments\n");
