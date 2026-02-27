@@ -1,0 +1,15 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: already been consumed
+
+struct Box {
+  data: 'ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let b : Box = Box { data: p, tag: 1 };
+  free(p);
+  return 0;
+}

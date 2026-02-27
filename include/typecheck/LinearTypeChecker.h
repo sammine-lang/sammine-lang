@@ -60,6 +60,8 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_if(IfExprAST *ast);
   void check_while(WhileExprAST *ast);
   void check_case(CaseExprAST *ast);
+  void check_struct_literal(StructLiteralExprAST *ast);
+  void check_array_literal(ArrayLiteralExprAST *ast);
 
 public:
   void check(ProgramAST *program);
