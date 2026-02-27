@@ -363,7 +363,7 @@ public:
 
       // Resolve type arguments
       Monomorphizer::SubstitutionMap bindings;
-      std::string mangled = base_mangled;
+      std::string mangled = base_mangled + "<";
       bool has_unresolved_type_param = false;
       for (size_t i = 0; i < gen->type_args.size(); i++) {
         auto resolved = resolve_type_expr(gen->type_args[i].get());
@@ -372,8 +372,10 @@ public:
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
         bindings[generic_def->type_params[i]] = resolved;
-        mangled += "." + resolved.to_string();
+        if (i > 0) mangled += ", ";
+        mangled += resolved.to_string();
       }
+      mangled += ">";
 
       // If type args contain unresolved type params (e.g. Option<T> inside
       // a generic function), we can't instantiate yet — return a placeholder

@@ -230,6 +230,9 @@ void Compiler::resolve_imports() {
     Lexer mni_lexer(mni_input);
     auto mni_tok_stream = mni_lexer.getTokenStream();
     Parser mni_parser(mni_tok_stream);
+    // Set up the module name as its own alias so that qualified type
+    // references like str::String resolve correctly in .mni files.
+    mni_parser.alias_to_module[import.module_name] = import.module_name;
     auto mni_program = mni_parser.Parse();
 
     if (mni_parser.has_errors()) {
@@ -248,9 +251,6 @@ void Compiler::resolve_imports() {
       (*it)->set_location(import.location);
       if (auto *ext = llvm::dyn_cast<AST::ExternAST>(it->get())) {
         ext->Prototype->set_location(import.location);
-        ext->Prototype->functionName =
-            sammine_util::QualifiedName::from_mangled(
-                ext->Prototype->functionName.name);
       }
       programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                        std::move(*it));
@@ -603,11 +603,11 @@ void Compiler::emit_interface() {
     switch (t.type_kind) {
     case TypeKind::Struct: {
       auto &st = std::get<StructType>(t.type_data);
-      return QualifiedName::local(st.get_name()).with_module(stem).mangled();
+      return QualifiedName::local(st.get_name()).with_module(stem).display();
     }
     case TypeKind::Enum: {
       auto &et = std::get<EnumType>(t.type_data);
-      return et.get_name().with_module(stem).mangled();
+      return et.get_name().with_module(stem).display();
     }
     case TypeKind::Pointer:
       return "ptr<" +
@@ -650,21 +650,21 @@ void Compiler::emit_interface() {
     if (auto *func_def = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!func_def->is_exported)
         continue;
-      std::string mangled = func_def->Prototype->functionName.with_module(stem).mangled();
-      emit_proto(mangled, func_def->Prototype.get(),
+      std::string name = func_def->Prototype->functionName.with_module(stem).display();
+      emit_proto(name, func_def->Prototype.get(),
                  func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = llvm::dyn_cast<AST::ExternAST>(def.get())) {
       if (!extern_def->is_exposed)
         continue;
-      std::string mangled =
-          extern_def->Prototype->functionName.with_module(stem).mangled();
-      emit_proto(mangled, extern_def->Prototype.get(),
+      std::string name =
+          extern_def->Prototype->functionName.with_module(stem).display();
+      emit_proto(name, extern_def->Prototype.get(),
                  extern_def->Prototype->is_var_arg);
     } else if (auto *struct_def = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (!struct_def->is_exported)
         continue;
       out << "struct "
-          << struct_def->struct_name.with_module(stem).mangled() << " {\n";
+          << struct_def->struct_name.with_module(stem).display() << " {\n";
       for (size_t i = 0; i < struct_def->struct_members.size(); i++) {
         auto &member = struct_def->struct_members[i];
         out << "  " << member->name;

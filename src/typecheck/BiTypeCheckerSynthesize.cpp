@@ -91,6 +91,43 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   // --- Enum variant constructor (Enum::Variant syntax) ---
   if (ast->functionName.is_qualified()) {
     auto enum_type_opt = get_typename_type(ast->functionName.module);
+
+    // If not found and we have explicit type args, try generic enum instantiation
+    if (!enum_type_opt && !ast->explicit_type_args.empty()) {
+      // Extract base name (everything before '<')
+      auto module = ast->functionName.module;
+      auto angle_pos = module.find('<');
+      if (angle_pos != std::string::npos) {
+        std::string base_name = module.substr(0, angle_pos);
+        auto it = generic_enum_defs.find(base_name);
+        if (it != generic_enum_defs.end()) {
+          auto *generic_def = it->second;
+          if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
+            Monomorphizer::SubstitutionMap bindings;
+            std::string mangled = base_name + "<";
+            bool ok = true;
+            for (size_t i = 0; i < ast->explicit_type_args.size(); i++) {
+              auto resolved = resolve_type_expr(ast->explicit_type_args[i].get());
+              if (resolved.type_kind == TypeKind::Poisoned) { ok = false; break; }
+              bindings[generic_def->type_params[i]] = resolved;
+              if (i > 0) mangled += ", ";
+              mangled += resolved.to_string();
+            }
+            mangled += ">";
+
+            if (ok && !instantiated_enums.contains(mangled)) {
+              auto cloned = Monomorphizer::instantiate_enum(generic_def, mangled, bindings);
+              cloned->accept_vis(this);
+              instantiated_enums.insert(mangled);
+              monomorphized_enum_defs.push_back(std::move(cloned));
+            }
+            if (ok)
+              enum_type_opt = get_typename_type(mangled);
+          }
+        }
+      }
+    }
+
     if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
       auto &enum_type = *enum_type_opt;
       auto &et = std::get<EnumType>(enum_type.type_data);
@@ -291,9 +328,12 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
     }
   }
 
-  std::string mangled = ast->functionName.mangled();
-  for (auto &tp : generic_def->Prototype->type_params)
-    mangled += "." + bindings[tp].to_string();
+  std::string mangled = ast->functionName.mangled() + "<";
+  for (size_t i = 0; i < generic_def->Prototype->type_params.size(); i++) {
+    if (i > 0) mangled += ", ";
+    mangled += bindings[generic_def->Prototype->type_params[i]].to_string();
+  }
+  mangled += ">";
 
   ast->resolved_generic_name = mangled;
   ast->type_bindings = bindings;
@@ -1022,6 +1062,34 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
                 result_type.to_string(), arm_type.to_string()));
         had_error = true;
       }
+    }
+  }
+
+  // 3. Exhaustiveness check: ensure all variants are covered
+  if (!had_error) {
+    bool has_wildcard = false;
+    std::set<size_t> covered_indices;
+    for (auto &arm : ast->arms) {
+      if (arm.pattern.is_wildcard) {
+        has_wildcard = true;
+        break;
+      }
+      covered_indices.insert(arm.pattern.variant_index);
+    }
+
+    if (!has_wildcard && covered_indices.size() < et.variant_count()) {
+      std::string missing;
+      for (size_t i = 0; i < et.variant_count(); i++) {
+        if (!covered_indices.contains(i)) {
+          if (!missing.empty()) missing += ", ";
+          missing += et.get_variant(i).name;
+        }
+      }
+      this->add_error(
+          ast->scrutinee->get_location(),
+          fmt::format("Non-exhaustive case expression: missing variant(s) {}",
+                      missing));
+      had_error = true;
     }
   }
 

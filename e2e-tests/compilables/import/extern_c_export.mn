@@ -1,8 +1,8 @@
 # RUN: %sammine --file %dir/Inputs/has_extern_c.mn %O && cat %T/has_extern_c.mni | %check %full
 
-# export reuse and export let appear in .mni with mangled names
-# CHECK: reuse has_extern_c$printf
-# CHECK: reuse has_extern_c$greet
+# export reuse and export let appear in .mni with qualified names
+# CHECK: reuse has_extern_c::printf
+# CHECK: reuse has_extern_c::greet
 
 let main() -> i32 {
   return 0;

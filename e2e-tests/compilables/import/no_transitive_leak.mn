@@ -2,9 +2,9 @@
 
 # middle imports math, but math's symbols should NOT leak into middle.mni
 # Only middle's own functions should appear
-# CHECK: reuse middle$wrapper
-# CHECK-NOT: math$add
-# CHECK-NOT: math$multiply
+# CHECK: reuse middle::wrapper
+# CHECK-NOT: math::add
+# CHECK-NOT: math::multiply
 
 let main() -> i32 {
   return 0;

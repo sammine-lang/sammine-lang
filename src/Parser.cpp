@@ -123,6 +123,17 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'struct'",
           struct_tok->get_location(), {nullptr, FAILED});
 
+  // Handle qualified name (mod::Struct) from .mni files
+  std::string qualified_module;
+  if (tokStream->peek()->tok_type == TokDoubleColon) {
+    tokStream->consume(); // consume ::
+    auto member = expect(TokID);
+    if (member) {
+      qualified_module = id->lexeme;
+      id = member;
+    }
+  }
+
   REQUIRE(left_curly, TokLeftCurly,
           fmt::format("Expected '{{{{' after struct identifier {}", id->lexeme),
           struct_tok->get_location() | id->get_location(), {nullptr, FAILED});
@@ -175,8 +186,11 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
     imm_error("Expected ';' after struct definition",
               right_curly->get_location());
 
-  return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
-          SUCCESS};
+  auto struct_def = std::make_unique<StructDefAST>(id, std::move(struct_members));
+  if (!qualified_module.empty())
+    struct_def->struct_name = sammine_util::QualifiedName::qualified(
+        qualified_module, struct_def->struct_name.name);
+  return {std::move(struct_def), SUCCESS};
 }
 
 // enum Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
@@ -994,12 +1008,16 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
       tokStream->consume(); // consume ::
       auto variant_id = expect(TokID);
       if (variant_id) {
-        // Build mangled enum name: Option.i32
-        std::string mangled = qn.mangled();
-        for (auto &ta : parsed_types)
-          mangled += "." + ta->to_string();
+        // Build mangled enum name: Option<i32>
+        std::string mangled = qn.mangled() + "<";
+        for (size_t i = 0; i < parsed_types.size(); i++) {
+          if (i > 0) mangled += ", ";
+          mangled += parsed_types[i]->to_string();
+        }
+        mangled += ">";
         qn = sammine_util::QualifiedName::qualified(mangled, variant_id->lexeme);
         qn_loc = id->get_location() | variant_id->get_location();
+        explicit_type_args = std::move(parsed_types);
       } else {
         speculative_ok = false;
       }
@@ -1049,8 +1067,11 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (result == NONCOMMITTED) {
     // Qualified name without args (e.g. Color::Red) — preserve as CallExprAST
     // so the qualified name isn't lost
-    if (qn.is_qualified())
-      return {std::make_unique<CallExprAST>(qn, qn_loc), SUCCESS};
+    if (qn.is_qualified()) {
+      auto call = std::make_unique<CallExprAST>(qn, qn_loc);
+      call->explicit_type_args = std::move(explicit_type_args);
+      return {std::move(call), SUCCESS};
+    }
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   }
   auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
@@ -1169,9 +1190,13 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
                     prefix_tok->get_location());
           return {nullptr, FAILED};
         }
-        // Build mangled name: Option.i32
-        for (auto &ta : type_args)
-          enum_prefix += "." + ta->to_string();
+        // Build mangled name: Option<i32>
+        enum_prefix += "<";
+        for (size_t i = 0; i < type_args.size(); i++) {
+          if (i > 0) enum_prefix += ", ";
+          enum_prefix += type_args[i]->to_string();
+        }
+        enum_prefix += ">";
       }
 
       auto dcolon = expect(TokenType::TokDoubleColon);
@@ -1343,6 +1368,17 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!id)
     return {nullptr, NONCOMMITTED};
 
+  // Handle qualified name (mod::func) from .mni files
+  std::string qualified_module;
+  if (tokStream->peek()->tok_type == TokDoubleColon) {
+    tokStream->consume(); // consume ::
+    auto member = expect(TokID);
+    if (member) {
+      qualified_module = id->lexeme;
+      id = member; // id now holds the function name token
+    }
+  }
+
   // Parse optional explicit type parameters: <T, U, ...>
   std::vector<std::string> type_params;
   if (expect(TokLESS)) {
@@ -1384,6 +1420,9 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
     auto proto = std::make_unique<PrototypeAST>(id, std::move(params));
     proto->is_var_arg = var_arg;
     proto->type_params = std::move(type_params);
+    if (!qualified_module.empty())
+      proto->functionName = sammine_util::QualifiedName::qualified(
+          qualified_module, proto->functionName.name);
     return {std::move(proto), SUCCESS};
   }
 
@@ -1395,6 +1434,9 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
                                               std::move(params));
   proto->is_var_arg = var_arg;
   proto->type_params = std::move(type_params);
+  if (!qualified_module.empty())
+    proto->functionName = sammine_util::QualifiedName::qualified(
+        qualified_module, proto->functionName.name);
   return {std::move(proto), has_return_type ? SUCCESS : FAILED};
 }
 
