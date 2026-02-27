@@ -640,6 +640,39 @@ void CgVisitor::visit(IfExprAST *ast) {
     delete MergeBB;
   }
 }
+void CgVisitor::visit(WhileExprAST *ast) {
+  llvm::Function *function = resPtr->Builder->GetInsertBlock()->getParent();
+
+  BasicBlock *HeaderBB =
+      BasicBlock::Create(*resPtr->Context, "loop_header", function);
+  BasicBlock *BodyBB = BasicBlock::Create(*resPtr->Context, "loop_body");
+  BasicBlock *ExitBB = BasicBlock::Create(*resPtr->Context, "loop_exit");
+
+  // Branch from current block to loop header
+  resPtr->Builder->CreateBr(HeaderBB);
+
+  // --- Header block: evaluate condition ---
+  resPtr->Builder->SetInsertPoint(HeaderBB);
+  ast->condition->accept_vis(this);
+  if (!ast->condition->val)
+    this->abort("Failed to codegen while loop condition");
+  resPtr->Builder->CreateCondBr(ast->condition->val, BodyBB, ExitBB);
+
+  // --- Body block ---
+  function->insert(function->end(), BodyBB);
+  resPtr->Builder->SetInsertPoint(BodyBB);
+  ast->body->accept_vis(this);
+
+  // Back-edge to header (only if body didn't already terminate)
+  auto *bodyEnd = resPtr->Builder->GetInsertBlock();
+  if (!bodyEnd->getTerminator())
+    resPtr->Builder->CreateBr(HeaderBB);
+
+  // --- Exit block ---
+  function->insert(function->end(), ExitBB);
+  resPtr->Builder->SetInsertPoint(ExitBB);
+}
+
 void CgVisitor::preorder_walk(TypedVarAST *ast) {}
 
 void CgVisitor::postorder_walk(StringExprAST *ast) {

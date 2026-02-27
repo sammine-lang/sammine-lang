@@ -108,6 +108,7 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(WhileExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -141,6 +142,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(WhileExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -564,6 +566,9 @@ void AstPrinterVisitor::visit(FieldAccessExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+
+void AstPrinterVisitor::preorder_walk(WhileExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(WhileExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
   generic_preprintln(ast);

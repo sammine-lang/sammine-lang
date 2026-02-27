@@ -133,6 +133,7 @@ void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
@@ -204,6 +205,7 @@ void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 } // namespace sammine_lang::AST

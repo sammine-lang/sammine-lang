@@ -129,6 +129,7 @@ public:
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
+  virtual void visit(WhileExprAST *ast) override;
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
 
@@ -205,6 +206,7 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(WhileExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -238,6 +240,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(WhileExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -270,6 +273,7 @@ public:
   virtual Type synthesize(UnaryNegExprAST *ast) override;
   virtual Type synthesize(StructLiteralExprAST *ast) override;
   virtual Type synthesize(FieldAccessExprAST *ast) override;
+  virtual Type synthesize(WhileExprAST *ast) override;
   virtual Type synthesize(TypeClassDeclAST *ast) override;
   virtual Type synthesize(TypeClassInstanceAST *ast) override;
 

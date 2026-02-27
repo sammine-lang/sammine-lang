@@ -518,6 +518,14 @@ void BiTypeCheckerVisitor::visit(FieldAccessExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(WhileExprAST *ast) {
+  if (ast->condition)
+    ast->condition->accept_vis(this);
+  if (ast->body)
+    ast->body->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   if (type_class_defs.contains(ast->class_name))
     return;
@@ -645,6 +653,7 @@ void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FieldAccessExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
@@ -678,6 +687,7 @@ void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FieldAccessExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 

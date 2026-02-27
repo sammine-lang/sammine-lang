@@ -87,6 +87,7 @@ public:
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
+  virtual void preorder_walk(WhileExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -121,6 +122,7 @@ public:
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
+  virtual void postorder_walk(WhileExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 };

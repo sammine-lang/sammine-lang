@@ -222,6 +222,11 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
         clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
   }
 
+  if (auto *wh = llvm::dyn_cast<WhileExprAST>(expr)) {
+    return std::make_unique<WhileExprAST>(clone_expr(wh->condition.get()),
+                                          clone_block(wh->body.get()));
+  }
+
   sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");
 }
 

@@ -430,6 +430,49 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
   }
 }
 
+mlir::Value MLIRGenImpl::emitWhileExpr(AST::WhileExprAST *ast) {
+  auto location = loc(ast);
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+
+  // Create blocks: header (condition), body, exit
+  auto *headerBlock = new mlir::Block();
+  auto *bodyBlock = new mlir::Block();
+  auto *exitBlock = new mlir::Block();
+
+  // Branch from current block to header
+  mlir::cf::BranchOp::create(builder, location, headerBlock);
+
+  // --- Header block: evaluate condition ---
+  parentRegion->push_back(headerBlock);
+  builder.setInsertionPointToStart(headerBlock);
+  auto cond = emitExpr(ast->condition.get());
+  if (!cond)
+    return nullptr;
+  mlir::cf::CondBranchOp::create(builder, location, cond, bodyBlock,
+                                  /*trueArgs=*/{}, exitBlock,
+                                  /*falseArgs=*/{});
+
+  // --- Body block ---
+  parentRegion->push_back(bodyBlock);
+  builder.setInsertionPointToStart(bodyBlock);
+  emitBlock(ast->body.get());
+
+  // Back-edge to header (only if body didn't already terminate)
+  auto *bodyEnd = builder.getInsertionBlock();
+  bool bodyTerminated =
+      !bodyEnd->empty() &&
+      bodyEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
+  if (!bodyTerminated)
+    mlir::cf::BranchOp::create(builder, location, headerBlock);
+
+  // --- Exit block ---
+  parentRegion->push_back(exitBlock);
+  builder.setInsertionPointToStart(exitBlock);
+
+  // While loops always evaluate to unit
+  return nullptr;
+}
+
 mlir::Value MLIRGenImpl::emitStringExpr(AST::StringExprAST *ast) {
   auto name = fmt::format("{}{}", kStringPrefix, strCounter++);
   return getOrCreateGlobalString(name, ast->string_content, loc(ast));

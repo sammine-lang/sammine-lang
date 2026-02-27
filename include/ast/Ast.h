@@ -672,6 +672,20 @@ public:
   AST_NODE_METHODS("FieldAccessExprAST", NodeKind::FieldAccessExprAST)
 };
 
+class WhileExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> condition;
+  std::unique_ptr<BlockAST> body;
+  explicit WhileExprAST(std::unique_ptr<ExprAST> condition,
+                        std::unique_ptr<BlockAST> body)
+      : ExprAST(NodeKind::WhileExprAST), condition(std::move(condition)),
+        body(std::move(body)) {
+    this->join_location(this->condition.get())
+        ->join_location(this->body.get());
+  }
+  AST_NODE_METHODS("WhileExprAST", NodeKind::WhileExprAST)
+};
+
 class TypeClassDeclAST : public DefinitionAST {
 public:
   std::string class_name;

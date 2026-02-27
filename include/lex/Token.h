@@ -91,8 +91,9 @@ enum TokenType {
   TokFalse, // Representing a boolean false
   TokChar,  // Representing a char literal
   // TokIf
-  TokIf,   // if
-  TokElse, // else
+  TokIf,    // if
+  TokElse,  // else
+  TokWhile, // while
 
   TokType, // Type
 
@@ -177,6 +178,7 @@ static const std::map<TokenType, std::string> TokenMap = {
 
     {TokIf, "if"},
     {TokElse, "else"},
+    {TokWhile, "while"},
 
     // TokCOMMENTS
     {TokSingleComment, "#"},
