@@ -117,6 +117,7 @@ struct Type {
   TypeKind type_kind;
   TypeData type_data;
   bool is_mutable = false;
+  bool is_linear = false;
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
   static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
@@ -190,7 +191,7 @@ struct Type {
     case TypeKind::Char:
       return "char";
     case TypeKind::Pointer:
-      return "ptr<" +
+      return (is_linear ? "'" : "") + std::string("ptr<") +
              std::get<PointerType>(type_data).get_pointee().to_string() + ">";
     case TypeKind::Array:
       return "[" + std::get<ArrayType>(type_data).get_element().to_string() +

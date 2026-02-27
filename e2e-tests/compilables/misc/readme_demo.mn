@@ -57,7 +57,7 @@ let main() -> i32 {
   let size = len(a);                         # array length
 
   # --- Pointers & memory ---
-  let p: ptr<i32> = alloc<i32>(1);          # heap allocation (count)
+  let p = alloc<i32>(1);                     # heap allocation (linear 'ptr<i32>)
   *p = 42;                                   # write through pointer
   let val = *p;                              # dereference
   free(p);                                   # manual deallocation

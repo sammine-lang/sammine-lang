@@ -41,11 +41,19 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   }
 
   ast->type.is_mutable = ast->is_mutable;
+
+  // Propagate linearity from expression type when no explicit annotation
+  if (ast->TypedVar->type_expr == nullptr && ast->Expression) {
+    auto expr_type = ast->Expression->type;
+    ast->type.is_linear = expr_type.is_linear;
+  }
+
   id_to_type.registerNameT(ast->TypedVar->name, ast->type);
   LOG({
-    fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} ({})\n",
+    fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} ({}{})\n",
                ast->TypedVar->name, ast->type.to_string(),
-               ast->is_mutable ? "mutable" : "immutable");
+               ast->is_mutable ? "mutable" : "immutable",
+               ast->type.is_linear ? ", linear" : "");
   });
   return ast->type;
 }
@@ -749,7 +757,9 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
     return ast->type = Type::Poisoned();
   }
 
-  return ast->type = Type::Pointer(element_type);
+  ast->type = Type::Pointer(element_type);
+  ast->type.is_linear = true; // alloc always produces linear pointers
+  return ast->type;
 }
 
 Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {

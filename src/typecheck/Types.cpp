@@ -84,7 +84,7 @@ bool Type::operator<(const Type &t) const {
 }
 bool Type::operator>(const Type &t) const { return t < *this; }
 // Compares fundamental type structure only (TypeKind + TypeData).
-// Qualifiers like is_mutable are intentionally ignored — use
+// Qualifiers like is_mutable and is_linear are intentionally ignored — use
 // compatible_to_from() for directional compatibility checks.
 bool Type::operator==(const Type &other) const {
   if (this->type_kind != other.type_kind)
@@ -151,6 +151,13 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
   // Primitive/literal types bypass this check since they are always by-value.
   if (a.is_mutable && !b.is_mutable && !b.is_literal()) {
     return false;
+  }
+
+  // Linearity check: linear and non-linear pointers are incompatible.
+  // 'ptr<T> cannot flow into ptr<T> and vice versa.
+  if (a.type_kind == TypeKind::Pointer && b.type_kind == TypeKind::Pointer) {
+    if (a.is_linear != b.is_linear)
+      return false;
   }
 
   // Polymorphic integer literal can flow into concrete integer types
