@@ -1,0 +1,24 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'o' of type 'Outer': non-linear ptr<i32> in field 'p' in field 'inner'
+
+# Test: struct wrapping struct wrapping ptr<T> — 2 levels deep
+struct Inner {
+  p: ptr<i32>,
+};
+
+struct Outer {
+  inner: Inner,
+  tag: i32,
+};
+
+let bad() -> Outer {
+  let x : i32 = 42;
+  let q : ptr<i32> = &x;
+  let i : Inner = Inner { p: q };
+  let o : Outer = Outer { inner: i, tag: 1 };
+  return o;
+}
+
+let main() -> i32 {
+  return 0;
+}

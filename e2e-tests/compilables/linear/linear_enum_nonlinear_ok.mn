@@ -1,0 +1,17 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: got val: 99
+
+# Test: enum wrapping a non-linear pointer used locally (no return) is fine
+import std;
+
+enum MaybePtr = Some(ptr<i32>) | None;
+
+let main() -> i32 {
+  let x : i32 = 99;
+  let m : MaybePtr = MaybePtr::Some(&x);
+  case m {
+    MaybePtr::Some(p) => std::printf("got val: %d\n", *p),
+    MaybePtr::None => std::printf("got nothing\n"),
+  };
+  return 0;
+}

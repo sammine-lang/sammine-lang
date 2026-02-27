@@ -1,0 +1,14 @@
+# RUN: ! %sammine --file %full --check --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'a' of type '[ptr<i32>;1]': non-linear ptr<i32> in element
+
+# Test: returning an array with non-linear pointer elements is an error
+let make_arr() -> [ptr<i32>;1] {
+  let x : i32 = 42;
+  let p : ptr<i32> = &x;
+  let a : [ptr<i32>;1] = [p];
+  return a;
+}
+
+let main() -> i32 {
+  return 0;
+}

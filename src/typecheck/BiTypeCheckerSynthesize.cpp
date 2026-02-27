@@ -1141,22 +1141,12 @@ bool BiTypeCheckerVisitor::contains_type_param(const Type &type,
   if (type.type_kind == TypeKind::TypeParam)
     return std::get<std::string>(type.type_data) == param_name;
 
-  if (type.type_kind == TypeKind::Pointer) {
-    auto pointee = std::get<PointerType>(type.type_data).get_pointee();
-    return contains_type_param(pointee, param_name);
-  }
-  if (type.type_kind == TypeKind::Array) {
-    auto elem = std::get<ArrayType>(type.type_data).get_element();
-    return contains_type_param(elem, param_name);
-  }
-  if (type.type_kind == TypeKind::Function) {
-    auto fn = std::get<FunctionType>(type.type_data);
-    for (auto &p : fn.get_params_types())
-      if (contains_type_param(p, param_name))
-        return true;
-    return contains_type_param(fn.get_return_type(), param_name);
-  }
-  return false;
+  bool found = false;
+  type.forEachInnerType([&](const Type &inner) {
+    if (!found && contains_type_param(inner, param_name))
+      found = true;
+  });
+  return found;
 }
 
 bool BiTypeCheckerVisitor::unify(

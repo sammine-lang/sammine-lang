@@ -1,0 +1,22 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'h' of type 'Holder': non-linear ptr<i32> in variant 'Some' in field 'm'
+
+# Test: struct wrapping enum wrapping ptr<T> — 2 levels deep
+enum MaybePtr = Some(ptr<i32>) | None;
+
+struct Holder {
+  m: MaybePtr,
+  tag: i32,
+};
+
+let bad() -> Holder {
+  let x : i32 = 42;
+  let q : ptr<i32> = &x;
+  let mp : MaybePtr = MaybePtr::Some(q);
+  let h : Holder = Holder { m: mp, tag: 1 };
+  return h;
+}
+
+let main() -> i32 {
+  return 0;
+}

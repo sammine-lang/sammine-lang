@@ -322,6 +322,53 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
 
 // ── check_return ────────────────────────────────────────────────────
 
+// Returns a human-readable path to the first non-linear pointer found,
+// e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
+// NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
+static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
+  if (t.type_kind == TypeKind::Pointer && !t.is_linear)
+    return fmt::format("non-linear {}", t.to_string());
+
+  if (t.type_kind == TypeKind::Struct) {
+    auto &st = std::get<StructType>(t.type_data);
+    auto &names = st.get_field_names();
+    auto &types = st.get_field_types();
+    for (size_t i = 0; i < types.size(); i++) {
+      auto path = find_nonlinear_pointer_path(types[i]);
+      if (path)
+        return fmt::format("{} in field '{}'", *path, names[i]);
+    }
+  }
+  if (t.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(t.type_data);
+    for (auto &variant : et.get_variants()) {
+      for (auto &pt : variant.payload_types) {
+        auto path = find_nonlinear_pointer_path(pt);
+        if (path)
+          return fmt::format("{} in variant '{}'", *path, variant.name);
+      }
+    }
+  }
+  if (t.type_kind == TypeKind::Array) {
+    auto &at = std::get<ArrayType>(t.type_data);
+    auto path = find_nonlinear_pointer_path(at.get_element());
+    if (path)
+      return fmt::format("{} in element", *path);
+  }
+  if (t.type_kind == TypeKind::Function) {
+    auto &fn = std::get<FunctionType>(t.type_data);
+    for (auto &p : fn.get_params_types()) {
+      auto path = find_nonlinear_pointer_path(p);
+      if (path)
+        return fmt::format("{} in parameter", *path);
+    }
+    auto path = find_nonlinear_pointer_path(fn.get_return_type());
+    if (path)
+      return fmt::format("{} in return type", *path);
+  }
+  return std::nullopt;
+}
+
 void LinearTypeChecker::check_return(ReturnExprAST *ast) {
   if (!ast->return_expr)
     return;
@@ -333,11 +380,14 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
       consume(var->variableName, ast->get_location());
       return;
     }
-    // Returning a non-linear pointer — error (may dangle)
-    if (var->type.type_kind == TypeKind::Pointer && !var->type.is_linear) {
+    // Returning a type that contains a non-linear pointer — error (may dangle)
+    auto path = find_nonlinear_pointer_path(var->type);
+    if (path) {
       this->add_error(
           ast->get_location(),
-          "Cannot return non-linear pointer (may reference a local variable)");
+          fmt::format("Cannot return '{}' of type '{}': {} "
+                      "(may reference a local variable)",
+                      var->variableName, var->type.to_string(), *path));
       return;
     }
   }

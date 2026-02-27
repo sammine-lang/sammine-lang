@@ -255,6 +255,56 @@ struct Type {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
 
+  bool isTypeWrapping() const {
+    switch (type_kind) {
+    case TypeKind::Pointer:
+    case TypeKind::Array:
+    case TypeKind::Struct:
+    case TypeKind::Enum:
+    case TypeKind::Function:
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  template <typename F> void forEachInnerType(F &&callback) const {
+    switch (type_kind) {
+    case TypeKind::Pointer: {
+      auto &pt = std::get<PointerType>(type_data);
+      callback(pt.get_pointee());
+      break;
+    }
+    case TypeKind::Array: {
+      auto &at = std::get<ArrayType>(type_data);
+      callback(at.get_element());
+      break;
+    }
+    case TypeKind::Struct: {
+      auto &st = std::get<StructType>(type_data);
+      for (auto &ft : st.get_field_types())
+        callback(ft);
+      break;
+    }
+    case TypeKind::Enum: {
+      auto &et = std::get<EnumType>(type_data);
+      for (auto &variant : et.get_variants())
+        for (auto &pt : variant.payload_types)
+          callback(pt);
+      break;
+    }
+    case TypeKind::Function: {
+      auto &fn = std::get<FunctionType>(type_data);
+      for (auto &p : fn.get_params_types())
+        callback(p);
+      callback(fn.get_return_type());
+      break;
+    }
+    default:
+      break;
+    }
+  }
+
   operator std::string() const { return to_string(); }
 };
 

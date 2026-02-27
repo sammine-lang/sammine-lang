@@ -1,0 +1,22 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'm' of type 'MaybeHasPtr': non-linear ptr<i32> in field 'p' in variant 'Some'
+
+# Test: enum wrapping struct wrapping ptr<T> — 2 levels deep
+struct HasPtr {
+  p: ptr<i32>,
+  tag: i32,
+};
+
+enum MaybeHasPtr = Some(HasPtr) | None;
+
+let bad() -> MaybeHasPtr {
+  let x : i32 = 42;
+  let q : ptr<i32> = &x;
+  let h : HasPtr = HasPtr { p: q, tag: 1 };
+  let m : MaybeHasPtr = MaybeHasPtr::Some(h);
+  return m;
+}
+
+let main() -> i32 {
+  return 0;
+}

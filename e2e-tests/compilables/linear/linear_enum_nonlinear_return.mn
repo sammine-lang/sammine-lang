@@ -1,0 +1,15 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: Cannot return 'm' of type 'MaybePtr': non-linear ptr<i32> in variant 'Some'
+
+# Test: returning an enum variant wrapping a non-linear pointer is an error
+enum MaybePtr = Some(ptr<i32>) | None;
+
+let bad() -> MaybePtr {
+  let x : i32 = 42;
+  let m : MaybePtr = MaybePtr::Some(&x);
+  return m;
+}
+
+let main() -> i32 {
+  return 0;
+}
