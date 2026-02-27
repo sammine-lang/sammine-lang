@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: duplicate discriminant value 1
+
+enum Dup = X(0) | Y(1) | Z(1);
+
+let main() -> i32 {
+  return 0;
+}

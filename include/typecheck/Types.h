@@ -95,10 +95,12 @@ public:
   struct VariantInfo {
     std::string name;
     std::vector<Type> payload_types;
+    std::optional<int64_t> discriminant_value;
   };
 
 private:
   std::vector<VariantInfo> variants;
+  bool integer_backed_ = false;
 
 public:
   bool operator==(const EnumType &t) const;
@@ -108,7 +110,9 @@ public:
   get_variant_index(const std::string &variant_name) const;
   const VariantInfo &get_variant(size_t idx) const { return variants[idx]; }
   size_t variant_count() const { return variants.size(); }
-  EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants);
+  bool is_integer_backed() const { return integer_backed_; }
+  EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants,
+           bool integer_backed = false);
 };
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, std::string, std::monostate>;
@@ -152,8 +156,10 @@ struct Type {
                            std::move(field_types))};
   }
   static Type Enum(sammine_util::QualifiedName name,
-                   std::vector<EnumType::VariantInfo> variants) {
-    return Type{TypeKind::Enum, EnumType(std::move(name), std::move(variants))};
+                   std::vector<EnumType::VariantInfo> variants,
+                   bool integer_backed = false) {
+    return Type{TypeKind::Enum,
+                EnumType(std::move(name), std::move(variants), integer_backed)};
   }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {

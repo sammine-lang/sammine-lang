@@ -1,0 +1,14 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 65
+# CHECK: 10
+
+import std;
+
+enum AsciiChar = A(65) | B(66) | Newline(10);
+
+let main() -> i32 {
+  let ch: AsciiChar = AsciiChar::A;
+  std::printf("%d\n", ch);
+  std::printf("%d\n", AsciiChar::Newline);
+  return 0;
+}

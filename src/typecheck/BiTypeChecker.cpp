@@ -6,6 +6,7 @@
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
+#include <set>
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -274,11 +275,49 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     return;
   }
 
+  // Validate integer-backed enums: all variants must have discriminant values,
+  // no mixing with type payloads
+  if (ast->is_integer_backed) {
+    std::set<int64_t> seen_values;
+    for (auto &variant : ast->variants) {
+      if (!variant.discriminant_value.has_value()) {
+        this->add_error(
+            variant.location,
+            fmt::format("Integer-backed enum '{}': variant '{}' is missing a "
+                        "discriminant value — all variants must have one",
+                        ast->enum_name.display(), variant.name));
+        ast->type = Type::Poisoned();
+        return;
+      }
+      if (!variant.payload_types.empty()) {
+        this->add_error(
+            variant.location,
+            fmt::format("Integer-backed enum '{}': variant '{}' cannot have "
+                        "both a discriminant value and type payloads",
+                        ast->enum_name.display(), variant.name));
+        ast->type = Type::Poisoned();
+        return;
+      }
+      auto val = variant.discriminant_value.value();
+      if (seen_values.contains(val)) {
+        this->add_error(
+            variant.location,
+            fmt::format("Integer-backed enum '{}': duplicate discriminant "
+                        "value {} on variant '{}'",
+                        ast->enum_name.display(), val, variant.name));
+        ast->type = Type::Poisoned();
+        return;
+      }
+      seen_values.insert(val);
+    }
+  }
+
   std::vector<EnumType::VariantInfo> variant_infos;
 
   for (auto &variant : ast->variants) {
     EnumType::VariantInfo info;
     info.name = variant.name;
+    info.discriminant_value = variant.discriminant_value;
     for (auto &type_expr : variant.payload_types) {
       auto resolved = resolve_type_expr(type_expr.get());
       if (resolved.type_kind == TypeKind::Poisoned) {
@@ -290,7 +329,8 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     variant_infos.push_back(std::move(info));
   }
 
-  auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos));
+  auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos),
+                              ast->is_integer_backed);
   ast->type = enum_type;
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 

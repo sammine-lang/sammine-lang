@@ -272,6 +272,7 @@ Monomorphizer::instantiate_enum(EnumDefAST *generic,
     EnumVariantDef cloned;
     cloned.name = variant.name;
     cloned.location = variant.location;
+    cloned.discriminant_value = variant.discriminant_value;
     for (auto &type_expr : variant.payload_types)
       cloned.payload_types.push_back(m.clone_type_expr(type_expr.get()));
     cloned_variants.push_back(std::move(cloned));
@@ -279,6 +280,7 @@ Monomorphizer::instantiate_enum(EnumDefAST *generic,
 
   auto result = std::make_unique<EnumDefAST>(make_tok(mangled_name),
                                               std::move(cloned_variants));
+  result->is_integer_backed = generic->is_integer_backed;
   // type_params left empty — this is a concrete instantiation
   return result;
 }

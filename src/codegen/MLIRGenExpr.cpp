@@ -5,7 +5,6 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 
 #include "llvm/ADT/SmallVector.h"
@@ -54,9 +53,20 @@ mlir::Value MLIRGenImpl::emitUnitExpr(AST::UnitExprAST *) {
 mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   auto location = loc(ast);
 
-  // Enum unit variant: build { tag, undef_payload }
+  // Enum unit variant
   if (ast->is_enum_unit_variant) {
     auto &et = std::get<EnumType>(ast->type.type_data);
+
+    // Integer-backed enum: emit bare integer constant
+    if (et.is_integer_backed()) {
+      auto &vi = et.get_variant(ast->enum_variant_index);
+      return mlir::arith::ConstantIntOp::create(
+                 builder, location, builder.getI32Type(),
+                 vi.discriminant_value.value())
+          .getResult();
+    }
+
+    // Tagged union: build { tag, undef_payload }
     auto enumTy = enumTypes.at(et.get_name().mangled());
 
     auto one = mlir::arith::ConstantIntOp::create(builder, location,
@@ -79,8 +89,10 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   if (symbolTable.queryName(ast->variableName) != nameNotFound) {
     auto val = symbolTable.get_from_name(ast->variableName);
 
-    // Array (memref<NxT>): return the memref itself
-    if (mlir::isa<mlir::MemRefType>(val.getType()))
+    // Array vars are !llvm.ptr (alloca to LLVMArrayType) — return the
+    // pointer directly; downstream consumers use GEP to index into it.
+    if (ast->type.type_kind == TypeKind::Array &&
+        mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()))
       return val;
 
     // Variable in llvm.alloca: load the value
@@ -136,19 +148,10 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       if (!arr || !idx || !rhs)
         return nullptr;
 
-      // If the array is a raw !llvm.ptr (from deref of ptr<[T;N]>),
-      // use LLVM GEP + store.
-      if (mlir::isa<mlir::LLVM::LLVMPointerType>(arr.getType())) {
-        auto &arrType =
-            std::get<ArrayType>(idxExpr->array_expr->type.type_data);
-        emitPtrArrayStore(arr, idx, rhs, arrType, location);
-        return rhs;
-      }
-
-      auto indexVal = mlir::arith::IndexCastOp::create(
-          builder, location, builder.getIndexType(), idx);
-      mlir::memref::StoreOp::create(builder, location, rhs, arr,
-                                     mlir::ValueRange{indexVal});
+      // All arrays are !llvm.ptr — use LLVM GEP + store
+      auto &arrType =
+          std::get<ArrayType>(idxExpr->array_expr->type.type_data);
+      emitPtrArrayStore(arr, idx, rhs, arrType, location);
       return rhs;
     }
 
@@ -399,8 +402,13 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
   auto *thenBlock = new mlir::Block();
   auto *elseBlock = new mlir::Block();
   auto *mergeBlock = new mlir::Block();
-  if (hasResult)
-    mergeBlock->addArgument(convertType(ast->type), location);
+  if (hasResult) {
+    // Array expressions produce !llvm.ptr (alloca pointers), not LLVMArrayType
+    auto mergeType = ast->type.type_kind == TypeKind::Array
+                         ? mlir::Type(llvmPtrTy())
+                         : convertType(ast->type);
+    mergeBlock->addArgument(mergeType, location);
+  }
 
   // Conditional branch from current block
   mlir::cf::CondBranchOp::create(builder, location, cond,
@@ -505,21 +513,19 @@ mlir::Value
 MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
   auto location = loc(ast);
   auto &arrType = std::get<ArrayType>(ast->type.type_data);
-  auto elemMlirType = convertType(arrType.get_element());
-  auto memrefType = mlir::MemRefType::get(
-      {static_cast<int64_t>(arrType.get_size())}, elemMlirType);
+  auto llvmArrayType = mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->type));
 
-  // Stack-allocate the array
-  auto alloca = mlir::memref::AllocaOp::create(builder, location, memrefType);
+  // Stack-allocate the array via llvm.alloca
+  auto alloca = emitAllocaOne(llvmArrayType, location);
 
-  // Store each element
+  // Store each element via GEP + store
   for (size_t i = 0; i < ast->elements.size(); ++i) {
     auto elemVal = emitExpr(ast->elements[i].get());
     if (!elemVal)
       return nullptr;
-    auto idx = mlir::arith::ConstantIndexOp::create(builder, location, i);
-    mlir::memref::StoreOp::create(builder, location, elemVal, alloca,
-                                   mlir::ValueRange{idx});
+    auto idx = mlir::arith::ConstantIntOp::create(
+        builder, location, builder.getI32Type(), static_cast<int64_t>(i));
+    emitPtrArrayStore(alloca, idx, elemVal, arrType, location);
   }
 
   return alloca;
@@ -541,15 +547,8 @@ mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
   // Bounds check
   emitBoundsCheck(indexVal, arrType.get_size(), location);
 
-  // If the array value is a raw !llvm.ptr (from dereferencing ptr<[T;N]>),
-  // use LLVM GEP + load instead of memref.load.
-  if (mlir::isa<mlir::LLVM::LLVMPointerType>(arr.getType())) {
-    return emitPtrArrayLoad(arr, idx, arrType, location);
-  }
-
-  // Standard memref path
-  return mlir::memref::LoadOp::create(builder, location, arr,
-                                       mlir::ValueRange{indexVal});
+  // All arrays are !llvm.ptr — use LLVM GEP + load
+  return emitPtrArrayLoad(arr, idx, arrType, location);
 }
 
 mlir::Value MLIRGenImpl::emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
@@ -615,23 +614,8 @@ mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
   if (!varExpr)
     sammine_util::abort("MLIRGen: address-of (&) requires a variable operand");
 
-  auto val = symbolTable.get_from_name(varExpr->variableName);
-
-  // Arrays are still memref<NxT> — extract pointer from memref
-  if (mlir::isa<mlir::MemRefType>(val.getType())) {
-    auto location = loc(ast);
-    auto ptrTy = llvmPtrTy();
-    auto idxVal =
-        mlir::memref::ExtractAlignedPointerAsIndexOp::create(
-            builder, location, val);
-    auto i64Val = mlir::arith::IndexCastOp::create(
-        builder, location, builder.getI64Type(), idxVal);
-    return mlir::LLVM::IntToPtrOp::create(builder, location, ptrTy,
-                                            i64Val.getResult(), nullptr);
-  }
-
-  // Non-array variables are in llvm.alloca — return the pointer directly
-  return val;
+  // All variables (including arrays) are in llvm.alloca — return the pointer
+  return symbolTable.get_from_name(varExpr->variableName);
 }
 
 mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
@@ -695,6 +679,12 @@ MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   for (size_t i = 0; i < ast->field_values.size(); i++) {
     auto fieldIdx = st.get_field_index(ast->field_names[i]);
     auto val = emitExpr(ast->field_values[i].get());
+    // Array expressions return !llvm.ptr; InsertValueOp needs LLVMArrayType
+    if (ast->field_values[i]->type.type_kind == TypeKind::Array &&
+        mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
+      val = mlir::LLVM::LoadOp::create(
+          builder, location, convertType(ast->field_values[i]->type), val);
+    }
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
                                              fieldIdx.value());
   }
@@ -714,6 +704,16 @@ MLIRGenImpl::emitFieldAccessExpr(AST::FieldAccessExprAST *ast) {
 mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
   auto location = loc(ast);
   auto &et = std::get<EnumType>(ast->type.type_data);
+
+  // Integer-backed enum: emit bare integer constant (no struct)
+  if (et.is_integer_backed()) {
+    auto &vi = et.get_variant(ast->enum_variant_index);
+    return mlir::arith::ConstantIntOp::create(
+               builder, location, builder.getI32Type(),
+               vi.discriminant_value.value())
+        .getResult();
+  }
+
   auto enumTy = enumTypes.at(et.get_name().mangled());
 
   // Alloca the enum struct
@@ -740,6 +740,12 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
     int64_t byte_offset = 0;
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto argVal = emitExpr(ast->arguments[i].get());
+      // Array expressions return !llvm.ptr; StoreOp needs LLVMArrayType
+      if (ast->arguments[i]->type.type_kind == TypeKind::Array &&
+          mlir::isa<mlir::LLVM::LLVMPointerType>(argVal.getType())) {
+        argVal = mlir::LLVM::LoadOp::create(
+            builder, location, convertType(ast->arguments[i]->type), argVal);
+      }
       mlir::Value dest;
       if (byte_offset == 0) {
         dest = payloadPtr;
@@ -841,10 +847,11 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
   // --- Body block: compare elements[i] ---
   parentRegion->push_back(bodyBlock);
   builder.setInsertionPointToStart(bodyBlock);
-  auto lhsElem = mlir::memref::LoadOp::create(builder, location, lhs,
-                                                mlir::ValueRange{counter});
-  auto rhsElem = mlir::memref::LoadOp::create(builder, location, rhs,
-                                                mlir::ValueRange{counter});
+  // Cast index counter to i32 for emitPtrArrayLoad
+  auto counterI32 = mlir::arith::IndexCastOp::create(
+      builder, location, builder.getI32Type(), counter);
+  auto lhsElem = emitPtrArrayLoad(lhs, counterI32, arrData, location);
+  auto rhsElem = emitPtrArrayLoad(rhs, counterI32, arrData, location);
   // Compare elements
   mlir::Value elemEq;
   if (isIntegerType(arrData.get_element()) || isBoolType(arrData.get_element()))
@@ -853,7 +860,16 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
   else if (isFloatType(arrData.get_element()))
     elemEq = mlir::arith::CmpFOp::create(
         builder, location, mlir::arith::CmpFPredicate::OEQ, lhsElem, rhsElem);
-  else
+  else if (arrData.get_element().type_kind == TypeKind::Pointer) {
+    // Pointer equality: compare as integers
+    auto i64Ty = builder.getI64Type();
+    auto lhsInt = mlir::LLVM::PtrToIntOp::create(builder, location,
+                                                   i64Ty, lhsElem);
+    auto rhsInt = mlir::LLVM::PtrToIntOp::create(builder, location,
+                                                   i64Ty, rhsElem);
+    elemEq = mlir::arith::CmpIOp::create(
+        builder, location, mlir::arith::CmpIPredicate::eq, lhsInt, rhsInt);
+  } else
     sammine_util::abort("MLIRGen: unsupported array element type for comparison");
 
   // If equal → increment and loop back to header; else → mismatch
@@ -890,6 +906,11 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   // 1. Emit scrutinee
   auto scrutineeVal = emitExpr(ast->scrutinee.get());
   auto &et = std::get<EnumType>(ast->scrutinee->type.type_data);
+
+  // Integer-backed enum: scrutinee IS the tag, no struct to decompose
+  if (et.is_integer_backed())
+    return emitIntegerBackedCaseExpr(ast, scrutineeVal, et);
+
   auto enumTy = enumTypes.at(et.get_name().mangled());
 
   // Alloca the scrutinee so we can GEP into it
@@ -923,8 +944,13 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   }
 
   auto *mergeBlock = new mlir::Block();
-  if (hasResult)
-    mergeBlock->addArgument(convertType(ast->type), location);
+  if (hasResult) {
+    // Array expressions produce !llvm.ptr (alloca pointers), not LLVMArrayType
+    auto mergeType = ast->type.type_kind == TypeKind::Array
+                         ? mlir::Type(llvmPtrTy())
+                         : convertType(ast->type);
+    mergeBlock->addArgument(mergeType, location);
+  }
 
   // If no wildcard, create an unreachable default
   if (!defaultBlock) {
@@ -1011,8 +1037,11 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
         auto fieldVal = mlir::LLVM::LoadOp::create(
             builder, location, fieldMlirTy, fieldPtr);
 
-        // Register in symbol table
-        symbolTable.registerNameT(arm.pattern.bindings[j], fieldVal);
+        // Wrap in alloca+store to match uniform variable model
+        // (emitVariableExpr expects all !llvm.ptr values to be allocas)
+        auto alloca = emitAllocaOne(fieldMlirTy, location);
+        mlir::LLVM::StoreOp::create(builder, location, fieldVal, alloca);
+        symbolTable.registerNameT(arm.pattern.bindings[j], alloca);
 
         byte_offset += getTypeSize(vi.payload_types[j]);
       }
@@ -1037,6 +1066,124 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   }
 
   // 6. Merge block
+  if (!allTerminated) {
+    parentRegion->push_back(mergeBlock);
+    builder.setInsertionPointToStart(mergeBlock);
+    return hasResult ? mergeBlock->getArgument(0) : nullptr;
+  } else {
+    delete mergeBlock;
+    return nullptr;
+  }
+}
+
+mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
+                                                   mlir::Value tag,
+                                                   const EnumType &et) {
+  auto location = loc(ast);
+  bool hasResult = ast->type.type_kind != TypeKind::Unit &&
+                   ast->type.type_kind != TypeKind::Never;
+
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+
+  // Create blocks for each arm + merge
+  std::vector<mlir::Block *> armBlocks;
+  mlir::Block *defaultBlock = nullptr;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto *bb = new mlir::Block();
+    armBlocks.push_back(bb);
+    if (ast->arms[i].pattern.is_wildcard)
+      defaultBlock = bb;
+  }
+
+  auto *mergeBlock = new mlir::Block();
+  if (hasResult) {
+    auto mergeType = ast->type.type_kind == TypeKind::Array
+                         ? mlir::Type(llvmPtrTy())
+                         : convertType(ast->type);
+    mergeBlock->addArgument(mergeType, location);
+  }
+
+  if (!defaultBlock) {
+    defaultBlock = new mlir::Block();
+    parentRegion->push_back(defaultBlock);
+    builder.setInsertionPointToStart(defaultBlock);
+    mlir::LLVM::UnreachableOp::create(builder, location);
+  }
+
+  // Emit switch via cascading cmpi + cond_br using discriminant values
+  // Restore insertion point to after the scrutinee (the default block creation
+  // may have moved it). Handle both OpResult and BlockArgument cases.
+  if (auto *defOp = tag.getDefiningOp())
+    builder.setInsertionPointAfter(defOp);
+  else
+    builder.setInsertionPointToEnd(tag.getParentBlock());
+
+  std::vector<size_t> nonWildcardIndices;
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    if (!ast->arms[i].pattern.is_wildcard)
+      nonWildcardIndices.push_back(i);
+  }
+
+  for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
+    size_t i = nonWildcardIndices[ci];
+    auto &arm = ast->arms[i];
+    // Use the actual discriminant value from the EnumType
+    auto &vi = et.get_variant(arm.pattern.variant_index);
+    auto tagConst = mlir::arith::ConstantIntOp::create(
+        builder, location, builder.getI32Type(),
+        vi.discriminant_value.value());
+    auto cmp = mlir::arith::CmpIOp::create(
+        builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);
+
+    mlir::Block *falseTarget;
+    if (ci + 1 < nonWildcardIndices.size()) {
+      auto *nextCmpBlock = new mlir::Block();
+      parentRegion->push_back(nextCmpBlock);
+      falseTarget = nextCmpBlock;
+    } else {
+      falseTarget = defaultBlock;
+    }
+
+    mlir::cf::CondBranchOp::create(builder, location, cmp, armBlocks[i], {},
+                                    falseTarget, {});
+
+    if (ci + 1 < nonWildcardIndices.size()) {
+      builder.setInsertionPointToStart(falseTarget);
+    }
+  }
+
+  if (nonWildcardIndices.empty()) {
+    mlir::cf::BranchOp::create(builder, location, defaultBlock);
+  }
+
+  // Emit each arm body (no payload extraction for integer-backed enums)
+  bool allTerminated = true;
+
+  for (size_t i = 0; i < ast->arms.size(); i++) {
+    auto &arm = ast->arms[i];
+    auto *armBlock = armBlocks[i];
+    parentRegion->push_back(armBlock);
+    builder.setInsertionPointToStart(armBlock);
+
+    auto armVal = emitBlock(arm.body.get());
+
+    auto *armEnd = builder.getInsertionBlock();
+    bool armTerminated = !armEnd->empty() &&
+                         armEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
+    if (!armTerminated) {
+      if (hasResult)
+        mlir::cf::BranchOp::create(builder, location, mergeBlock,
+                                    mlir::ValueRange{armVal});
+      else
+        mlir::cf::BranchOp::create(builder, location, mergeBlock);
+      allTerminated = false;
+    } else {
+      allTerminated = allTerminated && true;
+    }
+  }
+
+  // Merge block
   if (!allTerminated) {
     parentRegion->push_back(mergeBlock);
     builder.setInsertionPointToStart(mergeBlock);

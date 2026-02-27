@@ -344,6 +344,7 @@ public:
 struct EnumVariantDef {
   std::string name;
   std::vector<std::unique_ptr<TypeExprAST>> payload_types;
+  std::optional<int64_t> discriminant_value;
   sammine_util::Location location;
 };
 
@@ -352,6 +353,7 @@ public:
   sammine_util::QualifiedName enum_name;
   std::vector<EnumVariantDef> variants;
   std::vector<std::string> type_params;
+  bool is_integer_backed = false;
   bool is_exported = false;
 
   explicit EnumDefAST(std::shared_ptr<Token> enum_id,

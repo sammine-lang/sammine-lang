@@ -12,7 +12,6 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -56,6 +55,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (ed->type.type_kind != TypeKind::Poisoned) {
         auto &et = std::get<EnumType>(ed->type.type_data);
+        // Integer-backed enums are bare integers — no struct registration
+        if (et.is_integer_backed())
+          continue;
         auto name = et.get_name().mangled();
         // Compute max payload size across all variants
         int64_t max_payload_size = 0;
@@ -183,8 +185,8 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     return closureType;
   case TypeKind::Array: {
     auto &arrType = std::get<ArrayType>(type.type_data);
-    return mlir::MemRefType::get({static_cast<int64_t>(arrType.get_size())},
-                                 convertType(arrType.get_element()));
+    auto elemMlirType = convertType(arrType.get_element());
+    return mlir::LLVM::LLVMArrayType::get(elemMlirType, arrType.get_size());
   }
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(type.type_data);
@@ -192,6 +194,8 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
+    if (et.is_integer_backed())
+      return builder.getI32Type();
     return enumTypes.at(et.get_name().mangled());
   }
   case TypeKind::Never:
@@ -252,8 +256,8 @@ mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
     auto &funcType = std::get<FunctionType>(proto->type.type_data);
     auto retType = funcType.get_return_type();
     if (retType.type_kind == TypeKind::Array) {
-      // sret: array returns become a trailing memref parameter, void return
-      argTypes.push_back(convertType(retType));
+      // sret: array returns become a trailing !llvm.ptr parameter, void return
+      argTypes.push_back(llvmPtrTy());
     } else if (retType.type_kind != TypeKind::Unit) {
       retTypes.push_back(convertType(retType));
     }
@@ -412,6 +416,8 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
+    if (et.is_integer_backed())
+      return 4; // bare i32
     int64_t max_payload = 0;
     for (auto &vi : et.get_variants()) {
       int64_t variant_size = 0;

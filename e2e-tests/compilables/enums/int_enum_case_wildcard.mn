@@ -1,0 +1,21 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: special
+# CHECK: other
+
+import std;
+
+enum Sig = HUP(1) | INT(2) | KILL(9) | TERM(15);
+
+let describe(s: Sig) -> i32 {
+  case s {
+    Sig::KILL => std::printf("special\n"),
+    _ => std::printf("other\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  describe(Sig::KILL);
+  describe(Sig::HUP);
+  return 0;
+}

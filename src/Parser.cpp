@@ -247,27 +247,45 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     variant.name = variant_id->lexeme;
     variant.location = variant_id->get_location();
 
-    // Optional payload: (Type, Type, ...)
+    // Optional payload: (Type, Type, ...) or (integer_literal)
     if (expect(TokLeftParen)) {
       if (tokStream->peek()->tok_type != TokRightParen) {
-        auto first_type = ParseTypeExpr();
-        if (!first_type) {
-          imm_error(fmt::format("Expected type in payload of variant '{}'",
-                                variant.name),
-                    variant.location);
-          return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
-        }
-        variant.payload_types.push_back(std::move(first_type));
-
-        while (expect(TokComma)) {
-          auto next_type = ParseTypeExpr();
-          if (!next_type) {
-            imm_error("Expected type after ',' in variant payload",
-                      variant.location);
+        // Integer discriminant: Foo(42)
+        if (tokStream->peek()->tok_type == TokNum) {
+          auto num_tok = expect(TokNum);
+          size_t pos = 0;
+          int64_t val = std::stoll(num_tok->lexeme, &pos);
+          if (pos != num_tok->lexeme.size()) {
+            imm_error(
+                fmt::format("Expected integer discriminant in variant '{}', "
+                            "got '{}'",
+                            variant.name, num_tok->lexeme),
+                num_tok->get_location());
             return {std::make_unique<EnumDefAST>(id, std::move(variants)),
                     FAILED};
           }
-          variant.payload_types.push_back(std::move(next_type));
+          variant.discriminant_value = val;
+        } else {
+          // Type payload: Foo(i32, i32)
+          auto first_type = ParseTypeExpr();
+          if (!first_type) {
+            imm_error(fmt::format("Expected type in payload of variant '{}'",
+                                  variant.name),
+                      variant.location);
+            return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
+          }
+          variant.payload_types.push_back(std::move(first_type));
+
+          while (expect(TokComma)) {
+            auto next_type = ParseTypeExpr();
+            if (!next_type) {
+              imm_error("Expected type after ',' in variant payload",
+                        variant.location);
+              return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+                      FAILED};
+            }
+            variant.payload_types.push_back(std::move(next_type));
+          }
         }
       }
       REQUIRE(_rp, TokRightParen,
@@ -290,6 +308,13 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
 
   auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
   enum_def->type_params = std::move(enum_type_params);
+  // If any variant has an integer discriminant, mark as integer-backed
+  for (auto &v : enum_def->variants) {
+    if (v.discriminant_value.has_value()) {
+      enum_def->is_integer_backed = true;
+      break;
+    }
+  }
   return {std::move(enum_def), SUCCESS};
 }
 

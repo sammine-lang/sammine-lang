@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: matched WRONLY
+# CHECK: matched CREAT
+
+import std;
+
+enum OpenFlags = RDONLY(0) | WRONLY(1) | CREAT(64);
+
+let check_flag(f: OpenFlags) -> i32 {
+  case f {
+    OpenFlags::RDONLY => std::printf("matched RDONLY\n"),
+    OpenFlags::WRONLY => std::printf("matched WRONLY\n"),
+    OpenFlags::CREAT => std::printf("matched CREAT\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  let w: OpenFlags = OpenFlags::WRONLY;
+  let c: OpenFlags = OpenFlags::CREAT;
+  check_flag(w);
+  check_flag(c);
+  return 0;
+}

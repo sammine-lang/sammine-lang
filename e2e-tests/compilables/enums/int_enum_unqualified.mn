@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: read
+# CHECK: write
+
+import std;
+
+enum Mode = READ(0) | WRITE(1) | EXEC(2);
+
+let describe(m: Mode) -> i32 {
+  case m {
+    READ => std::printf("read\n"),
+    WRITE => std::printf("write\n"),
+    EXEC => std::printf("exec\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  let r: Mode = READ;
+  let w: Mode = WRITE;
+  describe(r);
+  describe(w);
+  return 0;
+}

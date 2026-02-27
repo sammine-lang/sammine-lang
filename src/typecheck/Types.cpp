@@ -56,8 +56,9 @@ StructType::get_field_index(const std::string &field) const {
 Type StructType::get_field_type(size_t idx) const { return field_types[idx]; }
 
 EnumType::EnumType(sammine_util::QualifiedName name,
-                   std::vector<VariantInfo> variants)
-    : name(std::move(name)), variants(std::move(variants)) {}
+                   std::vector<VariantInfo> variants, bool integer_backed)
+    : name(std::move(name)), variants(std::move(variants)),
+      integer_backed_(integer_backed) {}
 bool EnumType::operator==(const EnumType &t) const {
   return name.mangled() == t.name.mangled(); // nominal typing
 }
@@ -162,6 +163,13 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
   // Polymorphic float literal can flow into any concrete float type
   if (b.type_kind == TypeKind::Flt) {
     return a.type_kind == TypeKind::F64_t || a.type_kind == TypeKind::Flt;
+  }
+
+  // Integer-backed enum can flow into its backing type (i32)
+  if (b.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(b.type_data);
+    if (et.is_integer_backed() && a.type_kind == TypeKind::I32_t)
+      return true;
   }
 
   return a == b;

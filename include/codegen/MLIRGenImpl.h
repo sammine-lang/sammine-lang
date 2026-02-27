@@ -138,6 +138,9 @@ public:
   mlir::Value emitFieldAccessExpr(AST::FieldAccessExprAST *ast);
   mlir::Value emitEnumConstructor(AST::CallExprAST *ast);
   mlir::Value emitCaseExpr(AST::CaseExprAST *ast);
+  mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
+                                        mlir::Value scrutineeVal,
+                                        const EnumType &et);
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
