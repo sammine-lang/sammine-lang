@@ -827,8 +827,8 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   // Try typeclass dispatch first (requires explicit type args)
   if (!ast->explicit_type_args.empty()) {
     auto result = synthesize_typeclass_call(ast);
-    if (result.type_kind != TypeKind::NonExistent)
-      return result;
+    if (result.has_value())
+      return *result;
   }
 
   // Try generic function instantiation
@@ -839,11 +839,12 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   return synthesize_normal_call(ast);
 }
 
-Type BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
+std::optional<Type>
+BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   auto method_name = ast->functionName.mangled();
   auto class_it = method_to_class.find(method_name);
   if (class_it == method_to_class.end())
-    return Type::NonExistent(); // Not a typeclass method — fall through
+    return std::nullopt; // Not a typeclass method — fall through
 
   auto &class_name = class_it->second;
   auto &tc = type_class_defs[class_name];
@@ -1055,6 +1056,10 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
+  if (ast->LHS->type.type_kind == TypeKind::Poisoned ||
+      ast->RHS->type.type_kind == TypeKind::Poisoned)
+    return ast->type = Type::Poisoned();
+
   if (ast->LHS->type.type_kind == TypeKind::Never ||
       ast->RHS->type.type_kind == TypeKind::Never)
     return ast->type = Type::Never();
@@ -1085,7 +1090,7 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
         fmt::format("Incompatible types for operator '{}': {} and {}",
                     ast->Op->lexeme, ast->LHS->type.to_string(),
                     ast->RHS->type.to_string()));
-    return ast->type = ast->LHS->type;
+    return ast->type = Type::Poisoned();
   }
 
   return synthesize_binary_operator(ast, ast->LHS->type, ast->RHS->type);
@@ -1116,6 +1121,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
             fmt::format("Cannot reassign immutable variable '{}'. "
                         "Use 'let mut' or 'mut' to declare it as mutable",
                         var->variableName));
+        return ast->type = Type::Poisoned();
       }
     } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
       if (auto *arr_var =
@@ -1127,6 +1133,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                   "Cannot write to index of immutable array '{}'. "
                   "Use 'let mut' to declare it as mutable",
                   arr_var->variableName));
+          return ast->type = Type::Poisoned();
         }
       }
     }

@@ -161,7 +161,7 @@ public:
   void register_builtin_op_instances();
 
   // Call expression synthesis helpers
-  Type synthesize_typeclass_call(CallExprAST *ast);
+  std::optional<Type> synthesize_typeclass_call(CallExprAST *ast);
   Type synthesize_generic_call(CallExprAST *ast);
   Type synthesize_normal_call(CallExprAST *ast);
 
