@@ -54,6 +54,27 @@ mlir::Value MLIRGenImpl::emitUnitExpr(AST::UnitExprAST *) {
 mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   auto location = loc(ast);
 
+  // Enum unit variant: build { tag, undef_payload }
+  if (ast->is_enum_unit_variant) {
+    auto &et = std::get<EnumType>(ast->type.type_data);
+    auto enumTy = enumTypes.at(et.get_name().mangled());
+
+    auto one = mlir::arith::ConstantIntOp::create(builder, location,
+                                                    builder.getI64Type(), 1);
+    auto alloca = mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
+                                                 enumTy, one);
+
+    auto tagVal = mlir::arith::ConstantIntOp::create(
+        builder, location, builder.getI32Type(),
+        static_cast<int64_t>(ast->enum_variant_index));
+    auto tagPtr = mlir::LLVM::GEPOp::create(
+        builder, location, llvmPtrTy(), enumTy, alloca,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0});
+    mlir::LLVM::StoreOp::create(builder, location, tagVal, tagPtr);
+
+    return mlir::LLVM::LoadOp::create(builder, location, enumTy, alloca);
+  }
+
   // If the variable is in the symbol table, handle it normally
   if (symbolTable.queryName(ast->variableName) != nameNotFound) {
     auto val = symbolTable.get_from_name(ast->variableName);

@@ -1,0 +1,33 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: red
+# CHECK: has value: 99
+# CHECK: no value
+
+import std;
+
+enum Color = Red | Green | Blue;
+enum Option<T> = Some(T) | None;
+
+let main() -> i32 {
+  let c: Color = Red;
+  let x: Option<i32> = Some(99);
+  let y: Option<i32> = None;
+
+  case c {
+    Red => std::printf("red\n"),
+    Green => std::printf("green\n"),
+    Blue => std::printf("blue\n"),
+  };
+
+  case x {
+    Some(v) => std::printf("has value: %d\n", v),
+    None => std::printf("no value\n"),
+  };
+
+  case y {
+    Some(v) => std::printf("has value: %d\n", v),
+    None => std::printf("no value\n"),
+  };
+
+  return 0;
+}

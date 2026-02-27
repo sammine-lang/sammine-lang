@@ -182,6 +182,11 @@ bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
 }
 
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
+  // Pre-resolve type annotation to trigger generic enum instantiation
+  // (ensures variant_constructors is populated for unqualified constructors)
+  if (ast->TypedVar->type_expr != nullptr)
+    resolve_type_expr(ast->TypedVar->type_expr.get());
+
   // Special case: array type annotation + array literal RHS
   if (ast->TypedVar->type_expr != nullptr) {
     if (auto *arr_lit =

@@ -1,0 +1,27 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: red
+# CHECK: green
+# CHECK: blue
+
+import std;
+
+enum Color = Red | Green | Blue;
+
+let color_name(c: Color) -> i32 {
+  case c {
+    Red => std::printf("red\n"),
+    Green => std::printf("green\n"),
+    Blue => std::printf("blue\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  let r: Color = Color::Red;
+  let g: Color = Color::Green;
+  let b: Color = Color::Blue;
+  color_name(r);
+  color_name(g);
+  color_name(b);
+  return 0;
+}

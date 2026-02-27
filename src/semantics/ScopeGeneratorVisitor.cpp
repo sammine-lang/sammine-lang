@@ -32,6 +32,11 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
     } else if (auto enum_def = llvm::dyn_cast<EnumDefAST>(def.get())) {
       fn_name = enum_def->enum_name.mangled();
       loc = enum_def->get_location();
+      // Register variant names for unqualified access (e.g., Red, Some, None)
+      for (auto &variant : enum_def->variants) {
+        if (can_see(variant.name) == nameNotFound)
+          register_name(variant.name, enum_def->get_location());
+      }
     } else if (llvm::isa<TypeClassDeclAST>(def.get()) ||
                llvm::isa<TypeClassInstanceAST>(def.get())) {
       // Type class decls/instances don't register top-level names in scope

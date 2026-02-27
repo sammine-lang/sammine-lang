@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: circle r: 3
+# CHECK: rect w: 2, h: 4
+# CHECK: point
+
+import std;
+
+enum Shape = Circle(i32) | Rect(i32, i32) | Point;
+
+let describe(s: Shape) -> i32 {
+  case s {
+    Circle(r) => std::printf("circle r: %d\n", r),
+    Rect(w, h) => std::printf("rect w: %d, h: %d\n", w, h),
+    Point => std::printf("point\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  describe(Shape::Circle(3));
+  describe(Shape::Rect(2, 4));
+  describe(Shape::Point);
+  return 0;
+}

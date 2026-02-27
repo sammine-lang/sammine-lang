@@ -171,6 +171,33 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
     }
   }
 
+  // Try unqualified enum variant constructor (e.g., Some(42))
+  if (!ast->functionName.is_qualified()) {
+    auto it = variant_constructors.find(ast->functionName.name);
+    if (it != variant_constructors.end()) {
+      auto &[enum_type, variant_idx] = it->second;
+      auto &et = std::get<EnumType>(enum_type.type_data);
+      auto &vi = et.get_variant(variant_idx);
+
+      if (ast->arguments.size() == vi.payload_types.size()) {
+        bool ok = true;
+        for (size_t i = 0; i < ast->arguments.size(); i++) {
+          auto arg_type = ast->arguments[i]->accept_synthesis(this);
+          if (!type_map_ordering.compatible_to_from(vi.payload_types[i],
+                                                    arg_type)) {
+            ok = false;
+            break;
+          }
+        }
+        if (ok) {
+          ast->is_enum_constructor = true;
+          ast->enum_variant_index = variant_idx;
+          return ast->type = enum_type;
+        }
+      }
+    }
+  }
+
   // Try typeclass dispatch first (requires explicit type args)
   if (!ast->explicit_type_args.empty()) {
     auto result = synthesize_typeclass_call(ast);
@@ -577,7 +604,26 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->type = Type::Char();
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  ast->type = id_to_type.recursive_get_from_name(ast->variableName);
+  // Check if the name exists in type scope before looking it up
+  // (recursive_get_from_name aborts on not-found)
+  if (id_to_type.recursiveQueryName(ast->variableName) == nameFound) {
+    ast->type = id_to_type.recursive_get_from_name(ast->variableName);
+  } else {
+    // Try zero-payload enum variant (e.g., None, Red)
+    auto it = variant_constructors.find(ast->variableName);
+    if (it != variant_constructors.end()) {
+      auto &[enum_type, variant_idx] = it->second;
+      auto &et = std::get<EnumType>(enum_type.type_data);
+      auto &vi = et.get_variant(variant_idx);
+      if (vi.payload_types.empty()) {
+        ast->is_enum_unit_variant = true;
+        ast->enum_variant_index = variant_idx;
+        return ast->type = enum_type;
+      }
+    }
+    // Not found anywhere — use the original abort path for proper error
+    ast->type = id_to_type.recursive_get_from_name(ast->variableName);
+  }
   LOG({
     fmt::print(stderr, "[typecheck] synthesize VariableExprAST: '{}' -> {}\n",
                ast->variableName, ast->type.to_string());

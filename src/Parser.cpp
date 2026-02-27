@@ -1197,27 +1197,47 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
           enum_prefix += type_args[i]->to_string();
         }
         enum_prefix += ">";
-      }
 
-      auto dcolon = expect(TokenType::TokDoubleColon);
-      if (!dcolon) {
-        imm_error(
-            fmt::format("Expected '::' after '{}' in case pattern",
-                        prefix_tok->lexeme),
-            prefix_tok->get_location());
-        return {nullptr, FAILED};
-      }
-      auto variant_tok = expect(TokenType::TokID);
-      if (!variant_tok) {
-        imm_error("Expected variant name after '::'",
-                  dcolon->get_location());
-        return {nullptr, FAILED};
-      }
+        // Generic patterns always require :: and variant name
+        auto dcolon = expect(TokenType::TokDoubleColon);
+        if (!dcolon) {
+          imm_error(
+              fmt::format("Expected '::' after '{}' in case pattern",
+                          enum_prefix),
+              prefix_tok->get_location());
+          return {nullptr, FAILED};
+        }
+        auto variant_tok = expect(TokenType::TokID);
+        if (!variant_tok) {
+          imm_error("Expected variant name after '::'",
+                    dcolon->get_location());
+          return {nullptr, FAILED};
+        }
+        pattern.variant_name =
+            sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
+        pattern.location =
+            prefix_tok->get_location() | variant_tok->get_location();
 
-      pattern.variant_name =
-          sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
-      pattern.location =
-          prefix_tok->get_location() | variant_tok->get_location();
+      } else if (tokStream->peek()->tok_type == TokDoubleColon) {
+        // Qualified non-generic: Enum::Variant
+        auto dcolon = tokStream->consume();
+        auto variant_tok = expect(TokenType::TokID);
+        if (!variant_tok) {
+          imm_error("Expected variant name after '::'",
+                    dcolon->get_location());
+          return {nullptr, FAILED};
+        }
+        pattern.variant_name =
+            sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
+        pattern.location =
+            prefix_tok->get_location() | variant_tok->get_location();
+
+      } else {
+        // Unqualified: just the variant name (e.g., Some, None, Red)
+        pattern.variant_name =
+            sammine_util::QualifiedName::local(prefix_tok->lexeme);
+        pattern.location = prefix_tok->get_location();
+      }
 
       if (auto lparen = expect(TokenType::TokLeftParen)) {
         while (!tokStream->isEnd() &&
