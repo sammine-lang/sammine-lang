@@ -13,6 +13,7 @@ enum compiler_option_enum {
   STR,
   LLVM_IR,
   AST_IR,
+  CST_IR,
   DIAGNOSTIC,
   CHECK,
   TIME,

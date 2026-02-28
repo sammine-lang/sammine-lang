@@ -19,6 +19,7 @@ endfunction()
 
 
 add_project_library(Parser)
+add_subdirectory(cst)
 add_subdirectory(lex)
 add_subdirectory(ast)
 add_subdirectory(codegen)
@@ -33,7 +34,7 @@ add_subdirectory(compiler)
 add_executable(sammine ${CMAKE_CURRENT_LIST_DIR}/sammine.cpp)
 target_include_directories(sammine PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 
-target_link_libraries(sammine compiler cpptrace::cpptrace util _ast Lexer Parser
+target_link_libraries(sammine compiler cpptrace::cpptrace util cst _ast Lexer Parser
      semantics typecheck Types Monomorphizer _codegen  fmt argparse)
 
 set_target_properties(sammine PROPERTIES

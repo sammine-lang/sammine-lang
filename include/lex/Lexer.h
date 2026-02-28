@@ -21,8 +21,11 @@ private:
   size_t cursor;
   bool at_eof;
 
+  /// All tokens including trivia, in source order. For CST construction.
+  std::vector<std::shared_ptr<Token>> raw_tokens_;
+
   [[nodiscard]] size_t handleNumber(size_t i, const std::string &input);
-  size_t handleSpaces(size_t i, const std::string &input);
+  size_t handleTrivia(size_t i, const std::string &input);
   size_t handleID(size_t i, const std::string &input);
   size_t handleInvalid(size_t i, const std::string &input);
   size_t handleOperators(size_t i, const std::string &input);
@@ -50,6 +53,19 @@ private:
 
   void updateLocation();
 
+  /// Emit a token to both the filtered TokenStream (for parser) and raw_tokens_ (for CST).
+  void emit(const Token &token) {
+    auto ptr = std::make_shared<Token>(token);
+    tokStream->push_back(ptr);
+    raw_tokens_.push_back(ptr);
+  }
+
+  /// Emit a shared token to both destinations.
+  void emit(const std::shared_ptr<Token> &ptr) {
+    tokStream->push_back(ptr);
+    raw_tokens_.push_back(ptr);
+  }
+
 public:
   explicit Lexer(const std::string &input);
   Lexer() : location(), cursor(0), at_eof(false) {
@@ -60,6 +76,11 @@ public:
   std::shared_ptr<Token> consume();
 
   std::shared_ptr<TokenStream> getTokenStream() const { return tokStream; }
+
+  /// Get all tokens including trivia, in source order (for CST construction).
+  const std::vector<std::shared_ptr<Token>> &getRawTokens() const {
+    return raw_tokens_;
+  }
 
   size_t advance(size_t i);
 

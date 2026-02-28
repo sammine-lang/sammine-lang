@@ -18,6 +18,21 @@ Keywords recognized in `handleID()` (`src/lex/Lexer.cpp`). Token types defined i
 
 Removed: `TokSizeOf` — `sizeof` is now a typeclass method call.
 
+### Trivia Tokens & Dual-Destination Emission
+
+The lexer emits to two destinations via `emit()` helpers in `Lexer.h`:
+1. **`TokenStream`** — filtered, no trivia. Parser uses this unchanged.
+2. **`raw_tokens_`** — ALL tokens including trivia. Used for CST construction.
+
+Trivia tokens (emitted to `raw_tokens_` only, NOT to `TokenStream`):
+- `TokWhitespace` — contiguous spaces/tabs
+- `TokNewline` — `\n` or `\r\n`
+- `TokSingleComment` — `# ...` up to (but not including) the trailing newline
+
+`handleTrivia()` (replaces old `handleSpaces()`) produces these. Access via `lexer.getRawTokens()`.
+
+See `knowledge_base/cst.md` for full CST documentation.
+
 ### New Operator Token Checklist
 1. Add enum value to `TokenType` in `include/lex/Token.h`
 2. Add `{TokFoo, "foo"}` to `TokenMap` in `include/lex/Token.h`

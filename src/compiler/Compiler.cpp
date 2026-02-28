@@ -16,6 +16,11 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
+#include "cst/CSTBridge.h"
+#include "cst/GreenNode.h"
+#include "cst/SyntaxKind.h"
+#include "cst/SyntaxNode.h"
+#include "cst/TreeBuilder.h"
 #include "lex/Lexer.h"
 #include "parser/Parser.h"
 #include "semantics/GeneralSemanticsVisitor.h"
@@ -55,6 +60,8 @@ class Compiler {
   std::string output_dir;
   std::vector<std::string> import_paths;
 
+  std::optional<cst::SyntaxTree> syntax_tree_;
+
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
   bool error;
@@ -62,6 +69,8 @@ class Compiler {
 
   void lex();
   void parse();
+  void build_cst();
+  void dump_cst();
   void resolve_imports();
   void load_definitions();
   void semantics();
@@ -170,10 +179,52 @@ void Compiler::parse() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start parsing stage...\n");
   });
+
+  // Exhaust the lexer to produce all tokens before parsing.
+  // This populates both tokStream (filtered) and raw_tokens_ (with trivia).
+  tokStream->exhaust_until(TokEOF);
+  // Reset cursor to beginning so the parser can parse from the start.
+  tokStream->reset_cursor();
+
+  // Set up CST infrastructure
+  auto interner = std::make_unique<cst::GreenInterner>();
+  cst::TreeBuilder builder(*interner);
+  cst::CSTBridge bridge(builder, lexer->getRawTokens(), input);
+
+  // Start the root SourceFile node directly on builder (not bridge.start_node)
+  // so that leading trivia goes INSIDE the SourceFile, not before it.
+  builder.start_node(cst::SyntaxKind::SourceFile);
+
+  // Install the on_consume_ callback so every consumed token routes to CSTBridge
+  tokStream->set_on_consume(
+      [&bridge](const std::shared_ptr<Token> &tok) {
+        bridge.on_token_consumed(tok);
+      });
+
+  // Parse into AST (CSTBridge receives tokens via on_consume_ callback)
   Parser psr = Parser(tokStream, reporter);
+  psr.set_cst_bridge(&bridge);
 
   auto result = psr.Parse();
   programAST = std::move(result);
+
+  // Remove the callback before bridge goes out of scope
+  tokStream->set_on_consume(nullptr);
+
+  // Finish CST: emit trailing trivia, close SourceFile
+  bridge.finish_remaining();
+  bridge.finish_node();
+
+  auto *green_root = bridge.finish();
+  syntax_tree_.emplace(std::move(interner), green_root);
+
+  // Verify lossless round-trip
+  auto root = syntax_tree_->root();
+  if (root.text_len() != input.size()) {
+    fmt::print(stderr,
+               "CST warning: text_len ({}) != source size ({})\n",
+               root.text_len(), input.size());
+  }
 
   this->error = psr.has_errors();
   reporter.report(*lexer);
@@ -185,6 +236,33 @@ void Compiler::parse() {
         has_main = true;
         break;
       }
+}
+
+void Compiler::build_cst() {
+  // CST is now built during parse() via CSTBridge.
+  // This stage is a no-op but kept for pipeline compatibility.
+}
+
+void Compiler::dump_cst() {
+  if (compiler_options[compiler_option_enum::CST_IR] != "true")
+    return;
+  if (!syntax_tree_.has_value())
+    return;
+
+  auto root = syntax_tree_->root();
+  std::string dumped = root.dump();
+  fmt::print(stderr, "{}", dumped);
+
+  // Verify lossless round-trip
+  auto reconstructed = root.text();
+  if (reconstructed == input) {
+    fmt::print(stderr, "CST: lossless round-trip verified ({} bytes)\n",
+               input.size());
+  } else {
+    fmt::print(stderr, "CST: ROUND-TRIP MISMATCH! reconstructed {} bytes vs "
+                       "source {} bytes\n",
+               reconstructed.size(), input.size());
+  }
 }
 
 void Compiler::resolve_imports() {
@@ -760,6 +838,8 @@ void Compiler::start() {
   std::vector<Stage> stages = {
       {"lex", &Compiler::lex},
       {"parse", &Compiler::parse},
+      {"build_cst", &Compiler::build_cst},
+      {"dump_cst", &Compiler::dump_cst},
       {"imports", &Compiler::resolve_imports},
       {"definitions", &Compiler::load_definitions},
       {"semantics", &Compiler::semantics},

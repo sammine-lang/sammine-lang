@@ -329,7 +329,6 @@ auto Parser::ParseEnumDef(
 
   // Type alias path
   if (!is_enum) {
-    cst_guard.start(cst_, cp, cst::SyntaxKind::TypeAliasDef);
     auto type_expr = ParseTypeExpr();
     if (!type_expr) {
       imm_error("Expected type expression in type alias",
@@ -344,7 +343,6 @@ auto Parser::ParseEnumDef(
   }
 
   // Enum path: parse variants separated by |
-  cst_guard.start(cst_, cp, cst::SyntaxKind::EnumDef);
   std::vector<EnumVariantDef> variants;
   while (!tokStream->isEnd()) {
     auto variant_id = expect(TokID);
@@ -449,8 +447,6 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   // 'reuse' — parse as ExternAST
   // plain 'reuse' = module-private, 'export reuse' = re-exported
   if (auto reuse_tok = expect(TokenType::TokReuse)) {
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, func_cp, cst::SyntaxKind::ExternDef);
     auto [prototype, result] = ParsePrototype();
     if (result == SUCCESS) {
       if (!expect(TokSemiColon))
@@ -502,9 +498,6 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     return {std::make_unique<FuncDefAST>(nullptr, nullptr), NONCOMMITTED};
   }
 
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, func_cp, cst::SyntaxKind::FuncDef);
-
   auto [prototype, proto_result] = ParsePrototype();
   if (proto_result != SUCCESS) {
     emit_if_uncommitted(proto_result,
@@ -533,13 +526,10 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
 //! Accepts a let, continue parsing inside and (enable error reporting if
 //! possible). If a `let` is not found then return a nullptr.
 auto Parser::ParseVarDef() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto let = expect(TokenType::TokLet);
   if (!let)
     return {std::make_unique<VarDefAST>(nullptr, nullptr, nullptr),
             NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::VarDef);
   auto mut_tok = expect(TokenType::TokMUT);
   bool is_mutable = mut_tok != nullptr;
 
@@ -649,10 +639,7 @@ auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
 }
 
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   if (auto tick = expect(TokenType::TokTick)) {
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, cp, cst::SyntaxKind::LinearPtrType);
     if (auto ptr_tok = expect(TokenType::TokPtr)) {
       REQUIRE(_lt, TokLESS, "Expected '<' after 'ptr'",
               ptr_tok->get_location(), nullptr);
@@ -679,8 +666,6 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     }
   }
   if (auto ptr_tok = expect(TokenType::TokPtr)) {
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, cp, cst::SyntaxKind::PtrType);
     REQUIRE(_lt, TokLESS, "Expected '<' after 'ptr'", ptr_tok->get_location(),
             nullptr);
     auto inner = ParseTypeExpr();
@@ -699,8 +684,6 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto lbracket = expect(TokenType::TokLeftBracket)) {
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, cp, cst::SyntaxKind::ArrayType);
     auto elem = ParseTypeExpr();
     if (!elem) {
       this->imm_error("Expected element type in '[TYPE;SIZE]'",
@@ -721,7 +704,6 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
   }
   if (auto lparen = expect(TokenType::TokLeftParen)) {
     // Parse types inside parens: could be function type or tuple type
-    // CST node opened after disambiguation below
     std::vector<std::unique_ptr<TypeExprAST>> types;
     if (tokStream->peek()->tok_type != TokenType::TokRightParen) {
       auto first = ParseTypeExpr();
@@ -745,8 +727,6 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
             lparen->get_location(), nullptr);
     // If '->' follows, it's a function type
     if (expect(TokenType::TokArrow)) {
-      CSTNodeGuard cst_guard;
-      cst_guard.start(cst_, cp, cst::SyntaxKind::FuncType);
       auto retType = ParseTypeExpr();
       if (!retType) {
         this->imm_error("Expected return type after '->' in function type",
@@ -760,8 +740,6 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     }
     // Otherwise it's a tuple type (must have 2+ elements)
     if (types.size() >= 2) {
-      CSTNodeGuard cst_guard;
-      cst_guard.start(cst_, cp, cst::SyntaxKind::TupleType);
       auto result = std::make_unique<TupleTypeExprAST>(std::move(types));
       result->location = lparen->get_location();
       return result;
@@ -817,22 +795,17 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
         tokStream->suppress_on_consume(false);
       } else {
         tokStream->suppress_on_consume(false);
-        CSTNodeGuard cst_guard;
-        cst_guard.start(cst_, cp, cst::SyntaxKind::GenericType);
         return std::make_unique<GenericTypeExprAST>(base_name,
                                                     std::move(type_args), loc);
       }
     }
 
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, cp, cst::SyntaxKind::SimpleType);
     return std::make_unique<SimpleTypeExprAST>(base_name, loc);
   }
   return nullptr;
 }
 
 auto Parser::ParseTypedVar() -> p<TypedVarAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto mut_tok = expect(TokenType::TokMUT);
   bool is_mutable = mut_tok != nullptr;
   auto name = expect(TokenType::TokID);
@@ -844,8 +817,6 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
     }
     return {std::make_unique<TypedVarAST>(nullptr, nullptr), NONCOMMITTED};
   }
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::TypedVar);
 
   auto colon = expect(TokenType::TokColon);
   if (!colon)
@@ -864,18 +835,9 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
 template <typename NodeT>
 auto Parser::ParseUnaryPrefixExpr(TokenType opTok, const std::string &opStr)
     -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto tok = expect(opTok);
   if (!tok)
     return {nullptr, NONCOMMITTED};
-  // Determine CST kind from AST type
-  cst::SyntaxKind sk = cst::SyntaxKind::Error;
-  if constexpr (std::is_same_v<NodeT, UnaryNegExprAST>)
-    sk = cst::SyntaxKind::UnaryNegExpr;
-  else if constexpr (std::is_same_v<NodeT, AddrOfExprAST>)
-    sk = cst::SyntaxKind::AddrOfExpr;
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, sk);
   auto [operand, result] = ParsePrimaryExpr();
   if (result == SUCCESS)
     return {std::make_unique<NodeT>(tok, std::move(operand)), SUCCESS};
@@ -892,13 +854,10 @@ auto Parser::ParseUnaryNegExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseDerefExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   std::shared_ptr<Token> star_tok;
-  bool from_pending = false;
   if (pending_deref > 0) {
     pending_deref--;
     star_tok = pending_deref_tok;
-    from_pending = true;
   } else {
     star_tok = expect(TokenType::TokMUL);
     if (!star_tok) {
@@ -909,9 +868,6 @@ auto Parser::ParseDerefExpr() -> p<ExprAST> {
       pending_deref_tok = star_tok;
     }
   }
-  CSTNodeGuard cst_guard;
-  if (!from_pending)
-    cst_guard.start(cst_, cp, cst::SyntaxKind::DerefExpr);
   auto [operand, result] = ParsePrimaryExpr();
   if (result == SUCCESS)
     return {std::make_unique<DerefExprAST>(star_tok, std::move(operand)),
@@ -930,17 +886,9 @@ auto Parser::ParseAddrOfExpr() -> p<ExprAST> {
 template <typename NodeT>
 auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
     -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto kw_tok = expect(keyword);
   if (!kw_tok)
     return {nullptr, NONCOMMITTED};
-  cst::SyntaxKind sk = cst::SyntaxKind::Error;
-  if constexpr (std::is_same_v<NodeT, FreeExprAST>)
-    sk = cst::SyntaxKind::FreeExpr;
-  else if constexpr (std::is_same_v<NodeT, LenExprAST>)
-    sk = cst::SyntaxKind::LenExpr;
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, sk);
   REQUIRE(left_paren, TokLeftParen,
           fmt::format("Expected '(' after '{}'", name), kw_tok->get_location(),
           {nullptr, FAILED});
@@ -960,12 +908,9 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
 }
 
 auto Parser::ParseAllocExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto kw_tok = expect(TokAlloc);
   if (!kw_tok)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::AllocExpr);
 
   // Parse <TypeExpr>
   REQUIRE(_lt, TokLESS, "Expected '<' after 'alloc'", kw_tok->get_location(),
@@ -1007,12 +952,9 @@ auto Parser::ParseFreeExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto left_bracket = expect(TokenType::TokLeftBracket);
   if (!left_bracket)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::ArrayLiteralExpr);
   std::vector<u<ExprAST>> elements;
   auto [first, first_result] = ParseExpr();
   if (first_result == NONCOMMITTED) {
@@ -1069,37 +1011,25 @@ auto Parser::parsePostfixOps(u<ExprAST> expr,
     -> p<ExprAST> {
   while (true) {
     if (auto lb = expect(TokenType::TokLeftBracket)) {
-      if (cst_) cst_->start_node_at(expr_cp, cst::SyntaxKind::IndexExpr);
       auto [idx, idx_result] = ParseExpr();
       if (idx_result == NONCOMMITTED) {
         this->imm_error("Expected expression inside '[]'", lb->get_location());
-        if (cst_) cst_->finish_node();
         return {nullptr, FAILED};
       }
       if (idx_result != SUCCESS) {
-        if (cst_) cst_->finish_node();
         return {std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
                 FAILED};
       }
-      auto _rb = expect(TokRightBracket);
-      if (!_rb) {
-        imm_error("Expected ']' to close index expression", lb->get_location());
-        if (cst_) cst_->finish_node();
-        return {std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
-                FAILED};
-      }
-      if (cst_) cst_->finish_node();
+      REQUIRE(_rb, TokRightBracket, "Expected ']' to close index expression",
+              lb->get_location(),
+              {std::make_unique<IndexExprAST>(std::move(expr), std::move(idx)),
+               FAILED});
       expr = std::make_unique<IndexExprAST>(std::move(expr), std::move(idx));
     } else if (auto dot = expect(TokenType::TokDot)) {
-      if (cst_) cst_->start_node_at(expr_cp, cst::SyntaxKind::FieldAccessExpr);
-      auto field_tok = expect(TokID);
-      if (!field_tok) {
-        imm_error("Expected field name after '.'", dot->get_location());
-        if (cst_) cst_->finish_node();
-        return {std::make_unique<FieldAccessExprAST>(std::move(expr), nullptr),
-                FAILED};
-      }
-      if (cst_) cst_->finish_node();
+      REQUIRE(field_tok, TokID, "Expected field name after '.'",
+              dot->get_location(),
+              {std::make_unique<FieldAccessExprAST>(std::move(expr), nullptr),
+               FAILED});
       expr = std::make_unique<FieldAccessExprAST>(std::move(expr), field_tok);
     } else {
       break;
@@ -1133,9 +1063,6 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS,
     if (TokPrec < precedence)
       return {std::move(LHS), SUCCESS};
 
-    // Open BinaryExpr node wrapping LHS
-    if (cst_) cst_->start_node_at(lhs_cp, cst::SyntaxKind::BinaryExpr);
-
     auto binOpToken = tokStream->consume(); // Consume the operator
 
     // Parse the RHS as a primary
@@ -1144,7 +1071,6 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS,
       this->imm_error(
           "Expected right-hand side expression after binary operator",
           binOpToken->get_location());
-      if (cst_) cst_->finish_node();
       return {nullptr, FAILED};
     }
 
@@ -1160,15 +1086,11 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS,
         this->imm_error(
             "Incomplete right-hand expression after binary operator",
             binOpToken->get_location());
-        if (cst_) cst_->finish_node();
         return {nullptr, right_result};
       }
     }
 
-    // Close BinaryExpr node (CST preserves source syntax including pipe)
-    if (cst_) cst_->finish_node();
-
-    // Combine LHS and RHS (AST-level transformation)
+    // Combine LHS and RHS
     if (binOpToken->tok_type == TokenType::TokPipe) {
       // x |> f      →  f(x)
       // x |> f(y,z) →  f(x,y,z)
@@ -1203,12 +1125,9 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS,
 }
 
 auto Parser::ParseReturnExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto return_tok = expect(TokenType::TokReturn);
   if (!return_tok)
     return {std::make_unique<ReturnExprAST>(nullptr, nullptr), NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::ReturnExpr);
   auto [expr, result] = ParseExpr();
   if (result == FAILED)
     return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
@@ -1229,8 +1148,6 @@ auto Parser::ParseStructLiteralExpr(sammine_util::QualifiedName qn,
                                     Location qn_loc,
                                     cst::CSTBridge::BridgeCheckpoint precede_cp)
     -> p<ExprAST> {
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, precede_cp, cst::SyntaxKind::StructLiteralExpr);
   auto lbrace = tokStream->consume(); // consume {
   std::vector<std::string> field_names;
   std::vector<std::unique_ptr<ExprAST>> field_values;
@@ -1395,8 +1312,6 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
 
   auto [args, result] = ParseArguments();
   if (result == SUCCESS) {
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, call_cp, cst::SyntaxKind::CallExpr);
     auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
     call->explicit_type_args = std::move(explicit_type_args);
     return {std::move(call), SUCCESS};
@@ -1405,31 +1320,22 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     // Qualified name without args (e.g. Color::Red) — preserve as CallExprAST
     // so the qualified name isn't lost
     if (qn.is_qualified()) {
-      CSTNodeGuard cst_guard;
-      cst_guard.start(cst_, call_cp, cst::SyntaxKind::CallExpr);
       auto call = std::make_unique<CallExprAST>(qn, qn_loc);
       call->explicit_type_args = std::move(explicit_type_args);
       return {std::move(call), SUCCESS};
     }
-    CSTNodeGuard cst_guard;
-    cst_guard.start(cst_, call_cp, cst::SyntaxKind::VariableExpr);
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   }
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, call_cp, cst::SyntaxKind::CallExpr);
   auto call = std::make_unique<CallExprAST>(qn, qn_loc, std::move(args));
   call->explicit_type_args = std::move(explicit_type_args);
   return {std::move(call), FAILED};
 }
 
 auto Parser::ParseIfExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto if_tok = expect(TokenType::TokIf);
   if (!if_tok)
     return {std::make_unique<IfExprAST>(nullptr, nullptr, nullptr),
             NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::IfExpr);
 
   auto [cond, cond_result] = ParseExpr();
   if (cond_result != SUCCESS) {
@@ -1479,12 +1385,9 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseCaseExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto case_tok = expect(TokenType::TokCase);
   if (!case_tok)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::CaseExpr);
 
   auto [scrutinee, scrut_result] = ParseExpr();
   if (scrut_result != SUCCESS) {
@@ -1667,12 +1570,9 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseWhileExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto while_tok = expect(TokenType::TokWhile);
   if (!while_tok)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::WhileExpr);
 
   auto [cond, cond_result] = ParseExpr();
   if (cond_result != SUCCESS) {
@@ -1695,36 +1595,24 @@ auto Parser::ParseWhileExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseStringExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   if (auto tok_str = expect(TokStr)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::StringExpr);
     return {std::make_unique<StringExprAST>(tok_str), SUCCESS};
   }
   return {nullptr, NONCOMMITTED};
 }
 
 auto Parser::ParseNumberExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
-  if (auto numberToken = expect(TokenType::TokNum)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::NumberExpr);
+  if (auto numberToken = expect(TokenType::TokNum))
     return {std::make_unique<NumberExprAST>(numberToken), SUCCESS};
-  }
   return {nullptr, NONCOMMITTED};
 }
 
 auto Parser::ParseBoolExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   if (auto true_tok = expect(TokenType::TokTrue)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::BoolExpr);
     return {std::make_unique<BoolExprAST>(true, true_tok->get_location()),
             SUCCESS};
   }
   if (auto false_tok = expect(TokenType::TokFalse)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::BoolExpr);
     return {std::make_unique<BoolExprAST>(false, false_tok->get_location()),
             SUCCESS};
   }
@@ -1733,10 +1621,7 @@ auto Parser::ParseBoolExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseCharExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   if (auto tok = expect(TokenType::TokChar)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::CharExpr);
     char value = tok->lexeme.empty() ? '\0' : tok->lexeme[0];
     return {std::make_unique<CharExprAST>(value, tok->get_location()), SUCCESS};
   }
@@ -1744,22 +1629,16 @@ auto Parser::ParseCharExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseVariableExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   if (auto name = expect(TokenType::TokID)) {
-    CSTNodeGuard g;
-    g.start(cst_, cp, cst::SyntaxKind::VariableExpr);
     return {std::make_unique<VariableExprAST>(name), SUCCESS};
   }
   return {nullptr, NONCOMMITTED};
 }
 
 auto Parser::ParsePrototype() -> p<PrototypeAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto id = expect(TokID);
   if (!id)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::Prototype);
 
   // Handle qualified name (mod::func) from .mni files
   std::string qualified_module;
@@ -1834,13 +1713,10 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
 }
 
 auto Parser::ParseBlock() -> p<BlockAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   bool error = false;
   auto leftCurly = expect(TokLeftCurly);
   if (!leftCurly)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::Block);
 
   auto blockAST = std::make_unique<BlockAST>();
   while (!tokStream->isEnd()) {
@@ -1899,13 +1775,10 @@ auto Parser::ParseBlock() -> p<BlockAST> {
 }
 
 auto Parser::ParseParenExpr() -> p<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto tok_left = expect(TokLeftParen);
   if (!tok_left) {
     return {nullptr, NONCOMMITTED};
   }
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::ParenExpr);
 
   auto [expr, result] = ParseExpr(); // Parse inner expression
   if (result == FAILED) {
@@ -1948,12 +1821,9 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
 // Parsing of parameters in a function call, we use leftParen and rightParen
 // as appropriate stopping point
 auto Parser::ParseParams() -> ListResult<TypedVarAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto leftParen = expect(TokLeftParen);
   if (leftParen == nullptr)
     return {std::vector<u<TypedVarAST>>(), NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::ParamList);
 
   // COMMITMENT POINT
   bool error = false;
@@ -2024,13 +1894,10 @@ auto Parser::ParseParams() -> ListResult<TypedVarAST> {
 }
 
 auto Parser::ParseArguments() -> ListResult<ExprAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto leftParen = expect(TokLeftParen);
   bool error = false;
   if (!leftParen)
     return {std::vector<u<ExprAST>>(), NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::ArgList);
 
   std::vector<u<ExprAST>> vec;
 
@@ -2074,12 +1941,9 @@ auto Parser::ParseArguments() -> ListResult<ExprAST> {
 }
 
 auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto kw = expect(TokTypeclass);
   if (!kw)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::TypeClassDecl);
 
   REQUIRE(name_tok, TokID, "Expected type class name after 'typeclass'",
           kw->get_location(), {nullptr, FAILED});
@@ -2112,12 +1976,9 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
 }
 
 auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
-  auto cp = cst_ ? cst_->checkpoint() : cst::CSTBridge::BridgeCheckpoint{};
   auto kw = expect(TokInstance);
   if (!kw)
     return {nullptr, NONCOMMITTED};
-  CSTNodeGuard cst_guard;
-  cst_guard.start(cst_, cp, cst::SyntaxKind::TypeClassInstance);
 
   REQUIRE(name_tok, TokID, "Expected type class name after 'instance'",
           kw->get_location(), {nullptr, FAILED});

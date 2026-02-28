@@ -105,6 +105,10 @@ enum TokenType {
   TokSingleComment, //
   TokEOF,
   TokINVALID,
+
+  // Trivia tokens (for CST — not seen by the parser's TokenStream)
+  TokWhitespace,
+  TokNewline,
 };
 
 static const std::map<TokenType, std::string> TokenMap = {
@@ -192,6 +196,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokSingleComment, "#"},
     {TokEOF, "EOF"},
     {TokINVALID, "UNRECOGNIZED"},
+    {TokWhitespace, "<whitespace>"},
+    {TokNewline, "<newline>"},
 };
 
 //! A class representing a token for sammine-lang, includes TokenType, lexeme
@@ -236,6 +242,8 @@ class TokenStream {
   Iterator rollback_cursor;
   bool error;
   std::function<void()> tokenProducer;
+  std::function<void(const std::shared_ptr<Token> &)> on_consume_;
+  int suppress_on_consume_ = 0;
 
   struct SplitRecord {
     Iterator inserted;
@@ -258,6 +266,27 @@ public:
 
   void setTokenProducer(std::function<void()> producer) {
     tokenProducer = std::move(producer);
+  }
+
+  void set_on_consume(std::function<void(const std::shared_ptr<Token> &)> cb) {
+    on_consume_ = std::move(cb);
+  }
+
+  /// Reset cursor to the beginning of the token stream.
+  /// Used after exhaust_until(TokEOF) to allow reparsing from the start.
+  void reset_cursor() {
+    cursor = TokStream.begin();
+  }
+
+  /// Suppress on_consume_ callback (for speculative lookahead).
+  /// Nestable via reference count.
+  void suppress_on_consume(bool suppress) {
+    if (suppress)
+      ++suppress_on_consume_;
+    else {
+      assert(suppress_on_consume_ > 0);
+      --suppress_on_consume_;
+    }
   }
 
   void push_back(const std::shared_ptr<Token> &token) {
@@ -339,6 +368,8 @@ public:
     auto token = *cursor;
     if (token->tok_type != TokEOF)
       ++cursor;
+    if (on_consume_ && suppress_on_consume_ == 0)
+      on_consume_(token);
     return token;
   }
 

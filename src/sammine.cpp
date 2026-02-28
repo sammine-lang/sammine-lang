@@ -54,6 +54,10 @@ int main(int argc, char *argv[]) {
       .default_value(std::string("false"))
       .implicit_value(std::string("true"))
       .help("sammine compiler spits out the internal AST to stdout");
+  g_diag.add_argument("", "--cst-ir")
+      .default_value(std::string("false"))
+      .implicit_value(std::string("true"))
+      .help("Dump the lossless Concrete Syntax Tree (CST) to stderr");
   g_diag.add_argument("", "--diagnostics")
       .default_value(std::string("none"))
       .help("sammine compiler spits out diagnostics for "
@@ -100,6 +104,7 @@ int main(int argc, char *argv[]) {
       compiler_options[LLVM_IR] = "false";
     }
     compiler_options[AST_IR] = program.get("--ast-ir");
+    compiler_options[CST_IR] = program.get("--cst-ir");
     compiler_options[MLIR_IR] = program.get("--mlir-ir");
     compiler_options[DIAGNOSTIC] = program.get("--diagnostics");
     compiler_options[CHECK] = program.get("--check");

@@ -3,7 +3,7 @@ include(Catch)
 
 file(GLOB_RECURSE test_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/*.cpp)
 
-set(lib_source Lexer Parser util _ast typecheck fmt::fmt)
+set(lib_source Lexer Parser util cst CompilerDB _ast typecheck fmt::fmt)
 
 add_executable(tests)
 target_sources(tests PRIVATE ${test_sources})

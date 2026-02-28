@@ -1,0 +1,228 @@
+#include "cst/SyntaxKind.h"
+
+namespace sammine_lang {
+namespace cst {
+
+std::string_view syntax_kind_name(SyntaxKind kind) {
+  switch (kind) {
+  // Tokens
+  case SyntaxKind::TokADD: return "TokADD";
+  case SyntaxKind::TokSUB: return "TokSUB";
+  case SyntaxKind::TokMUL: return "TokMUL";
+  case SyntaxKind::TokDIV: return "TokDIV";
+  case SyntaxKind::TokMOD: return "TokMOD";
+  case SyntaxKind::TokAddAssign: return "TokAddAssign";
+  case SyntaxKind::TokAddIncr: return "TokAddIncr";
+  case SyntaxKind::TokSubAssign: return "TokSubAssign";
+  case SyntaxKind::TokSubDecr: return "TokSubDecr";
+  case SyntaxKind::TokMulAssign: return "TokMulAssign";
+  case SyntaxKind::TokDivAssign: return "TokDivAssign";
+  case SyntaxKind::TokAND: return "TokAND";
+  case SyntaxKind::TokAndLogical: return "TokAndLogical";
+  case SyntaxKind::TokOR: return "TokOR";
+  case SyntaxKind::TokORLogical: return "TokORLogical";
+  case SyntaxKind::TokPipe: return "TokPipe";
+  case SyntaxKind::TokXOR: return "TokXOR";
+  case SyntaxKind::TokSHL: return "TokSHL";
+  case SyntaxKind::TokSHR: return "TokSHR";
+  case SyntaxKind::TokEQUAL: return "TokEQUAL";
+  case SyntaxKind::TokLESS: return "TokLESS";
+  case SyntaxKind::TokLessEqual: return "TokLessEqual";
+  case SyntaxKind::TokGREATER: return "TokGREATER";
+  case SyntaxKind::TokGreaterEqual: return "TokGreaterEqual";
+  case SyntaxKind::TokASSIGN: return "TokASSIGN";
+  case SyntaxKind::TokNOT: return "TokNOT";
+  case SyntaxKind::TokNOTEqual: return "TokNOTEqual";
+  case SyntaxKind::TokEXP: return "TokEXP";
+  case SyntaxKind::TokFloorDiv: return "TokFloorDiv";
+  case SyntaxKind::TokCeilDiv: return "TokCeilDiv";
+  case SyntaxKind::TokLeftParen: return "TokLeftParen";
+  case SyntaxKind::TokRightParen: return "TokRightParen";
+  case SyntaxKind::TokLeftCurly: return "TokLeftCurly";
+  case SyntaxKind::TokRightCurly: return "TokRightCurly";
+  case SyntaxKind::TokLeftBracket: return "TokLeftBracket";
+  case SyntaxKind::TokRightBracket: return "TokRightBracket";
+  case SyntaxKind::TokComma: return "TokComma";
+  case SyntaxKind::TokDot: return "TokDot";
+  case SyntaxKind::TokSemiColon: return "TokSemiColon";
+  case SyntaxKind::TokColon: return "TokColon";
+  case SyntaxKind::TokDoubleColon: return "TokDoubleColon";
+  case SyntaxKind::TokReturn: return "TokReturn";
+  case SyntaxKind::TokFunc: return "TokFunc";
+  case SyntaxKind::TokStruct: return "TokStruct";
+  case SyntaxKind::TokPtr: return "TokPtr";
+  case SyntaxKind::TokAlloc: return "TokAlloc";
+  case SyntaxKind::TokFree: return "TokFree";
+  case SyntaxKind::TokLen: return "TokLen";
+  case SyntaxKind::TokArrow: return "TokArrow";
+  case SyntaxKind::TokLet: return "TokLet";
+  case SyntaxKind::TokMUT: return "TokMUT";
+  case SyntaxKind::TokReuse: return "TokReuse";
+  case SyntaxKind::TokExport: return "TokExport";
+  case SyntaxKind::TokImport: return "TokImport";
+  case SyntaxKind::TokAs: return "TokAs";
+  case SyntaxKind::TokEllipsis: return "TokEllipsis";
+  case SyntaxKind::TokTypeclass: return "TokTypeclass";
+  case SyntaxKind::TokInstance: return "TokInstance";
+  case SyntaxKind::TokCase: return "TokCase";
+  case SyntaxKind::TokFatArrow: return "TokFatArrow";
+  case SyntaxKind::TokID: return "TokID";
+  case SyntaxKind::TokStr: return "TokStr";
+  case SyntaxKind::TokNum: return "TokNum";
+  case SyntaxKind::TokTrue: return "TokTrue";
+  case SyntaxKind::TokFalse: return "TokFalse";
+  case SyntaxKind::TokChar: return "TokChar";
+  case SyntaxKind::TokTick: return "TokTick";
+  case SyntaxKind::TokIf: return "TokIf";
+  case SyntaxKind::TokElse: return "TokElse";
+  case SyntaxKind::TokWhile: return "TokWhile";
+  case SyntaxKind::TokType: return "TokType";
+  case SyntaxKind::TokSingleComment: return "TokSingleComment";
+  case SyntaxKind::TokEOF: return "TokEOF";
+  case SyntaxKind::TokINVALID: return "TokINVALID";
+  case SyntaxKind::TokWhitespace: return "TokWhitespace";
+  case SyntaxKind::TokNewline: return "TokNewline";
+
+  // Nodes
+  case SyntaxKind::SourceFile: return "SourceFile";
+  case SyntaxKind::FuncDef: return "FuncDef";
+  case SyntaxKind::ExternDef: return "ExternDef";
+  case SyntaxKind::StructDef: return "StructDef";
+  case SyntaxKind::EnumDef: return "EnumDef";
+  case SyntaxKind::TypeAliasDef: return "TypeAliasDef";
+  case SyntaxKind::TypeClassDecl: return "TypeClassDecl";
+  case SyntaxKind::TypeClassInstance: return "TypeClassInstance";
+  case SyntaxKind::ImportDecl: return "ImportDecl";
+  case SyntaxKind::Prototype: return "Prototype";
+  case SyntaxKind::TypedVar: return "TypedVar";
+  case SyntaxKind::ParamList: return "ParamList";
+  case SyntaxKind::TypeArgList: return "TypeArgList";
+  case SyntaxKind::SimpleType: return "SimpleType";
+  case SyntaxKind::PtrType: return "PtrType";
+  case SyntaxKind::LinearPtrType: return "LinearPtrType";
+  case SyntaxKind::ArrayType: return "ArrayType";
+  case SyntaxKind::FuncType: return "FuncType";
+  case SyntaxKind::GenericType: return "GenericType";
+  case SyntaxKind::TupleType: return "TupleType";
+  case SyntaxKind::VarDef: return "VarDef";
+  case SyntaxKind::NumberExpr: return "NumberExpr";
+  case SyntaxKind::StringExpr: return "StringExpr";
+  case SyntaxKind::BoolExpr: return "BoolExpr";
+  case SyntaxKind::CharExpr: return "CharExpr";
+  case SyntaxKind::BinaryExpr: return "BinaryExpr";
+  case SyntaxKind::CallExpr: return "CallExpr";
+  case SyntaxKind::ReturnExpr: return "ReturnExpr";
+  case SyntaxKind::UnitExpr: return "UnitExpr";
+  case SyntaxKind::VariableExpr: return "VariableExpr";
+  case SyntaxKind::IfExpr: return "IfExpr";
+  case SyntaxKind::DerefExpr: return "DerefExpr";
+  case SyntaxKind::AddrOfExpr: return "AddrOfExpr";
+  case SyntaxKind::AllocExpr: return "AllocExpr";
+  case SyntaxKind::FreeExpr: return "FreeExpr";
+  case SyntaxKind::ArrayLiteralExpr: return "ArrayLiteralExpr";
+  case SyntaxKind::IndexExpr: return "IndexExpr";
+  case SyntaxKind::LenExpr: return "LenExpr";
+  case SyntaxKind::UnaryNegExpr: return "UnaryNegExpr";
+  case SyntaxKind::StructLiteralExpr: return "StructLiteralExpr";
+  case SyntaxKind::FieldAccessExpr: return "FieldAccessExpr";
+  case SyntaxKind::CaseExpr: return "CaseExpr";
+  case SyntaxKind::CaseArm: return "CaseArm";
+  case SyntaxKind::WhileExpr: return "WhileExpr";
+  case SyntaxKind::TupleLiteralExpr: return "TupleLiteralExpr";
+  case SyntaxKind::ParenExpr: return "ParenExpr";
+  case SyntaxKind::Block: return "Block";
+  case SyntaxKind::StructField: return "StructField";
+  case SyntaxKind::EnumVariant: return "EnumVariant";
+  case SyntaxKind::ArgList: return "ArgList";
+  case SyntaxKind::FieldInit: return "FieldInit";
+  case SyntaxKind::Error: return "Error";
+  }
+  return "<unknown>";
+}
+
+SyntaxKind from_token_type(TokenType tt) {
+  // TokenType values map 1:1 to SyntaxKind token range since we laid them
+  // out in the same order. We still do an explicit switch for safety.
+  switch (tt) {
+  case ::sammine_lang::TokADD: return SyntaxKind::TokADD;
+  case ::sammine_lang::TokSUB: return SyntaxKind::TokSUB;
+  case ::sammine_lang::TokMUL: return SyntaxKind::TokMUL;
+  case ::sammine_lang::TokDIV: return SyntaxKind::TokDIV;
+  case ::sammine_lang::TokMOD: return SyntaxKind::TokMOD;
+  case ::sammine_lang::TokAddAssign: return SyntaxKind::TokAddAssign;
+  case ::sammine_lang::TokAddIncr: return SyntaxKind::TokAddIncr;
+  case ::sammine_lang::TokSubAssign: return SyntaxKind::TokSubAssign;
+  case ::sammine_lang::TokSubDecr: return SyntaxKind::TokSubDecr;
+  case ::sammine_lang::TokMulAssign: return SyntaxKind::TokMulAssign;
+  case ::sammine_lang::TokDivAssign: return SyntaxKind::TokDivAssign;
+  case ::sammine_lang::TokAND: return SyntaxKind::TokAND;
+  case ::sammine_lang::TokAndLogical: return SyntaxKind::TokAndLogical;
+  case ::sammine_lang::TokOR: return SyntaxKind::TokOR;
+  case ::sammine_lang::TokORLogical: return SyntaxKind::TokORLogical;
+  case ::sammine_lang::TokPipe: return SyntaxKind::TokPipe;
+  case ::sammine_lang::TokXOR: return SyntaxKind::TokXOR;
+  case ::sammine_lang::TokSHL: return SyntaxKind::TokSHL;
+  case ::sammine_lang::TokSHR: return SyntaxKind::TokSHR;
+  case ::sammine_lang::TokEQUAL: return SyntaxKind::TokEQUAL;
+  case ::sammine_lang::TokLESS: return SyntaxKind::TokLESS;
+  case ::sammine_lang::TokLessEqual: return SyntaxKind::TokLessEqual;
+  case ::sammine_lang::TokGREATER: return SyntaxKind::TokGREATER;
+  case ::sammine_lang::TokGreaterEqual: return SyntaxKind::TokGreaterEqual;
+  case ::sammine_lang::TokASSIGN: return SyntaxKind::TokASSIGN;
+  case ::sammine_lang::TokNOT: return SyntaxKind::TokNOT;
+  case ::sammine_lang::TokNOTEqual: return SyntaxKind::TokNOTEqual;
+  case ::sammine_lang::TokEXP: return SyntaxKind::TokEXP;
+  case ::sammine_lang::TokFloorDiv: return SyntaxKind::TokFloorDiv;
+  case ::sammine_lang::TokCeilDiv: return SyntaxKind::TokCeilDiv;
+  case ::sammine_lang::TokLeftParen: return SyntaxKind::TokLeftParen;
+  case ::sammine_lang::TokRightParen: return SyntaxKind::TokRightParen;
+  case ::sammine_lang::TokLeftCurly: return SyntaxKind::TokLeftCurly;
+  case ::sammine_lang::TokRightCurly: return SyntaxKind::TokRightCurly;
+  case ::sammine_lang::TokLeftBracket: return SyntaxKind::TokLeftBracket;
+  case ::sammine_lang::TokRightBracket: return SyntaxKind::TokRightBracket;
+  case ::sammine_lang::TokComma: return SyntaxKind::TokComma;
+  case ::sammine_lang::TokDot: return SyntaxKind::TokDot;
+  case ::sammine_lang::TokSemiColon: return SyntaxKind::TokSemiColon;
+  case ::sammine_lang::TokColon: return SyntaxKind::TokColon;
+  case ::sammine_lang::TokDoubleColon: return SyntaxKind::TokDoubleColon;
+  case ::sammine_lang::TokReturn: return SyntaxKind::TokReturn;
+  case ::sammine_lang::TokFunc: return SyntaxKind::TokFunc;
+  case ::sammine_lang::TokStruct: return SyntaxKind::TokStruct;
+  case ::sammine_lang::TokPtr: return SyntaxKind::TokPtr;
+  case ::sammine_lang::TokAlloc: return SyntaxKind::TokAlloc;
+  case ::sammine_lang::TokFree: return SyntaxKind::TokFree;
+  case ::sammine_lang::TokLen: return SyntaxKind::TokLen;
+  case ::sammine_lang::TokArrow: return SyntaxKind::TokArrow;
+  case ::sammine_lang::TokLet: return SyntaxKind::TokLet;
+  case ::sammine_lang::TokMUT: return SyntaxKind::TokMUT;
+  case ::sammine_lang::TokReuse: return SyntaxKind::TokReuse;
+  case ::sammine_lang::TokExport: return SyntaxKind::TokExport;
+  case ::sammine_lang::TokImport: return SyntaxKind::TokImport;
+  case ::sammine_lang::TokAs: return SyntaxKind::TokAs;
+  case ::sammine_lang::TokEllipsis: return SyntaxKind::TokEllipsis;
+  case ::sammine_lang::TokTypeclass: return SyntaxKind::TokTypeclass;
+  case ::sammine_lang::TokInstance: return SyntaxKind::TokInstance;
+  case ::sammine_lang::TokCase: return SyntaxKind::TokCase;
+  case ::sammine_lang::TokFatArrow: return SyntaxKind::TokFatArrow;
+  case ::sammine_lang::TokID: return SyntaxKind::TokID;
+  case ::sammine_lang::TokStr: return SyntaxKind::TokStr;
+  case ::sammine_lang::TokNum: return SyntaxKind::TokNum;
+  case ::sammine_lang::TokTrue: return SyntaxKind::TokTrue;
+  case ::sammine_lang::TokFalse: return SyntaxKind::TokFalse;
+  case ::sammine_lang::TokChar: return SyntaxKind::TokChar;
+  case ::sammine_lang::TokTick: return SyntaxKind::TokTick;
+  case ::sammine_lang::TokIf: return SyntaxKind::TokIf;
+  case ::sammine_lang::TokElse: return SyntaxKind::TokElse;
+  case ::sammine_lang::TokWhile: return SyntaxKind::TokWhile;
+  case ::sammine_lang::TokType: return SyntaxKind::TokType;
+  case ::sammine_lang::TokSingleComment: return SyntaxKind::TokSingleComment;
+  case ::sammine_lang::TokEOF: return SyntaxKind::TokEOF;
+  case ::sammine_lang::TokINVALID: return SyntaxKind::TokINVALID;
+  case ::sammine_lang::TokWhitespace: return SyntaxKind::TokWhitespace;
+  case ::sammine_lang::TokNewline: return SyntaxKind::TokNewline;
+  }
+  return SyntaxKind::TokINVALID;
+}
+
+} // namespace cst
+} // namespace sammine_lang

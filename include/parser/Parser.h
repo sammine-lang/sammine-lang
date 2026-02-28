@@ -1,6 +1,7 @@
 #pragma once
 #include "ast/Ast.h"
 #include "ast/AstDecl.h"
+#include "cst/CSTBridge.h"
 #include "lex/Token.h"
 #include "util/Utilities.h"
 #include <map>
@@ -107,8 +108,12 @@ public:
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
-  [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
-  [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseStructDef(
+      std::optional<cst::CSTBridge::BridgeCheckpoint> precede_cp = std::nullopt)
+      -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseEnumDef(
+      std::optional<cst::CSTBridge::BridgeCheckpoint> precede_cp = std::nullopt)
+      -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassDecl() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassInstance() -> p<DefinitionAST>;
 
@@ -120,8 +125,11 @@ public:
   // Parse expressions
   [[nodiscard]] auto ParseExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParsePrimaryExpr() -> p<ExprAST>;
-  [[nodiscard]] auto parsePostfixOps(u<ExprAST> expr) -> p<ExprAST>;
-  [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS)
+  [[nodiscard]] auto parsePostfixOps(u<ExprAST> expr,
+                                     cst::CSTBridge::BridgeCheckpoint expr_cp)
+      -> p<ExprAST>;
+  [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS,
+                                     cst::CSTBridge::BridgeCheckpoint lhs_cp)
       -> p<ExprAST>;
   [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCharExpr() -> p<ExprAST>;
@@ -134,8 +142,9 @@ public:
   [[nodiscard]] auto ParseLenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,
-                                            Location qn_loc) -> p<ExprAST>;
+  [[nodiscard]] auto ParseStructLiteralExpr(
+      sammine_util::QualifiedName qn, Location qn_loc,
+      cst::CSTBridge::BridgeCheckpoint precede_cp) -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArguments() -> ListResult<ExprAST>;
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;
@@ -169,6 +178,8 @@ public:
 
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
+  cst::CSTBridge *cst_ = nullptr;
+
   bool parsed_var_arg = false;
   int pending_deref = 0;
   std::shared_ptr<Token> pending_deref_tok;
@@ -180,6 +191,8 @@ public:
       std::shared_ptr<TokenStream> tokStream,
       std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt)
       : reporter(reporter), tokStream(tokStream) {}
+
+  void set_cst_bridge(cst::CSTBridge *bridge) { cst_ = bridge; }
 
   [[nodiscard]] auto Parse() -> u<ProgramAST>;
 };
