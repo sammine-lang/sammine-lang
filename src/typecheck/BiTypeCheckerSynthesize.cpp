@@ -507,6 +507,26 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   if (ast->Op->is_logical())
     return ast->type = lhs_type;
 
+  // Bitwise operators: valid on integer types and integer-backed enums
+  if (ast->Op->is_bitwise()) {
+    bool valid = lhs_type.type_kind == TypeKind::I32_t ||
+                 lhs_type.type_kind == TypeKind::I64_t ||
+                 lhs_type.type_kind == TypeKind::U32_t ||
+                 lhs_type.type_kind == TypeKind::U64_t ||
+                 lhs_type.type_kind == TypeKind::Integer;
+    if (!valid && lhs_type.type_kind == TypeKind::Enum) {
+      auto &et = std::get<EnumType>(lhs_type.type_data);
+      valid = et.is_integer_backed();
+    }
+    if (!valid) {
+      add_error(ast->Op->get_location(),
+                fmt::format("Bitwise operator '{}' is not valid on type '{}'",
+                            ast->Op->lexeme, lhs_type.to_string()));
+      return ast->type = Type::Poisoned();
+    }
+    return ast->type = lhs_type;
+  }
+
   // Arithmetic operators dispatch through typeclasses
   static const std::unordered_map<int, std::pair<std::string, std::string>>
       op_to_class = {

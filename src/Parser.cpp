@@ -17,13 +17,18 @@ static std::map<TokenType, int> binopPrecedence = {
     {TokenType::TokPipe, 1},
     {TokenType::TokASSIGN, 2},
     {TokenType::TokOR, 3},
+    {TokenType::TokORLogical, 4},
     {TokenType::TokAND, 5},
+    {TokenType::TokXOR, 6},
+    {TokenType::TokAndLogical, 7},
     {TokenType::TokLESS, 10},
     {TokenType::TokLessEqual, 10},
     {TokenType::TokGreaterEqual, 10},
     {TokenType::TokGREATER, 10},
     {TokenType::TokEQUAL, 10},
     {TokenType::TokNOTEqual, 10},
+    {TokenType::TokSHL, 15},
+    {TokenType::TokSHR, 15},
     {TokenType::TokADD, 20},
     {TokenType::TokSUB, 20},
     {TokenType::TokMUL, 40},
@@ -328,6 +333,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
 
   auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
   enum_def->type_params = std::move(enum_type_params);
+  enum_def->backing_type_name = std::move(backing_type_name);
   // If any variant has an integer discriminant, mark as integer-backed
   for (auto &v : enum_def->variants) {
     if (v.discriminant_value.has_value()) {

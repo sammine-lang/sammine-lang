@@ -128,8 +128,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokORLogical, "|"},
     {TokPipe, "|>"},
     {TokXOR, "^"},
-    {TokSHL, ">>"},
-    {TokSHR, "<<"},
+    {TokSHL, "<<"},
+    {TokSHR, ">>"},
     {TokEQUAL, "=="},
     {TokLESS, "<"},
     {TokLessEqual, "<="},
@@ -216,6 +216,10 @@ public:
   }
   bool is_assign() const { return tok_type == TokASSIGN; }
   bool is_logical() const { return tok_type == TokOR || tok_type == TokAND; }
+  bool is_bitwise() const {
+    return tok_type == TokAndLogical || tok_type == TokORLogical ||
+           tok_type == TokXOR || tok_type == TokSHL || tok_type == TokSHR;
+  }
   Location get_location() const { return this->location; }
 };
 
