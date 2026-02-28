@@ -4,7 +4,7 @@
 
 import std;
 
-enum MaybePtr = Some(ptr<i32>) | None;
+type MaybePtr = Some(ptr<i32>) | None;
 
 let check(m: MaybePtr) -> i32 {
   case m {

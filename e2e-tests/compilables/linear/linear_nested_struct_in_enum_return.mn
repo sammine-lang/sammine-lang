@@ -7,7 +7,7 @@ struct HasPtr {
   tag: i32,
 };
 
-enum MaybeHasPtr = Some(HasPtr) | None;
+type MaybeHasPtr = Some(HasPtr) | None;
 
 let bad() -> MaybeHasPtr {
   let x : i32 = 42;

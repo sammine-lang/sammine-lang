@@ -2,7 +2,7 @@
 # CHECK: Cannot return 'm' of type 'MaybePtr': non-linear ptr<i32> in variant 'Some'
 
 # Test: returning an enum variant wrapping a non-linear pointer is an error
-enum MaybePtr = Some(ptr<i32>) | None;
+type MaybePtr = Some(ptr<i32>) | None;
 
 let bad() -> MaybePtr {
   let x : i32 = 42;

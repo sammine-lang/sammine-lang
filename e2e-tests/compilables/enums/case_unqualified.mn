@@ -5,7 +5,7 @@
 
 import std;
 
-enum Color = Red | Green | Blue;
+type Color = Red | Green | Blue;
 
 let color_name(c: Color) -> i32 {
   case c {

@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK: missing a discriminant value
 
-enum Bad = A(0) | B(i32) | C(2);
+type Bad = A(0) | B(i32) | C(2);
 
 let main() -> i32 {
   return 0;

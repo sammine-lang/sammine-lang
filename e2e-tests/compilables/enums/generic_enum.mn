@@ -4,7 +4,7 @@
 
 import std;
 
-enum Option<T> = Some(T) | None;
+type Option<T> = Some(T) | None;
 
 let main() -> i32 {
   let x: Option<i32> = Option<i32>::Some(42);

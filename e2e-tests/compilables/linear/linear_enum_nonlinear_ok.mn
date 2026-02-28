@@ -4,7 +4,7 @@
 # Test: enum wrapping a non-linear pointer used locally (no return) is fine
 import std;
 
-enum MaybePtr = Some(ptr<i32>) | None;
+type MaybePtr = Some(ptr<i32>) | None;
 
 let main() -> i32 {
   let x : i32 = 99;

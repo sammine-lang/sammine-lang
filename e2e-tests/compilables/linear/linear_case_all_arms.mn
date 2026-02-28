@@ -3,7 +3,7 @@
 
 import std;
 
-enum Color = Red | Green | Blue;
+type Color = Red | Green | Blue;
 
 let main() -> i32 {
   let p = alloc<i32>(1);

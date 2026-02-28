@@ -4,7 +4,7 @@
 
 import std;
 
-enum Mode = READ(0) | WRITE(1) | EXEC(2);
+type Mode = READ(0) | WRITE(1) | EXEC(2);
 
 let describe(m: Mode) -> i32 {
   case m {

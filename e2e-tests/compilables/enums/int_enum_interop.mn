@@ -4,7 +4,7 @@
 
 import std;
 
-enum AsciiChar = A(65) | B(66) | Newline(10);
+type AsciiChar = A(65) | B(66) | Newline(10);
 
 let main() -> i32 {
   let ch: AsciiChar = AsciiChar::A;

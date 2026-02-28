@@ -5,7 +5,7 @@
 
 import std;
 
-enum Flags: u32 = Read(1) | Write(2) | Exec(4);
+type Flags: u32 = Read(1) | Write(2) | Exec(4);
 
 let main() -> i32 {
   let r: Flags = Read;

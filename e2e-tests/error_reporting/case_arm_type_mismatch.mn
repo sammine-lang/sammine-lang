@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK: Case arms have incompatible types: expected i32, got f64
 
-enum Color = Red | Green | Blue;
+type Color = Red | Green | Blue;
 
 let main() -> i32 {
   let c: Color = Color::Red;

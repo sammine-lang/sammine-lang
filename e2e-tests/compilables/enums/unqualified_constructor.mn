@@ -5,8 +5,8 @@
 
 import std;
 
-enum Color = Red | Green | Blue;
-enum Option<T> = Some(T) | None;
+type Color = Red | Green | Blue;
+type Option<T> = Some(T) | None;
 
 let main() -> i32 {
   let c: Color = Red;

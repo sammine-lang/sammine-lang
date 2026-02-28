@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Enum 'Shape' has no variant 'Triangle'
+# CHECK: Type 'Shape' has no variant 'Triangle'
 
-enum Shape = Circle(f64) | Rect(f64, f64) | Point;
+type Shape = Circle(f64) | Rect(f64, f64) | Point;
 
 let main() -> i32 {
   let s: Shape = Shape::Triangle(1.0);

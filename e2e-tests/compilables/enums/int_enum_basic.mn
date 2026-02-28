@@ -4,7 +4,7 @@
 
 import std;
 
-enum OpenFlags = RDONLY(0) | WRONLY(1) | CREAT(64);
+type OpenFlags = RDONLY(0) | WRONLY(1) | CREAT(64);
 
 let check_flag(f: OpenFlags) -> i32 {
   case f {

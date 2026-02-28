@@ -5,7 +5,7 @@
 
 import std;
 
-enum Selector = Small | Medium | Large;
+type Selector = Small | Medium | Large;
 
 let main() -> i32 {
   let s : Selector = Selector::Small;

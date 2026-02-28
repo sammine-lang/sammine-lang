@@ -29,6 +29,9 @@ let apply<T, U>(f: (T) -> U, x: T) -> U {   # higher-order + generic
   f(x)                                       # (T) -> U is a function type
 }
 
+# --- Type aliases ---
+type Int = i32;                                   # transparent alias for i32
+
 # --- Structs ---
 struct Vec2 { x: i32, y: i32, };
 
@@ -41,7 +44,7 @@ instance Add<Vec2> {
 
 let main() -> i32 {
   # --- Variables ---
-  let x: i32 = 5;                            # immutable, type-annotated
+  let x: Int = 5;                            # using type alias
   let y = 10;                                # type inference
   let mut counter: i32 = 0;                  # mutable binding
   counter = counter + 1;                     # assignment (mut only)

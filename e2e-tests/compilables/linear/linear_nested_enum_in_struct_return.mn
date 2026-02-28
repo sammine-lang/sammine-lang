@@ -2,7 +2,7 @@
 # CHECK: Cannot return 'h' of type 'Holder': non-linear ptr<i32> in variant 'Some' in field 'm'
 
 # Test: struct wrapping enum wrapping ptr<T> — 2 levels deep
-enum MaybePtr = Some(ptr<i32>) | None;
+type MaybePtr = Some(ptr<i32>) | None;
 
 struct Holder {
   m: MaybePtr,

@@ -4,7 +4,7 @@
 
 import std;
 
-enum Sig = HUP(1) | INT(2) | KILL(9) | TERM(15);
+type Sig = HUP(1) | INT(2) | KILL(9) | TERM(15);
 
 let describe(s: Sig) -> i32 {
   case s {
