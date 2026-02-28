@@ -1,0 +1,40 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 648
+
+# Project Euler Problem 20: Factorial digit sum
+# Find the sum of the digits in 100!
+# Uses base-10^9 bignum arithmetic with array of i64 chunks.
+
+import std;
+
+let main() -> i32 {
+  let base: i64 = 1000000000;
+  let mut d: [i64; 20] = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  let mut k: i64 = 2;
+  while k <= 100 {
+    let mut carry: i64 = 0;
+    let mut i: i32 = 0;
+    while i < 20 {
+      let val: i64 = d[i] * k + carry;
+      d[i] = val % base;
+      carry = val / base;
+      i = i + 1;
+    };
+    k = k + 1;
+  };
+
+  let mut sum: i64 = 0;
+  let mut j: i32 = 0;
+  while j < 20 {
+    let mut chunk: i64 = d[j];
+    while chunk > 0 {
+      sum = sum + chunk % 10;
+      chunk = chunk / 10;
+    };
+    j = j + 1;
+  };
+
+  std::printf("%lld\n", sum);
+  return 0;
+}

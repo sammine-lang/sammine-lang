@@ -1,0 +1,40 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1366
+
+# Project Euler Problem 16: Power digit sum
+# What is the sum of the digits of the number 2^1000?
+# Uses base-10^9 bignum arithmetic with array of i64 chunks.
+
+import std;
+
+let main() -> i32 {
+  let base: i64 = 1000000000;
+  let mut d: [i64; 40] = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  let mut step: i32 = 0;
+  while step < 1000 {
+    let mut carry: i64 = 0;
+    let mut i: i32 = 0;
+    while i < 40 {
+      let val: i64 = d[i] * 2 + carry;
+      d[i] = val % base;
+      carry = val / base;
+      i = i + 1;
+    };
+    step = step + 1;
+  };
+
+  let mut sum: i64 = 0;
+  let mut j: i32 = 0;
+  while j < 40 {
+    let mut chunk: i64 = d[j];
+    while chunk > 0 {
+      sum = sum + chunk % 10;
+      chunk = chunk / 10;
+    };
+    j = j + 1;
+  };
+
+  std::printf("%lld\n", sum);
+  return 0;
+}
