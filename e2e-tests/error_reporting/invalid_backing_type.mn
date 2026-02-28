@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Invalid backing type 'f64' for enum 'Flags'
+
+enum Flags: f64 = Read(1) | Write(2);
+
+let main() -> i32 {
+  return 0;
+}

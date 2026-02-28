@@ -1,0 +1,6 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: main's first parameter must be i32 (argc)
+
+let main(argc: f64, argv: ptr<ptr<char>>) -> i32 {
+  return 0;
+}

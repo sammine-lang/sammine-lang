@@ -1,0 +1,10 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Function 'add' expects 2 arguments, got 3
+
+let add(a: i32, b: i32) -> i32 {
+  return a + b;
+}
+
+let main() -> i32 {
+  return add(1, 2, 3);
+}

@@ -1,0 +1,11 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Type mismatch: expression has type f64, but variable declared as i32
+
+let get_pi() -> f64 {
+  return 3.14;
+}
+
+let main() -> i32 {
+  let x: i32 = get_pi();
+  return 0;
+}

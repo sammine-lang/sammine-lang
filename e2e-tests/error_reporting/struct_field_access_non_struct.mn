@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot access field 'field' on non-struct type i32
+
+let main() -> i32 {
+  let x: i32 = 42;
+  let y: i32 = x.field;
+  return 0;
+}

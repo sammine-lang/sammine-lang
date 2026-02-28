@@ -1,0 +1,7 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: If branches have incompatible types: then has i32, else has f64
+
+let main() -> i32 {
+  let x: i32 = if true { 42 } else { 3.14 };
+  return x;
+}

@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Enum variant 'Shape::Circle' expects 1 arguments, got 2
+
+enum Shape = Circle(f64) | Rect(f64, f64) | Point;
+
+let main() -> i32 {
+  let s: Shape = Shape::Circle(1.0, 2.0);
+  return 0;
+}

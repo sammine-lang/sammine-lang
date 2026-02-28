@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot negate non-numeric type 'bool'
+
+let main() -> i32 {
+  let b: bool = true;
+  let c: bool = -b;
+  return 0;
+}

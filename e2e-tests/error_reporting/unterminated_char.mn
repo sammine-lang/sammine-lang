@@ -1,0 +1,7 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Unterminated char literal
+
+let main() -> i32 {
+  let c: char = 'a;
+  return 0;
+}

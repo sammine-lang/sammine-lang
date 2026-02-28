@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: If condition must be bool, got i32
+
+let main() -> i32 {
+  if 42 {
+    return 1;
+  };
+  return 0;
+}

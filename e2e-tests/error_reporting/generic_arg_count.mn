@@ -1,0 +1,11 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Generic function 'pair' expects 2 arguments, got 1
+
+let pair<T>(a: T, b: T) -> T {
+  return a;
+}
+
+let main() -> i32 {
+  let x: i32 = pair(42);
+  return 0;
+}

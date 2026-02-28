@@ -1,0 +1,12 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Non-exhaustive case expression: missing variant(s) South, East, West
+
+enum Direction = North | South | East | West;
+
+let main() -> i32 {
+  let d: Direction = Direction::North;
+  let r: i32 = case d {
+    Direction::North => 0,
+  };
+  return r;
+}

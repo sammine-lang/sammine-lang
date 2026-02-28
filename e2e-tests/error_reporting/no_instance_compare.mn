@@ -1,0 +1,13 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Incompatible types for operator '<'
+
+struct Foo {
+  x: i32,
+};
+
+let main() -> i32 {
+  let a: Foo = Foo { x: 1 };
+  let b: Foo = Foo { x: 2 };
+  let c: bool = a < b;
+  return 0;
+}

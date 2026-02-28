@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Bitwise operator '&' is not valid on type 'f64'
+
+let main() -> i32 {
+  let x: f64 = 3.14;
+  let y: f64 = 1.0;
+  let z: f64 = x & y;
+  return 0;
+}

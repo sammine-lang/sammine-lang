@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: cannot have both a discriminant value and type payloads
+
+enum Bad: i32 = Foo(1, i32);
+
+let main() -> i32 {
+  return 0;
+}

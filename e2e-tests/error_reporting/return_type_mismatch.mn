@@ -1,0 +1,10 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Wrong return type for function f, expected i32 but got f64
+
+let f(x: i32) -> i32 {
+  return 3.14;
+}
+
+let main() -> i32 {
+  return f(1);
+}

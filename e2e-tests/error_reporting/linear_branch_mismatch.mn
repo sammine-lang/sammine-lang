@@ -1,0 +1,11 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Linear variable 'p' is consumed in some branches but not others
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 10;
+  if true {
+    free(p);
+  };
+  return 0;
+}

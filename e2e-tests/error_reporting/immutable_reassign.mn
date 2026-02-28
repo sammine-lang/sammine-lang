@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot reassign immutable variable 'x'
+
+let main() -> i32 {
+  let x: i32 = 5;
+  x = 10;
+  return x;
+}
