@@ -1,0 +1,12 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot dereference linear variable 'p'
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  free(p);
+  *p = 7;
+  std::printf("%d\n", 7);
+  return 0;
+}

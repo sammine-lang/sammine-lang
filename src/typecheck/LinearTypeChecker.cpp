@@ -238,6 +238,9 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
 
 void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
   if (ast->Op->is_assign()) {
+    // Check LHS for deref-after-consume (e.g. free(p); *p = 7)
+    check_stmt(ast->LHS.get());
+
     // Assignment: check for move semantics on RHS
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
       auto *rhs_info = find_linear(var->variableName);
