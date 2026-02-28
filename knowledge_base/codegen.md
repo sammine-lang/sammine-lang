@@ -87,8 +87,17 @@ If not in allocaValues but `Module->getFunction` found + type is Function → cr
 
 Eliminates definition-ordering constraints. Typeclass methods use mangled names (e.g. `Sized__i32__sizeof`).
 
+## ASTProperties in Codegen
+Both backends receive `const ASTProperties&` (stored as `props_` member). Node-specific decorated data is read from the side table, NOT from AST node fields:
+- `props_.call(ast->id())->callee_func_type` — resolved function type for calls
+- `props_.call(ast->id())->is_partial` — partial application detection
+- `props_.call(ast->id())->resolved_generic_name` — monomorphized/typeclass call target
+- `props_.variable(ast->id())->is_enum_unit_variant` — enum unit variant detection
+- `props_.binary(ast->id())->resolved_op_method` — operator overload target
+- `ast->get_type()` — node type (reads from ASTProperties via static pointer)
+
 ## Operator Overloading (`resolved_op_method`)
-Binary ops (`+`,`-`,`*`,`/`,`%`) check `ast->resolved_op_method` — if set, emit function call to typeclass method instead of native instruction. Both backends (MLIR uses `func::CallOp`).
+Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_method` — if set, emit function call to typeclass method instead of native instruction. Both backends (MLIR uses `func::CallOp`).
 
 ## Typeclass Codegen
 - Instance methods → regular functions with mangled names. `TypeClassDeclAST`/`TypeClassInstanceAST` have no-op visitor stubs.
@@ -157,7 +166,7 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `ast->resolved_op_method` — if set, emi
 - Both-terminate case → merge block deleted. `scf.if` used only for bounds checks.
 
 ### Key Patterns
-- `proto->type` is full `FunctionType` — extract return via `std::get<FunctionType>(proto->type.type_data).get_return_type()`
+- `proto->get_type()` is full `FunctionType` — extract return via `std::get<FunctionType>(proto->get_type().type_data).get_return_type()`
 - Uses `LexicalStack<mlir::Value, std::monostate>` for scoped variables
 - Generic functions skipped (same as CgVisitor). Externs → `func.func` with `Private` visibility.
 

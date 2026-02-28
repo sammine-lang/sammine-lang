@@ -20,6 +20,34 @@
 - `operator==` compares `type_kind` + `type_data` only — ignores `is_mutable`. Use `compatible_to_from(to, from)` for directional checks; rejects `immut → mut` for non-primitives. `is_literal()` types bypass this (always by-value).
 - Immutable by default (`let x`); `let mut` for mutable locals, `mut` for mutable params. Set on `Type::is_mutable` during `synthesize(VarDefAST*)`/`synthesize(TypedVarAST*)`. Assignment to immutable LHS → error at `=` token.
 
+## ASTProperties Side Table (`include/ast/ASTProperties.h`)
+
+Post-parse semantic attributes (types, resolution flags) live in an external `ASTProperties` map, keyed by `NodeId` (auto-incrementing `uint32_t` on each `AstBase`). This decouples AST structure from semantic information.
+
+### Infrastructure
+- `NodeId` defined in `AstDecl.h`; `AstBase::id()` returns each node's unique ID
+- `AstBase::set_properties(ASTProperties*)` sets a static pointer; `Compiler::typecheck()` calls it before type checking
+- `AstBase::get_type()` reads from `ASTProperties::get_type(id)` (returns `Type` by value; `NonExistent()` if not set)
+- `AstBase::set_type(t)` writes to `ASTProperties::set_type(id, t)` (returns `Type` by value)
+- `AstBase::synthesized()` delegates to `get_type().synthesized()`
+
+### Per-Node Property Structs
+| Struct | Fields | Populated by |
+|--------|--------|-------------|
+| `CallProps` | `callee_func_type`, `is_partial`, `resolved_generic_name`, `type_bindings`, `is_typeclass_call`, `is_enum_constructor`, `enum_variant_index` | `synthesize(CallExprAST*)` via `props_.call(id)` |
+| `VariableProps` | `is_enum_unit_variant`, `enum_variant_index` | `synthesize(VariableExprAST*)` via `props_.variable(id)` |
+| `BinaryProps` | `resolved_op_method` | `synthesize(BinaryExprAST*)` via `props_.binary(id)` |
+| `TypeAliasProps` | `resolved_type` | `visit(TypeAliasDefAST*)` via `props_.type_alias(id)` |
+| `TypeClassInstanceProps` | `concrete_type` | `visit(TypeClassInstanceAST*)` via `props_.type_class_instance(id)` |
+
+### Access Patterns
+- **Writers** (BiTypeChecker): `props_.call(ast->id()).field = value` (mutable accessor, auto-inserts)
+- **Readers** (codegen/linear checker): `props_.call(ast->id())->field` (const accessor, returns `nullptr` if missing)
+- **Type access**: `ast->get_type()` / `ast->set_type(t)` anywhere in the pipeline (delegates to static `ASTProperties*`)
+
+### Threading
+`ASTProperties` lives as `props_` on `Compiler`, passed by reference to: `BiTypeCheckerVisitor`, `LinearTypeChecker::check()`, `mlirGen()` (stored in `MLIRGenImpl`), `CodegenVisitor`, `ASTPrinter::print()`.
+
 ## BiTypeChecker (`include/typecheck/BiTypeChecker.h`)
 - Bidirectional: `synthesize()` → types bottom-up, `postorder_walk()` → consistency top-down
 - Two lexical stacks: `id_to_type` (variable/function names), `typename_to_type` (type names); built-ins (i32/i64/f64/bool/char/unit) registered in `enter_new_scope()`
