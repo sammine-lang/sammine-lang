@@ -116,9 +116,9 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
   id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(),
-                                           ast->type);
+                                           ast->get_type());
   if (ast->functionName.name == "main") {
-    auto fn_type = std::get<FunctionType>(ast->type.type_data);
+    auto fn_type = std::get<FunctionType>(ast->get_type().type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type != Type::I32_t()) {
       this->add_error(ast->get_location(),
@@ -133,8 +133,8 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
           "main must take 0 or 2 parameters (argc: i32, argv: ptr<ptr<char>>)");
     }
     if (param_count == 2) {
-      auto argc_type = ast->parameterVectors[0]->type;
-      auto argv_type = ast->parameterVectors[1]->type;
+      auto argc_type = ast->parameterVectors[0]->get_type();
+      auto argv_type = ast->parameterVectors[1]->get_type();
       if (argc_type != Type::I32_t()) {
         this->add_error(ast->parameterVectors[0]->get_location(),
                         fmt::format("main's first parameter must be i32 "
@@ -184,8 +184,8 @@ bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
             arr_lit->elements[first_error_idx]->accept_synthesis(this)))
       this->add_diagnostics(
           arr_lit->elements[first_error_idx]->get_location(), *hint);
-    ast->type = Type::Poisoned();
-    arr_lit->type = Type::Poisoned();
+    ast->set_type(Type::Poisoned());
+    arr_lit->set_type(Type::Poisoned());
     return true;
   }
   return false;
@@ -209,13 +209,13 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
     if (auto *arr_lit =
             llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get())) {
       ast->accept_synthesis(this);
-      if (ast->type.type_kind == TypeKind::Array) {
-        auto &arr_data = std::get<ArrayType>(ast->type.type_data);
+      if (ast->get_type().type_kind == TypeKind::Array) {
+        auto arr_data = std::get<ArrayType>(ast->get_type().type_data);
         for (auto &elem : arr_lit->elements)
           elem->accept_vis(this);
         if (check_array_literal_against_annotation(ast, arr_lit, arr_data))
           return;
-        arr_lit->type = ast->type;
+        arr_lit->set_type(ast->get_type());
         return;
       }
     }
@@ -224,10 +224,10 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   // Normal case
   ast->Expression->accept_vis(this);
   ast->accept_synthesis(this);
-  auto to = ast->type;
+  auto to = ast->get_type();
   auto from = ast->Expression->accept_synthesis(this);
   if (to == Type::Poisoned() || from == Type::Poisoned()) {
-    ast->type = Type::Poisoned();
+    ast->set_type(Type::Poisoned());
   } else if (!type_map_ordering.compatible_to_from(to, from)) {
     this->add_error(ast->Expression->get_location(),
                     fmt::format("Type mismatch: expression has type {}, "
@@ -235,7 +235,7 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
                                 from.to_string(), to.to_string()));
     if (auto hint = incompatibility_hint(to, from))
       this->add_diagnostics(ast->Expression->get_location(), *hint);
-    ast->type = Type::Poisoned();
+    ast->set_type(Type::Poisoned());
   } else if (from.is_polymorphic_numeric()) {
     resolve_literal_type(ast->Expression.get(), to);
   }
@@ -258,7 +258,7 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Skip if already registered (e.g. by first pass)
 
-  if (ast->type.synthesized())
+  if (ast->get_type().synthesized())
     return;
 
   std::vector<std::string> field_names;
@@ -269,7 +269,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
     field_names.push_back(member->name);
     field_types.push_back(ft);
     if (ft.type_kind == TypeKind::Poisoned) {
-      ast->type = Type::Poisoned();
+      ast->set_type(Type::Poisoned());
       return;
     }
   }
@@ -277,16 +277,16 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   auto struct_type =
       Type::Struct(ast->struct_name.mangled(), std::move(field_names),
                    std::move(field_types));
-  ast->type = struct_type;
+  ast->set_type(struct_type);
   typename_to_type.registerNameT(ast->struct_name.mangled(), struct_type);
 }
 
 void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Generic enum: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
-    if (!ast->type.synthesized()) {
+    if (!ast->get_type().synthesized()) {
       generic_enum_defs[ast->enum_name.mangled()] = ast;
-      ast->type = Type::Poisoned(); // mark as visited (not concretely usable)
+      ast->set_type(Type::Poisoned()); // mark as visited (not concretely usable)
     }
     return;
   }
@@ -309,7 +309,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
           fmt::format("Invalid backing type '{}' for type '{}' — must be "
                       "i32, i64, u32, or u64",
                       bt_name, ast->enum_name.display()));
-      ast->type = Type::Poisoned();
+      ast->set_type(Type::Poisoned());
       return;
     }
     // Backing type annotation implies integer-backed
@@ -327,7 +327,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': variant '{}' is missing a "
                         "discriminant value — all variants must have one",
                         ast->enum_name.display(), variant.name));
-        ast->type = Type::Poisoned();
+        ast->set_type(Type::Poisoned());
         return;
       }
       if (!variant.payload_types.empty()) {
@@ -336,7 +336,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': variant '{}' cannot have "
                         "both a discriminant value and type payloads",
                         ast->enum_name.display(), variant.name));
-        ast->type = Type::Poisoned();
+        ast->set_type(Type::Poisoned());
         return;
       }
       auto val = variant.discriminant_value.value();
@@ -346,7 +346,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': duplicate discriminant "
                         "value {} on variant '{}'",
                         ast->enum_name.display(), val, variant.name));
-        ast->type = Type::Poisoned();
+        ast->set_type(Type::Poisoned());
         return;
       }
       seen_values.insert(val);
@@ -362,7 +362,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     for (auto &type_expr : variant.payload_types) {
       auto resolved = resolve_type_expr(type_expr.get());
       if (resolved.type_kind == TypeKind::Poisoned) {
-        ast->type = Type::Poisoned();
+        ast->set_type(Type::Poisoned());
         return;
       }
       info.payload_types.push_back(resolved);
@@ -372,7 +372,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
 
   auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos),
                               ast->is_integer_backed, backing_type);
-  ast->type = enum_type;
+  ast->set_type(enum_type);
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 
   // Register variant constructors for qualified generic enum resolution
@@ -386,7 +386,8 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
 
 void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   // Already resolved — skip on third pass
-  if (ast->resolved_type.synthesized())
+  auto &tap = props_.type_alias(ast->id());
+  if (tap.resolved_type.synthesized())
     return;
 
   auto resolved = resolve_type_expr(ast->type_expr.get());
@@ -395,11 +396,11 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
         ast->get_location(),
         fmt::format("Cannot resolve type '{}' in type alias '{}'",
                     ast->type_expr->to_string(), ast->alias_name.display()));
-    ast->type = Type::Poisoned();
+    ast->set_type(Type::Poisoned());
     return;
   }
-  ast->resolved_type = resolved;
-  ast->type = resolved;
+  tap.resolved_type = resolved;
+  ast->set_type(resolved);
   typename_to_type.registerNameT(ast->alias_name.mangled(), resolved);
 }
 
@@ -408,18 +409,20 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
 
+  auto &cp = props_.call(ast->id());
+
   // Enum constructors are fully resolved during synthesis
-  if (ast->is_enum_constructor)
+  if (cp.is_enum_constructor)
     return;
 
   // Generic calls: trigger monomorphization if synthesis succeeded
   if (generic_func_defs.contains(ast->functionName.mangled())) {
-    if (ast->resolved_generic_name.has_value()) {
-      auto &mangled = ast->resolved_generic_name.value();
+    if (cp.resolved_generic_name.has_value()) {
+      auto &mangled = cp.resolved_generic_name.value();
       if (!instantiated_functions.contains(mangled)) {
         auto *generic_def = generic_func_defs[ast->functionName.mangled()];
         auto cloned = Monomorphizer::instantiate(generic_def, mangled,
-                                                 ast->type_bindings);
+                                                 cp.type_bindings);
         auto sem = GeneralSemanticsVisitor();
         cloned->accept_vis(&sem);
         cloned->accept_vis(this);
@@ -432,34 +435,34 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   }
 
   // Typeclass calls: rewrite call target to mangled instance method name
-  if (ast->is_typeclass_call) {
-    if (ast->resolved_generic_name.has_value())
+  if (cp.is_typeclass_call) {
+    if (cp.resolved_generic_name.has_value())
       ast->functionName = sammine_util::QualifiedName::local(
-          ast->resolved_generic_name.value());
+          cp.resolved_generic_name.value());
     return;
   }
 
   // Normal calls: check arg types now that args have been visited
-  if (!ast->callee_func_type.has_value() ||
-      ast->callee_func_type->type_kind != TypeKind::Function)
+  if (!cp.callee_func_type.has_value() ||
+      cp.callee_func_type->type_kind != TypeKind::Function)
     return;
 
-  auto func = std::get<FunctionType>(ast->callee_func_type->type_data);
+  auto func = std::get<FunctionType>(cp.callee_func_type->type_data);
   if (func.is_var_arg())
     return;
 
   auto params = func.get_params_types();
   for (size_t i = 0; i < ast->arguments.size(); i++) {
     if (!this->type_map_ordering.compatible_to_from(params[i],
-                                                    ast->arguments[i]->type)) {
+                                                    ast->arguments[i]->get_type())) {
       this->add_error(ast->arguments[i]->get_location(),
                       fmt::format("Argument {} to '{}': expected {}, got {}",
                                   i + 1, ast->functionName.display(),
                                   params[i].to_string(),
-                                  ast->arguments[i]->type.to_string()));
-      if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->type))
+                                  ast->arguments[i]->get_type().to_string()));
+      if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->get_type()))
         this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
-    } else if (ast->arguments[i]->type.is_polymorphic_numeric()) {
+    } else if (ast->arguments[i]->get_type().is_polymorphic_numeric()) {
       resolve_literal_type(ast->arguments[i].get(), params[i]);
     }
   }
@@ -471,7 +474,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   if (auto *arr_lit =
           llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
     auto scope_fn = this->id_to_type.top().s.value();
-    auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+    auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type.type_kind == TypeKind::Array) {
       auto &arr_data = std::get<ArrayType>(return_type.type_data);
@@ -510,7 +513,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
           this->add_diagnostics(
               arr_lit->elements[first_error_idx]->get_location(), *hint);
       }
-      arr_lit->type = return_type;
+      arr_lit->set_type(return_type);
       ast->accept_synthesis(this);
       return;
     }
@@ -522,7 +525,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   ast->accept_synthesis(this);
   auto t = ast->return_expr->accept_synthesis(this);
   auto scope_fn = this->id_to_type.top().s.value();
-  auto fn_type = std::get<FunctionType>(scope_fn->type.type_data);
+  auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
     this->add_error(ast->get_location(),
@@ -540,7 +543,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
 void BiTypeCheckerVisitor::visit(BinaryExprAST *ast) {
   ast->LHS->accept_vis(this);
   ast->RHS->accept_vis(this);
-  ast->type = ast->accept_synthesis(this);
+  ast->set_type(ast->accept_synthesis(this));
 }
 
 void BiTypeCheckerVisitor::visit(BlockAST *ast) {
@@ -681,8 +684,9 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
 
 void BiTypeCheckerVisitor::register_typeclass_instance(
     TypeClassInstanceAST *ast) {
-  ast->concrete_type = resolve_type_expr(ast->concrete_type_expr.get());
-  if (ast->concrete_type.is_poisoned())
+  auto &tcip = props_.type_class_instance(ast->id());
+  tcip.concrete_type = resolve_type_expr(ast->concrete_type_expr.get());
+  if (tcip.concrete_type.is_poisoned())
     return;
 
   auto it = type_class_defs.find(ast->class_name);
@@ -694,18 +698,18 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   TypeClassInstanceInfo inst_info;
   inst_info.class_name = ast->class_name;
-  inst_info.concrete_type = ast->concrete_type;
+  inst_info.concrete_type = tcip.concrete_type;
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.name;
     std::string mangled = ast->class_name + "__" +
-                          ast->concrete_type.to_string() + "__" + original_name;
+                          tcip.concrete_type.to_string() + "__" + original_name;
     method->Prototype->functionName =
         sammine_util::QualifiedName::local(mangled);
     inst_info.method_mangled_names[original_name] = mangled;
   }
 
-  std::string key = ast->class_name + "__" + ast->concrete_type.to_string();
+  std::string key = ast->class_name + "__" + tcip.concrete_type.to_string();
   type_class_instances[key] = std::move(inst_info);
 }
 

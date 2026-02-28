@@ -37,10 +37,10 @@ void CgVisitor::forward_declare(PrototypeAST *ast) {
 
   std::vector<llvm::Type *> param_types;
   for (auto &p : ast->parameterVectors)
-    param_types.push_back(type_converter.get_type(p->type));
+    param_types.push_back(type_converter.get_type(p->get_type()));
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
-      this->type_converter.get_return_type(ast->type), param_types,
+      this->type_converter.get_return_type(ast->get_type()), param_types,
       ast->is_var_arg);
   auto *F = llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
                                    llvm_name, resPtr->Module.get());
@@ -77,10 +77,10 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
 
   std::vector<llvm::Type *> param_types;
   for (auto &p : ast->parameterVectors)
-    param_types.push_back(type_converter.get_type(p->type));
+    param_types.push_back(type_converter.get_type(p->get_type()));
 
   llvm::FunctionType *FT = llvm::FunctionType::get(
-      this->type_converter.get_return_type(ast->type), param_types,
+      this->type_converter.get_return_type(ast->get_type()), param_types,
       ast->is_var_arg);
   llvm::Function *F =
       llvm::Function::Create(FT, llvm::Function::ExternalLinkage,
@@ -92,7 +92,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
     auto &typed_var = vect[param_index];
     arg.setName(typed_var->name);
     // Mark immutable pointer params as readonly nocapture so LLVM can optimize
-    if (typed_var->type.type_kind == TypeKind::Pointer &&
+    if (typed_var->get_type().type_kind == TypeKind::Pointer &&
         !typed_var->is_mutable) {
       F->addParamAttr(param_index, llvm::Attribute::ReadOnly);
       F->addParamAttr(param_index,
@@ -157,9 +157,10 @@ void CgVisitor::emitCall(ExprAST *ast, llvm::FunctionCallee callee,
 void CgVisitor::emitPartialApplication(CallExprAST *ast,
                                         llvm::Function *callee,
                                         llvm::ArrayRef<llvm::Value *> boundArgs) {
-  this->abort_if_not(ast->callee_func_type.has_value(),
+  auto *cp = props_ ? props_->call(ast->id()) : nullptr;
+  this->abort_if_not(cp && cp->callee_func_type.has_value(),
                      "ICE: partial call missing callee_func_type");
-  auto full_ft = std::get<FunctionType>(ast->callee_func_type->type_data);
+  auto full_ft = std::get<FunctionType>(cp->callee_func_type->type_data);
   auto all_params = full_ft.get_params_types();
   size_t bound_count = boundArgs.size();
 
@@ -227,8 +228,10 @@ void CgVisitor::emitPartialApplication(CallExprAST *ast,
 }
 
 void CgVisitor::emitEnumConstructor(CallExprAST *ast) {
-  auto &et = std::get<EnumType>(ast->type.type_data);
+  auto et = std::get<EnumType>(ast->get_type().type_data);
   auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
+  auto *ecp = props_ ? props_->call(ast->id()) : nullptr;
+  size_t evi = ecp ? ecp->enum_variant_index : 0;
 
   // Alloca the enum struct
   auto *alloca = CodegenUtils::CreateEntryBlockAlloca(
@@ -239,14 +242,14 @@ void CgVisitor::emitEnumConstructor(CallExprAST *ast) {
       resPtr->Builder->CreateStructGEP(enum_ty, alloca, 0, "tag_ptr");
   resPtr->Builder->CreateStore(
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
-                             ast->enum_variant_index),
+                             evi),
       tag_ptr);
 
   // Store payload fields into the byte buffer
   if (enum_ty->getNumElements() > 1) {
     auto *payload_ptr =
         resPtr->Builder->CreateStructGEP(enum_ty, alloca, 1, "payload_ptr");
-    auto &vi = et.get_variant(ast->enum_variant_index);
+    auto &vi = et.get_variant(evi);
     size_t byte_offset = 0;
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto *field_ty = type_converter.get_type(vi.payload_types[i]);
@@ -264,8 +267,9 @@ void CgVisitor::emitEnumConstructor(CallExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(CallExprAST *ast) {
+  auto *cp = props_ ? props_->call(ast->id()) : nullptr;
   // Enum payload variant constructor
-  if (ast->is_enum_constructor) {
+  if (cp && cp->is_enum_constructor) {
     emitEnumConstructor(ast);
     return;
   }
@@ -277,7 +281,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
 
   // Path 1: Direct call to a module-level function
   llvm::Function *callee = resPtr->Module->getFunction(ast->functionName.mangled());
-  if (callee && !ast->is_partial) {
+  if (callee && !(cp && cp->is_partial)) {
     LOG({
       fmt::print(stderr, "[codegen] call '{}': direct call with {} args\n",
                  ast->functionName.display(), ast->arguments.size());
@@ -291,7 +295,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
   }
 
   // Path 2: Partial application of a direct function
-  if (callee && ast->is_partial) {
+  if (callee && cp && cp->is_partial) {
     LOG({
       fmt::print(stderr,
                  "[codegen] call '{}': partial application, binding {} of {} "
@@ -312,9 +316,9 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
                  "args\n",
                  ast->functionName.display(), ast->arguments.size());
     });
-    this->abort_if_not(ast->callee_func_type.has_value(),
+    this->abort_if_not(cp && cp->callee_func_type.has_value(),
                        "ICE: indirect call missing callee_func_type");
-    auto ft = std::get<FunctionType>(ast->callee_func_type->type_data);
+    auto ft = std::get<FunctionType>(cp->callee_func_type->type_data);
     auto *closureTy =
         llvm::StructType::getTypeByName(*resPtr->Context, "sammine.closure");
     auto *closureVal =

@@ -143,8 +143,8 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
 
   // Determine if this function returns an array (sret transform)
   bool isSret = false;
-  if (ast->Prototype->type.type_kind == TypeKind::Function) {
-    auto &ft = std::get<FunctionType>(ast->Prototype->type.type_data);
+  if (ast->Prototype->get_type().type_kind == TypeKind::Function) {
+    auto ft = std::get<FunctionType>(ast->Prototype->get_type().type_data);
     isSret = ft.get_return_type().type_kind == TypeKind::Array;
   }
 
@@ -173,7 +173,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
     if (isSret && bodyResult) {
       // sret: load whole array from source, store into output buffer
       auto arrMlirType = convertType(
-          std::get<FunctionType>(ast->Prototype->type.type_data)
+          std::get<FunctionType>(ast->Prototype->get_type().type_data)
               .get_return_type());
       auto arrVal = mlir::LLVM::LoadOp::create(builder, location,
                                                 arrMlirType, bodyResult);
@@ -228,9 +228,9 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     // Vararg C functions must use LLVM dialect (func dialect has no varargs)
     llvm::SmallVector<mlir::Type, 4> paramTypes;
     for (auto &param : ast->Prototype->parameterVectors)
-      paramTypes.push_back(convertType(param->type));
+      paramTypes.push_back(convertType(param->get_type()));
     // Return type
-    auto &funcTypeData = std::get<FunctionType>(ast->Prototype->type.type_data);
+    auto funcTypeData = std::get<FunctionType>(ast->Prototype->get_type().type_data);
     auto retType = funcTypeData.get_return_type();
     mlir::Type llvmRetType;
     if (retType.type_kind == TypeKind::Unit)
@@ -256,7 +256,7 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
     llvm::ArrayRef<mlir::Value> boundArgs) {
   auto location = loc(ast);
   auto &fullFt =
-      std::get<FunctionType>(ast->callee_func_type->type_data);
+      std::get<FunctionType>(props_.call(ast->id())->callee_func_type->type_data);
   auto allParams = fullFt.get_params_types();
   size_t boundCount = boundArgs.size();
   auto ptrTy = llvmPtrTy();
@@ -361,7 +361,7 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
   callArgs.append(operands.begin(), operands.end());
 
   auto &ft =
-      std::get<FunctionType>(ast->callee_func_type->type_data);
+      std::get<FunctionType>(props_.call(ast->id())->callee_func_type->type_data);
   auto closureFnTy = getClosureFuncType(ft);
 
   // For indirect LLVM calls, build the op manually:
@@ -387,7 +387,8 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
 
 mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // Enum constructor — handled separately
-  if (ast->is_enum_constructor)
+  auto *cp = props_.call(ast->id());
+  if (cp && cp->is_enum_constructor)
     return emitEnumConstructor(ast);
 
   auto location = loc(ast);
@@ -397,10 +398,10 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   for (auto &arg : ast->arguments) {
     auto val = emitExpr(arg.get());
     if (val) {
-      if (arg->type.type_kind == TypeKind::Array &&
+      if (arg->get_type().type_kind == TypeKind::Array &&
           mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()))
         val = mlir::LLVM::LoadOp::create(builder, location,
-                                          convertType(arg->type), val);
+                                          convertType(arg->get_type()), val);
       operands.push_back(val);
     }
   }
@@ -409,8 +410,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // the LLVM backend. Names already include module prefixes where needed
   // (e.g. "math$add" for imports, "wrapper" for local calls).
   std::string callee;
-  if (ast->resolved_generic_name.has_value())
-    callee = *ast->resolved_generic_name;
+  if (cp && cp->resolved_generic_name.has_value())
+    callee = *cp->resolved_generic_name;
   else
     callee = ast->functionName.mangled();
 
@@ -421,10 +422,10 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   }
 
   // Path 1: Direct call (not partial) — callee found in module
-  if (theModule.lookupSymbol(callee) && !ast->is_partial) {
+  if (theModule.lookupSymbol(callee) && !(cp && cp->is_partial)) {
     // sret: if call returns an array, allocate local buffer, pass as extra arg
-    if (ast->type.type_kind == TypeKind::Array) {
-      auto arrMlirType = convertType(ast->type);
+    if (ast->get_type().type_kind == TypeKind::Array) {
+      auto arrMlirType = convertType(ast->get_type());
       auto localBuf = emitAllocaOne(arrMlirType, location);
       operands.push_back(localBuf);
       mlir::func::CallOp::create(
@@ -434,8 +435,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
     }
 
     llvm::SmallVector<mlir::Type, 1> resultTypes;
-    if (ast->type.type_kind != TypeKind::Unit)
-      resultTypes.push_back(convertType(ast->type));
+    if (ast->get_type().type_kind != TypeKind::Unit)
+      resultTypes.push_back(convertType(ast->get_type()));
 
     // If callee is an llvm.func (C function), use llvm.call
     if (auto llvmFunc =
@@ -458,7 +459,7 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   }
 
   // Path 2: Partial application — callee found + is_partial
-  if (theModule.lookupSymbol(callee) && ast->is_partial)
+  if (theModule.lookupSymbol(callee) && cp && cp->is_partial)
     return emitPartialApplication(ast, callee, operands);
 
   // Path 3: Indirect call through closure variable
@@ -472,7 +473,7 @@ mlir::Value MLIRGenImpl::emitReturnExpr(AST::ReturnExprAST *ast) {
     auto val = emitExpr(ast->return_expr.get());
     if (currentSretBuffer && val) {
       // sret: load whole array from source, store into output buffer
-      auto arrMlirType = convertType(ast->return_expr->type);
+      auto arrMlirType = convertType(ast->return_expr->get_type());
       auto arrVal = mlir::LLVM::LoadOp::create(builder, location,
                                                 arrMlirType, val);
       mlir::LLVM::StoreOp::create(builder, location, arrVal,

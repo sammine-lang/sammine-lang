@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
 
@@ -31,10 +32,12 @@ static constexpr llvm::StringLiteral kExitFunc = "exit";
 class MLIRGenImpl {
 public:
   MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName,
-              const std::string &fileName, const std::string &sourceText)
+              const std::string &fileName, const std::string &sourceText,
+              const AST::ASTProperties &props)
       : builder(&context), moduleName(moduleName), fileName(fileName),
         diagnosticData(
-            sammine_util::Reporter::get_diagnostic_data(sourceText)) {}
+            sammine_util::Reporter::get_diagnostic_data(sourceText)),
+        props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 
@@ -58,6 +61,8 @@ public:
   int partialCounter = 0;
 
   mlir::Value currentSretBuffer = nullptr;
+
+  const AST::ASTProperties &props_;
 
   // --- Inline type helpers ---
   mlir::LLVM::LLVMPointerType llvmPtrTy() {

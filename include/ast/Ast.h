@@ -396,7 +396,6 @@ class TypeAliasDefAST : public DefinitionAST {
 public:
   sammine_util::QualifiedName alias_name;
   std::unique_ptr<TypeExprAST> type_expr;
-  Type resolved_type = Type::NonExistent();
   bool is_exported = false;
 
   explicit TypeAliasDefAST(std::shared_ptr<Token> name_tok,
@@ -497,7 +496,6 @@ class BinaryExprAST : public ExprAST {
 public:
   std::shared_ptr<Token> Op;
   std::unique_ptr<ExprAST> LHS, RHS;
-  std::string resolved_op_method; // Set by type checker for typeclass operator dispatch
   BinaryExprAST(std::shared_ptr<Token> op, std::unique_ptr<ExprAST> LHS,
                 std::unique_ptr<ExprAST> RHS)
       : ExprAST(NodeKind::BinaryExprAST), Op(op), LHS(std::move(LHS)),
@@ -540,14 +538,7 @@ class CallExprAST : public ExprAST {
 public:
   sammine_util::QualifiedName functionName;
   std::vector<std::unique_ptr<AST::ExprAST>> arguments;
-  std::optional<Type> callee_func_type;
-  bool is_partial = false;
-  std::optional<std::string> resolved_generic_name;
-  std::unordered_map<std::string, Type> type_bindings;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
-  bool is_typeclass_call = false;
-  bool is_enum_constructor = false;
-  size_t enum_variant_index = 0;
   explicit CallExprAST(
       std::shared_ptr<Token> tok,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
@@ -610,8 +601,6 @@ public:
 class VariableExprAST : public ExprAST {
 public:
   std::string variableName;
-  bool is_enum_unit_variant = false;
-  size_t enum_variant_index = 0;
   VariableExprAST(std::shared_ptr<Token> var)
       : ExprAST(NodeKind::VariableExprAST) {
     join_location(var);
@@ -624,7 +613,6 @@ public:
 class DerefExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
-  bool is_assignment_lhs = false; // Set by synthesize(BinaryExprAST*) for *p = x
   explicit DerefExprAST(std::shared_ptr<Token> star_tok,
                         std::unique_ptr<ExprAST> operand)
       : ExprAST(NodeKind::DerefExprAST), operand(std::move(operand)) {
@@ -848,7 +836,6 @@ class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;
   std::unique_ptr<TypeExprAST> concrete_type_expr;
-  Type concrete_type = Type::NonExistent();
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(
       std::shared_ptr<Token> tok, std::string class_name,

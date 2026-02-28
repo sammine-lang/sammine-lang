@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "typecheck/Types.h"
 
 #include "mlir/IR/Builders.h"
@@ -22,6 +23,6 @@ namespace sammine_lang {
 mlir::OwningOpRef<mlir::ModuleOp>
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
         const std::string &moduleName, const std::string &fileName,
-        const std::string &sourceText);
+        const std::string &sourceText, const AST::ASTProperties &props);
 
 } // namespace sammine_lang

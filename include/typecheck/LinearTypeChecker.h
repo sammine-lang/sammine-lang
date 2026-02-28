@@ -1,5 +1,6 @@
 #pragma once
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "util/Utilities.h"
 #include <string>
 #include <unordered_map>
@@ -74,8 +75,10 @@ class LinearTypeChecker : public sammine_util::Reportee {
   VarInfo *find_child(const std::string &var_name,
                        const std::string &field_name);
 
+  const ASTProperties *props_ = nullptr;
+
 public:
-  void check(ProgramAST *program);
+  void check(ProgramAST *program, const ASTProperties &props);
 };
 
 } // namespace sammine_lang::AST

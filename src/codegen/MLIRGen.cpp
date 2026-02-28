@@ -42,8 +42,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   // references can find them even if the definition comes later.
   for (auto &def : program->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (sd->type.type_kind != TypeKind::Poisoned) {
-        auto &st = std::get<StructType>(sd->type.type_data);
+      if (sd->get_type().type_kind != TypeKind::Poisoned) {
+        auto st = std::get<StructType>(sd->get_type().type_data);
         llvm::SmallVector<mlir::Type> fieldTypes;
         for (auto &ft : st.get_field_types())
           fieldTypes.push_back(convertType(ft));
@@ -53,8 +53,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         structTypes[st.get_name()] = structTy;
       }
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (ed->type.type_kind != TypeKind::Poisoned) {
-        auto &et = std::get<EnumType>(ed->type.type_data);
+      if (ed->get_type().type_kind != TypeKind::Poisoned) {
+        auto et = std::get<EnumType>(ed->get_type().type_data);
         // Integer-backed enums are bare integers — no struct registration
         if (et.is_integer_backed())
           continue;
@@ -280,12 +280,12 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
 mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
   llvm::SmallVector<mlir::Type, 4> argTypes;
   for (auto &param : proto->parameterVectors)
-    argTypes.push_back(convertType(param->type));
+    argTypes.push_back(convertType(param->get_type()));
 
   llvm::SmallVector<mlir::Type, 1> retTypes;
-  // proto->type is the full FunctionType — extract the return type from it
-  if (proto->type.type_kind == TypeKind::Function) {
-    auto &funcType = std::get<FunctionType>(proto->type.type_data);
+  // proto->get_type() is the full FunctionType — extract the return type from it
+  if (proto->get_type().type_kind == TypeKind::Function) {
+    auto funcType = std::get<FunctionType>(proto->get_type().type_data);
     auto retType = funcType.get_return_type();
     if (retType.type_kind == TypeKind::Array) {
       // sret: array returns become a trailing !llvm.ptr parameter, void return
@@ -391,7 +391,7 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
       auto elemVal = mlir::LLVM::ExtractValueOp::create(
           builder, location, initVal,
           llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
-      auto elemType = convertType(ast->destructure_vars[i]->type);
+      auto elemType = convertType(ast->destructure_vars[i]->get_type());
       auto alloca = emitAllocaOne(elemType, location);
       mlir::LLVM::StoreOp::create(builder, location, elemVal, alloca);
       symbolTable.registerNameT(ast->destructure_vars[i]->name, alloca);
@@ -400,13 +400,13 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   }
 
   // Arrays: the literal already returns an !llvm.ptr, register it directly
-  if (ast->type.type_kind == TypeKind::Array) {
+  if (ast->get_type().type_kind == TypeKind::Array) {
     symbolTable.registerNameT(ast->TypedVar->name, initVal);
     return initVal;
   }
 
   // All non-array variables: llvm.alloca + llvm.store (uniform model)
-  auto alloca = emitAllocaOne(convertType(ast->type), location);
+  auto alloca = emitAllocaOne(convertType(ast->get_type()), location);
   mlir::LLVM::StoreOp::create(builder, location, initVal, alloca);
   symbolTable.registerNameT(ast->TypedVar->name, alloca);
   return initVal;
@@ -535,8 +535,8 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
 mlir::OwningOpRef<mlir::ModuleOp>
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
         const std::string &moduleName, const std::string &fileName,
-        const std::string &sourceText) {
-  return MLIRGenImpl(context, moduleName, fileName, sourceText)
+        const std::string &sourceText, const AST::ASTProperties &props) {
+  return MLIRGenImpl(context, moduleName, fileName, sourceText, props)
       .generate(program);
 }
 

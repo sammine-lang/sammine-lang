@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "ast/AstBase.h"
 #include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
@@ -26,6 +27,7 @@ class BiTypeCheckerVisitor : public ScopedASTVisitor,
   // We're gonna provide look up in different
 
 public:
+  ASTProperties &props_;
   // INFO: x, y, z
   LexicalStack<Type, AST::FuncDefAST *> id_to_type;
 
@@ -67,7 +69,7 @@ public:
     id_to_type.pop();
     typename_to_type.pop();
   }
-  BiTypeCheckerVisitor() {
+  BiTypeCheckerVisitor(ASTProperties &props) : props_(props) {
     this->enter_new_scope();
   }
 
@@ -446,10 +448,10 @@ inline Type default_polymorphic_type(const Type &t) {
 /// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
 /// and BlockAST to reach all leaf literals.
 inline void resolve_literal_type(ExprAST *expr, const Type &target) {
-  if (!expr || !expr->type.is_polymorphic_numeric())
+  if (!expr || !expr->get_type().is_polymorphic_numeric())
     return;
 
-  expr->type = target;
+  expr->set_type(target);
 
   if (auto *unary = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     resolve_literal_type(unary->operand.get(), target);
@@ -460,12 +462,12 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
     if (if_expr->thenBlockAST && !if_expr->thenBlockAST->Statements.empty()) {
       auto *last_then = if_expr->thenBlockAST->Statements.back().get();
       resolve_literal_type(last_then, target);
-      if_expr->thenBlockAST->type = target;
+      if_expr->thenBlockAST->set_type(target);
     }
     if (if_expr->elseBlockAST && !if_expr->elseBlockAST->Statements.empty()) {
       auto *last_else = if_expr->elseBlockAST->Statements.back().get();
       resolve_literal_type(last_else, target);
-      if_expr->elseBlockAST->type = target;
+      if_expr->elseBlockAST->set_type(target);
     }
   }
   // For all other expression types (NumberExprAST, CallExprAST, IndexExprAST,

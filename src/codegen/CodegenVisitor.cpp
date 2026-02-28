@@ -129,8 +129,8 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
   // Struct and enum types must be registered first since prototypes reference them.
   for (auto &def : ast->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get())) {
-      if (sd->type.type_kind != TypeKind::Poisoned) {
-        auto &st = std::get<StructType>(sd->type.type_data);
+      if (sd->get_type().type_kind != TypeKind::Poisoned) {
+        auto st = std::get<StructType>(sd->get_type().type_data);
         if (!llvm::StructType::getTypeByName(*resPtr->Context,
                                              "sammine.struct." + st.get_name())) {
           std::vector<llvm::Type *> field_types;
@@ -143,8 +143,8 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
         }
       }
     } else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get())) {
-      if (ed->type.type_kind != TypeKind::Poisoned) {
-        auto &et = std::get<EnumType>(ed->type.type_data);
+      if (ed->get_type().type_kind != TypeKind::Poisoned) {
+        auto et = std::get<EnumType>(ed->get_type().type_data);
         auto name = et.get_name().mangled();
         if (!type_converter.get_enum_type(name)) {
           // Compute max payload size across all variants
@@ -189,7 +189,7 @@ void CgVisitor::preorder_walk(VarDefAST *ast) {
                var_name);
   });
   auto *alloca = CodegenUtils::CreateEntryBlockAlloca(
-      getCurrentFunction(), var_name, type_converter.get_type(ast->type));
+      getCurrentFunction(), var_name, type_converter.get_type(ast->get_type()));
   this->allocaValues.top()[var_name] = alloca;
 }
 void CgVisitor::postorder_walk(VarDefAST *ast) {
@@ -208,10 +208,10 @@ void CgVisitor::postorder_walk(VarDefAST *ast) {
 }
 void CgVisitor::preorder_walk(ExternAST *ast) { in_reuse = true; }
 void CgVisitor::preorder_walk(StructDefAST *ast) {
-  if (ast->type.type_kind == TypeKind::Poisoned)
+  if (ast->get_type().type_kind == TypeKind::Poisoned)
     return;
 
-  auto &st = std::get<StructType>(ast->type.type_data);
+  auto st = std::get<StructType>(ast->get_type().type_data);
 
   // Skip if already registered (e.g. by forward-declaration pass)
   if (type_converter.get_struct_type(st.get_name()))
@@ -262,10 +262,10 @@ void CgVisitor::postorder_walk(ExternAST *ast) {
 }
 void CgVisitor::postorder_walk(StructDefAST *ast) {}
 void CgVisitor::preorder_walk(EnumDefAST *ast) {
-  if (ast->type.type_kind == TypeKind::Poisoned)
+  if (ast->get_type().type_kind == TypeKind::Poisoned)
     return;
 
-  auto &et = std::get<EnumType>(ast->type.type_data);
+  auto et = std::get<EnumType>(ast->get_type().type_data);
   auto name = et.get_name().mangled();
 
   // Skip if already registered (e.g. by forward-declaration pass)
@@ -295,7 +295,7 @@ void CgVisitor::preorder_walk(TypeAliasDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
   // INFO: If we cannot parse return expr, treat it as unit for now
-  if (ast->type == Type::Unit())
+  if (ast->get_type() == Type::Unit())
     resPtr->Builder->CreateRetVoid();
   else
     resPtr->Builder->CreateRet(ast->return_expr->val);
@@ -332,8 +332,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       if (auto *deref =
               llvm::dyn_cast<DerefExprAST>(idx_expr->array_expr.get())) {
         auto *ptr_val = deref->operand->val;
-        auto &arr_data = std::get<ArrayType>(deref->type.type_data);
-        auto *arr_llvm_type = type_converter.get_type(deref->type);
+        auto arr_data = std::get<ArrayType>(deref->get_type().type_data);
+        auto *arr_llvm_type = type_converter.get_type(deref->get_type());
         auto *idx = idx_expr->index_expr->val;
 
         auto *gep = emitArrayElementGEP(ptr_val, idx, arr_llvm_type,
@@ -351,9 +351,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       auto *alloca = this->allocaValues.top()[var_expr->variableName];
       this->abort_if_not(alloca, "Unknown array variable in index assignment");
 
-      auto *arr_type = type_converter.get_type(var_expr->type);
+      auto *arr_type = type_converter.get_type(var_expr->get_type());
       auto *idx = idx_expr->index_expr->val;
-      auto &arr_data = std::get<ArrayType>(var_expr->type.type_data);
+      auto arr_data = std::get<ArrayType>(var_expr->get_type().type_data);
       auto *gep = emitArrayElementGEP(alloca, idx, arr_type,
                                       arr_data.get_size());
       resPtr->Builder->CreateStore(R, gep);
@@ -367,7 +367,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   }
   auto *L = ast->LHS->val;
   auto *R = ast->RHS->val;
-  auto &lhs_type = ast->LHS->type;
+  auto lhs_type = ast->LHS->get_type();
   bool is_int = lhs_type == Type::I32_t() || lhs_type == Type::I64_t() ||
                 lhs_type == Type::U32_t() || lhs_type == Type::U64_t() ||
                 lhs_type == Type::Char();
@@ -375,13 +375,15 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   bool is_float = lhs_type == Type::F64_t();
 
   auto tok = ast->Op->tok_type;
+  auto *bp = props_ ? props_->binary(ast->id()) : nullptr;
+  std::string resolved_op = bp ? bp->resolved_op_method : std::string();
   if (tok == TokenType::TokADD) {
     if (is_int)
       ast->val = resPtr->Builder->CreateAdd(L, R, "add_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFAdd(L, R, "add_expr");
-    else if (!ast->resolved_op_method.empty()) {
-      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+    else if (!resolved_op.empty()) {
+      auto *fn = resPtr->Module->getFunction(resolved_op);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
@@ -390,8 +392,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       ast->val = resPtr->Builder->CreateSub(L, R, "sub_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFSub(L, R, "sub_expr");
-    else if (!ast->resolved_op_method.empty()) {
-      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+    else if (!resolved_op.empty()) {
+      auto *fn = resPtr->Module->getFunction(resolved_op);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
@@ -400,8 +402,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       ast->val = resPtr->Builder->CreateMul(L, R, "mul_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFMul(L, R, "mul_expr");
-    else if (!ast->resolved_op_method.empty()) {
-      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+    else if (!resolved_op.empty()) {
+      auto *fn = resPtr->Module->getFunction(resolved_op);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
@@ -412,8 +414,8 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       ast->val = resPtr->Builder->CreateSDiv(L, R, "div_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFDiv(L, R, "div_expr");
-    else if (!ast->resolved_op_method.empty()) {
-      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+    else if (!resolved_op.empty()) {
+      auto *fn = resPtr->Module->getFunction(resolved_op);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
@@ -426,15 +428,15 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
       ast->val = emitArrayComparison(L, R, lhs_type, tok);
     } else {
       ast->val = resPtr->Builder->CreateCmp(
-          type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
+          type_converter.get_cmp_func(lhs_type, ast->RHS->get_type(), tok), L, R);
     }
   } else if (tok == TokMOD) {
     if (is_uint)
       ast->val = resPtr->Builder->CreateURem(L, R);
     else if (is_int)
       ast->val = resPtr->Builder->CreateSRem(L, R);
-    else if (!ast->resolved_op_method.empty()) {
-      auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
+    else if (!resolved_op.empty()) {
+      auto *fn = resPtr->Module->getFunction(resolved_op);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
@@ -459,7 +461,7 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
 
 void CgVisitor::preorder_walk(StringExprAST *ast) {}
 void CgVisitor::preorder_walk(NumberExprAST *ast) {
-  switch (ast->type.type_kind) {
+  switch (ast->get_type().type_kind) {
   case TypeKind::I32_t:
     ast->val = llvm::ConstantInt::get(
         *resPtr->Context, llvm::APInt(32, std::stoi(ast->number), true));
@@ -510,14 +512,15 @@ void CgVisitor::preorder_walk(CharExprAST *ast) {
 }
 void CgVisitor::preorder_walk(VariableExprAST *ast) {
   // Enum unit variant: build { tag, undef_payload }
-  if (ast->is_enum_unit_variant) {
-    auto &et = std::get<EnumType>(ast->type.type_data);
+  auto *vp = props_ ? props_->variable(ast->id()) : nullptr;
+  if (vp && vp->is_enum_unit_variant) {
+    auto et = std::get<EnumType>(ast->get_type().type_data);
     auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
     llvm::Value *agg = llvm::UndefValue::get(enum_ty);
     agg = resPtr->Builder->CreateInsertValue(
         agg,
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
-                               ast->enum_variant_index),
+                               vp->enum_variant_index),
         {0}, "enum_tag");
     ast->val = agg;
     return;
@@ -538,14 +541,14 @@ void CgVisitor::preorder_walk(VariableExprAST *ast) {
 
   // Not a local variable — check if it's a module function used as a value
   auto *fn = resPtr->Module->getFunction(ast->variableName);
-  if (fn && ast->type.type_kind == TypeKind::Function) {
+  if (fn && ast->get_type().type_kind == TypeKind::Function) {
     LOG({
       fmt::print(stderr,
                  "[codegen] VariableExprAST '{}': wrapping module function as "
                  "closure\n",
                  ast->variableName);
     });
-    auto ft = std::get<FunctionType>(ast->type.type_data);
+    auto ft = std::get<FunctionType>(ast->get_type().type_data);
     auto *wrapper = getOrCreateClosureWrapper(fn, ft);
     auto *nullEnv = llvm::ConstantPointerNull::get(
         llvm::PointerType::get(*resPtr->Context, 0));
@@ -567,7 +570,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   }
 
   // Convert condition to i1 based on type
-  switch (ast->bool_expr->type.type_kind) {
+  switch (ast->bool_expr->get_type().type_kind) {
   case TypeKind::I32_t:
     ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
         ast->bool_expr->val,
@@ -669,8 +672,8 @@ void CgVisitor::visit(IfExprAST *ast) {
 
     // Create PHI node to merge values if both branches produce values
     // and the if expression has a non-Unit, non-Never type
-    if (ThenV && ElseV && ast->type.type_kind != TypeKind::Unit &&
-        ast->type.type_kind != TypeKind::Never) {
+    if (ThenV && ElseV && ast->get_type().type_kind != TypeKind::Unit &&
+        ast->get_type().type_kind != TypeKind::Never) {
       llvm::PHINode *PN =
           resPtr->Builder->CreatePHI(ThenV->getType(), 2, "iftmp");
       PN->addIncoming(ThenV, ThenEndBB);
@@ -729,7 +732,7 @@ void CgVisitor::visit(DerefExprAST *ast) {
 
 void CgVisitor::postorder_walk(DerefExprAST *ast) {
   auto pointee_type =
-      std::get<PointerType>(ast->operand->type.type_data).get_pointee();
+      std::get<PointerType>(ast->operand->get_type().type_data).get_pointee();
   ast->val = resPtr->Builder->CreateLoad(type_converter.get_type(pointee_type),
                                          ast->operand->val, "deref");
 }
@@ -737,7 +740,7 @@ void CgVisitor::postorder_walk(DerefExprAST *ast) {
 void CgVisitor::postorder_walk(AllocExprAST *ast) {
   // Extract element type T from ptr<T>
   auto pointee_type =
-      std::get<PointerType>(ast->type.type_data).get_pointee();
+      std::get<PointerType>(ast->get_type().type_data).get_pointee();
   auto *elem_llvm_type = type_converter.get_type(pointee_type);
 
   // Compute sizeof(T) using DataLayout
@@ -789,7 +792,7 @@ void CgVisitor::visit(AddrOfExprAST *ast) {
 // -o -
 void CgVisitor::postorder_walk(ArrayLiteralExprAST *ast) {
   auto *arr_llvm_type =
-      llvm::cast<llvm::ArrayType>(type_converter.get_type(ast->type));
+      llvm::cast<llvm::ArrayType>(type_converter.get_type(ast->get_type()));
 
   // Collect element constants
   std::vector<llvm::Constant *> constants;
@@ -837,9 +840,9 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
   if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->array_expr.get())) {
     auto *ptr_val =
         deref->operand->val; // pointer to the array (loaded by visit())
-    // deref->type is the pointee type = the array type
-    auto &arr_data = std::get<ArrayType>(deref->type.type_data);
-    auto *arr_llvm_type = type_converter.get_type(deref->type);
+    // deref->get_type() is the pointee type = the array type
+    auto arr_data = std::get<ArrayType>(deref->get_type().type_data);
+    auto *arr_llvm_type = type_converter.get_type(deref->get_type());
     auto *idx = ast->index_expr->val;
 
     auto *gep = emitArrayElementGEP(ptr_val, idx, arr_llvm_type,
@@ -855,8 +858,8 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
   auto *alloca = this->allocaValues.top()[var_expr->variableName];
   this->abort_if_not(alloca, "Unknown array variable");
 
-  auto &arr_data = std::get<ArrayType>(var_expr->type.type_data);
-  auto *arr_type = type_converter.get_type(var_expr->type);
+  auto arr_data = std::get<ArrayType>(var_expr->get_type().type_data);
+  auto *arr_type = type_converter.get_type(var_expr->get_type());
   auto *idx = ast->index_expr->val;
 
   auto *gep = emitArrayElementGEP(alloca, idx, arr_type, arr_data.get_size());
@@ -865,7 +868,7 @@ void CgVisitor::postorder_walk(IndexExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(LenExprAST *ast) {
-  auto arr_size = std::get<ArrayType>(ast->operand->type.type_data).get_size();
+  auto arr_size = std::get<ArrayType>(ast->operand->get_type().type_data).get_size();
   ast->val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(*resPtr->Context),
                                     arr_size);
 }
@@ -900,20 +903,20 @@ void CgVisitor::emitBoundsCheck(llvm::Value *idx, size_t arr_size) {
 
 void CgVisitor::postorder_walk(UnaryNegExprAST *ast) {
   auto *operand_val = ast->operand->val;
-  if (ast->operand->type == Type::I32_t() ||
-      ast->operand->type == Type::I64_t())
+  if (ast->operand->get_type() == Type::I32_t() ||
+      ast->operand->get_type() == Type::I64_t())
     ast->val = resPtr->Builder->CreateNeg(operand_val, "neg");
-  else if (ast->operand->type == Type::F64_t())
+  else if (ast->operand->get_type() == Type::F64_t())
     ast->val = resPtr->Builder->CreateFNeg(operand_val, "fneg");
   else
     this->abort("UnaryNegExprAST has invalid operand type");
 }
 
 void CgVisitor::postorder_walk(StructLiteralExprAST *ast) {
-  if (ast->type.type_kind == TypeKind::Poisoned)
+  if (ast->get_type().type_kind == TypeKind::Poisoned)
     return;
 
-  auto &st = std::get<StructType>(ast->type.type_data);
+  auto st = std::get<StructType>(ast->get_type().type_data);
   auto *llvm_struct_ty = type_converter.get_struct_type(st.get_name());
 
   llvm::Value *agg = llvm::UndefValue::get(llvm_struct_ty);
@@ -926,10 +929,10 @@ void CgVisitor::postorder_walk(StructLiteralExprAST *ast) {
 }
 
 void CgVisitor::postorder_walk(FieldAccessExprAST *ast) {
-  if (ast->type.type_kind == TypeKind::Poisoned)
+  if (ast->get_type().type_kind == TypeKind::Poisoned)
     return;
 
-  auto obj_type = ast->object_expr->type;
+  auto obj_type = ast->object_expr->get_type();
   auto &st = std::get<StructType>(obj_type.type_data);
   auto field_idx = st.get_field_index(ast->field_name);
 
@@ -1065,7 +1068,7 @@ void CgVisitor::visit(CaseExprAST *ast) {
   auto *scrutinee_val = ast->scrutinee->val;
   this->abort_if_not(scrutinee_val, "Failed to codegen case scrutinee");
 
-  auto &et = std::get<EnumType>(ast->scrutinee->type.type_data);
+  auto et = std::get<EnumType>(ast->scrutinee->get_type().type_data);
   auto *enum_ty = type_converter.get_enum_type(et.get_name().mangled());
   this->abort_if_not(enum_ty, "Unknown enum type in case expression");
 
@@ -1168,7 +1171,7 @@ void CgVisitor::visit(CaseExprAST *ast) {
     if (!end_bb->getTerminator())
       resPtr->Builder->CreateBr(merge_bb);
 
-    if (arm_val && arm.body->type.type_kind != TypeKind::Never)
+    if (arm_val && arm.body->get_type().type_kind != TypeKind::Never)
       phi_entries.push_back({arm_val, end_bb});
   }
 
@@ -1177,10 +1180,10 @@ void CgVisitor::visit(CaseExprAST *ast) {
     function->insert(function->end(), merge_bb);
     resPtr->Builder->SetInsertPoint(merge_bb);
 
-    if (!phi_entries.empty() && ast->type.type_kind != TypeKind::Unit &&
-        ast->type.type_kind != TypeKind::Never) {
+    if (!phi_entries.empty() && ast->get_type().type_kind != TypeKind::Unit &&
+        ast->get_type().type_kind != TypeKind::Never) {
       auto *phi = resPtr->Builder->CreatePHI(
-          type_converter.get_type(ast->type),
+          type_converter.get_type(ast->get_type()),
           static_cast<unsigned>(phi_entries.size()), "case_result");
       for (auto &[val, bb] : phi_entries)
         phi->addIncoming(val, bb);

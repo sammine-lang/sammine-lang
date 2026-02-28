@@ -4,6 +4,7 @@
 
 #include "compiler/Compiler.h"
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "codegen/CodegenVisitor.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
@@ -55,6 +56,7 @@ class Compiler {
   std::string output_dir;
   std::vector<std::string> import_paths;
 
+  AST::ASTProperties props_;
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
   bool error;
@@ -358,7 +360,8 @@ void Compiler::typecheck() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start bi-direcitonal type checking stage...\n");
   });
-  auto vs = sammine_lang::AST::BiTypeCheckerVisitor();
+  AST::AstBase::set_properties(&props_);
+  auto vs = sammine_lang::AST::BiTypeCheckerVisitor(props_);
   programAST->accept_vis(&vs);
 
   // Inject monomorphized generic enum definitions at the front.
@@ -388,7 +391,7 @@ void Compiler::linear_check() {
                "Start linear type checking stage...\n");
   });
   auto lc = sammine_lang::AST::LinearTypeChecker();
-  lc.check(programAST.get());
+  lc.check(programAST.get(), props_);
   reporter.report(lc);
   this->error = lc.has_errors();
 }
@@ -400,7 +403,7 @@ void Compiler::dump_ast() {
                  sammine_util::styled(fmt::terminal_color::green),
                  "Start dumping ast-ir stage...\n");
     });
-    AST::ASTPrinter::print(programAST.get());
+    AST::ASTPrinter::print(programAST.get(), props_);
   }
   if (this->error) {
     LOG({
@@ -444,7 +447,7 @@ void Compiler::codegen_mlir() {
   std::string moduleName = has_main ? "" : stem;
 
   auto mlirModule =
-      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input);
+      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input, props_);
   if (!mlirModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -659,7 +662,7 @@ void Compiler::emit_interface() {
   auto emit_proto = [&out, &qualify_type](const std::string &name,
                                           AST::PrototypeAST *proto,
                                           bool is_var_arg) {
-    auto &funcType = std::get<FunctionType>(proto->type.type_data);
+    auto funcType = std::get<FunctionType>(proto->get_type().type_data);
     auto paramTypes = funcType.get_params_types();
     auto retType = funcType.get_return_type();
 

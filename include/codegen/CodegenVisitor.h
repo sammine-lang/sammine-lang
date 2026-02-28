@@ -4,6 +4,7 @@
 
 #pragma once
 #include "TypeConverter.h"
+#include "ast/ASTProperties.h"
 #include "ast/AstBase.h"
 #include "ast/AstDecl.h"
 #include "codegen/LLVMRes.h"
@@ -52,11 +53,14 @@ private:
   // INFO: The collector is named Jasmine because she said on her discord status
   // once that she's a garbage woman lol
 
+  const AST::ASTProperties *props_ = nullptr;
+
 public:
   CgVisitor(std::shared_ptr<sammine_lang::LLVMRes> resPtr,
-            std::string module_name = "")
+            std::string module_name = "",
+            const AST::ASTProperties *props = nullptr)
       : resPtr(resPtr), module_name(std::move(module_name)),
-        type_converter(*resPtr) {}
+        type_converter(*resPtr), props_(props) {}
 
   void enter_new_scope() override;
   void exit_new_scope() override;

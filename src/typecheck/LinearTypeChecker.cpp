@@ -135,7 +135,8 @@ void LinearTypeChecker::check_branch_consistency(
 
 // ── Entry point ─────────────────────────────────────────────────────
 
-void LinearTypeChecker::check(ProgramAST *program) {
+void LinearTypeChecker::check(ProgramAST *program, const ASTProperties &props) {
+  props_ = &props;
   check_program(program);
 }
 
@@ -151,12 +152,12 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
 
   // Register linear parameters (including wrapper types with linear fields)
   for (auto &param : ast->Prototype->parameterVectors) {
-    if (param->type.is_linear) {
+    if (param->get_type().is_linear) {
       register_linear(param->name, param->get_location());
-    } else if (param->type.containsLinear()) {
+    } else if (param->get_type().containsLinear()) {
       register_linear(param->name, param->get_location());
       auto *info = find_linear(param->name);
-      register_inner_linear(*info, param->type, param->get_location());
+      register_inner_linear(*info, param->get_type(), param->get_location());
     }
   }
 
@@ -176,13 +177,13 @@ void LinearTypeChecker::check_block(BlockAST *ast) {
                       "Linear pointer from alloc is discarded"
                       " (must be stored in a variable)");
     } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt.get())) {
-      if (call->type.is_linear || call->type.containsLinear()) {
+      if (call->get_type().is_linear || call->get_type().containsLinear()) {
         this->add_error(
             call->get_location(),
             fmt::format(
                 "Return value of '{}' has linear type '{}' and must not be "
                 "discarded",
-                call->functionName.display(), call->type.to_string()));
+                call->functionName.display(), call->get_type().to_string()));
       }
     }
   }
@@ -238,7 +239,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     check_stmt(ast->Expression.get());
     // Register any linear vars from the destructured elements
     for (auto &var : ast->destructure_vars) {
-      if (var->type.is_linear)
+      if (var->get_type().is_linear)
         register_linear(var->name, var->get_location());
     }
     return;
@@ -249,13 +250,13 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     auto *info = find_linear(var->variableName);
     if (info) {
       consume(info, loc);
-      if (ast->type.is_linear) {
+      if (ast->get_type().is_linear) {
         register_linear(ast->TypedVar->name, loc);
-      } else if (ast->type.containsLinear()) {
+      } else if (ast->get_type().containsLinear()) {
         // Move of wrapper type — register inner linear tracking on dest
         register_linear(ast->TypedVar->name, loc);
         auto *new_info = find_linear(ast->TypedVar->name);
-        register_inner_linear(*new_info, ast->type, loc);
+        register_inner_linear(*new_info, ast->get_type(), loc);
       }
       return;
     }
@@ -267,12 +268,12 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
         consume(child, loc);
-        if (ast->type.is_linear) {
+        if (ast->get_type().is_linear) {
           register_linear(ast->TypedVar->name, loc);
-        } else if (ast->type.containsLinear()) {
+        } else if (ast->get_type().containsLinear()) {
           register_linear(ast->TypedVar->name, loc);
           auto *new_info = find_linear(ast->TypedVar->name);
-          register_inner_linear(*new_info, ast->type, loc);
+          register_inner_linear(*new_info, ast->get_type(), loc);
         }
         return;
       }
@@ -283,13 +284,13 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   check_stmt(ast->Expression.get());
 
   // If the variable itself is linear, register it
-  if (ast->type.is_linear) {
+  if (ast->get_type().is_linear) {
     register_linear(ast->TypedVar->name, loc);
-  } else if (ast->type.containsLinear()) {
+  } else if (ast->get_type().containsLinear()) {
     // Wrapper type: track inner linear fields (struct, tuple, array)
     register_linear(ast->TypedVar->name, loc);
     auto *new_info = find_linear(ast->TypedVar->name);
-    register_inner_linear(*new_info, ast->type, loc);
+    register_inner_linear(*new_info, ast->get_type(), loc);
   }
 }
 
@@ -314,7 +315,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     // LHS: check for overwrite without consuming, or re-register
     if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       auto *lhs_info = find_linear(lhs_var->variableName);
-      if (lhs_info && ast->RHS->type.is_linear) {
+      if (lhs_info && ast->RHS->get_type().is_linear) {
         if (lhs_info->state == VarState::Unconsumed) {
           this->add_error(
               ast->get_location(),
@@ -339,8 +340,9 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
 void LinearTypeChecker::check_call(CallExprAST *ast) {
   // Check each argument: if it's a variable referencing a linear var,
   // and the parameter type is linear, consume it.
-  if (ast->callee_func_type) {
-    auto &func_type = std::get<FunctionType>(ast->callee_func_type->type_data);
+  auto *cp = props_ ? props_->call(ast->id()) : nullptr;
+  if (cp && cp->callee_func_type) {
+    auto &func_type = std::get<FunctionType>(cp->callee_func_type->type_data);
     auto params = func_type.get_params_types();
     for (size_t i = 0; i < ast->arguments.size() && i < params.size(); i++) {
       if (auto *var =
@@ -499,13 +501,13 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
       return;
     }
     // Returning a type that contains a non-linear pointer — error (may dangle)
-    auto path = find_nonlinear_pointer_path(var->type);
+    auto path = find_nonlinear_pointer_path(var->get_type());
     if (path) {
       this->add_error(
           ast->get_location(),
           fmt::format("Cannot return '{}' of type '{}': {} "
                       "(may reference a local variable)",
-                      var->variableName, var->type.to_string(), *path));
+                      var->variableName, var->get_type().to_string(), *path));
       return;
     }
   }

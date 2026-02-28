@@ -1,8 +1,13 @@
 #pragma once
+#include <cstdint>
+
 //! \file AstDecl.h
 //! \brief Holds declaration for all the AST Nodes
 namespace sammine_lang {
 namespace AST {
+
+using NodeId = uint32_t;
+
 class Printable;
 class ProgramAST;
 class DefinitionAST;

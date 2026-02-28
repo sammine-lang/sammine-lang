@@ -4,12 +4,14 @@
 
 #pragma once
 #include "ast/AstDecl.h"
+#include "ast/ASTProperties.h"
 #include "lex/Lexer.h"
 #include "lex/Token.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
 #include "llvm/Support/Casting.h"
+#include <atomic>
 #include <stack>
 
 //! \file AstBase.h
@@ -73,8 +75,12 @@ enum class NodeKind {
 class Visitable;
 class AstBase;
 class ASTVisitor;
+class ASTProperties;
 
 struct ASTPrinter {
+  static void print(AstBase *t, const ASTProperties &props);
+  static void print(ProgramAST *t, const ASTProperties &props);
+  // Convenience overloads for debug/error paths that don't have props available
   static void print(AstBase *t);
   static void print(ProgramAST *t);
 };
@@ -334,6 +340,10 @@ public:
 
 class AstBase : public Visitable {
   NodeKind kind;
+  NodeId node_id_;
+
+  static inline std::atomic<NodeId> next_id_{0};
+  static inline ASTProperties *current_props_ = nullptr;
 
   void change_location(sammine_util::Location loc) {
     if (first_location) {
@@ -349,12 +359,14 @@ protected:
   sammine_util::Location location;
 
 public:
-  AstBase(NodeKind kind) : kind(kind) {}
+  AstBase(NodeKind kind) : kind(kind), node_id_(next_id_++) {}
+  NodeId id() const { return node_id_; }
+  static void reset_id_counter() { next_id_ = 0; }
+  static void set_properties(ASTProperties *p) { current_props_ = p; }
   NodeKind getKind() const { return kind; }
   // INFO: Parser error
   bool pe = false;
   llvm::Value *val;
-  Type type = Type::NonExistent();
   AstBase *join_location(AstBase *ast) {
     if (!ast)
       pe = true;
@@ -386,7 +398,17 @@ public:
     this->location = loc;
     first_location = false;
   }
-  bool synthesized() const { return this->type.synthesized(); }
+  bool synthesized() const { return get_type().synthesized(); }
+  Type get_type() const {
+    if (current_props_)
+      return current_props_->get_type(node_id_);
+    return Type::NonExistent();
+  }
+  Type set_type(const Type &t) {
+    if (current_props_)
+      current_props_->set_type(node_id_, t);
+    return t;
+  }
 };
 } // namespace AST
 } // namespace sammine_lang

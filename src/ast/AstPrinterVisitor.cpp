@@ -1,4 +1,5 @@
 #include "ast/Ast.h"
+#include "ast/ASTProperties.h"
 #include "ast/AstBase.h"
 #include "fmt/base.h"
 #include "fmt/format.h"
@@ -168,6 +169,16 @@ public:
   friend Printable;
 };
 
+void ASTPrinter::print(AstBase *ast, const ASTProperties &props) {
+  (void)props; // Will be used in later phases
+  auto vs = AstPrinterVisitor();
+  ast->accept_vis(&vs);
+}
+void ASTPrinter::print(ProgramAST *ast, const ASTProperties &props) {
+  (void)props; // Will be used in later phases
+  auto vs = AstPrinterVisitor();
+  ast->accept_vis(&vs);
+}
 void ASTPrinter::print(AstBase *ast) {
   auto vs = AstPrinterVisitor();
   ast->accept_vis(&vs);
@@ -352,7 +363,7 @@ void AstPrinterVisitor::generic_preprintln(AstBase *ast) {
                            ast->getTreeName() + " - !!ParserError!!"));
   else
     add_to_rep(fmt::format("{} {} - {}\n", tabs(), ast->getTreeName(),
-                           ast->type.to_string()));
+                           ast->get_type().to_string()));
   current_tabs += tab;
 }
 void AstPrinterVisitor::generic_preprint(AstBase *ast) {
@@ -362,7 +373,7 @@ void AstPrinterVisitor::generic_preprint(AstBase *ast) {
                            ast->getTreeName() + " - !!ParserError!!"));
   else
     add_to_rep(fmt::format("{} {} - {} : ", tabs(), ast->getTreeName(),
-                           ast->type.to_string()));
+                           ast->get_type().to_string()));
   current_tabs += tab;
 }
 void AstPrinterVisitor::add_to_rep(const std::string &s) {
@@ -435,13 +446,13 @@ void AstPrinterVisitor::preorder_walk(StringExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(NumberExprAST *ast) {
   add_to_rep(fmt::format("(num, type): (\"{}\", {})", ast->number,
-                         ast->type.to_string()));
+                         ast->get_type().to_string()));
 }
 void AstPrinterVisitor::preorder_walk(BoolExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(CharExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(VariableExprAST *ast) {
   add_to_rep(fmt::format("(var_name, type): (\"{}\", {})", ast->variableName,
-                         ast->type.to_string()));
+                         ast->get_type().to_string()));
 }
 void AstPrinterVisitor::preorder_walk(BlockAST *ast) {}
 void AstPrinterVisitor::preorder_walk(IfExprAST *ast) {}
@@ -451,7 +462,7 @@ void AstPrinterVisitor::preorder_walk(UnitExprAST *ast) {
 void AstPrinterVisitor::preorder_walk(TypedVarAST *ast) {
   auto type_str = ast->type_expr ? ast->type_expr->to_string() : "";
   add_to_rep(fmt::format("(name, type_expr, type): (\"{}\", \"{}\", {})",
-                         ast->name, type_str, ast->type.to_string()));
+                         ast->name, type_str, ast->get_type().to_string()));
 }
 //
 // post order
@@ -671,7 +682,7 @@ void AstPrinterVisitor::preorder_walk(TypeClassDeclAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
   add_to_rep(fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name,
-                         ast->concrete_type.to_string()));
+                         ast->concrete_type_expr ? ast->concrete_type_expr->to_string() : "?"));
 }
 void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
