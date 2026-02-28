@@ -57,6 +57,9 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
               fmt::format("Type annotation '{}' incompatible with tuple "
                           "element type '{}'",
                           ann_type.to_string(), elem_type.to_string()));
+          if (auto hint = incompatibility_hint(ann_type, elem_type))
+            this->add_diagnostics(ast->destructure_vars[i]->get_location(),
+                                  *hint);
           return ast->type = Type::Poisoned();
         }
         elem_type = ann_type;
@@ -227,6 +230,9 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
                           ast->functionName.module, vi.name, i + 1,
                           vi.payload_types[i].to_string(),
                           arg_type.to_string()));
+          if (auto hint =
+                  incompatibility_hint(vi.payload_types[i], arg_type))
+            this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
           return ast->type = Type::Poisoned();
         }
       }
@@ -355,6 +361,8 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
             fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
                         ast->functionName.display(), expected.to_string(),
                         arg_type.to_string()));
+        if (auto hint = incompatibility_hint(expected, arg_type))
+          this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
         return ast->type = Type::Poisoned();
       }
     }
@@ -506,6 +514,9 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
         fmt::format("Incompatible types for operator '{}': {} and {}",
                     ast->Op->lexeme, ast->LHS->type.to_string(),
                     ast->RHS->type.to_string()));
+    if (auto hint =
+            incompatibility_hint(ast->LHS->type, ast->RHS->type))
+      this->add_diagnostics(ast->Op->get_location(), *hint);
     return ast->type = Type::Poisoned();
   }
 
@@ -1021,6 +1032,8 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
           fmt::format("Field '{}': expected type {}, got {}",
                       ast->field_names[i], expected.to_string(),
                       actual.to_string()));
+      if (auto hint = incompatibility_hint(expected, actual))
+        this->add_diagnostics(ast->field_values[i]->get_location(), *hint);
       return ast->type = Type::Poisoned();
     }
   }
@@ -1144,6 +1157,8 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
               fmt::format(
                   "Case arms have incompatible types: expected {}, got {}",
                   result_type.to_string(), arm_type.to_string()));
+          if (auto hint = incompatibility_hint(result_type, arm_type))
+            this->add_diagnostics(arm.body->get_location(), *hint);
           had_error = true;
         }
       }
@@ -1204,6 +1219,8 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
             fmt::format(
                 "Case arms have incompatible types: expected {}, got {}",
                 result_type.to_string(), arm_type.to_string()));
+        if (auto hint = incompatibility_hint(result_type, arm_type))
+          this->add_diagnostics(arm.body->get_location(), *hint);
         had_error = true;
       }
     }

@@ -179,6 +179,11 @@ bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
                                  error_count - 1,
                                  (error_count - 1 == 1) ? "error" : "errors"));
     this->add_error(arr_lit->elements[first_error_idx]->get_location(), msgs);
+    if (auto hint = incompatibility_hint(
+            expected_elem,
+            arr_lit->elements[first_error_idx]->accept_synthesis(this)))
+      this->add_diagnostics(
+          arr_lit->elements[first_error_idx]->get_location(), *hint);
     ast->type = Type::Poisoned();
     arr_lit->type = Type::Poisoned();
     return true;
@@ -228,6 +233,8 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
                     fmt::format("Type mismatch: expression has type {}, "
                                 "but variable declared as {}",
                                 from.to_string(), to.to_string()));
+    if (auto hint = incompatibility_hint(to, from))
+      this->add_diagnostics(ast->Expression->get_location(), *hint);
     ast->type = Type::Poisoned();
   } else if (from.is_polymorphic_numeric()) {
     resolve_literal_type(ast->Expression.get(), to);
@@ -450,6 +457,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
                                   i + 1, ast->functionName.display(),
                                   params[i].to_string(),
                                   ast->arguments[i]->type.to_string()));
+      if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->type))
+        this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
     } else if (ast->arguments[i]->type.is_polymorphic_numeric()) {
       resolve_literal_type(ast->arguments[i].get(), params[i]);
     }
@@ -495,6 +504,11 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
               (error_count - 1 == 1) ? "error" : "errors"));
         this->add_error(arr_lit->elements[first_error_idx]->get_location(),
                         msgs);
+        if (auto hint = incompatibility_hint(
+                expected_elem,
+                arr_lit->elements[first_error_idx]->accept_synthesis(this)))
+          this->add_diagnostics(
+              arr_lit->elements[first_error_idx]->get_location(), *hint);
       }
       arr_lit->type = return_type;
       ast->accept_synthesis(this);
@@ -516,6 +530,8 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
                                 "{} but got {}",
                                 scope_fn->getFunctionName(),
                                 return_type.to_string(), t.to_string()));
+    if (auto hint = incompatibility_hint(return_type, t))
+      this->add_diagnostics(ast->get_location(), *hint);
   } else if (t.is_polymorphic_numeric()) {
     resolve_literal_type(ast->return_expr.get(), return_type);
   }

@@ -156,6 +156,62 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
   return std::nullopt;
 }
 
+std::optional<std::string> incompatibility_hint(const Type &expected,
+                                                const Type &actual) {
+  // Linearity mismatch: both pointers but different is_linear
+  if (expected.type_kind == TypeKind::Pointer &&
+      actual.type_kind == TypeKind::Pointer &&
+      expected.is_linear != actual.is_linear) {
+    auto pointee = std::get<PointerType>(expected.type_data)
+                       .get_pointee()
+                       .to_string();
+    if (actual.is_linear) {
+      return fmt::format(
+          "note: 'ptr<{}>' is a linear (owned) pointer, 'ptr<{}>' is "
+          "non-linear — these are incompatible",
+          pointee, pointee);
+    } else {
+      return fmt::format(
+          "note: 'ptr<{}>' is non-linear, 'ptr<{}>' is a linear (owned) "
+          "pointer — these are incompatible",
+          pointee, pointee);
+    }
+  }
+
+  // Mutability mismatch
+  if (expected.is_mutable && !actual.is_mutable && !actual.is_literal()) {
+    return "note: expected a mutable value, but got an immutable one";
+  }
+
+  // Signed/unsigned mismatch
+  bool expected_signed = expected.type_kind == TypeKind::I32_t ||
+                         expected.type_kind == TypeKind::I64_t;
+  bool expected_unsigned = expected.type_kind == TypeKind::U32_t ||
+                           expected.type_kind == TypeKind::U64_t;
+  bool actual_signed =
+      actual.type_kind == TypeKind::I32_t || actual.type_kind == TypeKind::I64_t;
+  bool actual_unsigned =
+      actual.type_kind == TypeKind::U32_t || actual.type_kind == TypeKind::U64_t;
+  if ((expected_signed && actual_unsigned) ||
+      (expected_unsigned && actual_signed)) {
+    return "note: signed and unsigned integer types cannot be mixed";
+  }
+
+  // Tuple arity mismatch
+  if (expected.type_kind == TypeKind::Tuple &&
+      actual.type_kind == TypeKind::Tuple) {
+    auto &et = std::get<TupleType>(expected.type_data);
+    auto &at = std::get<TupleType>(actual.type_data);
+    if (et.size() != at.size()) {
+      return fmt::format(
+          "note: tuples have different sizes ({} vs {} elements)", et.size(),
+          at.size());
+    }
+  }
+
+  return std::nullopt;
+}
+
 bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
   // Never is compatible with any type (bottom type subtyping rule)
   // Since Never represents "no value is ever produced", it can be assigned

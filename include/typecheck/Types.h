@@ -367,6 +367,9 @@ struct Type {
   operator std::string() const { return to_string(); }
 };
 
+std::optional<std::string> incompatibility_hint(const Type &expected,
+                                                const Type &actual);
+
 struct TypeMapOrdering {
   // TODO: Planned for future subtyping support — don't remove
   std::map<Type, Type> type_map;
