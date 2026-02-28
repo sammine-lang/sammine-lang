@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 77
+
+import std;
+
+let main() -> i32 {
+  let mut x : i32 = 77;
+  let p : ptr<i32> = &x;
+  let v : i32 = *p;
+  std::printf("%d\n", v);
+  return 0;
+}

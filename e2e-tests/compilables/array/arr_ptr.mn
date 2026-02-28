@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 100
+# CHECK: 200
+# CHECK: 999
+
+import std;
+
+let main() -> i32 {
+  let x : i32 = 100;
+  let y : i32 = 200;
+  let z : i32 = 300;
+  let mut a : [ptr<i32>; 3] = [&x, &y, &z];
+  std::printf("%d\n", *a[0]);
+  std::printf("%d\n", *a[1]);
+  # Write a new pointer into the array
+  let w : i32 = 999;
+  a[2] = &w;
+  std::printf("%d\n", *a[2]);
+  return 0;
+}

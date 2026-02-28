@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: done
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  if true {
+    free(p);
+  } else {
+    free(p);
+  };
+  std::printf("done\n");
+  return 0;
+}

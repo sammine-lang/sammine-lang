@@ -1,0 +1,22 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 7
+# CHECK: 42
+# CHECK: 13
+# CHECK: 99
+
+import std;
+
+struct Node { id: i32, val: ptr<i32>, };
+
+let main() -> i32 {
+  let a : i32 = 42;
+  let b : i32 = 99;
+  let s0 : Node = Node { id: 7, val: &a };
+  let s1 : Node = Node { id: 13, val: &b };
+  let arr : [Node; 2] = [s0, s1];
+  std::printf("%d\n", arr[0].id);
+  std::printf("%d\n", *arr[0].val);
+  std::printf("%d\n", arr[1].id);
+  std::printf("%d\n", *arr[1].val);
+  return 0;
+}

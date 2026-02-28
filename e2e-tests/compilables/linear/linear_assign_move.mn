@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 55
+
+import std;
+
+# Test: move via let-binding, original is consumed, new binding must be freed
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 55;
+  let q = p;
+  let v : i32 = *q;
+  free(q);
+  std::printf("%d\n", v);
+  return 0;
+}

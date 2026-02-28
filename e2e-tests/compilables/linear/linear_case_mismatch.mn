@@ -1,0 +1,15 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: some branches but not others
+
+enum Color = Red | Green | Blue;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  let c : Color = Red;
+  case c {
+    Color::Red => free(p),
+    Color::Green => *p = 1,
+    Color::Blue => free(p),
+  };
+  return 0;
+}

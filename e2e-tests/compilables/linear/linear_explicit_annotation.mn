@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+
+import std;
+
+let main() -> i32 {
+  let p : 'ptr<i32> = alloc<i32>(1);
+  *p = 42;
+  let v : i32 = *p;
+  free(p);
+  std::printf("%d\n", v);
+  return 0;
+}

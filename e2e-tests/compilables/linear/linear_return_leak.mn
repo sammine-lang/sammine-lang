@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  return 0;
+}

@@ -1,0 +1,22 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+# CHECK: 7
+# CHECK: 99
+
+import std;
+
+struct Pair { vals: [i32; 2], tag: i32, };
+
+let get_tag(p: Pair) -> i32 {
+  return p.tag;
+}
+
+let main() -> i32 {
+  let p : Pair = Pair { vals: [10, 20], tag: 42 };
+  let q : Pair = Pair { vals: [3, 4], tag: 7 };
+  let r : Pair = Pair { vals: [0, 0], tag: 99 };
+  std::printf("%d\n", get_tag(p));
+  std::printf("%d\n", get_tag(q));
+  std::printf("%d\n", get_tag(r));
+  return 0;
+}

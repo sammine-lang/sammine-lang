@@ -1,0 +1,14 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 60
+
+import std;
+
+let sum_array(a: [i32; 3]) -> i32 {
+  return a[0] + a[1] + a[2];
+}
+
+let main() -> i32 {
+  let result : i32 = sum_array([10, 20, 30]);
+  std::printf("%d\n", result);
+  return 0;
+}

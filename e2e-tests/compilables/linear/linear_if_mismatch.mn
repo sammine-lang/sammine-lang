@@ -1,0 +1,12 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: some branches but not others
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  if true {
+    free(p);
+  } else {
+    *p = 1;
+  };
+  return 0;
+}

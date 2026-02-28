@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 99
+
+# Test: struct with non-linear pointer used locally (no return) is fine
+import std;
+
+struct Wrapper {
+  data: ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let x : i32 = 99;
+  let p : ptr<i32> = &x;
+  let w : Wrapper = Wrapper { data: p, tag: 1 };
+  std::printf("%d\n", *(w.data));
+  return 0;
+}

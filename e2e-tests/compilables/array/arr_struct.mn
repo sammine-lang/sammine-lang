@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 10
+# CHECK: 20
+# CHECK: 30
+# CHECK: 40
+
+import std;
+
+struct Point { x: i32, y: i32, };
+
+let main() -> i32 {
+  let a : [Point; 2] = [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }];
+  std::printf("%d\n", a[0].x);
+  std::printf("%d\n", a[0].y);
+  std::printf("%d\n", a[1].x);
+  std::printf("%d\n", a[1].y);
+  return 0;
+}

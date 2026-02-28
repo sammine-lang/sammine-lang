@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: got val: 42
+# CHECK: got nothing
+
+import std;
+
+enum MaybePtr = Some(ptr<i32>) | None;
+
+let check(m: MaybePtr) -> i32 {
+  case m {
+    MaybePtr::Some(p) => std::printf("got val: %d\n", *p),
+    MaybePtr::None => std::printf("got nothing\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  let x : i32 = 42;
+  let s : MaybePtr = MaybePtr::Some(&x);
+  let n : MaybePtr = MaybePtr::None;
+  check(s);
+  check(n);
+  return 0;
+}

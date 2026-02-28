@@ -1,0 +1,10 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: already been consumed
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  let q = p;
+  free(p);
+  free(q);
+  return 0;
+}

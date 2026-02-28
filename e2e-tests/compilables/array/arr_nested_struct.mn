@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1
+# CHECK: 2
+# CHECK: 3
+# CHECK: 4
+# CHECK: 5
+# CHECK: 6
+
+import std;
+
+struct Inner { a: i32, b: i32, };
+struct Outer { inner: Inner, c: i32, };
+
+let main() -> i32 {
+  let a : [Outer; 2] = [Outer { inner: Inner { a: 1, b: 2 }, c: 3 }, Outer { inner: Inner { a: 4, b: 5 }, c: 6 }];
+  std::printf("%d\n", a[0].inner.a);
+  std::printf("%d\n", a[0].inner.b);
+  std::printf("%d\n", a[0].c);
+  std::printf("%d\n", a[1].inner.a);
+  std::printf("%d\n", a[1].inner.b);
+  std::printf("%d\n", a[1].c);
+  return 0;
+}

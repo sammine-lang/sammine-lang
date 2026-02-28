@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 10
+# CHECK: 20
+# CHECK: 30
+
+import std;
+
+let main() -> i32 {
+  let x : i32 = 10;
+  let y : i32 = 20;
+  let z : i32 = 30;
+  let p : ptr<i32> = &x;
+  let q : ptr<i32> = &y;
+  let r : ptr<i32> = &z;
+  let a : [ptr<ptr<i32>>; 3] = [&p, &q, &r];
+  std::printf("%d\n", **a[0]);
+  std::printf("%d\n", **a[1]);
+  std::printf("%d\n", **a[2]);
+  return 0;
+}

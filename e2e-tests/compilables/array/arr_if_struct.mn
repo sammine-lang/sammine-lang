@@ -1,0 +1,28 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1
+# CHECK: 2
+# CHECK: 10
+# CHECK: 20
+
+import std;
+
+struct Point { x: i32, y: i32, };
+
+let main() -> i32 {
+  let flag : i32 = 1;
+  let a : [Point; 2] = if flag == 1 {
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+  } else {
+    [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }]
+  };
+  let b : [Point; 2] = if flag == 0 {
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
+  } else {
+    [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }]
+  };
+  std::printf("%d\n", a[0].x);
+  std::printf("%d\n", a[0].y);
+  std::printf("%d\n", b[0].x);
+  std::printf("%d\n", b[0].y);
+  return 0;
+}
