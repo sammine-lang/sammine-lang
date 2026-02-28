@@ -1,0 +1,29 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+# CHECK-NEXT: 100
+# CHECK-NEXT: 52
+# CHECK-NEXT: 420
+# CHECK-NEXT: 5
+# CHECK-NEXT: 2
+
+import std;
+
+let main() -> i32 {
+  let x: u32 = 42u32;
+  std::printf("%u\n", x);
+
+  let y: u64 = 100u64;
+  std::printf("%lu\n", y);
+
+  let a: u32 = 10u32;
+  let b: u32 = 42u32;
+  std::printf("%u\n", a + b);
+  std::printf("%u\n", a * b);
+
+  let c: u32 = 17u32;
+  let d: u32 = 3u32;
+  std::printf("%u\n", c / d);
+  std::printf("%u\n", c % d);
+
+  return 0;
+}

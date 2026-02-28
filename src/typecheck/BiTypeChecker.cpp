@@ -642,13 +642,18 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
 
   static const BuiltinEntry entries[] = {
       {"Add", "add", Type::I32_t()}, {"Add", "add", Type::I64_t()},
+      {"Add", "add", Type::U32_t()}, {"Add", "add", Type::U64_t()},
       {"Add", "add", Type::F64_t()}, {"Add", "add", Type::Char()},
       {"Sub", "sub", Type::I32_t()}, {"Sub", "sub", Type::I64_t()},
+      {"Sub", "sub", Type::U32_t()}, {"Sub", "sub", Type::U64_t()},
       {"Sub", "sub", Type::F64_t()}, {"Mul", "mul", Type::I32_t()},
-      {"Mul", "mul", Type::I64_t()}, {"Mul", "mul", Type::F64_t()},
+      {"Mul", "mul", Type::I64_t()}, {"Mul", "mul", Type::U32_t()},
+      {"Mul", "mul", Type::U64_t()}, {"Mul", "mul", Type::F64_t()},
       {"Div", "div", Type::I32_t()}, {"Div", "div", Type::I64_t()},
+      {"Div", "div", Type::U32_t()}, {"Div", "div", Type::U64_t()},
       {"Div", "div", Type::F64_t()}, {"Mod", "mod", Type::I32_t()},
-      {"Mod", "mod", Type::I64_t()},
+      {"Mod", "mod", Type::I64_t()}, {"Mod", "mod", Type::U32_t()},
+      {"Mod", "mod", Type::U64_t()},
   };
 
   for (auto &e : entries) {

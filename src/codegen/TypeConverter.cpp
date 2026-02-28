@@ -13,8 +13,10 @@ namespace sammine_lang::AST {
 llvm::Type *TypeConverter::get_type(Type t) {
   switch (t.type_kind) {
   case TypeKind::I32_t:
+  case TypeKind::U32_t:
     return llvm::Type::getInt32Ty(context);
   case TypeKind::I64_t:
+  case TypeKind::U64_t:
     return llvm::Type::getInt64Ty(context);
   case TypeKind::F64_t:
     return llvm::Type::getDoubleTy(context);
@@ -118,6 +120,26 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
       return CmpInst::ICMP_SGE;
     default:
       sammine_util::abort("Invalid token for integer comparison");
+    }
+  }
+  case TypeKind::U32_t:
+  case TypeKind::U64_t: {
+    // Unsigned integer comparisons
+    switch (tok) {
+    case TokenType::TokEQUAL:
+      return CmpInst::ICMP_EQ;
+    case TokenType::TokNOTEqual:
+      return CmpInst::ICMP_NE;
+    case TokenType::TokLESS:
+      return CmpInst::ICMP_ULT;
+    case TokenType::TokLessEqual:
+      return CmpInst::ICMP_ULE;
+    case TokenType::TokGREATER:
+      return CmpInst::ICMP_UGT;
+    case TokenType::TokGreaterEqual:
+      return CmpInst::ICMP_UGE;
+    default:
+      sammine_util::abort("Invalid token for unsigned integer comparison");
     }
   }
   case TypeKind::F64_t: {

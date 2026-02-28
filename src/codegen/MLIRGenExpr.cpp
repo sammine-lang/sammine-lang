@@ -61,7 +61,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     if (et.is_integer_backed()) {
       auto &vi = et.get_variant(ast->enum_variant_index);
       return mlir::arith::ConstantIntOp::create(
-                 builder, location, builder.getI32Type(),
+                 builder, location, getEnumBackingMLIRType(et),
                  vi.discriminant_value.value())
           .getResult();
     }
@@ -188,10 +188,34 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       return mlir::arith::MulIOp::create(builder, location, lhs, rhs)
           .getResult();
     case TokDIV:
+      if (isUnsignedIntegerType(resultType))
+        return mlir::arith::DivUIOp::create(builder, location, lhs, rhs)
+            .getResult();
       return mlir::arith::DivSIOp::create(builder, location, lhs, rhs)
           .getResult();
     case TokMOD:
+      if (isUnsignedIntegerType(resultType))
+        return mlir::arith::RemUIOp::create(builder, location, lhs, rhs)
+            .getResult();
       return mlir::arith::RemSIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokAndLogical:
+      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokORLogical:
+      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokXOR:
+      return mlir::arith::XOrIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokSHL:
+      return mlir::arith::ShLIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokSHR:
+      if (isUnsignedIntegerType(resultType))
+        return mlir::arith::ShRUIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      return mlir::arith::ShRSIOp::create(builder, location, lhs, rhs)
           .getResult();
     default:
       break;
@@ -227,6 +251,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
     const auto &lhsType = ast->LHS->type;
 
     if (isIntegerType(lhsType)) {
+      bool is_unsigned = isUnsignedIntegerType(lhsType);
       mlir::arith::CmpIPredicate pred;
       switch (ast->Op->tok_type) {
       case TokEQUAL:
@@ -236,16 +261,20 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         pred = mlir::arith::CmpIPredicate::ne;
         break;
       case TokLESS:
-        pred = mlir::arith::CmpIPredicate::slt;
+        pred = is_unsigned ? mlir::arith::CmpIPredicate::ult
+                           : mlir::arith::CmpIPredicate::slt;
         break;
       case TokLessEqual:
-        pred = mlir::arith::CmpIPredicate::sle;
+        pred = is_unsigned ? mlir::arith::CmpIPredicate::ule
+                           : mlir::arith::CmpIPredicate::sle;
         break;
       case TokGREATER:
-        pred = mlir::arith::CmpIPredicate::sgt;
+        pred = is_unsigned ? mlir::arith::CmpIPredicate::ugt
+                           : mlir::arith::CmpIPredicate::sgt;
         break;
       case TokGreaterEqual:
-        pred = mlir::arith::CmpIPredicate::sge;
+        pred = is_unsigned ? mlir::arith::CmpIPredicate::uge
+                           : mlir::arith::CmpIPredicate::sge;
         break;
       case TokAND:
         return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
@@ -342,6 +371,37 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       }
       return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
           .getResult();
+    }
+  }
+
+  // Integer-backed enum bitwise ops: values are bare integers
+  if (resultType.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(resultType.type_data);
+    if (et.is_integer_backed() && ast->Op->is_bitwise()) {
+      switch (ast->Op->tok_type) {
+      case TokAndLogical:
+        return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      case TokORLogical:
+        return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      case TokXOR:
+        return mlir::arith::XOrIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      case TokSHL:
+        return mlir::arith::ShLIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      case TokSHR: {
+        auto bt = et.get_backing_type();
+        if (bt == TypeKind::U32_t || bt == TypeKind::U64_t)
+          return mlir::arith::ShRUIOp::create(builder, location, lhs, rhs)
+              .getResult();
+        return mlir::arith::ShRSIOp::create(builder, location, lhs, rhs)
+            .getResult();
+      }
+      default:
+        break;
+      }
     }
   }
 
@@ -709,7 +769,7 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
   if (et.is_integer_backed()) {
     auto &vi = et.get_variant(ast->enum_variant_index);
     return mlir::arith::ConstantIntOp::create(
-               builder, location, builder.getI32Type(),
+               builder, location, getEnumBackingMLIRType(et),
                vi.discriminant_value.value())
         .getResult();
   }
@@ -1131,7 +1191,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
     // Use the actual discriminant value from the EnumType
     auto &vi = et.get_variant(arm.pattern.variant_index);
     auto tagConst = mlir::arith::ConstantIntOp::create(
-        builder, location, builder.getI32Type(),
+        builder, location, getEnumBackingMLIRType(et),
         vi.discriminant_value.value());
     auto cmp = mlir::arith::CmpIOp::create(
         builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);

@@ -571,6 +571,10 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
       ast->type = Type::I32_t();
     else if (suffix == "i64")
       ast->type = Type::I64_t();
+    else if (suffix == "u32")
+      ast->type = Type::U32_t();
+    else if (suffix == "u64")
+      ast->type = Type::U64_t();
     else if (suffix == "f64")
       ast->type = Type::F64_t();
     else
@@ -744,6 +748,8 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
   auto count_type = ast->operand->accept_synthesis(this);
   if (count_type.type_kind != TypeKind::I32_t &&
       count_type.type_kind != TypeKind::I64_t &&
+      count_type.type_kind != TypeKind::U32_t &&
+      count_type.type_kind != TypeKind::U64_t &&
       count_type.type_kind != TypeKind::Integer) {
     this->add_error(ast->operand->get_location(),
                     fmt::format("alloc count must be an integer, got '{}'",
@@ -820,7 +826,9 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     idx_type = Type::I32_t();
   }
   if (idx_type.type_kind != TypeKind::I32_t &&
-      idx_type.type_kind != TypeKind::I64_t) {
+      idx_type.type_kind != TypeKind::I64_t &&
+      idx_type.type_kind != TypeKind::U32_t &&
+      idx_type.type_kind != TypeKind::U64_t) {
     this->add_error(ast->get_location(),
                     fmt::format("Array index must be integer, got '{}'",
                                 idx_type.to_string()));
@@ -862,6 +870,14 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
     return ast->type;
 
   auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind == TypeKind::U32_t ||
+      operand_type.type_kind == TypeKind::U64_t) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Cannot negate unsigned type '{}'",
+                    operand_type.to_string()));
+    return ast->type = Type::Poisoned();
+  }
   if (operand_type.type_kind != TypeKind::I32_t &&
       operand_type.type_kind != TypeKind::I64_t &&
       operand_type.type_kind != TypeKind::F64_t &&

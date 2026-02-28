@@ -368,7 +368,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
   auto *R = ast->RHS->val;
   auto &lhs_type = ast->LHS->type;
   bool is_int = lhs_type == Type::I32_t() || lhs_type == Type::I64_t() ||
+                lhs_type == Type::U32_t() || lhs_type == Type::U64_t() ||
                 lhs_type == Type::Char();
+  bool is_uint = lhs_type == Type::U32_t() || lhs_type == Type::U64_t();
   bool is_float = lhs_type == Type::F64_t();
 
   auto tok = ast->Op->tok_type;
@@ -403,7 +405,9 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
     } else
       this->abort();
   } else if (tok == TokenType::TokDIV) {
-    if (is_int)
+    if (is_uint)
+      ast->val = resPtr->Builder->CreateUDiv(L, R, "div_expr");
+    else if (is_int)
       ast->val = resPtr->Builder->CreateSDiv(L, R, "div_expr");
     else if (is_float)
       ast->val = resPtr->Builder->CreateFDiv(L, R, "div_expr");
@@ -424,13 +428,28 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
           type_converter.get_cmp_func(lhs_type, ast->RHS->type, tok), L, R);
     }
   } else if (tok == TokMOD) {
-    if (is_int)
+    if (is_uint)
+      ast->val = resPtr->Builder->CreateURem(L, R);
+    else if (is_int)
       ast->val = resPtr->Builder->CreateSRem(L, R);
     else if (!ast->resolved_op_method.empty()) {
       auto *fn = resPtr->Module->getFunction(ast->resolved_op_method);
       ast->val = resPtr->Builder->CreateCall(fn, {L, R});
     } else
       this->abort();
+  } else if (tok == TokAndLogical) {
+    ast->val = resPtr->Builder->CreateAnd(L, R);
+  } else if (tok == TokORLogical) {
+    ast->val = resPtr->Builder->CreateOr(L, R);
+  } else if (tok == TokXOR) {
+    ast->val = resPtr->Builder->CreateXor(L, R);
+  } else if (tok == TokSHL) {
+    ast->val = resPtr->Builder->CreateShl(L, R);
+  } else if (tok == TokSHR) {
+    if (is_uint)
+      ast->val = resPtr->Builder->CreateLShr(L, R);
+    else
+      ast->val = resPtr->Builder->CreateAShr(L, R);
   } else {
     LOG({ fmt::print(stderr, "{}\n", ast->Op->lexeme); });
     this->abort();
@@ -447,6 +466,14 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::I64_t:
     ast->val = llvm::ConstantInt::get(
         *resPtr->Context, llvm::APInt(64, std::stoll(ast->number), true));
+    break;
+  case TypeKind::U32_t:
+    ast->val = llvm::ConstantInt::get(
+        *resPtr->Context, llvm::APInt(32, std::stoul(ast->number), false));
+    break;
+  case TypeKind::U64_t:
+    ast->val = llvm::ConstantInt::get(
+        *resPtr->Context, llvm::APInt(64, std::stoull(ast->number), false));
     break;
   case TypeKind::F64_t:
     ast->val = llvm::ConstantFP::get(*resPtr->Context,
@@ -550,6 +577,18 @@ void CgVisitor::visit(IfExprAST *ast) {
         ast->bool_expr->val,
         llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(64, 0)),
         "ifcond_i64");
+    break;
+  case TypeKind::U32_t:
+    ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
+        ast->bool_expr->val,
+        llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(32, 0)),
+        "ifcond_u32");
+    break;
+  case TypeKind::U64_t:
+    ast->bool_expr->val = resPtr->Builder->CreateICmpNE(
+        ast->bool_expr->val,
+        llvm::ConstantInt::get(*resPtr->Context, llvm::APInt(64, 0)),
+        "ifcond_u64");
     break;
   case TypeKind::F64_t:
     ast->bool_expr->val = resPtr->Builder->CreateFCmpONE(

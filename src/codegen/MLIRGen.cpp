@@ -162,9 +162,11 @@ void MLIRGenImpl::declareRuntimeFunctions() {
 mlir::Type MLIRGenImpl::convertType(const Type &type) {
   switch (type.type_kind) {
   case TypeKind::I32_t:
+  case TypeKind::U32_t:
   case TypeKind::Integer:
     return builder.getI32Type();
   case TypeKind::I64_t:
+  case TypeKind::U64_t:
     return builder.getI64Type();
   case TypeKind::F64_t:
   case TypeKind::Flt:
@@ -195,7 +197,7 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
     if (et.is_integer_backed())
-      return builder.getI32Type();
+      return getEnumBackingMLIRType(et);
     return enumTypes.at(et.get_name().mangled());
   }
   case TypeKind::Never:
@@ -210,8 +212,15 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
 bool MLIRGenImpl::isIntegerType(const Type &type) {
   return type.type_kind == TypeKind::I32_t ||
          type.type_kind == TypeKind::I64_t ||
+         type.type_kind == TypeKind::U32_t ||
+         type.type_kind == TypeKind::U64_t ||
          type.type_kind == TypeKind::Integer ||
          type.type_kind == TypeKind::Char;
+}
+
+bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
+  return type.type_kind == TypeKind::U32_t ||
+         type.type_kind == TypeKind::U64_t;
 }
 
 bool MLIRGenImpl::isFloatType(const Type &type) {
@@ -220,6 +229,19 @@ bool MLIRGenImpl::isFloatType(const Type &type) {
 
 bool MLIRGenImpl::isBoolType(const Type &type) {
   return type.type_kind == TypeKind::Bool;
+}
+
+mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
+  switch (et.get_backing_type()) {
+  case TypeKind::I32_t:
+  case TypeKind::U32_t:
+    return builder.getI32Type();
+  case TypeKind::I64_t:
+  case TypeKind::U64_t:
+    return builder.getI64Type();
+  default:
+    sammine_util::abort("Invalid enum backing type");
+  }
 }
 
 // ===--- Definition emission ---===
@@ -377,9 +399,11 @@ mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
 int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   switch (type.type_kind) {
   case TypeKind::I32_t:
+  case TypeKind::U32_t:
   case TypeKind::Integer:
     return 4;
   case TypeKind::I64_t:
+  case TypeKind::U64_t:
     return 8;
   case TypeKind::F64_t:
   case TypeKind::Flt:
@@ -416,8 +440,10 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
-    if (et.is_integer_backed())
-      return 4; // bare i32
+    if (et.is_integer_backed()) {
+      auto bt = et.get_backing_type();
+      return (bt == TypeKind::I64_t || bt == TypeKind::U64_t) ? 8 : 4;
+    }
     int64_t max_payload = 0;
     for (auto &vi : et.get_variants()) {
       int64_t variant_size = 0;

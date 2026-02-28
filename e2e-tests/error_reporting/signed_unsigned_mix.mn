@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Incompatible types for operator '+': i32 and u32
+
+let main() -> i32 {
+  let x: i32 = 10;
+  let y: u32 = 20u32;
+  let z: i32 = x + y;
+  return 0;
+}

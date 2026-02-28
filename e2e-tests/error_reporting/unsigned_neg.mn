@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot negate unsigned type 'u32'
+
+let main() -> i32 {
+  let x: u32 = 42u32;
+  let y: u32 = -x;
+  return 0;
+}

@@ -13,6 +13,8 @@
 enum class TypeKind {
   I32_t,
   I64_t,
+  U32_t,
+  U64_t,
   F64_t,
   Unit,
   Bool,
@@ -101,6 +103,7 @@ public:
 private:
   std::vector<VariantInfo> variants;
   bool integer_backed_ = false;
+  TypeKind backing_type_ = TypeKind::I32_t;
 
 public:
   bool operator==(const EnumType &t) const;
@@ -111,8 +114,10 @@ public:
   const VariantInfo &get_variant(size_t idx) const { return variants[idx]; }
   size_t variant_count() const { return variants.size(); }
   bool is_integer_backed() const { return integer_backed_; }
+  TypeKind get_backing_type() const { return backing_type_; }
   EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants,
-           bool integer_backed = false);
+           bool integer_backed = false,
+           TypeKind backing_type = TypeKind::I32_t);
 };
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, std::string, std::monostate>;
@@ -126,6 +131,8 @@ struct Type {
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
   static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
   static Type I64_t() { return Type{TypeKind::I64_t, std::monostate()}; }
+  static Type U32_t() { return Type{TypeKind::U32_t, std::monostate()}; }
+  static Type U64_t() { return Type{TypeKind::U64_t, std::monostate()}; }
   static Type F64_t() { return Type{TypeKind::F64_t, std::monostate()}; }
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
   static Type Char() { return Type{TypeKind::Char, std::monostate()}; }
@@ -157,9 +164,11 @@ struct Type {
   }
   static Type Enum(sammine_util::QualifiedName name,
                    std::vector<EnumType::VariantInfo> variants,
-                   bool integer_backed = false) {
+                   bool integer_backed = false,
+                   TypeKind backing_type = TypeKind::I32_t) {
     return Type{TypeKind::Enum,
-                EnumType(std::move(name), std::move(variants), integer_backed)};
+                EnumType(std::move(name), std::move(variants), integer_backed,
+                         backing_type)};
   }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
@@ -184,6 +193,10 @@ struct Type {
       return "i32";
     case TypeKind::I64_t:
       return "i64";
+    case TypeKind::U32_t:
+      return "u32";
+    case TypeKind::U64_t:
+      return "u64";
     case TypeKind::F64_t:
       return "f64";
     case TypeKind::Unit:
@@ -242,6 +255,8 @@ struct Type {
     switch (type_kind) {
     case TypeKind::I32_t:
     case TypeKind::I64_t:
+    case TypeKind::U32_t:
+    case TypeKind::U64_t:
     case TypeKind::F64_t:
     case TypeKind::Bool:
     case TypeKind::Char:

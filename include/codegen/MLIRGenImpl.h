@@ -76,8 +76,10 @@ public:
   // --- Type conversion ---
   mlir::Type convertType(const Type &type);
   bool isIntegerType(const Type &type);
+  bool isUnsignedIntegerType(const Type &type);
   bool isFloatType(const Type &type);
   bool isBoolType(const Type &type);
+  mlir::Type getEnumBackingMLIRType(const EnumType &et);
 
   // --- Definition emission (MLIRGen.cpp) ---
   void emitDefinition(AST::DefinitionAST *def);

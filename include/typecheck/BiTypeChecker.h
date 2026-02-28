@@ -56,6 +56,8 @@ public:
 
     typename_to_type.registerNameT("i32", Type::I32_t());
     typename_to_type.registerNameT("i64", Type::I64_t());
+    typename_to_type.registerNameT("u32", Type::U32_t());
+    typename_to_type.registerNameT("u64", Type::U64_t());
     typename_to_type.registerNameT("f64", Type::F64_t());
     typename_to_type.registerNameT("bool", Type::Bool());
     typename_to_type.registerNameT("char", Type::Char());
