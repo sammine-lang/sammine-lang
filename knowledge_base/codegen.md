@@ -16,6 +16,7 @@
 | `Array` | N/A (alloca-based) | `MemRefType::get({size}, elemType)` |
 | `Struct` | `get_struct_type(name)` | `structTypes` map |
 | `Enum` | `get_enum_type(name)` | `enumTypes` map |
+| `Tuple` | N/A | `LLVMStructType::getLiteral(ctx, elementTypes)` |
 
 - `NumberExprAST`: `I32_t`→`stoi`, `I64_t`→`stoll`, `F64_t`→`stod` (suffix already stripped by type checker)
 - `CharExprAST`: LLVM `ConstantInt::get(getInt8Ty, value)`, MLIR `ConstantIntOp::create(builder, loc, uint8_t(value), 8)`
@@ -129,7 +130,7 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `ast->resolved_op_method` — if set, emi
 | `MLIRGenImpl.h` | Class declaration, inline helpers (`llvmPtrTy()`, `llvmVoidTy()`), named constants |
 | `MLIRGen.cpp` | `generate()`, `convertType()`, `emitVarDef()`, `emitBlock()`, `getTypeSize()`, `getOrCreateGlobalString()`, `emitAllocaOne()` |
 | `MLIRGenFunction.cpp` | `emitFunction()`, `emitExtern()`, closures, partial application, `emitCallExpr()`, `emitFuncCallAndLLVMReturn()` |
-| `MLIRGenExpr.cpp` | All expression emission (number, bool, char, string, binary, unary, if, while, array, pointer, struct, field, enum, case) |
+| `MLIRGenExpr.cpp` | All expression emission (number, bool, char, string, binary, unary, if, while, array, pointer, struct, field, enum, case, tuple) |
 | `MLIRLowering.cpp` | `lowerMLIRToLLVMIR()` pipeline |
 
 ### Named Constants (`MLIRGenImpl.h`)
@@ -166,8 +167,13 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `ast->resolved_op_method` — if set, emi
 - `emitFuncCallAndLLVMReturn(callee, retType, args, loc)` — call + void-vs-value return (wrappers/partial)
 - RAII: `mlir::OpBuilder::InsertionGuard` over manual save/restore; scope in `{}` block for early restore
 
+### Tuple Codegen (MLIR)
+- `emitTupleLiteralExpr()`: `UndefOp` + `InsertValueOp` for each element (same pattern as struct literals)
+- `emitVarDef()` destructuring path: `ExtractValueOp` for each element index → alloca + store for each binding
+- `convertType()`: `TypeKind::Tuple` → `LLVMStructType::getLiteral(ctx, elementTypes)` (anonymous struct)
+
 ### `getTypeSize()` Alignment
-- Structs: `llvm::alignTo()` for ABI padding (e.g. `{i32, f64}` = 16 bytes, not 12)
+- Structs/Tuples: `llvm::alignTo()` for ABI padding (e.g. `{i32, f64}` = 16 bytes, not 12)
 - Function = 16 (two pointers), Array = element_size * count, Enum = 4 (tag) + max payload
 
 ### Lowering Pipeline

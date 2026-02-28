@@ -74,6 +74,11 @@ Top-level `ParseDefinition()` tries: `ParseTypeClassDecl`, `ParseTypeClassInstan
 ### Arrays & Indexing
 - `[expr, ...]` → `ArrayLiteralExprAST` | `expr[index]` → `IndexExprAST` via `parsePostfixOps()` | `[T;N]` → `ArrayTypeExprAST`
 
+### Tuples & Destructuring
+- `(expr, expr, ...)` → `TupleLiteralExprAST` — parsed in `ParseParenExpr()`: after first expr, if comma follows → parse more elements. Single expr with no comma → existing paren expr. `()` → `UnitExprAST`.
+- `(T, U)` → `TupleTypeExprAST` — parsed in `ParseTypeExpr()`: after `(`, parse types. If `->` follows `)` → function type (existing). If no `->` with 2+ types → tuple type.
+- `let (a, b) = expr;` → destructuring `VarDefAST` — parsed in `ParseVarDef()`: after `let [mut]`, if `(` → parse comma-separated `TypedVar`s → `is_tuple_destructure = true`, populate `destructure_vars`. Supports optional type annotations: `let (a: i32, b: bool) = t;`
+
 ## QualifiedName (`include/util/QualifiedName.h`)
 
 | Method | Returns |
@@ -98,6 +103,7 @@ Parser always consumes `::` after ID — never silently skips for unknown aliase
 | `Pointer` | `PointerTypeExprAST` | `ptr<T>` | `pointee` |
 | `Array` | `ArrayTypeExprAST` | `[T;N]` | `element`, `size` |
 | `Function` | `FunctionTypeExprAST` | `(T, U) -> V` | `paramTypes`, `returnType` |
+| `Tuple` | `TupleTypeExprAST` | `(T, U)` | `element_types` (vec of TypeExprAST) |
 | `Generic` | `GenericTypeExprAST` | `Option<i32>` | `base_name` (QualifiedName), `type_args` |
 
 Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern — resolved via `dynamic_cast` in type checker.
@@ -125,7 +131,7 @@ Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern 
 ### Expression Nodes
 | Node | Key Fields |
 |---|---|
-| `VarDefAST` | `is_mutable`, `TypedVar`, `Expression` |
+| `VarDefAST` | `is_mutable`, `is_tuple_destructure`, `TypedVar`, `destructure_vars`, `Expression` |
 | `NumberExprAST` | `number` (string, e.g. "42i32") |
 | `StringExprAST` | `string_content` |
 | `BoolExprAST` | `b` (bool) |
@@ -148,6 +154,7 @@ Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern 
 | `FieldAccessExprAST` | `object_expr`, `field_name` |
 | `CaseExprAST` | `scrutinee`, `arms` (vec of CaseArm) |
 | `WhileExprAST` | `condition`, `body` |
+| `TupleLiteralExprAST` | `elements` (vec of ExprAST) |
 
 ### Supporting Nodes
 | Node | Key Fields |

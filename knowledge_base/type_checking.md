@@ -11,10 +11,12 @@
 | `Array` | `ArrayType` | `Type::Array(elem, size)` |
 | `Struct` | `StructType` | `Type::Struct(name, members)` |
 | `Enum` | `EnumType` | `Type::Enum(name, variants)` |
+| `Tuple` | `TupleType` | `Type::Tuple(element_types)` |
 | `TypeParam` | `std::string` | `Type::TypeParam(name)` |
 
-- `TypeData` = `std::variant<FunctionType, PointerType, ArrayType, StructType, EnumType, std::string, std::monostate>`
-- `PointerType` uses `shared_ptr<Type>` (forward-decl needs indirection); `FunctionType`/`ArrayType` use `vector<Type>` (heap-backed, no forward-decl issue)
+- `TypeData` = `std::variant<FunctionType, PointerType, ArrayType, StructType, EnumType, TupleType, std::string, std::monostate>`
+- `PointerType` uses `shared_ptr<Type>` (forward-decl needs indirection); `TupleType` uses `shared_ptr<vector<Type>>` (same reason); `FunctionType`/`ArrayType` use `vector<Type>` (heap-backed, no forward-decl issue)
+- Type's copy/move constructors/assignment/destructor must be declared in header but defaulted in `Types.cpp` to break circular variant instantiation
 - `operator==` compares `type_kind` + `type_data` only — ignores `is_mutable`. Use `compatible_to_from(to, from)` for directional checks; rejects `immut → mut` for non-primitives. `is_literal()` types bypass this (always by-value).
 - Immutable by default (`let x`); `let mut` for mutable locals, `mut` for mutable params. Set on `Type::is_mutable` during `synthesize(VarDefAST*)`/`synthesize(TypedVarAST*)`. Assignment to immutable LHS → error at `=` token.
 
@@ -31,6 +33,7 @@
 | `nullptr` | `Type::NonExistent()` |
 | `SimpleTypeExprAST` | check unresolved → lookup `.mangled()` in `typename_to_type` |
 | `Pointer/Array/FunctionTypeExprAST` | recursive resolve → wrap in corresponding `Type::` factory |
+| `TupleTypeExprAST` | recursive resolve each element → `Type::Tuple(element_types)` |
 | `GenericTypeExprAST` | resolve type args → lookup `generic_enum_defs` → validate count → `Monomorphizer::instantiate_enum()` → register; unresolved type params defer |
 
 ### Literal Synthesis
@@ -141,11 +144,12 @@ Type params shadow outer types — e.g. a struct named `T` is hidden by `<T>` in
 Separate pass after BiTypeChecker — enforces that `'ptr<T>` (heap-allocated) pointers are consumed exactly once.
 
 ### Dispatch (`check_stmt`)
-Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnExprAST`, `IfExprAST`, `WhileExprAST`, `CaseExprAST`, `StructLiteralExprAST`, `ArrayLiteralExprAST`.
+Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnExprAST`, `IfExprAST`, `WhileExprAST`, `CaseExprAST`, `StructLiteralExprAST`, `ArrayLiteralExprAST`, `TupleLiteralExprAST`, `DerefExprAST`.
 
 ### Consumption Rules
 - `free(p)`, `let q = p` (move), `return p` (ownership transfer), passing as linear param, moving into struct field or array element
 - NOT consumption: `*p` (deref), comparison, struct field access
+- **Deref-after-consume**: `check_deref()` verifies the operand hasn't been consumed before dereferencing — prevents use-after-free (e.g. `free(p); *p` errors)
 
 ### Struct/Array Literal Consumption
 - `check_struct_literal()`: walks each field value; if a `VariableExprAST` references a linear var, consumes it (moved into struct)
