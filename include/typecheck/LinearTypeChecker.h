@@ -35,7 +35,7 @@ class LinearTypeChecker : public sammine_util::Reportee {
 
   // Variable tracking
   void register_linear(const std::string &name, sammine_util::Location loc);
-  void consume(const std::string &name, sammine_util::Location loc);
+  void consume(VarInfo *info, sammine_util::Location loc);
   VarInfo *find_linear(const std::string &name);
 
   // Get merged view of all scopes for snapshotting

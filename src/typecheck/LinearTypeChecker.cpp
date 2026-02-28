@@ -39,18 +39,14 @@ void LinearTypeChecker::register_linear(const std::string &name,
   scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name};
 }
 
-void LinearTypeChecker::consume(const std::string &name,
-                                sammine_util::Location loc) {
-  auto *info = find_linear(name);
-  if (!info)
-    return;
+void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc) {
   if (info->state == VarState::Consumed) {
     this->add_error(
-        loc,
-        fmt::format("Linear variable '{}' has already been consumed", name));
+        loc, fmt::format("Linear variable '{}' has already been consumed",
+                         info->name));
     this->add_error(
         info->consume_location,
-        fmt::format("'{}' was previously consumed here", name));
+        fmt::format("'{}' was previously consumed here", info->name));
     return;
   }
   info->state = VarState::Consumed;
@@ -114,6 +110,7 @@ void LinearTypeChecker::check_branch_consistency(
       }
     }
 
+    auto *info = find_linear(name);
     if (has_mismatch) {
       this->add_error(
           loc,
@@ -121,15 +118,12 @@ void LinearTypeChecker::check_branch_consistency(
                       "not others",
                       name));
       // Mark consumed to prevent cascading "must be consumed" at scope exit
-      auto *info = find_linear(name);
       if (info)
         info->state = VarState::Consumed;
-    } else if (first_consumed) {
-      // All branches consumed it — apply directly (not via consume() to
+    } else if (first_consumed && info) {
+      // All branches consumed it — set directly (not via consume() to
       // avoid "already consumed" false positive)
-      auto *info = find_linear(name);
-      if (info)
-        info->state = VarState::Consumed;
+      info->state = VarState::Consumed;
     }
   }
 }
@@ -219,7 +213,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      consume(var->variableName, ast->get_location());
+      consume(info, ast->get_location());
       if (ast->type.is_linear)
         register_linear(ast->TypedVar->name, ast->get_location());
       return;
@@ -245,7 +239,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
       auto *rhs_info = find_linear(var->variableName);
       if (rhs_info)
-        consume(var->variableName, ast->get_location());
+        consume(rhs_info, ast->get_location());
       else
         check_stmt(ast->RHS.get());
     } else {
@@ -288,7 +282,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
               llvm::dyn_cast<VariableExprAST>(ast->arguments[i].get())) {
         auto *info = find_linear(var->variableName);
         if (info && params[i].is_linear) {
-          consume(var->variableName, ast->get_location());
+          consume(info, ast->get_location());
           continue;
         }
       }
@@ -330,7 +324,7 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      consume(var->variableName, ast->get_location());
+      consume(info, ast->get_location());
       return;
     }
   }
@@ -395,7 +389,7 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
     auto *info = find_linear(var->variableName);
     if (info) {
       // Returning a linear pointer: ownership transfers to caller
-      consume(var->variableName, ast->get_location());
+      consume(info, ast->get_location());
       return;
     }
     // Returning a type that contains a non-linear pointer — error (may dangle)
@@ -502,7 +496,7 @@ void LinearTypeChecker::check_struct_literal(StructLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(field_val.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(var->variableName, ast->get_location());
+        consume(info, ast->get_location());
         continue;
       }
     }
@@ -517,7 +511,7 @@ void LinearTypeChecker::check_array_literal(ArrayLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(var->variableName, ast->get_location());
+        consume(info, ast->get_location());
         continue;
       }
     }
@@ -532,7 +526,7 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(var->variableName, ast->get_location());
+        consume(info, ast->get_location());
         continue;
       }
     }
