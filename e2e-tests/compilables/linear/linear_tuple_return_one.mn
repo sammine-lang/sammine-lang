@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+
+# Destructure a tuple containing linear pointers, return one, free the other.
+
+import std;
+
+let pick_first(t: ('ptr<i32>, 'ptr<i32>)) -> 'ptr<i32> {
+  let (a, b) = t;
+  free(b);
+  return a;
+}
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  let q = alloc<i32>(1);
+  *p = 42;
+  *q = 99;
+  let r = pick_first((p, q));
+  let v : i32 = *r;
+  free(r);
+  std::printf("%d\n", v);
+  return 0;
+}

@@ -1,0 +1,22 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+# CORRECT: p is consumed into Box{data: p}, but b.data is never freed.
+# The checker now tracks inner linear fields and rejects this.
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let b : Box = Box { data: p, tag: 1 };
+  let v : i32 = *(b.data);
+  std::printf("%d
+", v);
+  return 0;
+}

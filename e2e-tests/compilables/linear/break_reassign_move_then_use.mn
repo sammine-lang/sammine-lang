@@ -1,0 +1,16 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: already been consumed
+
+# CORRECT: Move then free original should be caught.
+# After let q = p, p is consumed. Freeing p should error.
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let q = p;
+  free(p);
+  free(q);
+  return 0;
+}

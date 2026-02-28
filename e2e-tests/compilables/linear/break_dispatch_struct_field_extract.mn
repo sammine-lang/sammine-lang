@@ -1,0 +1,25 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: already been consumed
+
+# CORRECT: Extract a linear pointer from a struct field, then extract again.
+# Second b.data extraction is caught — the field was already consumed.
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let b : Box = Box { data: p, tag: 1 };
+  let q : 'ptr<i32> = b.data;
+  let r : 'ptr<i32> = b.data;
+  let v : i32 = *q;
+  free(q);
+  free(r);
+  std::printf("%d\n", v);
+  return 0;
+}

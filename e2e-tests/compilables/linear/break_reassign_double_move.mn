@@ -1,0 +1,17 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: already been consumed
+
+# CORRECT: Two moves from same source should fail.
+# let q = p consumes p. Then let r = p should fail.
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let q = p;
+  let r = p;
+  free(q);
+  free(r);
+  return 0;
+}

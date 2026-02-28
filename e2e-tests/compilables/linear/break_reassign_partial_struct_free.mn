@@ -1,0 +1,25 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+# CORRECT: Two linear pointers consumed into struct fields. Only s.a freed.
+# s.b leaks and the checker now correctly catches this.
+
+import std;
+
+struct TwoPtr {
+  a: 'ptr<i32>,
+  b: 'ptr<i32>,
+};
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  let q = alloc<i32>(1);
+  *p = 10;
+  *q = 20;
+  let s : TwoPtr = TwoPtr { a: p, b: q };
+  let v : i32 = *(s.a);
+  free(s.a);
+  std::printf("%d
+", v);
+  return 0;
+}

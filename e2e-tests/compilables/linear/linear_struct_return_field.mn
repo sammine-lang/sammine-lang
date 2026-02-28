@@ -1,0 +1,30 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+
+# Struct with two linear fields: return one, free the other.
+
+import std;
+
+struct TwoPtr {
+  a: 'ptr<i32>,
+  b: 'ptr<i32>,
+};
+
+let pick_a(s: TwoPtr) -> 'ptr<i32> {
+  let q = s.a;
+  free(s.b);
+  return q;
+}
+
+let main() -> i32 {
+  let p1 = alloc<i32>(1);
+  let p2 = alloc<i32>(1);
+  *p1 = 42;
+  *p2 = 99;
+  let s : TwoPtr = TwoPtr { a: p1, b: p2 };
+  let r = pick_a(s);
+  let v : i32 = *r;
+  free(r);
+  std::printf("%d\n", v);
+  return 0;
+}

@@ -1,0 +1,22 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: ok
+
+# CORRECT: Nested if-else where all branches consistently consume p.
+# This valid program should compile and run.
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  if (1 == 1) {
+    if (2 == 2) {
+      free(p);
+    } else {
+      free(p);
+    };
+  } else {
+    free(p);
+  };
+  std::printf("ok\n");
+  return 0;
+}

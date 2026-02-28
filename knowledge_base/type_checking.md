@@ -163,14 +163,46 @@ Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnExpr
 - `free(p)`, `let q = p` (move), `return p` (ownership transfer), passing as linear param, moving into struct field or array element
 - NOT consumption: `*p` (deref), comparison, struct field access
 - **Deref-after-consume**: `check_deref()` verifies the operand hasn't been consumed before dereferencing — prevents use-after-free (e.g. `free(p); *p` errors)
+- **Discarded linear values** (`check_block`): bare `alloc<T>(n)` statements and call statements returning linear types are rejected — must be stored in a variable
 
 ### Struct/Array Literal Consumption
 - `check_struct_literal()`: walks each field value; if a `VariableExprAST` references a linear var, consumes it (moved into struct)
 - `check_array_literal()`: walks each element; same pattern
 - `'ptr<T>` syntax works everywhere `ParseTypeExpr()` is called, including struct fields (`data: 'ptr<i32>`) and array element types (`['ptr<i32>;1]`). `compatible_to_from()` rejects `'ptr<T>` → `ptr<T>` mismatches, so field/element type annotations must match linearity.
 
+### Inner-Linear Tracking (Wrapper Types)
+Wrapper types (structs, tuples, arrays) containing linear fields are tracked recursively via `VarInfo::children`.
+
+- **`Type::containsLinear()`** (in `Types.h`): recursively checks if a type contains any linear sub-component, using `forEachInnerType()`.
+- **`VarInfo::children`**: `std::unordered_map<std::string, VarInfo>` — per-field tracking. Keys: field names for structs (`"data"`), indices for tuples (`"0"`, `"1"`), `"*"` for arrays.
+- **`register_inner_linear(parent, type, loc)`**: populates children recursively based on type structure (struct fields, tuple elements, array element).
+- **`check_children_consumed(info)`**: at scope exit, recursively checks that all linear children are consumed.
+- **`find_child(var_name, field_name)`**: looks up a child VarInfo by parent variable name and field key.
+
+#### Wrapper Tracking Flow
+1. `let b : Box = Box { data: p, tag: 1 };` → `p` consumed into struct literal; `b` registered with inner child `b.data` (Unconsumed)
+2. `free(b.data)` → `check_free` handles `FieldAccessExprAST` → consumes child `b.data`
+3. Scope exit → `pop_scope_and_check` finds `b` Unconsumed → `check_children_consumed` → `b.data` is Consumed → no error
+
+#### FieldAccessExprAST Handling
+Several methods handle `FieldAccessExprAST` for struct field operations on tracked children:
+- `check_var_def`: `let q = b.data` → extracts and consumes child, registers `q` as linear
+- `check_free`: `free(b.data)` → consumes child
+- `check_deref`: `*(b.data)` → checks child hasn't been consumed (use-after-free)
+- `check_return`: `return b.data` → consumes child, transfers ownership to caller
+- `check_call`: `some_func(b.data)` → consumes child when passed as linear param
+
+#### Tuple Destructuring
+`let (a, b) = t;` — if `t` is a tracked wrapper, the parent is consumed (children dissolve). Individual variables are registered as linear if their types are linear.
+
 ### Branch Consistency
 All branches of `if`/`case` must agree — either all consume a linear var or none do.
 
 ### Loop Restriction
 Outer linear vars cannot be consumed inside loops (would be consumed multiple times).
+
+### Known Limitations
+- **Array element access**: `arr[i]` with runtime `i` — tracked as single `"*"` entry, not per-element
+- **Nested struct fields**: `s.inner.data` — only single-level `FieldAccessExprAST` handled currently
+- **Enum payloads**: not yet tracked; enums containing linear types should require case/match for consumption
+- **Whole-struct move after partial consume**: `let b2 = b` after `free(b.data)` — not yet rejected

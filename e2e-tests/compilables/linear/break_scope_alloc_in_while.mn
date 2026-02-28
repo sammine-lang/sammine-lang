@@ -1,0 +1,19 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+# CORRECT: Linear pointer allocated inside while body is caught at
+# function scope exit. Even though while's restore() doesn't remove
+# the variable, pop_scope_and_check() catches it.
+
+import std;
+
+let main() -> i32 {
+  let mut i : i32 = 0;
+  while (i < 1) {
+    let q = alloc<i32>(1);
+    *q = 42;
+    i = i + 1;
+  };
+  std::printf("done\n");
+  return 0;
+}

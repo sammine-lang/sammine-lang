@@ -1,0 +1,20 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: not compatible
+
+# CORRECT: BiTypeChecker rejects passing 'ptr<i32> (linear) to a function
+# taking ptr<i32> (non-linear). This prevents linearity from being dropped.
+
+import std;
+
+let read_val(p: ptr<i32>) -> i32 {
+  return *p;
+}
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let v : i32 = read_val(p);
+  free(p);
+  std::printf("%d\n", v);
+  return 0;
+}

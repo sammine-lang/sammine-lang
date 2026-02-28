@@ -321,6 +321,17 @@ struct Type {
     }
   }
 
+  bool containsLinear() const {
+    if (is_linear)
+      return true;
+    bool found = false;
+    forEachInnerType([&](const Type &inner) {
+      if (inner.containsLinear())
+        found = true;
+    });
+    return found;
+  }
+
   template <typename F> void forEachInnerType(F &&callback) const {
     switch (type_kind) {
     case TypeKind::Pointer: {

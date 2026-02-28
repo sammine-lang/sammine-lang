@@ -1,0 +1,18 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+# CORRECT: Linear pointer allocated inside if-branch is caught at
+# function scope exit by pop_scope_and_check(). Even though restore()
+# doesn't remove the variable, the function-level scope check catches it.
+
+import std;
+
+let main() -> i32 {
+  if (1 == 1) {
+    let q = alloc<i32>(1);
+    *q = 99;
+  } else {
+  };
+  std::printf("done\n");
+  return 0;
+}

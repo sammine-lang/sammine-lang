@@ -19,12 +19,17 @@ void LinearTypeChecker::pop_scope_and_check(sammine_util::Location loc) {
   auto &top = scope_stack.back();
   for (auto &[name, info] : top) {
     if (info.state == VarState::Unconsumed) {
-      this->add_error(
-          info.def_location,
-          fmt::format(
-              "Linear variable '{}' must be consumed before scope exit"
-              " (use free() to deallocate)",
-              name));
+      // Check children first (struct/array/tuple with linear fields)
+      if (!info.children.empty()) {
+        check_children_consumed(info);
+      } else {
+        this->add_error(
+            info.def_location,
+            fmt::format(
+                "Linear variable '{}' must be consumed before scope exit"
+                " (use free() to deallocate)",
+                name));
+      }
     }
   }
   scope_stack.pop_back();
@@ -36,7 +41,7 @@ void LinearTypeChecker::register_linear(const std::string &name,
                                         sammine_util::Location loc) {
   if (scope_stack.empty())
     return;
-  scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name};
+  scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name, {}};
 }
 
 void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc) {
@@ -144,10 +149,15 @@ void LinearTypeChecker::check_program(ProgramAST *ast) {
 void LinearTypeChecker::check_func(FuncDefAST *ast) {
   push_scope();
 
-  // Register linear parameters
+  // Register linear parameters (including wrapper types with linear fields)
   for (auto &param : ast->Prototype->parameterVectors) {
-    if (param->type.is_linear)
+    if (param->type.is_linear) {
       register_linear(param->name, param->get_location());
+    } else if (param->type.containsLinear()) {
+      register_linear(param->name, param->get_location());
+      auto *info = find_linear(param->name);
+      register_inner_linear(*info, param->type, param->get_location());
+    }
   }
 
   if (ast->Block)
@@ -157,8 +167,25 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
 }
 
 void LinearTypeChecker::check_block(BlockAST *ast) {
-  for (auto &stmt : ast->Statements)
+  for (auto &stmt : ast->Statements) {
     check_stmt(stmt.get());
+
+    // Check for bare statements that discard linear values
+    if (llvm::isa<AllocExprAST>(stmt.get())) {
+      this->add_error(stmt->get_location(),
+                      "Linear pointer from alloc is discarded"
+                      " (must be stored in a variable)");
+    } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt.get())) {
+      if (call->type.is_linear || call->type.containsLinear()) {
+        this->add_error(
+            call->get_location(),
+            fmt::format(
+                "Return value of '{}' has linear type '{}' and must not be "
+                "discarded",
+                call->functionName.display(), call->type.to_string()));
+      }
+    }
+  }
 }
 
 // ── Recursive dispatch ──────────────────────────────────────────────
@@ -197,9 +224,17 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   if (!ast->Expression)
     return;
 
+  auto loc = ast->get_location();
+
   // Tuple destructuring: let (a, b) = expr;
   if (ast->is_tuple_destructure) {
-    // Walk into RHS
+    // If RHS is a wrapper var, consume it (children dissolve into individual vars)
+    if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
+      auto *info = find_linear(var->variableName);
+      if (info)
+        consume(info, loc);
+    }
+    // Walk into RHS for other expressions
     check_stmt(ast->Expression.get());
     // Register any linear vars from the destructured elements
     for (auto &var : ast->destructure_vars) {
@@ -213,10 +248,34 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      consume(info, ast->get_location());
-      if (ast->type.is_linear)
-        register_linear(ast->TypedVar->name, ast->get_location());
+      consume(info, loc);
+      if (ast->type.is_linear) {
+        register_linear(ast->TypedVar->name, loc);
+      } else if (ast->type.containsLinear()) {
+        // Move of wrapper type — register inner linear tracking on dest
+        register_linear(ast->TypedVar->name, loc);
+        auto *new_info = find_linear(ast->TypedVar->name);
+        register_inner_linear(*new_info, ast->type, loc);
+      }
       return;
+    }
+  }
+
+  // Check if RHS is a field access extracting a linear field (e.g. let q = b.data)
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->Expression.get())) {
+    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+      auto *child = find_child(obj->variableName, fa->field_name);
+      if (child) {
+        consume(child, loc);
+        if (ast->type.is_linear) {
+          register_linear(ast->TypedVar->name, loc);
+        } else if (ast->type.containsLinear()) {
+          register_linear(ast->TypedVar->name, loc);
+          auto *new_info = find_linear(ast->TypedVar->name);
+          register_inner_linear(*new_info, ast->type, loc);
+        }
+        return;
+      }
     }
   }
 
@@ -224,8 +283,14 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   check_stmt(ast->Expression.get());
 
   // If the variable itself is linear, register it
-  if (ast->type.is_linear)
-    register_linear(ast->TypedVar->name, ast->get_location());
+  if (ast->type.is_linear) {
+    register_linear(ast->TypedVar->name, loc);
+  } else if (ast->type.containsLinear()) {
+    // Wrapper type: track inner linear fields (struct, tuple, array)
+    register_linear(ast->TypedVar->name, loc);
+    auto *new_info = find_linear(ast->TypedVar->name);
+    register_inner_linear(*new_info, ast->type, loc);
+  }
 }
 
 // ── check_binary ────────────────────────────────────────────────────
@@ -281,9 +346,23 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
       if (auto *var =
               llvm::dyn_cast<VariableExprAST>(ast->arguments[i].get())) {
         auto *info = find_linear(var->variableName);
-        if (info && params[i].is_linear) {
+        if (info &&
+            (params[i].is_linear || params[i].containsLinear())) {
           consume(info, ast->get_location());
           continue;
+        }
+      }
+      // Handle field access arguments (e.g., some_func(b.data))
+      if (auto *fa =
+              llvm::dyn_cast<FieldAccessExprAST>(ast->arguments[i].get())) {
+        if (auto *obj =
+                llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+          auto *child = find_child(obj->variableName, fa->field_name);
+          if (child &&
+              (params[i].is_linear || params[i].containsLinear())) {
+            consume(child, ast->get_location());
+            continue;
+          }
         }
       }
       // Walk into nested expressions
@@ -314,6 +393,23 @@ void LinearTypeChecker::check_deref(DerefExprAST *ast) {
       return;
     }
   }
+  // Handle *(b.data) — check if struct field has been consumed
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->operand.get())) {
+    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+      auto *child = find_child(obj->variableName, fa->field_name);
+      if (child && child->state == VarState::Consumed) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Cannot dereference '{}' — it has "
+                        "already been consumed",
+                        child->name));
+        this->add_error(
+            child->consume_location,
+            fmt::format("'{}' was consumed here", child->name));
+        return;
+      }
+    }
+  }
   // Walk operand for nested linear ops
   check_stmt(ast->operand.get());
 }
@@ -326,6 +422,16 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
     if (info) {
       consume(info, ast->get_location());
       return;
+    }
+  }
+  // Handle free(b.data) — field access operand
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->operand.get())) {
+    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+      auto *child = find_child(obj->variableName, fa->field_name);
+      if (child) {
+        consume(child, ast->get_location());
+        return;
+      }
     }
   }
   // Walk operand for nested linear ops
@@ -388,7 +494,7 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->return_expr.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      // Returning a linear pointer: ownership transfers to caller
+      // Returning a linear pointer (or wrapper): ownership transfers to caller
       consume(info, ast->get_location());
       return;
     }
@@ -401,6 +507,17 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
                       "(may reference a local variable)",
                       var->variableName, var->type.to_string(), *path));
       return;
+    }
+  }
+
+  // Handle return b.data — field access returning a linear field
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->return_expr.get())) {
+    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+      auto *child = find_child(obj->variableName, fa->field_name);
+      if (child) {
+        consume(child, ast->get_location());
+        return;
+      }
     }
   }
 
@@ -532,6 +649,77 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
     }
     check_stmt(elem.get());
   }
+}
+
+// ── Inner-linear tracking helpers ────────────────────────────────────
+
+void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
+                                               sammine_util::Location loc) {
+  if (t.type_kind == TypeKind::Struct) {
+    auto &st = std::get<StructType>(t.type_data);
+    auto &names = st.get_field_names();
+    auto &types = st.get_field_types();
+    for (size_t i = 0; i < names.size(); i++) {
+      if (types[i].containsLinear()) {
+        auto &child =
+            parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
+                                                 parent.name + "." + names[i], {}};
+        // Recurse: field itself may be a struct/array/tuple with linear innards
+        if (!types[i].is_linear)
+          register_inner_linear(child, types[i], loc);
+      }
+    }
+  } else if (t.type_kind == TypeKind::Tuple) {
+    auto &tt = std::get<TupleType>(t.type_data);
+    for (size_t i = 0; i < tt.size(); i++) {
+      if (tt.get_element(i).containsLinear()) {
+        auto key = std::to_string(i);
+        auto &child =
+            parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
+                                            parent.name + "." + key, {}};
+        if (!tt.get_element(i).is_linear)
+          register_inner_linear(child, tt.get_element(i), loc);
+      }
+    }
+  } else if (t.type_kind == TypeKind::Array) {
+    auto &at = std::get<ArrayType>(t.type_data);
+    if (at.get_element().containsLinear()) {
+      auto &child =
+          parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
+                                          parent.name + "[*]", {}};
+      if (!at.get_element().is_linear)
+        register_inner_linear(child, at.get_element(), loc);
+    }
+  }
+}
+
+void LinearTypeChecker::check_children_consumed(const VarInfo &info) {
+  for (auto &[name, child] : info.children) {
+    if (child.state == VarState::Unconsumed) {
+      // Check if child has its own children (nested wrapper)
+      if (!child.children.empty()) {
+        check_children_consumed(child);
+      } else {
+        this->add_error(
+            child.def_location,
+            fmt::format(
+                "Linear variable '{}' must be consumed before scope exit"
+                " (use free() to deallocate)",
+                child.name));
+      }
+    }
+  }
+}
+
+VarInfo *LinearTypeChecker::find_child(const std::string &var_name,
+                                        const std::string &field_name) {
+  auto *parent = find_linear(var_name);
+  if (!parent)
+    return nullptr;
+  auto it = parent->children.find(field_name);
+  if (it != parent->children.end())
+    return &it->second;
+  return nullptr;
 }
 
 } // namespace sammine_lang::AST

@@ -1,0 +1,14 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: some branches
+
+# CORRECT: Linear pointer consumed in then-branch but not in else.
+# With no else, the "else" state equals "before" (unconsumed).
+# Branch consistency should flag the mismatch.
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  if (1 == 1) {
+    free(p);
+  };
+  return 0;
+}

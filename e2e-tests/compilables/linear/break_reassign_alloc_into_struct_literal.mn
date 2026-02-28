@@ -1,0 +1,21 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK: must be consumed
+
+# CORRECT: alloc<i32>(1) directly in struct literal creates a linear
+# pointer that is tracked via inner field tracking. Never freed = error.
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let b : Box = Box { data: alloc<i32>(1), tag: 1 };
+  *(b.data) = 99;
+  let v : i32 = *(b.data);
+  std::printf("%d
+", v);
+  return 0;
+}
