@@ -6,10 +6,13 @@
 |---|---|
 | Definition | `enum Color = Red \| Green \| Blue;` |
 | Payload variants | `enum Shape = Circle(f64) \| Rect(f64, f64) \| Point;` |
+| Integer-backed | `enum Status = OK(0) \| Err(1);` |
+| Explicit backing type | `enum Flags: u32 = Read(1) \| Write(2) \| Exec(4);` |
 | Generic enum | `enum Option<T> = Some(T) \| None;` |
 | Qualified construction | `Color::Red`, `Shape::Circle(3.14)` |
 | Unqualified construction | `Red`, `Some(42)` — rewritten to qualified form by scope generator |
 | Case expression | `case expr { Color::Red => body, _ => default, }` |
+| Bitwise on int-backed | `Read \| Write` — `&`, `\|`, `^`, `<<`, `>>` supported |
 
 ## Variant Access
 
@@ -34,6 +37,10 @@
 ## Type System
 
 - `TypeKind::Enum` with `EnumType` class using `QualifiedName` (nominal equality by mangled name). Has `operator==` only — no `operator<`
+- `EnumType::backing_type_` (`TypeKind`) — defaults to `I32_t`, configurable via `: u32`/`: i64` etc. syntax
+- `EnumType::get_backing_type()` — used by codegen to select correct integer width
+- Integer-backed enums flow into their backing type via `compatible_to_from()`
+- Negative discriminant values are rejected at parse time (TokSUB check in ParseEnumDef)
 - `variant_constructors` map: `variant_name → (enum_type, index)` — used for generic enum fallback and `VariableExprAST` unit variant lookup
 - Variant resolution in `synthesize(CallExprAST*)`: look up enum via `get_typename_type(module)`, fall back to `variant_constructors` for generics, then find variant by name
 - See `type_checking.md` for full enum type checker details (EnumType, variant constructors, case expressions, exhaustiveness)
