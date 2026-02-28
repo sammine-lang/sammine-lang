@@ -89,9 +89,9 @@ Condition must be `bool` (skip if `Poisoned`), result always `unit`.
 `synthesize_binary_operator()`: lookup `ClassName__lhs_type` in `type_class_instances` → set `resolved_op_method` (e.g. `Add__i32__add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
 
 ## Three-Pass Registration (`visit(ProgramAST*)`)
-1. **Types + typeclasses**: structs, enums, typeclass decls/instances, builtin ops → type maps, `variant_constructors`, typeclass data
+1. **Types + typeclasses**: structs, enums, **type aliases**, typeclass decls/instances, builtin ops → type maps, `variant_constructors`, typeclass data. Type aliases: `resolve_type_expr()` on the alias's type expr, register result in `typename_to_type`.
 2. **Function signatures**: `pre_register_function()` for func/extern/instance-methods → mutual recursion. Resolves types via `resolve_type_expr()` directly (not `accept_synthesis`). Generics → `generic_func_defs` instead.
-3. **Full type checking**: all definitions (structs/enums skip if already visited)
+3. **Full type checking**: all definitions (structs/enums/type aliases skip if already visited)
 
 ## Typeclasses
 - `TypeClassInfo`: `name`, `type_param`, `methods`. `TypeClassInstanceInfo`: `class_name`, `concrete_type`, `method_mangled_names`.

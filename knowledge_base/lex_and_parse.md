@@ -10,7 +10,7 @@ Keywords recognized in `handleID()` (`src/lex/Lexer.cpp`). Token types defined i
 | `TokAlloc`, `TokFree`, `TokLen`, `TokMUT` | `alloc`, `free`, `len`, `mut` |
 | `TokReuse`, `TokExport`, `TokImport`, `TokAs` | `reuse`, `export`, `import`, `as` |
 | `TokTypeclass`, `TokInstance` | `typeclass`, `instance` |
-| `TokEnum`, `TokCase`, `TokFatArrow` | `enum`, `case`, `=>` |
+| `TokType`, `TokCase`, `TokFatArrow` | `type`, `case`, `=>` |
 | `TokIf`, `TokElse`, `TokWhile` | `if`, `else`, `while` |
 | `TokPipe`, `TokEllipsis` | `\|>`, `...` |
 | `TokNum` | Number literals with optional suffix (`42i32`, `3.14f64`) — suffix consumed as part of lexeme |
@@ -50,7 +50,7 @@ Unary/keyword parsers go before `ParseCallExpr` (start with operator/keyword tok
 | `x \|> f` / `x \|> f(y,z)` | Desugared in `ParseBinaryExpr()` | → `f(x)` / `f(x,y,z)` at parse time. Precedence 1 (lowest). No special typecheck/codegen. |
 | `while cond { body }` | `ParseWhileExpr` → `WhileExprAST` | Unit-typed expression |
 | `import mod;` / `import mod as alias;` | `ParseImport` → `ImportDecl` | `alias_to_module` map resolves `alias::member` → `module__member` |
-| `export let`/`struct`/`enum`/`reuse` | Prefix flag | `is_exported` / `is_exposed` on respective AST nodes |
+| `export let`/`struct`/`type`/`reuse` | Prefix flag | `is_exported` / `is_exposed` on respective AST nodes |
 | `typeclass Name<T> { sig; ... }` | `ParseTypeClassDecl` → `TypeClassDeclAST` | Method signatures only (no bodies) |
 | `instance Name<Type> { let m() { } }` | `ParseTypeClassInstance` → `TypeClassInstanceAST` | Full `FuncDefAST` method implementations |
 
@@ -61,8 +61,9 @@ Top-level `ParseDefinition()` tries: `ParseTypeClassDecl`, `ParseTypeClassInstan
 - **Call sites** `f<i32, f64>(args)`: `ParseCallExpr()` uses speculative parsing with rollback for `<TypeExpr, ...>`. If parse fails → rollback, treat `<` as comparison.
 - `consumeClosingAngleBracket()` splits `>>` → `>` + `>` and `>=` → `>` + `=` for nested generics
 
-### Enum Definitions & Case Expressions
-- `enum Name = V1(Type) | V2;` — pipe-separated variants (`TokORLogical`). Generic: `enum Option<T> = Some(T) | None;`
+### Enum Definitions, Type Aliases & Case Expressions
+- `type Name = V1(Type) | V2;` — pipe-separated variants (`TokORLogical`). Generic: `type Option<T> = Some(T) | None;`
+- `type IntAlias = i32;` — type alias (disambiguation: if after `=` next tokens are `ID |` or `ID(` → enum, otherwise → type alias)
 - `case expr { Pattern => body, ... }` — expression returning a value
 - Patterns: qualified `Color::Red`, unqualified `Red` (scope generator rewrites to qualified), wildcard `_`, payload `Some(v)`, generic `Option<i32>::Some(v)`
 - See `type_checking.md` for enum type resolution details
@@ -125,6 +126,7 @@ Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern 
 | `ExternAST` | `Prototype`, `is_exposed` |
 | `StructDefAST` | `struct_name` (QN), `struct_members` (vec of TypedVarAST), `is_exported` |
 | `EnumDefAST` | `enum_name` (QN), `variants` (vec of EnumVariantDef), `type_params`, `is_exported` |
+| `TypeAliasDefAST` | `alias_name` (QN), `type_expr` (TypeExprAST), `resolved_type`, `is_exported` |
 | `TypeClassDeclAST` | `class_name`, `type_param` (string), `methods` (vec of PrototypeAST) |
 | `TypeClassInstanceAST` | `class_name`, `concrete_type_expr`, `concrete_type`, `methods` (vec of FuncDefAST) |
 

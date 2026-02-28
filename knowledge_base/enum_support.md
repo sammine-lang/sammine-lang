@@ -1,18 +1,35 @@
-# Enum Support
+# Enum & Type Alias Support
+
+## Keyword
+
+The `type` keyword serves double duty: enum definitions and type aliases.
+
+**Disambiguation rule** (in `ParseEnumDef()`): After `type Name =`, if next tokens are `ID |` or `ID(` → enum path. Otherwise → type alias path.
 
 ## Syntax
 
 | Construct | Example |
 |---|---|
-| Definition | `enum Color = Red \| Green \| Blue;` |
-| Payload variants | `enum Shape = Circle(f64) \| Rect(f64, f64) \| Point;` |
-| Integer-backed | `enum Status = OK(0) \| Err(1);` |
-| Explicit backing type | `enum Flags: u32 = Read(1) \| Write(2) \| Exec(4);` |
-| Generic enum | `enum Option<T> = Some(T) \| None;` |
+| Definition | `type Color = Red \| Green \| Blue;` |
+| Payload variants | `type Shape = Circle(f64) \| Rect(f64, f64) \| Point;` |
+| Integer-backed | `type Status = OK(0) \| Err(1);` |
+| Explicit backing type | `type Flags: u32 = Read(1) \| Write(2) \| Exec(4);` |
+| Generic enum | `type Option<T> = Some(T) \| None;` |
+| **Type alias** | `type IntAlias = i32;` |
+| **Pointer alias** | `type IntPtr = ptr<i32>;` |
 | Qualified construction | `Color::Red`, `Shape::Circle(3.14)` |
 | Unqualified construction | `Red`, `Some(42)` — rewritten to qualified form by scope generator |
 | Case expression | `case expr { Color::Red => body, _ => default, }` |
 | Bitwise on int-backed | `Read \| Write` — `&`, `\|`, `^`, `<<`, `>>` supported |
+
+## Type Aliases
+
+- AST node: `TypeAliasDefAST` (in `include/ast/Ast.h`)
+- Fields: `alias_name` (QualifiedName), `type_expr` (TypeExprAST), `resolved_type` (Type), `is_exported`
+- **Transparent**: resolved at type-check time (Pass 1 of `visit(ProgramAST*)`). Registered in `typename_to_type` pointing to the resolved type.
+- **No codegen**: MLIRGen skips `TypeAliasDefAST`; CodegenVisitor stubs are empty.
+- **Scope**: registered in `ScopeGeneratorVisitor::preorder_walk(ProgramAST*)` like enums/structs.
+- **Semantics**: `GeneralSemanticsVisitor` checks for reserved identifiers.
 
 ## Variant Access
 
@@ -79,4 +96,6 @@ See `codegen.md` for full details. Summary:
 
 ## Parsing
 
-See `lex_and_parse.md` for full details. Tokens: `TokEnum`, `TokCase`, `TokFatArrow` (`=>`). Variants pipe-separated via `TokORLogical`. Patterns support qualified, unqualified (rewritten), wildcard `_`, and payload bindings.
+See `lex_and_parse.md` for full details. Tokens: `TokType`, `TokCase`, `TokFatArrow` (`=>`). The `type` keyword triggers `ParseEnumDef()`, which disambiguates enum vs type alias. Variants pipe-separated via `TokORLogical`. Patterns support qualified, unqualified (rewritten), wildcard `_`, and payload bindings.
+
+Note: `TokEnum` was removed — the `enum` keyword no longer exists. All definitions use `type`.
