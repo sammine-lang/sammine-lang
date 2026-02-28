@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Negative discriminant values are not supported in integer-backed enums
+
+enum Foo = A(-1) | B(2);
+
+let main() -> i32 {
+  return 0;
+}

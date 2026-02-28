@@ -250,6 +250,15 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     // Optional payload: (Type, Type, ...) or (integer_literal)
     if (expect(TokLeftParen)) {
       if (tokStream->peek()->tok_type != TokRightParen) {
+        // Negative discriminant: Foo(-1) — not supported
+        if (tokStream->peek()->tok_type == TokSUB) {
+          imm_error(
+              "Negative discriminant values are not supported in "
+              "integer-backed enums",
+              tokStream->peek()->get_location());
+          return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+                  FAILED};
+        }
         // Integer discriminant: Foo(42)
         if (tokStream->peek()->tok_type == TokNum) {
           auto num_tok = expect(TokNum);
