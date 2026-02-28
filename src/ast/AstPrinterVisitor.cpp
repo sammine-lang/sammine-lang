@@ -80,6 +80,7 @@ public:
   virtual void visit(FieldAccessExprAST *ast) override;
   virtual void visit(CaseExprAST *ast) override;
   virtual void visit(WhileExprAST *ast) override;
+  virtual void visit(TupleLiteralExprAST *ast) override;
   // pre order
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
@@ -112,6 +113,7 @@ public:
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
   virtual void preorder_walk(CaseExprAST *ast) override;
   virtual void preorder_walk(WhileExprAST *ast) override;
+  virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -147,6 +149,7 @@ public:
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
   virtual void postorder_walk(CaseExprAST *ast) override;
   virtual void postorder_walk(WhileExprAST *ast) override;
+  virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -185,7 +188,12 @@ void AstPrinterVisitor::visit(ProgramAST *ast) {
 void AstPrinterVisitor::visit(VarDefAST *ast) {
   generic_preprintln(ast);
   ast->walk_with_preorder(this);
-  safeguard_visit(ast->TypedVar.get(), "!!nullptr!! TypedVarAST\n");
+  if (ast->is_tuple_destructure) {
+    for (auto &v : ast->destructure_vars)
+      safeguard_visit(v.get(), "!!nullptr!! TypedVarAST\n");
+  } else {
+    safeguard_visit(ast->TypedVar.get(), "!!nullptr!! TypedVarAST\n");
+  }
   safeguard_visit(ast->Expression.get(), "!!nullptr!! ExprAST\n");
   ast->walk_with_postorder(this);
   generic_postprint();
@@ -615,6 +623,17 @@ void AstPrinterVisitor::visit(WhileExprAST *ast) {
 }
 void AstPrinterVisitor::preorder_walk(WhileExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(WhileExprAST *ast) {}
+
+void AstPrinterVisitor::visit(TupleLiteralExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  for (auto &elem : ast->elements)
+    safeguard_visit(elem.get(), "!!nullptr!! ExprAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
   generic_preprintln(ast);

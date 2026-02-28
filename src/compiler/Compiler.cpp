@@ -631,6 +631,17 @@ void Compiler::emit_interface() {
       return "[" + qualify_type(arr.get_element()) + ";" +
              std::to_string(arr.get_size()) + "]";
     }
+    case TypeKind::Tuple: {
+      auto &tup = std::get<TupleType>(t.type_data);
+      std::string result = "(";
+      for (size_t i = 0; i < tup.size(); i++) {
+        result += qualify_type(tup.get_element(i));
+        if (i + 1 < tup.size())
+          result += ", ";
+      }
+      result += ")";
+      return result;
+    }
     default:
       return t.to_string();
     }

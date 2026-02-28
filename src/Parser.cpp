@@ -435,6 +435,54 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
             NONCOMMITTED};
   auto mut_tok = expect(TokenType::TokMUT);
   bool is_mutable = mut_tok != nullptr;
+
+  // Check for destructuring: let (a, b) = expr;
+  if (auto lparen = expect(TokenType::TokLeftParen)) {
+    std::vector<std::unique_ptr<TypedVarAST>> vars;
+    auto [first_var, first_result] = ParseTypedVar();
+    if (first_result != SUCCESS) {
+      this->imm_error("Expected variable name in destructuring pattern",
+                      lparen->get_location());
+      return {nullptr, FAILED};
+    }
+    vars.push_back(std::move(first_var));
+    while (expect(TokenType::TokComma)) {
+      auto [next_var, next_result] = ParseTypedVar();
+      if (next_result != SUCCESS) {
+        this->imm_error("Expected variable name after ',' in destructuring",
+                        lparen->get_location());
+        return {nullptr, FAILED};
+      }
+      vars.push_back(std::move(next_var));
+    }
+    REQUIRE(_rp, TokRightParen,
+            "Expected ')' to close destructuring pattern",
+            lparen->get_location(), {nullptr, FAILED});
+    auto assign_tok = expect(TokenType::TokASSIGN, true, TokSemiColon);
+    if (!assign_tok) {
+      this->imm_error("Expected '=' after destructuring pattern",
+                      lparen->get_location());
+      return {nullptr, FAILED};
+    }
+    auto [expr, result] = ParseExpr();
+    if (result != SUCCESS) {
+      this->imm_error("Expected expression in destructuring variable definition",
+                      let->get_location());
+      return {nullptr, FAILED};
+    }
+    auto semicolon = expect(TokenType::TokSemiColon, true);
+    if (!semicolon) {
+      this->imm_error("Expected ';' after variable definition",
+                      tokStream->currentLocation());
+      return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr),
+                                          is_mutable),
+              FAILED};
+    }
+    return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr),
+                                        is_mutable),
+            SUCCESS};
+  }
+
   auto [typedVar, tv_result] = ParseTypedVar();
   if (tv_result != SUCCESS) {
     emit_if_uncommitted(tv_result, "Expected a typed variable after 'let'",
@@ -558,40 +606,51 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto lparen = expect(TokenType::TokLeftParen)) {
-    // Parse function type: (type, type, ...) -> retType
-    std::vector<std::unique_ptr<TypeExprAST>> paramTypes;
+    // Parse types inside parens: could be function type or tuple type
+    std::vector<std::unique_ptr<TypeExprAST>> types;
     if (tokStream->peek()->tok_type != TokenType::TokRightParen) {
       auto first = ParseTypeExpr();
       if (!first) {
-        this->imm_error("Expected parameter type in function type",
+        this->imm_error("Expected type in parenthesized type expression",
                         lparen->get_location());
         return nullptr;
       }
-      paramTypes.push_back(std::move(first));
+      types.push_back(std::move(first));
       while (expect(TokenType::TokComma)) {
         auto param = ParseTypeExpr();
         if (!param) {
-          this->imm_error("Expected parameter type after ',' in function type",
+          this->imm_error("Expected type after ',' in type expression",
                           lparen->get_location());
           return nullptr;
         }
-        paramTypes.push_back(std::move(param));
+        types.push_back(std::move(param));
       }
     }
-    REQUIRE(_rp, TokRightParen, "Expected ')' in function type",
+    REQUIRE(_rp, TokRightParen, "Expected ')' in type expression",
             lparen->get_location(), nullptr);
-    REQUIRE(_arrow, TokArrow, "Expected '->' after ')' in function type",
-            lparen->get_location(), nullptr);
-    auto retType = ParseTypeExpr();
-    if (!retType) {
-      this->imm_error("Expected return type after '->' in function type",
-                      lparen->get_location());
-      return nullptr;
+    // If '->' follows, it's a function type
+    if (expect(TokenType::TokArrow)) {
+      auto retType = ParseTypeExpr();
+      if (!retType) {
+        this->imm_error("Expected return type after '->' in function type",
+                        lparen->get_location());
+        return nullptr;
+      }
+      auto result = std::make_unique<FunctionTypeExprAST>(std::move(types),
+                                                          std::move(retType));
+      result->location = lparen->get_location();
+      return result;
     }
-    auto result = std::make_unique<FunctionTypeExprAST>(std::move(paramTypes),
-                                                        std::move(retType));
-    result->location = lparen->get_location();
-    return result;
+    // Otherwise it's a tuple type (must have 2+ elements)
+    if (types.size() >= 2) {
+      auto result = std::make_unique<TupleTypeExprAST>(std::move(types));
+      result->location = lparen->get_location();
+      return result;
+    }
+    // Single element in parens with no arrow is not valid as a type
+    this->imm_error("Expected '->' for function type or ',' for tuple type",
+                    lparen->get_location());
+    return nullptr;
   }
   if (auto id = expect(TokenType::TokID)) {
     // Build the base name (simple or qualified)
@@ -1610,6 +1669,28 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
     this->imm_error("Incomplete expression after '('",
                     tok_left->get_location());
     return {std::unique_ptr<UnitExprAST>(), FAILED};
+  }
+
+  // Check for tuple: (expr, expr, ...)
+  if (result == SUCCESS && tokStream->peek()->tok_type == TokComma) {
+    std::vector<std::unique_ptr<ExprAST>> elements;
+    elements.push_back(std::move(expr));
+    while (expect(TokComma)) {
+      auto [next_expr, next_result] = ParseExpr();
+      if (next_result != SUCCESS) {
+        this->imm_error("Expected expression after ',' in tuple",
+                        tok_left->get_location());
+        return {nullptr, FAILED};
+      }
+      elements.push_back(std::move(next_expr));
+    }
+    REQUIRE(tok_right, TokRightParen,
+            "Expected ')' to close tuple literal",
+            tok_left->get_location(),
+            {nullptr, FAILED});
+    auto tuple = std::make_unique<TupleLiteralExprAST>(std::move(elements));
+    tuple->join_location(tok_left)->join_location(tok_right);
+    return {std::move(tuple), SUCCESS};
   }
 
   REQUIRE(tok_right, TokRightParen,

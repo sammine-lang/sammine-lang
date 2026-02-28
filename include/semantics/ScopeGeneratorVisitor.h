@@ -94,6 +94,7 @@ public:
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
   virtual void preorder_walk(CaseExprAST *ast) override;
   virtual void preorder_walk(WhileExprAST *ast) override;
+  virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -130,6 +131,7 @@ public:
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
   virtual void postorder_walk(CaseExprAST *ast) override;
   virtual void postorder_walk(WhileExprAST *ast) override;
+  virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 };

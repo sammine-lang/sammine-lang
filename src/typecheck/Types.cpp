@@ -72,6 +72,26 @@ EnumType::get_variant_index(const std::string &variant_name) const {
   return std::nullopt;
 }
 
+TupleType::TupleType(std::vector<Type> element_types)
+    : element_types(
+          std::make_shared<std::vector<Type>>(std::move(element_types))) {}
+bool TupleType::operator==(const TupleType &t) const {
+  return *element_types == *t.element_types;
+}
+const std::vector<Type> &TupleType::get_element_types() const {
+  return *element_types;
+}
+size_t TupleType::size() const { return element_types->size(); }
+Type TupleType::get_element(size_t idx) const {
+  return (*element_types)[idx];
+}
+
+Type::Type(const Type &other) = default;
+Type::Type(Type &&other) noexcept = default;
+Type &Type::operator=(const Type &other) = default;
+Type &Type::operator=(Type &&other) noexcept = default;
+Type::~Type() = default;
+
 Type Type::Function(std::vector<Type> params, bool var_arg) {
   return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
@@ -96,6 +116,7 @@ bool Type::operator==(const Type &other) const {
       this->type_kind == TypeKind::Array ||
       this->type_kind == TypeKind::Struct ||
       this->type_kind == TypeKind::Enum ||
+      this->type_kind == TypeKind::Tuple ||
       this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 
@@ -172,6 +193,19 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
     auto &et = std::get<EnumType>(b.type_data);
     if (et.is_integer_backed() && a.type_kind == et.get_backing_type())
       return true;
+  }
+
+  // Tuple compatibility: element-wise, same arity
+  if (a.type_kind == TypeKind::Tuple && b.type_kind == TypeKind::Tuple) {
+    auto &at = std::get<TupleType>(a.type_data);
+    auto &bt = std::get<TupleType>(b.type_data);
+    if (at.size() != bt.size())
+      return false;
+    for (size_t i = 0; i < at.size(); i++) {
+      if (!compatible_to_from(at.get_element(i), bt.get_element(i)))
+        return false;
+    }
+    return true;
   }
 
   return a == b;

@@ -139,6 +139,7 @@ public:
   virtual void visit(FieldAccessExprAST *ast) override;
   virtual void visit(CaseExprAST *ast) override;
   virtual void visit(WhileExprAST *ast) override;
+  virtual void visit(TupleLiteralExprAST *ast) override;
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
 
@@ -217,6 +218,7 @@ public:
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
   virtual void preorder_walk(CaseExprAST *ast) override;
   virtual void preorder_walk(WhileExprAST *ast) override;
+  virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -252,6 +254,7 @@ public:
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
   virtual void postorder_walk(CaseExprAST *ast) override;
   virtual void postorder_walk(WhileExprAST *ast) override;
+  virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
 
@@ -286,6 +289,7 @@ public:
   virtual Type synthesize(FieldAccessExprAST *ast) override;
   virtual Type synthesize(CaseExprAST *ast) override;
   virtual Type synthesize(WhileExprAST *ast) override;
+  virtual Type synthesize(TupleLiteralExprAST *ast) override;
   virtual Type synthesize(TypeClassDeclAST *ast) override;
   virtual Type synthesize(TypeClassInstanceAST *ast) override;
 
@@ -337,6 +341,17 @@ public:
         return Type::Poisoned();
       total_types.push_back(ret);
       return Type::Function(std::move(total_types));
+    }
+
+    if (auto *tup = llvm::dyn_cast<TupleTypeExprAST>(type_expr)) {
+      std::vector<Type> elem_types;
+      for (auto &et : tup->element_types) {
+        auto resolved = resolve_type_expr(et.get());
+        if (resolved.is_poisoned())
+          return Type::Poisoned();
+        elem_types.push_back(resolved);
+      }
+      return Type::Tuple(std::move(elem_types));
     }
 
     if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(type_expr)) {

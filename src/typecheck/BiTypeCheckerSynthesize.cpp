@@ -19,6 +19,55 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   if (ast->synthesized())
     return ast->type;
 
+  // Handle tuple destructuring: let (a, b) = expr;
+  if (ast->is_tuple_destructure) {
+    if (!ast->Expression) {
+      this->add_error(ast->get_location(),
+                      "Destructuring requires an initializer expression");
+      return ast->type = Type::Poisoned();
+    }
+    auto expr_type = ast->Expression->accept_synthesis(this);
+    if (expr_type.is_poisoned())
+      return ast->type = Type::Poisoned();
+
+    if (expr_type.type_kind != TypeKind::Tuple) {
+      this->add_error(ast->Expression->get_location(),
+                      fmt::format("Cannot destructure non-tuple type '{}'",
+                                  expr_type.to_string()));
+      return ast->type = Type::Poisoned();
+    }
+
+    auto &tt = std::get<TupleType>(expr_type.type_data);
+    if (tt.size() != ast->destructure_vars.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Tuple has {} elements but destructuring has {} variables",
+                      tt.size(), ast->destructure_vars.size()));
+      return ast->type = Type::Poisoned();
+    }
+
+    for (size_t i = 0; i < tt.size(); i++) {
+      auto elem_type = tt.get_element(i);
+      // If the var has a type annotation, check compatibility
+      if (ast->destructure_vars[i]->type_expr) {
+        auto ann_type = ast->destructure_vars[i]->accept_synthesis(this);
+        if (!type_map_ordering.compatible_to_from(ann_type, elem_type)) {
+          this->add_error(
+              ast->destructure_vars[i]->get_location(),
+              fmt::format("Type annotation '{}' incompatible with tuple "
+                          "element type '{}'",
+                          ann_type.to_string(), elem_type.to_string()));
+          return ast->type = Type::Poisoned();
+        }
+        elem_type = ann_type;
+      }
+      ast->destructure_vars[i]->type = elem_type;
+      id_to_type.registerNameT(ast->destructure_vars[i]->name, elem_type);
+    }
+
+    return ast->type = Type::Unit();
+  }
+
   // if you dont have type lexeme for typed var, then just assign type of expr
   // to typed var, if we dont have expr also, then we add error
   //
@@ -743,8 +792,10 @@ Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
                                 operand_type.to_string()));
     return ast->type = Type::Poisoned();
   }
-  return ast->type =
-             std::get<PointerType>(operand_type.type_data).get_pointee();
+
+  auto pointee = std::get<PointerType>(operand_type.type_data).get_pointee();
+
+  return ast->type = pointee;
 }
 
 Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
@@ -1014,6 +1065,25 @@ Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
   return ast->type = Type::Unit();
 }
 
+Type BiTypeCheckerVisitor::synthesize(TupleLiteralExprAST *ast) {
+  if (ast->synthesized())
+    return ast->type;
+  std::vector<Type> elem_types;
+  for (auto &elem : ast->elements) {
+    auto t = elem->accept_synthesis(this);
+    if (t.is_poisoned())
+      return ast->type = Type::Poisoned();
+    // Default polymorphic literals in tuple elements
+    if (t.is_polymorphic_numeric()) {
+      auto concrete = default_polymorphic_type(t);
+      resolve_literal_type(elem.get(), concrete);
+      t = concrete;
+    }
+    elem_types.push_back(t);
+  }
+  return ast->type = Type::Tuple(std::move(elem_types));
+}
+
 Type BiTypeCheckerVisitor::synthesize(TypeClassDeclAST *ast) {
   return Type::NonExistent();
 }
@@ -1228,6 +1298,16 @@ bool BiTypeCheckerVisitor::unify(
         return false;
     return unify(pf.get_return_type(), cf.get_return_type(), bindings);
   }
+  if (pattern.type_kind == TypeKind::Tuple) {
+    auto &pt = std::get<TupleType>(pattern.type_data);
+    auto &ct = std::get<TupleType>(concrete.type_data);
+    if (pt.size() != ct.size())
+      return false;
+    for (size_t i = 0; i < pt.size(); i++)
+      if (!unify(pt.get_element(i), ct.get_element(i), bindings))
+        return false;
+    return true;
+  }
 
   return true;
 }
@@ -1256,6 +1336,13 @@ Type BiTypeCheckerVisitor::substitute(
       total.push_back(substitute(p, bindings));
     total.push_back(substitute(fn.get_return_type(), bindings));
     return Type::Function(std::move(total));
+  }
+  if (type.type_kind == TypeKind::Tuple) {
+    auto &tt = std::get<TupleType>(type.type_data);
+    std::vector<Type> elems;
+    for (auto &e : tt.get_element_types())
+      elems.push_back(substitute(e, bindings));
+    return Type::Tuple(std::move(elems));
   }
   return type;
 }

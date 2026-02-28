@@ -140,6 +140,7 @@ public:
   mlir::Value emitFieldAccessExpr(AST::FieldAccessExprAST *ast);
   mlir::Value emitEnumConstructor(AST::CallExprAST *ast);
   mlir::Value emitCaseExpr(AST::CaseExprAST *ast);
+  mlir::Value emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast);
   mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                         mlir::Value scrutineeVal,
                                         const EnumType &et);

@@ -100,7 +100,8 @@ std::unique_ptr<BlockAST> Monomorphizer::clone_block(BlockAST *block) {
 // VariableExprAST, CallExprAST, BinaryExprAST, ReturnExprAST,
 // VarDefAST, IfExprAST, UnitExprAST, DerefExprAST, AddrOfExprAST,
 // AllocExprAST, FreeExprAST, ArrayLiteralExprAST, IndexExprAST,
-// LenExprAST, UnaryNegExprAST, StructLiteralExprAST, FieldAccessExprAST
+// LenExprAST, UnaryNegExprAST, StructLiteralExprAST, FieldAccessExprAST,
+// CaseExprAST, WhileExprAST, TupleLiteralExprAST
 std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   if (!expr)
     return nullptr;
@@ -159,6 +160,14 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   if (auto *vd = llvm::dyn_cast<VarDefAST>(expr)) {
+    if (vd->is_tuple_destructure) {
+      std::vector<std::unique_ptr<TypedVarAST>> vars;
+      for (auto &v : vd->destructure_vars)
+        vars.push_back(clone_typed_var(v.get()));
+      return std::make_unique<VarDefAST>(
+          make_tok("let"), std::move(vars),
+          clone_expr(vd->Expression.get()), vd->is_mutable);
+    }
     auto result = std::make_unique<VarDefAST>(
         make_tok("let"), clone_typed_var(vd->TypedVar.get()),
         clone_expr(vd->Expression.get()), vd->is_mutable);
@@ -246,6 +255,11 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   if (auto *wh = llvm::dyn_cast<WhileExprAST>(expr)) {
     return std::make_unique<WhileExprAST>(clone_expr(wh->condition.get()),
                                           clone_block(wh->body.get()));
+  }
+
+  if (auto *tup = llvm::dyn_cast<TupleLiteralExprAST>(expr)) {
+    return std::make_unique<TupleLiteralExprAST>(
+        clone_expr_vec(tup->elements));
   }
 
   sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");

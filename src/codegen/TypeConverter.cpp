@@ -55,6 +55,8 @@ llvm::Type *TypeConverter::get_type(Type t) {
         fmt::format("Enum '{}' not registered in TypeConverter",
                     et.get_name().display()));
   }
+  case TypeKind::Tuple:
+    sammine_util::abort("Tuple type not supported in old LLVM codegen");
   case TypeKind::Never:
     sammine_util::abort("Never type should not reach codegen");
   case TypeKind::NonExistent:
@@ -181,6 +183,7 @@ llvm::CmpInst::Predicate TypeConverter::get_cmp_func(Type a, Type b,
   case TypeKind::Flt:
   case TypeKind::Struct:
   case TypeKind::Enum:
+  case TypeKind::Tuple:
   case TypeKind::TypeParam:
     sammine_util::abort(
         fmt::format("Cannot compare values of this type: {}", a.to_string()));

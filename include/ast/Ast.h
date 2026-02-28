@@ -45,6 +45,7 @@ enum class TypeExprKind {
   Array,
   Function,
   Generic,
+  Tuple,
 };
 
 class TypeExprAST {
@@ -154,6 +155,27 @@ public:
         res += ", ";
     }
     res += ">";
+    return res;
+  }
+};
+
+class TupleTypeExprAST : public TypeExprAST {
+public:
+  std::vector<std::unique_ptr<TypeExprAST>> element_types;
+  TupleTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> element_types)
+      : TypeExprAST(TypeExprKind::Tuple),
+        element_types(std::move(element_types)) {}
+  static bool classof(const TypeExprAST *node) {
+    return node->getKind() == TypeExprKind::Tuple;
+  }
+  std::string to_string() const override {
+    std::string res = "(";
+    for (size_t i = 0; i < element_types.size(); i++) {
+      res += element_types[i]->to_string();
+      if (i != element_types.size() - 1)
+        res += ", ";
+    }
+    res += ")";
     return res;
   }
 };
@@ -369,11 +391,13 @@ public:
   AST_NODE_METHODS("EnumDefAST", NodeKind::EnumDefAST)
 };
 
-//! \brief A variable definition: "var x = expression;"
+//! \brief A variable definition: "var x = expression;" or "let (a, b) = expr;"
 class VarDefAST : public ExprAST {
 public:
   bool is_mutable = false;
-  std::unique_ptr<TypedVarAST> TypedVar;
+  bool is_tuple_destructure = false;
+  std::unique_ptr<TypedVarAST> TypedVar;                      // single var (existing)
+  std::vector<std::unique_ptr<TypedVarAST>> destructure_vars; // tuple (new)
   std::unique_ptr<ExprAST> Expression;
 
   explicit VarDefAST(std::shared_ptr<Token> let,
@@ -386,6 +410,21 @@ public:
     this->join_location(let)
         ->join_location(this->TypedVar.get())
         ->join_location(this->Expression.get());
+  };
+
+  // Destructuring constructor: let (a, b) = expr;
+  explicit VarDefAST(std::shared_ptr<Token> let,
+                     std::vector<std::unique_ptr<TypedVarAST>> destructure_vars,
+                     std::unique_ptr<ExprAST> Expression,
+                     bool is_mutable = false)
+      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable),
+        is_tuple_destructure(true),
+        destructure_vars(std::move(destructure_vars)),
+        Expression(std::move(Expression)) {
+    this->join_location(let);
+    for (auto &v : this->destructure_vars)
+      this->join_location(v.get());
+    this->join_location(this->Expression.get());
   };
 
   AST_NODE_METHODS("VarDefAST", NodeKind::VarDefAST)
@@ -564,6 +603,7 @@ public:
 class DerefExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
+  bool is_assignment_lhs = false; // Set by synthesize(BinaryExprAST*) for *p = x
   explicit DerefExprAST(std::shared_ptr<Token> star_tok,
                         std::unique_ptr<ExprAST> operand)
       : ExprAST(NodeKind::DerefExprAST), operand(std::move(operand)) {
@@ -752,6 +792,19 @@ public:
         ->join_location(this->body.get());
   }
   AST_NODE_METHODS("WhileExprAST", NodeKind::WhileExprAST)
+};
+
+class TupleLiteralExprAST : public ExprAST {
+public:
+  std::vector<std::unique_ptr<ExprAST>> elements;
+  explicit TupleLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
+      : ExprAST(NodeKind::TupleLiteralExprAST),
+        elements(std::move(elements)) {
+    for (auto &e : this->elements)
+      if (e)
+        this->join_location(e.get());
+  }
+  AST_NODE_METHODS("TupleLiteralExprAST", NodeKind::TupleLiteralExprAST)
 };
 
 class TypeClassDeclAST : public DefinitionAST {

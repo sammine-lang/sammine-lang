@@ -491,6 +491,7 @@ void CgVisitor::preorder_walk(NumberExprAST *ast) {
   case TypeKind::String:
   case TypeKind::Struct:
   case TypeKind::Enum:
+  case TypeKind::Tuple:
   case TypeKind::Integer:
   case TypeKind::Flt:
   case TypeKind::TypeParam:
@@ -607,6 +608,7 @@ void CgVisitor::visit(IfExprAST *ast) {
   case TypeKind::Unit:
   case TypeKind::Struct:
   case TypeKind::Enum:
+  case TypeKind::Tuple:
   case TypeKind::Array:
   case TypeKind::Function:
   case TypeKind::Pointer:

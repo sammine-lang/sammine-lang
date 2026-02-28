@@ -200,6 +200,14 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
       return getEnumBackingMLIRType(et);
     return enumTypes.at(et.get_name().mangled());
   }
+  case TypeKind::Tuple: {
+    auto &tt = std::get<TupleType>(type.type_data);
+    std::vector<mlir::Type> elemTypes;
+    for (auto &et : tt.get_element_types())
+      elemTypes.push_back(convertType(et));
+    return mlir::LLVM::LLVMStructType::getLiteral(builder.getContext(),
+                                                   elemTypes);
+  }
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -342,6 +350,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitFieldAccessExpr(fieldAccess);
   if (auto *caseExpr = llvm::dyn_cast<AST::CaseExprAST>(ast))
     return emitCaseExpr(caseExpr);
+  if (auto *tupleLit = llvm::dyn_cast<AST::TupleLiteralExprAST>(ast))
+    return emitTupleLiteralExpr(tupleLit);
 
   sammine_util::abort(
       fmt::format("MLIRGen: unsupported expression type '{}'",
@@ -372,6 +382,20 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   mlir::Value initVal = emitExpr(ast->Expression.get());
   if (!initVal)
     return nullptr;
+
+  // Tuple destructuring: let (a, b) = expr;
+  if (ast->is_tuple_destructure) {
+    for (size_t i = 0; i < ast->destructure_vars.size(); i++) {
+      auto elemVal = mlir::LLVM::ExtractValueOp::create(
+          builder, location, initVal,
+          llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+      auto elemType = convertType(ast->destructure_vars[i]->type);
+      auto alloca = emitAllocaOne(elemType, location);
+      mlir::LLVM::StoreOp::create(builder, location, elemVal, alloca);
+      symbolTable.registerNameT(ast->destructure_vars[i]->name, alloca);
+    }
+    return initVal;
+  }
 
   // Arrays: the literal already returns an !llvm.ptr, register it directly
   if (ast->type.type_kind == TypeKind::Array) {
@@ -452,6 +476,23 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
       max_payload = std::max(max_payload, variant_size);
     }
     return 4 + max_payload; // i32 tag + payload
+  }
+  case TypeKind::Tuple: {
+    auto &tt = std::get<TupleType>(type.type_data);
+    int64_t size = 0;
+    for (auto &et : tt.get_element_types()) {
+      int64_t fieldSize = getTypeSize(et);
+      int64_t align = fieldSize;
+      size = llvm::alignTo(size, align);
+      size += fieldSize;
+    }
+    if (!tt.get_element_types().empty()) {
+      int64_t maxAlign = 0;
+      for (auto &et : tt.get_element_types())
+        maxAlign = std::max(maxAlign, getTypeSize(et));
+      size = llvm::alignTo(size, maxAlign);
+    }
+    return size;
   }
   default:
     sammine_util::abort(

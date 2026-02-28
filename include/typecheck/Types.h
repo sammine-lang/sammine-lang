@@ -25,6 +25,7 @@ enum class TypeKind {
   Array,
   Struct,
   Enum,
+  Tuple,
   Never,
   NonExistent,
   Poisoned,
@@ -119,8 +120,18 @@ public:
            bool integer_backed = false,
            TypeKind backing_type = TypeKind::I32_t);
 };
+class TupleType {
+  std::shared_ptr<std::vector<Type>> element_types;
+
+public:
+  bool operator==(const TupleType &t) const;
+  const std::vector<Type> &get_element_types() const;
+  size_t size() const;
+  Type get_element(size_t idx) const;
+  TupleType(std::vector<Type> element_types);
+};
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
-                              EnumType, std::string, std::monostate>;
+                              EnumType, TupleType, std::string, std::monostate>;
 
 struct Type {
   TypeKind type_kind;
@@ -170,6 +181,9 @@ struct Type {
                 EnumType(std::move(name), std::move(variants), integer_backed,
                          backing_type)};
   }
+  static Type Tuple(std::vector<Type> element_types) {
+    return Type{TypeKind::Tuple, TupleType(std::move(element_types))};
+  }
   static Type Function(std::vector<Type> params, bool var_arg = false);
   explicit operator bool() const {
     return this->type_kind != TypeKind::Poisoned;
@@ -180,6 +194,12 @@ struct Type {
   }
   Type(TypeKind type_kind, TypeData type_data)
       : type_kind(type_kind), type_data(type_data) {}
+
+  Type(const Type &other);
+  Type(Type &&other) noexcept;
+  Type &operator=(const Type &other);
+  Type &operator=(Type &&other) noexcept;
+  ~Type();
 
   bool operator==(const Type &other) const;
 
@@ -228,6 +248,17 @@ struct Type {
       res += ") -> ";
       res += fn_type.get_return_type().to_string();
 
+      return res;
+    }
+    case TypeKind::Tuple: {
+      std::string res = "(";
+      auto &tt = std::get<TupleType>(type_data);
+      for (size_t i = 0; i < tt.size(); i++) {
+        res += tt.get_element(i).to_string();
+        if (i != tt.size() - 1)
+          res += ", ";
+      }
+      res += ")";
       return res;
     }
     case TypeKind::Never:
@@ -283,6 +314,7 @@ struct Type {
     case TypeKind::Struct:
     case TypeKind::Enum:
     case TypeKind::Function:
+    case TypeKind::Tuple:
       return true;
     default:
       return false;
@@ -319,6 +351,12 @@ struct Type {
       for (auto &p : fn.get_params_types())
         callback(p);
       callback(fn.get_return_type());
+      break;
+    }
+    case TypeKind::Tuple: {
+      auto &tt = std::get<TupleType>(type_data);
+      for (auto &et : tt.get_element_types())
+        callback(et);
       break;
     }
     default:

@@ -28,7 +28,12 @@ void GeneralSemanticsVisitor::preorder_walk(FuncDefAST *ast) {
 }
 
 void GeneralSemanticsVisitor::preorder_walk(VarDefAST *ast) {
-  check_reserved_identifier(ast->TypedVar->name, ast->get_location());
+  if (ast->is_tuple_destructure) {
+    for (auto &var : ast->destructure_vars)
+      check_reserved_identifier(var->name, var->get_location());
+  } else {
+    check_reserved_identifier(ast->TypedVar->name, ast->get_location());
+  }
 }
 
 void GeneralSemanticsVisitor::preorder_walk(StructDefAST *ast) {

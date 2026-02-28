@@ -185,6 +185,13 @@ bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
 }
 
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
+  // Tuple destructuring: let (a, b) = expr;
+  if (ast->is_tuple_destructure) {
+    ast->Expression->accept_vis(this);
+    ast->accept_synthesis(this);
+    return;
+  }
+
   // Pre-resolve type annotation to trigger generic enum instantiation
   // (ensures variant_constructors is populated for unqualified constructors)
   if (ast->TypedVar->type_expr != nullptr)
@@ -606,6 +613,13 @@ void BiTypeCheckerVisitor::visit(WhileExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(TupleLiteralExprAST *ast) {
+  for (auto &elem : ast->elements)
+    if (elem)
+      elem->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   if (type_class_defs.contains(ast->class_name))
     return;
@@ -740,6 +754,7 @@ void BiTypeCheckerVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(CaseExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(WhileExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
@@ -775,6 +790,7 @@ void BiTypeCheckerVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(CaseExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(WhileExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 

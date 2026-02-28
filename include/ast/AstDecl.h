@@ -37,6 +37,7 @@ class StructLiteralExprAST;
 class FieldAccessExprAST;
 class CaseExprAST;
 class WhileExprAST;
+class TupleLiteralExprAST;
 class EnumDefAST;
 class TypeClassDeclAST;
 class TypeClassInstanceAST;

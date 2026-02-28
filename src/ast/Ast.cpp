@@ -20,7 +20,12 @@ void ASTVisitor::visit(ProgramAST *ast) {
 }
 void ASTVisitor::visit(VarDefAST *ast) {
   ast->walk_with_preorder(this);
-  ast->TypedVar->accept_vis(this);
+  if (ast->is_tuple_destructure) {
+    for (auto &var : ast->destructure_vars)
+      var->accept_vis(this);
+  } else {
+    ast->TypedVar->accept_vis(this);
+  }
   ast->Expression->accept_vis(this);
   ast->walk_with_postorder(this);
 }
@@ -204,6 +209,13 @@ void ASTVisitor::visit(WhileExprAST *ast) {
     ast->condition->accept_vis(this);
   if (ast->body)
     ast->body->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+void ASTVisitor::visit(TupleLiteralExprAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &elem : ast->elements)
+    if (elem)
+      elem->accept_vis(this);
   ast->walk_with_postorder(this);
 }
 void ASTVisitor::visit(TypeClassDeclAST *ast) {

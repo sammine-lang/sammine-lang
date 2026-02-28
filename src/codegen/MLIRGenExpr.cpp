@@ -666,7 +666,10 @@ mlir::Value MLIRGenImpl::emitDerefExpr(AST::DerefExprAST *ast) {
     return ptr;
 
   auto mlirPointeeType = convertType(pointeeType);
-  return mlir::LLVM::LoadOp::create(builder, location, mlirPointeeType, ptr);
+  auto loadedVal =
+      mlir::LLVM::LoadOp::create(builder, location, mlirPointeeType, ptr);
+
+  return loadedVal;
 }
 
 mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
@@ -958,6 +961,28 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
         .getResult();
   }
   return result;
+}
+
+mlir::Value MLIRGenImpl::emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast) {
+  auto location = loc(ast);
+  auto tupleTy = convertType(ast->type);
+
+  // Start with undef
+  mlir::Value agg = mlir::LLVM::UndefOp::create(builder, location, tupleTy);
+
+  // Insert each element at its index
+  for (size_t i = 0; i < ast->elements.size(); i++) {
+    auto val = emitExpr(ast->elements[i].get());
+    // Array elements return !llvm.ptr; InsertValueOp needs LLVMArrayType
+    if (ast->elements[i]->type.type_kind == TypeKind::Array &&
+        mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
+      val = mlir::LLVM::LoadOp::create(
+          builder, location, convertType(ast->elements[i]->type), val);
+    }
+    agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
+                                             llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+  }
+  return agg;
 }
 
 mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {

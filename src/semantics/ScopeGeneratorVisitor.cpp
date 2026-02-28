@@ -75,6 +75,18 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
   }
 }
 void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
+  if (ast->is_tuple_destructure) {
+    for (auto &var : ast->destructure_vars) {
+      auto var_name = var->name;
+      if (can_see(var_name) == nameNotFound) {
+        register_name(var_name, var->get_location());
+      } else if (can_see(var_name) == nameFound) {
+        // Allow shadowing in destructuring (needed for linear deref rebinding)
+        register_name(var_name, var->get_location());
+      }
+    }
+    return;
+  }
 
   auto var_name = ast->TypedVar->name;
   if (can_see(var_name) == nameNotFound) {
@@ -142,6 +154,7 @@ void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(CaseExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(WhileExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 
@@ -225,6 +238,7 @@ void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CaseExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(WhileExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 } // namespace sammine_lang::AST
