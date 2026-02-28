@@ -146,12 +146,6 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
     return true;
   }
 
-  // Mutability check: immutable cannot flow into mutable
-  // (mut -> immut is fine, immut -> mut is not)
-  // Primitive/literal types bypass this check since they are always by-value.
-  if (a.is_mutable && !b.is_mutable && !b.is_literal()) {
-    return false;
-  }
 
   // Linearity check: linear and non-linear pointers are incompatible
   if (a.type_kind == TypeKind::Pointer && b.type_kind == TypeKind::Pointer) {
