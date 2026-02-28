@@ -2,6 +2,7 @@ export reuse printf(fmt: ptr<char>, ...) -> i32;
 reuse sammine_io_eprint(s: ptr<char>) -> unit;
 reuse sammine_io_eprintln(s: ptr<char>) -> unit;
 reuse sammine_io_read_line(out_len: ptr<i64>) -> ptr<char>;
+reuse scanf(fmt: ptr<char>, ...) -> i32;
 reuse sammine_io_open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char>;
 reuse sammine_io_close(handle: 'ptr<char>) -> unit;
 reuse sammine_io_file_read_line(handle: 'ptr<char>, out_buf: ptr<ptr<char>>, out_len: ptr<i64>) -> 'ptr<char>;
@@ -22,6 +23,9 @@ export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
 export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
 export let read_line(out_len: ptr<i64>) -> ptr<char> { sammine_io_read_line(out_len) }
+export let read_i32() -> i32 { let mut v: i32 = 0; scanf("%d", &v); v }
+export let read_i64() -> i64 { let mut v: i64 = 0i64; scanf("%ld", &v); v }
+export let read_f64() -> f64 { let mut v: f64 = 0.0; scanf("%lf", &v); v }
 
 export let open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char> { sammine_io_open(path, mode) }
 export let close(f: 'ptr<char>) -> unit { sammine_io_close(f) }
