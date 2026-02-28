@@ -1,5 +1,5 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_annotation_mismatch.mn
+# CHECK:          |hint_linearity_mismatch.mn
 # CHECK-NEXT:   15|
 # CHECK-NEXT:   16|let main() -> i32 {
 # CHECK-NEXT:   17|  let p : ptr<i32> = alloc<i32>(1);

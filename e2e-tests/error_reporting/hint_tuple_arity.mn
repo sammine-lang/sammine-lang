@@ -1,0 +1,18 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |hint_tuple_arity.mn:16:2
+# CHECK-NEXT:   14|let main() -> i32 {
+# CHECK-NEXT:   15|  let tup = (1, 2, 3);
+# CHECK-NEXT:   16|  let (a, b) = tup;
+# CHECK-NEXT:     |  ───────────────┬
+# CHECK-NEXT:     |                 ╰─ Tuple has 3 elements but destructuring has 2 variables
+# CHECK-NEXT:   17|  return 0;
+# CHECK-NEXT:   18|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+let main() -> i32 {
+  let tup = (1, 2, 3);
+  let (a, b) = tup;
+  return 0;
+}
