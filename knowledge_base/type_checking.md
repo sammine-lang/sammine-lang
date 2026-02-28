@@ -121,6 +121,19 @@ Generic functions and enums only (not structs). No const generics, no partial ap
 ### Type Param Shadowing
 Type params shadow outer types — e.g. a struct named `T` is hidden by `<T>` inside a generic function. `PrototypeAST::type_params` is populated during **parsing**; type checker registers them in `typename_to_type` before visiting the body.
 
+## Incompatibility Hints (`incompatibility_hint()` in `Types.h`/`Types.cpp`)
+
+Free function `std::optional<std::string> incompatibility_hint(const Type &expected, const Type &actual)` — returns a `"note: ..."` hint string explaining *why* two types are incompatible, rendered via `add_diagnostics()` (green color) alongside the error (red).
+
+| Failure reason | Hint text |
+|---|---|
+| Linearity mismatch (both `Pointer`, different `is_linear`) | `"note: 'ptr<T>' is a linear (owned) pointer, 'ptr<T>' is non-linear — these are incompatible"` |
+| Mutability (`expected.is_mutable && !actual.is_mutable && !actual.is_literal()`) | `"note: expected a mutable value, but got an immutable one"` |
+| Signed/unsigned mismatch (i32/i64 vs u32/u64) | `"note: signed and unsigned integer types cannot be mixed"` |
+| Tuple arity mismatch (different element counts) | `"note: tuples have different sizes (N vs M elements)"` |
+
+Called at every `compatible_to_from` failure site in `BiTypeChecker.cpp` (5 sites) and `BiTypeCheckerSynthesize.cpp` (7 sites) immediately after `add_error`.
+
 ## Edge Cases
 - **Polymorphic literal binops**: both operands polymorphic + same kind → skip dispatch, keep polymorphic. Excluded for comparison/logical ops (must return `Bool`).
 - **Compound comparison guards**: Array/Pointer only allow `==`/`!=`; others → error + `Poisoned`.
