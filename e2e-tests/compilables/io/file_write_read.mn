@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: hello from file
+
+import io;
+
+let main() -> i32 {
+  let content: ptr<char> = "hello from file";
+  let result: i32 = io::write_file("/tmp/sammine_test_io.txt", content, 15);
+  let mut out_len: i64 = 0;
+  let data: ptr<char> = io::read_file("/tmp/sammine_test_io.txt", &out_len);
+  io::println(data);
+  0
+}

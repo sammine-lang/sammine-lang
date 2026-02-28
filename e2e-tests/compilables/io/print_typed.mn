@@ -1,0 +1,25 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+# CHECK-NEXT: 1000000
+# CHECK-NEXT: 3.140000
+# CHECK-NEXT: A
+# CHECK-NEXT: true
+# CHECK-NEXT: false
+
+import io;
+
+let main() -> i32 {
+  io::print_i32(42);
+  io::printf("\n");
+  io::print_i64(1000000);
+  io::printf("\n");
+  io::print_f64(3.14);
+  io::printf("\n");
+  io::print_char('A');
+  io::printf("\n");
+  io::print_bool(true);
+  io::printf("\n");
+  io::print_bool(false);
+  io::printf("\n");
+  0
+}

@@ -1,0 +1,43 @@
+export reuse printf(fmt: ptr<char>, ...) -> i32;
+reuse sammine_io_eprint(s: ptr<char>) -> unit;
+reuse sammine_io_eprintln(s: ptr<char>) -> unit;
+reuse sammine_io_read_line(out_len: ptr<i64>) -> ptr<char>;
+reuse sammine_io_open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char>;
+reuse sammine_io_close(handle: 'ptr<char>) -> unit;
+reuse sammine_io_file_read_line(handle: 'ptr<char>, out_buf: ptr<ptr<char>>, out_len: ptr<i64>) -> 'ptr<char>;
+reuse sammine_io_file_write(handle: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char>;
+reuse sammine_io_read_file(path: ptr<char>, out_len: ptr<i64>) -> ptr<char>;
+reuse sammine_io_write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
+reuse sammine_io_append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
+
+export let print(s: ptr<char>) -> unit { printf("%s", s); }
+export let println(s: ptr<char>) -> unit { printf("%s\n", s); }
+export let print_i32(n: i32) -> unit { printf("%d", n); }
+export let print_i64(n: i64) -> unit { printf("%ld", n); }
+export let print_f64(n: f64) -> unit { printf("%f", n); }
+export let print_char(c: char) -> unit { printf("%c", c); }
+export let print_bool(b: bool) -> unit { if b { printf("true") } else { printf("false") }; }
+
+export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
+export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
+
+export let read_line(out_len: ptr<i64>) -> ptr<char> { sammine_io_read_line(out_len) }
+
+export let open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char> { sammine_io_open(path, mode) }
+export let close(f: 'ptr<char>) -> unit { sammine_io_close(f) }
+export let file_read_line(f: 'ptr<char>, out_buf: ptr<ptr<char>>, out_len: ptr<i64>) -> 'ptr<char> {
+  sammine_io_file_read_line(f, out_buf, out_len)
+}
+export let file_write(f: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char> {
+  sammine_io_file_write(f, content, nbytes)
+}
+
+export let read_file(path: ptr<char>, out_len: ptr<i64>) -> ptr<char> {
+  sammine_io_read_file(path, out_len)
+}
+export let write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+  sammine_io_write_file(path, content, nbytes)
+}
+export let append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+  sammine_io_append_file(path, content, nbytes)
+}

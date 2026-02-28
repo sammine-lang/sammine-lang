@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: hello world
+# CHECK-NEXT: goodbye
+
+import io;
+
+let main() -> i32 {
+  io::print("hello ");
+  io::println("world");
+  io::println("goodbye");
+  0
+}

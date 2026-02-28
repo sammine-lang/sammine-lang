@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O && echo "hello stdin" | %T/%base.exe | %check %full
+# CHECK: got: hello stdin
+
+import io;
+
+let main() -> i32 {
+  let mut line_len: i64 = 0;
+  let line: ptr<char> = io::read_line(&line_len);
+  io::print("got: ");
+  io::println(line);
+  0
+}

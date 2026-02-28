@@ -1,0 +1,9 @@
+# RUN: %sammine --file %full %O && %T/%base.exe 2>&1 | %check %full
+# CHECK: error: something went wrong
+
+import io;
+
+let main() -> i32 {
+  io::eprintln("error: something went wrong");
+  0
+}

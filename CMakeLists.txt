@@ -97,6 +97,36 @@ foreach(file ${STDLIB_COPIED})
   list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
 endforeach()
 
+# --- io module: sammine wrapper + C runtime merged into single .o ---
+# Compile io_runtime.c → io_runtime.o
+add_custom_command(
+  OUTPUT ${STDLIB_DIR}/io_runtime.o
+  COMMAND ${CMAKE_C_COMPILER} -c ${CMAKE_SOURCE_DIR}/stdlib/io_runtime.c
+          -o ${STDLIB_DIR}/io_runtime.o
+  DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/io_runtime.c
+  COMMENT "Compiling stdlib/io_runtime.c"
+)
+
+# Compile io.mn → io.o + io.mni, then rename io.o to io_sammine.o
+add_custom_command(
+  OUTPUT ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io.mni
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn -O ${STDLIB_DIR}
+  COMMAND ${CMAKE_COMMAND} -E rename ${STDLIB_DIR}/io.o ${STDLIB_DIR}/io_sammine.o
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn
+  COMMENT "Compiling stdlib/io.mn"
+)
+
+# Merge into single io.o (preserves one-module = one-.o import invariant)
+add_custom_command(
+  OUTPUT ${STDLIB_DIR}/io.o
+  COMMAND ld -r ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io_runtime.o
+          -o ${STDLIB_DIR}/io.o
+  DEPENDS ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io_runtime.o
+  COMMENT "Merging io_sammine.o + io_runtime.o → io.o"
+)
+
+list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.o ${STDLIB_DIR}/io.mni)
+
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
