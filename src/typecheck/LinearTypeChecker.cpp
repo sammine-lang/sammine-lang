@@ -241,42 +241,22 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     // Check LHS for deref-after-consume (e.g. free(p); *p = 7)
     check_stmt(ast->LHS.get());
 
-    // Assignment: check for move semantics on RHS
+    // RHS: linear variable → consume (move), otherwise walk for nested ops
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
       auto *rhs_info = find_linear(var->variableName);
-      if (rhs_info) {
-        // Check if LHS is a linear var being overwritten
-        if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-          auto *lhs_info = find_linear(lhs_var->variableName);
-          if (lhs_info && lhs_info->state == VarState::Unconsumed) {
-            this->add_error(
-                ast->get_location(),
-                fmt::format("Reassigning linear variable '{}' without "
-                            "consuming its previous value",
-                            lhs_var->variableName));
-            return;
-          }
-        }
-        // Consume the RHS (move)
+      if (rhs_info)
         consume(var->variableName, ast->get_location());
-        // If LHS is a linear var, re-register it as unconsumed
-        if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-          auto *lhs_info = find_linear(lhs_var->variableName);
-          if (lhs_info) {
-            lhs_info->state = VarState::Unconsumed;
-            lhs_info->def_location = ast->get_location();
-          }
-        }
-        return;
-      }
+      else
+        check_stmt(ast->RHS.get());
+    } else {
+      check_stmt(ast->RHS.get());
     }
-    // Check RHS for nested linear operations
-    check_stmt(ast->RHS.get());
-    // Check if LHS is a linear var being overwritten with alloc
+
+    // LHS: check for overwrite without consuming, or re-register
     if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       auto *lhs_info = find_linear(lhs_var->variableName);
-      if (lhs_info && lhs_info->state == VarState::Unconsumed) {
-        if (ast->RHS->type.is_linear) {
+      if (lhs_info && ast->RHS->type.is_linear) {
+        if (lhs_info->state == VarState::Unconsumed) {
           this->add_error(
               ast->get_location(),
               fmt::format("Reassigning linear variable '{}' without "
@@ -284,9 +264,6 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
                           lhs_var->variableName));
           return;
         }
-      }
-      // Re-register if RHS is linear (e.g. q = alloc<i32>(1))
-      if (lhs_info && ast->RHS->type.is_linear) {
         lhs_info->state = VarState::Unconsumed;
         lhs_info->def_location = ast->get_location();
       }
