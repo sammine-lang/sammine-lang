@@ -190,7 +190,11 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
     check_struct_literal(sl);
   else if (auto *al = llvm::dyn_cast<ArrayLiteralExprAST>(stmt))
     check_array_literal(al);
-  // All other nodes (deref, number, string, etc.): no linear state changes
+  else if (auto *tl = llvm::dyn_cast<TupleLiteralExprAST>(stmt))
+    check_tuple_literal(tl);
+  else if (auto *dr = llvm::dyn_cast<DerefExprAST>(stmt))
+    check_deref(dr);
+  // All other nodes (number, string, etc.): no linear state changes
 }
 
 // ── check_var_def ───────────────────────────────────────────────────
@@ -198,6 +202,18 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
 void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   if (!ast->Expression)
     return;
+
+  // Tuple destructuring: let (a, b) = expr;
+  if (ast->is_tuple_destructure) {
+    // Walk into RHS
+    check_stmt(ast->Expression.get());
+    // Register any linear vars from the destructured elements
+    for (auto &var : ast->destructure_vars) {
+      if (var->type.is_linear)
+        register_linear(var->name, var->get_location());
+    }
+    return;
+  }
 
   // Check if RHS is a variable referencing a linear var (move)
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
@@ -304,6 +320,28 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
     for (auto &arg : ast->arguments)
       check_stmt(arg.get());
   }
+}
+
+// ── check_deref ─────────────────────────────────────────────────────
+
+void LinearTypeChecker::check_deref(DerefExprAST *ast) {
+  // If the operand is a linear variable, verify it hasn't been consumed
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
+    auto *info = find_linear(var->variableName);
+    if (info && info->state == VarState::Consumed) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Cannot dereference linear variable '{}' — it has "
+                      "already been consumed",
+                      var->variableName));
+      this->add_error(
+          info->consume_location,
+          fmt::format("'{}' was consumed here", var->variableName));
+      return;
+    }
+  }
+  // Walk operand for nested linear ops
+  check_stmt(ast->operand.get());
 }
 
 // ── check_free ──────────────────────────────────────────────────────
@@ -495,6 +533,21 @@ void LinearTypeChecker::check_struct_literal(StructLiteralExprAST *ast) {
 // ── check_array_literal ─────────────────────────────────────────────
 
 void LinearTypeChecker::check_array_literal(ArrayLiteralExprAST *ast) {
+  for (auto &elem : ast->elements) {
+    if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
+      auto *info = find_linear(var->variableName);
+      if (info) {
+        consume(var->variableName, ast->get_location());
+        continue;
+      }
+    }
+    check_stmt(elem.get());
+  }
+}
+
+// ── check_tuple_literal ──────────────────────────────────────────────
+
+void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
   for (auto &elem : ast->elements) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
       auto *info = find_linear(var->variableName);
