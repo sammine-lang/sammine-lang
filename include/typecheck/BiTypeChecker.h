@@ -114,6 +114,7 @@ public:
   virtual void visit(FuncDefAST *ast) override;
   virtual void visit(StructDefAST *ast) override;
   virtual void visit(EnumDefAST *ast) override;
+  virtual void visit(TypeAliasDefAST *ast) override;
   virtual void visit(PrototypeAST *ast) override;
   virtual void visit(CallExprAST *ast) override;
   virtual void visit(ReturnExprAST *ast) override;
@@ -193,6 +194,7 @@ public:
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(EnumDefAST *ast) override;
+  virtual void preorder_walk(TypeAliasDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
   virtual void preorder_walk(ReturnExprAST *ast) override;
@@ -229,6 +231,7 @@ public:
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(StructDefAST *ast) override;
   virtual void postorder_walk(EnumDefAST *ast) override;
+  virtual void postorder_walk(TypeAliasDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override;
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;
@@ -264,6 +267,7 @@ public:
   virtual Type synthesize(FuncDefAST *ast) override;
   virtual Type synthesize(StructDefAST *ast) override;
   virtual Type synthesize(EnumDefAST *ast) override;
+  virtual Type synthesize(TypeAliasDefAST *ast) override;
   virtual Type synthesize(PrototypeAST *ast) override;
   virtual Type synthesize(CallExprAST *ast) override;
   virtual Type synthesize(ReturnExprAST *ast) override;
@@ -361,7 +365,7 @@ public:
       auto it = generic_enum_defs.find(base_mangled);
       if (it == generic_enum_defs.end()) {
         this->add_error(type_expr->location,
-                        fmt::format("'{}' is not a generic enum",
+                        fmt::format("'{}' is not a generic type",
                                     gen->base_name.display()));
         return Type::Poisoned();
       }
@@ -370,7 +374,7 @@ public:
       if (gen->type_args.size() != generic_def->type_params.size()) {
         this->add_error(
             type_expr->location,
-            fmt::format("Generic enum '{}' expects {} type argument(s), got {}",
+            fmt::format("Generic type '{}' expects {} type argument(s), got {}",
                         gen->base_name.display(),
                         generic_def->type_params.size(),
                         gen->type_args.size()));

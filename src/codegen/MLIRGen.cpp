@@ -262,7 +262,9 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
   else if (llvm::isa<AST::StructDefAST>(def))
     ; // Struct types registered in generate() pre-pass
   else if (llvm::isa<AST::EnumDefAST>(def))
-    ; // Enum types registered in generate() pre-pass (TODO)
+    ; // Enum types registered in generate() pre-pass
+  else if (llvm::isa<AST::TypeAliasDefAST>(def))
+    ; // Type aliases resolved at type-check time
   else if (llvm::isa<AST::TypeClassDeclAST>(def))
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {

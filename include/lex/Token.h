@@ -83,7 +83,6 @@ enum TokenType {
   TokEllipsis,  // ...
   TokTypeclass, // typeclass
   TokInstance,  // instance
-  TokEnum,      // enum
   TokCase,      // case
   TokFatArrow,  // =>
   // TokID
@@ -100,7 +99,7 @@ enum TokenType {
   TokElse,  // else
   TokWhile, // while
 
-  TokType, // Type
+  TokType, // type
 
   // TokCOMMENTS
   TokSingleComment, //
@@ -175,7 +174,6 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokEllipsis, "..."},
     {TokTypeclass, "typeclass"},
     {TokInstance, "instance"},
-    {TokEnum, "enum"},
     {TokCase, "case"},
     {TokFatArrow, "=>"},
     {TokID, "identifier"},
@@ -183,6 +181,8 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokNum, "number"},
     {TokChar, "char literal"},
     {TokTick, "'"},
+
+    {TokType, "type"},
 
     {TokIf, "if"},
     {TokElse, "else"},

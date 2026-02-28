@@ -39,6 +39,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
           variant_to_enum[variant.name] = enum_def->enum_name.name;
         }
       }
+    } else if (auto alias_def = llvm::dyn_cast<TypeAliasDefAST>(def.get())) {
+      fn_name = alias_def->alias_name.mangled();
+      loc = alias_def->get_location();
     } else if (llvm::isa<TypeClassDeclAST>(def.get()) ||
                llvm::isa<TypeClassInstanceAST>(def.get())) {
       // Type class decls/instances don't register top-level names in scope
@@ -111,6 +114,7 @@ void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(TypeAliasDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
   auto var_name = ast->functionName.mangled();
@@ -165,6 +169,7 @@ void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(EnumDefAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(TypeAliasDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   // Type class calls (e.g. sizeof<i32>()) have explicit type args and are

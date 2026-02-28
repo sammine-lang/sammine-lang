@@ -39,6 +39,7 @@ class CaseExprAST;
 class WhileExprAST;
 class TupleLiteralExprAST;
 class EnumDefAST;
+class TypeAliasDefAST;
 class TypeClassDeclAST;
 class TypeClassInstanceAST;
 

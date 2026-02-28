@@ -173,14 +173,14 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
 
     static const std::unordered_map<std::string, TokenType> keywords = {
         {"fn", TokFunc},       {"return", TokReturn}, {"struct", TokStruct},
-        {"Type", TokType},     {"if", TokIf},         {"else", TokElse},
+        {"type", TokType},     {"if", TokIf},         {"else", TokElse},
         {"let", TokLet},       {"mut", TokMUT},       {"true", TokTrue},
         {"false", TokFalse},   {"reuse", TokReuse},   {"export", TokExport},
         {"ptr", TokPtr},
         {"alloc", TokAlloc},   {"free", TokFree},     {"len", TokLen},
         {"import", TokImport}, {"as", TokAs},
         {"typeclass", TokTypeclass}, {"instance", TokInstance},
-        {"enum", TokEnum},           {"while", TokWhile},
+        {"while", TokWhile},
         {"case", TokCase},
     };
     auto it = keywords.find(IdentifierStr);

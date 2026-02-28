@@ -43,6 +43,9 @@ void GeneralSemanticsVisitor::preorder_walk(StructDefAST *ast) {
 void GeneralSemanticsVisitor::preorder_walk(EnumDefAST *ast) {
   check_reserved_identifier(ast->enum_name.name, ast->get_location());
 }
+void GeneralSemanticsVisitor::preorder_walk(TypeAliasDefAST *ast) {
+  check_reserved_identifier(ast->alias_name.name, ast->get_location());
+}
 void GeneralSemanticsVisitor::preorder_walk(BlockAST *ast) {
   // Only reset for function blocks, not nested blocks
   if (!func_blocks.contains(ast)) {

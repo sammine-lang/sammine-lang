@@ -107,7 +107,6 @@ public:
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
-  [[nodiscard]] auto ParseTypeDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassDecl() -> p<DefinitionAST>;

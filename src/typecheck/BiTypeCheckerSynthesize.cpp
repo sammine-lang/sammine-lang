@@ -110,6 +110,9 @@ Type BiTypeCheckerVisitor::synthesize(StructDefAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(EnumDefAST *ast) {
   return Type::NonExistent();
 }
+Type BiTypeCheckerVisitor::synthesize(TypeAliasDefAST *ast) {
+  return ast->resolved_type;
+}
 Type BiTypeCheckerVisitor::synthesize(FuncDefAST *ast) {
   if (ast->synthesized())
     return ast->type;
@@ -198,7 +201,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       if (!variant_idx) {
         this->add_error(
             ast->get_location(),
-            fmt::format("Enum '{}' has no variant '{}'",
+            fmt::format("Type '{}' has no variant '{}'",
                         ast->functionName.module, ast->functionName.name));
         return ast->type = Type::Poisoned();
       }
@@ -1152,7 +1155,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     auto variant_idx = et.get_variant_index(variant_name);
     if (!variant_idx.has_value()) {
       this->add_error(arm.pattern.location,
-                      fmt::format("Enum '{}' has no variant '{}'",
+                      fmt::format("Type '{}' has no variant '{}'",
                                   et.get_name().display(), variant_name));
       had_error = true;
       continue;

@@ -291,6 +291,7 @@ void CgVisitor::preorder_walk(EnumDefAST *ast) {
   type_converter.register_enum_type(name, llvm_enum);
 }
 void CgVisitor::postorder_walk(EnumDefAST *ast) {}
+void CgVisitor::preorder_walk(TypeAliasDefAST *ast) {}
 
 void CgVisitor::postorder_walk(ReturnExprAST *ast) {
   // INFO: If we cannot parse return expr, treat it as unit for now

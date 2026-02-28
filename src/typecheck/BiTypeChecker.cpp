@@ -37,13 +37,15 @@ void BiTypeCheckerVisitor::pre_register_function(PrototypeAST *ast) {
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
 
-  // First pass: register structs, enums, typeclass declarations, and instances
-  // so method bodies can reference any type/instance regardless of order.
+  // First pass: register structs, enums, type aliases, typeclass declarations,
+  // and instances so method bodies can reference any type regardless of order.
   for (auto &def : ast->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get()))
       sd->accept_vis(this);
     else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get()))
       ed->accept_vis(this);
+    else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
+      ta->accept_vis(this);
     else if (auto *tc = llvm::dyn_cast<TypeClassDeclAST>(def.get()))
       register_typeclass_decl(tc);
     else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
@@ -297,7 +299,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     else {
       this->add_error(
           ast->get_location(),
-          fmt::format("Invalid backing type '{}' for enum '{}' — must be "
+          fmt::format("Invalid backing type '{}' for type '{}' — must be "
                       "i32, i64, u32, or u64",
                       bt_name, ast->enum_name.display()));
       ast->type = Type::Poisoned();
@@ -373,6 +375,25 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     auto &vi = et.get_variant(i);
     variant_constructors[vi.name] = {enum_type, i};
   }
+}
+
+void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
+  // Already resolved — skip on third pass
+  if (ast->resolved_type.synthesized())
+    return;
+
+  auto resolved = resolve_type_expr(ast->type_expr.get());
+  if (resolved.type_kind == TypeKind::Poisoned) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Cannot resolve type '{}' in type alias '{}'",
+                    ast->type_expr->to_string(), ast->alias_name.display()));
+    ast->type = Type::Poisoned();
+    return;
+  }
+  ast->resolved_type = resolved;
+  ast->type = resolved;
+  typename_to_type.registerNameT(ast->alias_name.mangled(), resolved);
 }
 
 void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
@@ -729,6 +750,7 @@ void BiTypeCheckerVisitor::preorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(EnumDefAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(TypeAliasDefAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(CallExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ReturnExprAST *ast) {}
@@ -764,6 +786,7 @@ void BiTypeCheckerVisitor::postorder_walk(VarDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ExternAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(EnumDefAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(TypeAliasDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FuncDefAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(PrototypeAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(CallExprAST *ast) {}

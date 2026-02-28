@@ -47,6 +47,7 @@ public:
 
   virtual void visit(StructDefAST *ast) override;
   virtual void visit(EnumDefAST *ast) override;
+  virtual void visit(TypeAliasDefAST *ast) override;
 
   virtual void visit(PrototypeAST *ast) override;
 
@@ -88,6 +89,7 @@ public:
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(EnumDefAST *ast) override;
+  virtual void preorder_walk(TypeAliasDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
   virtual void preorder_walk(ReturnExprAST *ast) override;
@@ -124,6 +126,7 @@ public:
   virtual void postorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(StructDefAST *ast) override;
   virtual void postorder_walk(EnumDefAST *ast) override;
+  virtual void postorder_walk(TypeAliasDefAST *ast) override;
   virtual void postorder_walk(PrototypeAST *ast) override;
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(ReturnExprAST *ast) override;
@@ -235,6 +238,13 @@ void AstPrinterVisitor::visit(EnumDefAST *ast) {
   ast->walk_with_preorder(this);
   ast->walk_with_postorder(this);
   this->exit_new_scope();
+  generic_postprint();
+}
+
+void AstPrinterVisitor::visit(TypeAliasDefAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
@@ -407,7 +417,10 @@ void AstPrinterVisitor::preorder_walk(EnumDefAST *ast) {
     if (i + 1 < ast->variants.size())
       variants_str += " | ";
   }
-  add_to_rep(fmt::format("{}enum_name: \"{}\" = {}", tabs(), ast->enum_name.display(), variants_str));
+  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.display(), variants_str));
+}
+void AstPrinterVisitor::preorder_walk(TypeAliasDefAST *ast) {
+  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.display(), ast->type_expr->to_string()));
 }
 void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
   add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.display()));
@@ -462,6 +475,7 @@ void AstPrinterVisitor::postorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::postorder_walk(FuncDefAST *ast) {}
 void AstPrinterVisitor::postorder_walk(StructDefAST *ast) {}
 void AstPrinterVisitor::postorder_walk(EnumDefAST *ast) {}
+void AstPrinterVisitor::postorder_walk(TypeAliasDefAST *ast) {}
 
 void AstPrinterVisitor::postorder_walk(PrototypeAST *ast) {}
 void AstPrinterVisitor::postorder_walk(CallExprAST *ast) {}

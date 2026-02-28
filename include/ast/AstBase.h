@@ -64,6 +64,7 @@ enum class NodeKind {
   ExternAST,
   StructDefAST,
   EnumDefAST,
+  TypeAliasDefAST,
   TypeClassDeclAST,
   TypeClassInstanceAST,
   LastDef = TypeClassInstanceAST,
@@ -108,6 +109,10 @@ public:
   virtual void visit(EnumDefAST *ast);
   virtual void preorder_walk(EnumDefAST *ast) = 0;
   virtual void postorder_walk(EnumDefAST *ast) = 0;
+
+  virtual void visit(TypeAliasDefAST *ast);
+  virtual void preorder_walk(TypeAliasDefAST *ast) = 0;
+  virtual void postorder_walk(TypeAliasDefAST *ast) = 0;
 
   virtual void visit(PrototypeAST *ast);
   virtual void preorder_walk(PrototypeAST *ast) = 0;
@@ -284,6 +289,7 @@ public:
   virtual Type synthesize(FuncDefAST *ast) = 0;
   virtual Type synthesize(StructDefAST *ast) = 0;
   virtual Type synthesize(EnumDefAST *ast) = 0;
+  virtual Type synthesize(TypeAliasDefAST *ast) = 0;
   virtual Type synthesize(PrototypeAST *ast) = 0;
   virtual Type synthesize(CallExprAST *ast) = 0;
   virtual Type synthesize(ReturnExprAST *ast) = 0;

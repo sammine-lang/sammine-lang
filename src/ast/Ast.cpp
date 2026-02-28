@@ -45,6 +45,11 @@ void ASTVisitor::visit(EnumDefAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(TypeAliasDefAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->walk_with_postorder(this);
+}
+
 void ASTVisitor::visit(FuncDefAST *ast) {
   ast->walk_with_preorder(this);
   ast->Prototype->accept_vis(this);

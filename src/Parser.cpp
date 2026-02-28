@@ -110,15 +110,7 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
   return result;
 }
 
-auto Parser::ParseTypeDef() -> p<DefinitionAST> {
-  auto type_tok = expect(TokType);
-  if (!type_tok)
-    return {nullptr, NONCOMMITTED};
 
-  REQUIRE(id, TokID, "Expected an identifier after 'type'",
-          type_tok->get_location(), {nullptr, FAILED});
-  return {nullptr, ParserError::SUCCESS};
-}
 
 auto Parser::ParseStructDef() -> p<DefinitionAST> {
   auto struct_tok = expect(TokStruct);
@@ -198,16 +190,17 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
   return {std::move(struct_def), SUCCESS};
 }
 
-// enum Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
+// type Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
+// type Name = ExistingType;  (type alias)
 auto Parser::ParseEnumDef() -> p<DefinitionAST> {
-  auto enum_tok = expect(TokEnum);
-  if (!enum_tok)
+  auto type_tok = expect(TokType);
+  if (!type_tok)
     return {nullptr, NONCOMMITTED};
 
-  REQUIRE(id, TokID, "Expected an identifier after 'enum'",
-          enum_tok->get_location(), {nullptr, FAILED});
+  REQUIRE(id, TokID, "Expected an identifier after 'type'",
+          type_tok->get_location(), {nullptr, FAILED});
 
-  // Parse optional type parameters: enum Option<T> = ...
+  // Parse optional type parameters: type Option<T> = ...
   std::vector<std::string> enum_type_params;
   if (expect(TokLESS)) {
     auto first = expect(TokID);
@@ -233,27 +226,57 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     }
   }
 
-  // Parse optional backing type: enum Foo: u32 = ...
+  // Parse optional backing type: type Foo: u32 = ...
   std::optional<std::string> backing_type_name;
   if (expect(TokColon)) {
-    auto type_tok = expect(TokID);
-    if (!type_tok) {
+    auto bt_tok = expect(TokID);
+    if (!bt_tok) {
       imm_error("Expected backing type name after ':'", id->get_location());
       return {nullptr, FAILED};
     }
-    backing_type_name = type_tok->lexeme;
+    backing_type_name = bt_tok->lexeme;
   }
 
   REQUIRE(_eq, TokASSIGN,
-          fmt::format("Expected '=' after enum name '{}'", id->lexeme),
+          fmt::format("Expected '=' after type name '{}'", id->lexeme),
           id->get_location(), {nullptr, FAILED});
 
-  // Parse variants separated by |
+  // Disambiguate: enum vs type alias
+  // If next tokens are ID followed by | or ID followed by ( → enum
+  // Otherwise → type alias
+  bool is_enum = false;
+  if (tokStream->peek()->tok_type == TokID) {
+    tokStream->mark_rollback();
+    tokStream->consume(); // consume the ID
+    auto next = tokStream->peek();
+    if (next->tok_type == TokORLogical || next->tok_type == TokLeftParen) {
+      // Enum: ID | ... or ID(...)
+      is_enum = true;
+    }
+    tokStream->rollback();
+  }
+
+  // Type alias path
+  if (!is_enum) {
+    auto type_expr = ParseTypeExpr();
+    if (!type_expr) {
+      imm_error("Expected type expression in type alias",
+                id->get_location());
+      return {nullptr, FAILED};
+    }
+    if (!expect(TokSemiColon))
+      imm_error("Expected ';' after type alias definition",
+                id->get_location());
+    auto alias = std::make_unique<TypeAliasDefAST>(id, std::move(type_expr));
+    return {std::move(alias), SUCCESS};
+  }
+
+  // Enum path: parse variants separated by |
   std::vector<EnumVariantDef> variants;
   while (!tokStream->isEnd()) {
     auto variant_id = expect(TokID);
     if (!variant_id) {
-      imm_error("Expected variant name in enum definition",
+      imm_error("Expected variant name in type definition",
                 variants.empty() ? id->get_location()
                                  : variants.back().location);
       return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
@@ -328,7 +351,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   }
 
   if (!expect(TokSemiColon))
-    imm_error("Expected ';' after enum definition",
+    imm_error("Expected ';' after type definition",
               variants.empty() ? id->get_location() : variants.back().location);
 
   auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
@@ -380,12 +403,14 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     return {std::move(node), result};
   }
 
-  // 'export enum' — delegate to enum parsing with export flag
-  if (is_exported && tokStream->peek()->tok_type == TokEnum) {
+  // 'export type' — delegate to type/enum parsing with export flag
+  if (is_exported && tokStream->peek()->tok_type == TokType) {
     auto [node, result] = ParseEnumDef();
     if (node) {
       if (auto *ed = llvm::dyn_cast<EnumDefAST>(node.get()))
         ed->is_exported = true;
+      else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(node.get()))
+        ta->is_exported = true;
     }
     return {std::move(node), result};
   }
@@ -394,7 +419,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   auto fn = expect(TokenType::TokLet);
   if (!fn) {
     if (is_exported) {
-      imm_error("Expected 'let', 'struct', or 'enum' after 'export'",
+      imm_error("Expected 'let', 'struct', or 'type' after 'export'",
                 export_tok->get_location());
       return {std::make_unique<FuncDefAST>(nullptr, nullptr), FAILED};
     }

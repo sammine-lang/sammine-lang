@@ -391,6 +391,27 @@ public:
   AST_NODE_METHODS("EnumDefAST", NodeKind::EnumDefAST)
 };
 
+// type Name = ExistingType;
+class TypeAliasDefAST : public DefinitionAST {
+public:
+  sammine_util::QualifiedName alias_name;
+  std::unique_ptr<TypeExprAST> type_expr;
+  Type resolved_type = Type::NonExistent();
+  bool is_exported = false;
+
+  explicit TypeAliasDefAST(std::shared_ptr<Token> name_tok,
+                           std::unique_ptr<TypeExprAST> type_expr)
+      : DefinitionAST(NodeKind::TypeAliasDefAST),
+        type_expr(std::move(type_expr)) {
+    if (name_tok)
+      alias_name = sammine_util::QualifiedName::local(name_tok->lexeme);
+    this->join_location(name_tok);
+    if (this->type_expr)
+      this->join_location(this->type_expr->location);
+  }
+  AST_NODE_METHODS("TypeAliasDefAST", NodeKind::TypeAliasDefAST)
+};
+
 //! \brief A variable definition: "var x = expression;" or "let (a, b) = expr;"
 class VarDefAST : public ExprAST {
 public:
