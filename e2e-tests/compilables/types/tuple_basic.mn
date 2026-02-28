@@ -1,0 +1,13 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 42
+# CHECK: 1
+
+import std;
+
+let main() -> i32 {
+  let t = (42, true);
+  let (a, b) = t;
+  std::printf("%d\n", a);
+  std::printf("%d\n", b);
+  return 0;
+}

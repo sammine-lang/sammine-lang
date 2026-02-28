@@ -56,6 +56,10 @@ let main() -> i32 {
   let first = a[0];                          # indexing
   let size = len(a);                         # array length
 
+  # --- Tuples ---
+  let t = (100, true);                        # tuple literal (i32, bool)
+  let (tx, ty) = t;                           # destructuring let
+
   # --- Pointers & memory ---
   let p: 'ptr<i32> = alloc<i32>(1);         # heap allocation (count, linear)
   *p = 42;                                   # write through pointer
