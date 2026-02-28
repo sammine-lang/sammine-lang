@@ -355,6 +355,7 @@ public:
   std::vector<std::string> type_params;
   bool is_integer_backed = false;
   bool is_exported = false;
+  std::optional<std::string> backing_type_name;
 
   explicit EnumDefAST(std::shared_ptr<Token> enum_id,
                       std::vector<EnumVariantDef> variants)

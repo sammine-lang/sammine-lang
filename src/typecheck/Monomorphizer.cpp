@@ -281,6 +281,7 @@ Monomorphizer::instantiate_enum(EnumDefAST *generic,
   auto result = std::make_unique<EnumDefAST>(make_tok(mangled_name),
                                               std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
+  result->backing_type_name = generic->backing_type_name;
   // type_params left empty — this is a concrete instantiation
   return result;
 }

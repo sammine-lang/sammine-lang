@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 1
+# CHECK-NEXT: 2
+# CHECK-NEXT: 4
+
+import std;
+
+enum Flags: u32 = Read(1) | Write(2) | Exec(4);
+
+let main() -> i32 {
+  let r: Flags = Read;
+  let w: Flags = Write;
+  let e: Flags = Exec;
+  std::printf("%u\n", r);
+  std::printf("%u\n", w);
+  std::printf("%u\n", e);
+  return 0;
+}

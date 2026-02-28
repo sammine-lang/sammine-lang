@@ -228,6 +228,17 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     }
   }
 
+  // Parse optional backing type: enum Foo: u32 = ...
+  std::optional<std::string> backing_type_name;
+  if (expect(TokColon)) {
+    auto type_tok = expect(TokID);
+    if (!type_tok) {
+      imm_error("Expected backing type name after ':'", id->get_location());
+      return {nullptr, FAILED};
+    }
+    backing_type_name = type_tok->lexeme;
+  }
+
   REQUIRE(_eq, TokASSIGN,
           fmt::format("Expected '=' after enum name '{}'", id->lexeme),
           id->get_location(), {nullptr, FAILED});

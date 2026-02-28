@@ -275,6 +275,31 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     return;
   }
 
+  // Resolve backing type if specified
+  TypeKind backing_type = TypeKind::I32_t;
+  if (ast->backing_type_name.has_value()) {
+    auto &bt_name = ast->backing_type_name.value();
+    if (bt_name == "i32")
+      backing_type = TypeKind::I32_t;
+    else if (bt_name == "i64")
+      backing_type = TypeKind::I64_t;
+    else if (bt_name == "u32")
+      backing_type = TypeKind::U32_t;
+    else if (bt_name == "u64")
+      backing_type = TypeKind::U64_t;
+    else {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Invalid backing type '{}' for enum '{}' — must be "
+                      "i32, i64, u32, or u64",
+                      bt_name, ast->enum_name.display()));
+      ast->type = Type::Poisoned();
+      return;
+    }
+    // Backing type annotation implies integer-backed
+    ast->is_integer_backed = true;
+  }
+
   // Validate integer-backed enums: all variants must have discriminant values,
   // no mixing with type payloads
   if (ast->is_integer_backed) {
@@ -330,7 +355,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   }
 
   auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos),
-                              ast->is_integer_backed);
+                              ast->is_integer_backed, backing_type);
   ast->type = enum_type;
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 
