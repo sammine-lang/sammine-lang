@@ -59,6 +59,7 @@ class Compiler {
   size_t context_radius = 2;
   bool error;
   bool has_main = false;
+  bool from_string = false;
 
   void lex();
   void parse();
@@ -107,7 +108,8 @@ Compiler::Compiler(
   this->input = compiler_options[compiler_option_enum::STR];
 
   if (!this->input.empty()) {
-    this->file_name = "From string input";
+    this->file_name = "-s|--str";
+    this->from_string = true;
   } else if (!this->file_name.empty()) {
     this->input = sammine_util::get_string_from_file(this->file_name);
   } else {
@@ -568,6 +570,13 @@ void Compiler::emit_object() {
     return;
   }
 
+  if (this->from_string) {
+    reporter.immediate_diag(
+        "Skipping object file and executable emission: input was provided "
+        "via --str. Use -f to compile from a file.");
+    return;
+  }
+
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start emit object stage...\n");
@@ -593,7 +602,7 @@ void Compiler::emit_object() {
 }
 
 void Compiler::emit_interface() {
-  if (this->error || has_main)
+  if (this->error || has_main || this->from_string)
     return;
 
   LOG({
@@ -702,7 +711,7 @@ void Compiler::emit_interface() {
 }
 
 void Compiler::link() {
-  if (this->error) {
+  if (this->error || this->from_string) {
     return;
   }
 
