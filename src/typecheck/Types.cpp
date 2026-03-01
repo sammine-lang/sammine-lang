@@ -38,12 +38,13 @@ bool ArrayType::operator==(const ArrayType &t) const {
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
-StructType::StructType(std::string name, std::vector<std::string> field_names,
+StructType::StructType(sammine_util::QualifiedName name,
+                       std::vector<std::string> field_names,
                        std::vector<Type> field_types)
     : name(std::move(name)), field_names(std::move(field_names)),
       field_types(std::move(field_types)) {}
 bool StructType::operator==(const StructType &t) const {
-  return name == t.name; // nominal typing
+  return name.mangled() == t.name.mangled(); // nominal typing
 }
 std::optional<size_t>
 StructType::get_field_index(const std::string &field) const {

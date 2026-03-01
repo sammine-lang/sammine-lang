@@ -5,6 +5,7 @@
 #include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
+#include "util/MonomorphizedName.h"
 #include "util/Utilities.h"
 #include <set>
 
@@ -275,7 +276,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   }
 
   auto struct_type =
-      Type::Struct(ast->struct_name.mangled(), std::move(field_names),
+      Type::Struct(ast->struct_name, std::move(field_names),
                    std::move(field_types));
   ast->set_type(struct_type);
   typename_to_type.registerNameT(ast->struct_name.mangled(), struct_type);
@@ -417,30 +418,26 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 
   // Generic calls: trigger monomorphization if synthesis succeeded
   if (generic_func_defs.contains(ast->functionName.mangled())) {
-    if (cp.resolved_generic_name.has_value()) {
-      auto &mangled = cp.resolved_generic_name.value();
+    if (cp.resolved_name.has_value()) {
+      auto &mono = *cp.resolved_name;
+      auto mangled = mono.mangled();
       if (!instantiated_functions.contains(mangled)) {
         auto *generic_def = generic_func_defs[ast->functionName.mangled()];
-        auto cloned = Monomorphizer::instantiate(generic_def, mangled,
-                                                 cp.type_bindings);
+        auto cloned =
+            Monomorphizer::instantiate(generic_def, mono, cp.type_bindings);
         auto sem = GeneralSemanticsVisitor();
         cloned->accept_vis(&sem);
         cloned->accept_vis(this);
         instantiated_functions.insert(mangled);
         monomorphized_defs.push_back(std::move(cloned));
       }
-      ast->functionName = sammine_util::QualifiedName::local(mangled);
     }
     return;
   }
 
-  // Typeclass calls: rewrite call target to mangled instance method name
-  if (cp.is_typeclass_call) {
-    if (cp.resolved_generic_name.has_value())
-      ast->functionName = sammine_util::QualifiedName::local(
-          cp.resolved_generic_name.value());
+  // Typeclass calls: nothing to do here — codegen reads resolved_name
+  if (cp.is_typeclass_call)
     return;
-  }
 
   // Normal calls: check arg types now that args have been visited
   if (!cp.callee_func_type.has_value() ||
@@ -702,15 +699,15 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
-    std::string mangled = ast->class_name + "__" +
-                          tcip.concrete_type.to_string() + "__" + original_name;
-    method->Prototype->functionName =
-        sammine_util::QualifiedName::local(mangled);
-    inst_info.method_mangled_names[original_name] = mangled;
+    auto mono = sammine_util::MonomorphizedName::typeclass(
+        ast->class_name, tcip.concrete_type.to_string(), original_name);
+    method->Prototype->functionName = mono.to_qualified_name();
+    inst_info.method_mangled_names[original_name] = mono;
   }
 
-  std::string key = ast->class_name + "__" + tcip.concrete_type.to_string();
-  type_class_instances[key] = std::move(inst_info);
+  auto inst_key = sammine_util::MonomorphizedName::typeclass(
+      ast->class_name, tcip.concrete_type.to_string(), "");
+  type_class_instances[inst_key.instance_key()] = std::move(inst_info);
 }
 
 void BiTypeCheckerVisitor::register_builtin_op_instances() {
@@ -737,17 +734,16 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
   };
 
   for (auto &e : entries) {
-    std::string type_str = e.type.to_string();
-    std::string key = std::string(e.class_name) + "__" + type_str;
+    auto mono = sammine_util::MonomorphizedName::typeclass(
+        e.class_name, e.type.to_string(), e.method_name);
+    auto key = mono.instance_key();
     if (type_class_instances.contains(key))
       continue;
 
     TypeClassInstanceInfo info;
     info.class_name = e.class_name;
     info.concrete_type = e.type;
-    std::string mangled =
-        std::string(e.class_name) + "__" + type_str + "__" + e.method_name;
-    info.method_mangled_names[e.method_name] = mangled;
+    info.method_mangled_names[e.method_name] = mono;
     type_class_instances[key] = std::move(info);
   }
 }

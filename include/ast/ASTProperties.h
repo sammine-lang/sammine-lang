@@ -2,6 +2,7 @@
 
 #include "ast/AstDecl.h"
 #include "typecheck/Types.h"
+#include "util/MonomorphizedName.h"
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -12,7 +13,7 @@ namespace AST {
 struct CallProps {
   std::optional<Type> callee_func_type;
   bool is_partial = false;
-  std::optional<std::string> resolved_generic_name;
+  std::optional<sammine_util::MonomorphizedName> resolved_name;
   std::unordered_map<std::string, Type> type_bindings;
   bool is_typeclass_call = false;
   bool is_enum_constructor = false;
@@ -25,7 +26,7 @@ struct VariableProps {
 };
 
 struct BinaryProps {
-  std::string resolved_op_method;
+  std::optional<sammine_util::MonomorphizedName> resolved_op_method;
 };
 
 struct TypeAliasProps {

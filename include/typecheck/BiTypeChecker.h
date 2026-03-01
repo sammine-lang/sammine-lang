@@ -156,7 +156,8 @@ public:
   struct TypeClassInstanceInfo {
     std::string class_name;
     Type concrete_type;
-    std::unordered_map<std::string, std::string> method_mangled_names;
+    std::unordered_map<std::string, sammine_util::MonomorphizedName>
+        method_mangled_names;
   };
 
   std::unordered_map<std::string, TypeClassInfo> type_class_defs;
@@ -385,7 +386,7 @@ public:
 
       // Resolve type arguments
       Monomorphizer::SubstitutionMap bindings;
-      std::string mangled = base_mangled + "<";
+      std::string type_args = "<";
       bool has_unresolved_type_param = false;
       for (size_t i = 0; i < gen->type_args.size(); i++) {
         auto resolved = resolve_type_expr(gen->type_args[i].get());
@@ -394,10 +395,13 @@ public:
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
         bindings[generic_def->type_params[i]] = resolved;
-        if (i > 0) mangled += ", ";
-        mangled += resolved.to_string();
+        if (i > 0) type_args += ", ";
+        type_args += resolved.to_string();
       }
-      mangled += ">";
+      type_args += ">";
+      auto mono = sammine_util::MonomorphizedName::generic(
+          gen->base_name, type_args);
+      auto mangled = mono.mangled();
 
       // If type args contain unresolved type params (e.g. Option<T> inside
       // a generic function), we can't instantiate yet — return a placeholder
@@ -419,7 +423,7 @@ public:
       }
 
       // Instantiate the generic enum
-      auto cloned = Monomorphizer::instantiate_enum(generic_def, mangled,
+      auto cloned = Monomorphizer::instantiate_enum(generic_def, mono,
                                                      bindings);
       cloned->accept_vis(this);
       instantiated_enums.insert(mangled);

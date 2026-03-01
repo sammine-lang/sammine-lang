@@ -65,17 +65,16 @@ std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
 }
 
 std::unique_ptr<PrototypeAST>
-Monomorphizer::clone_prototype(PrototypeAST *proto,
-                               const std::string &mangled_name) {
+Monomorphizer::clone_prototype(
+    PrototypeAST *proto,
+    const sammine_util::MonomorphizedName &mono_name) {
   std::vector<std::unique_ptr<TypedVarAST>> params;
   for (auto &p : proto->parameterVectors)
     params.push_back(clone_typed_var(p.get()));
 
   auto result = std::make_unique<PrototypeAST>(
-      sammine_util::QualifiedName::local(mangled_name),
-      sammine_util::Location{},
-      clone_type_expr(proto->return_type_expr.get()),
-      std::move(params));
+      mono_name.to_qualified_name(), sammine_util::Location{},
+      clone_type_expr(proto->return_type_expr.get()), std::move(params));
   // type_params left empty — this is a concrete instantiation
   return result;
 }
@@ -268,18 +267,21 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 }
 
 std::unique_ptr<FuncDefAST>
-Monomorphizer::instantiate(FuncDefAST *generic, const std::string &mangled_name,
-                           const SubstitutionMap &bindings) {
+Monomorphizer::instantiate(
+    FuncDefAST *generic,
+    const sammine_util::MonomorphizedName &mono_name,
+    const SubstitutionMap &bindings) {
   Monomorphizer m(bindings);
-  auto proto = m.clone_prototype(generic->Prototype.get(), mangled_name);
+  auto proto = m.clone_prototype(generic->Prototype.get(), mono_name);
   auto block = m.clone_block(generic->Block.get());
   return std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
 }
 
 std::unique_ptr<EnumDefAST>
-Monomorphizer::instantiate_enum(EnumDefAST *generic,
-                                const std::string &mangled_name,
-                                const SubstitutionMap &bindings) {
+Monomorphizer::instantiate_enum(
+    EnumDefAST *generic,
+    const sammine_util::MonomorphizedName &mono_name,
+    const SubstitutionMap &bindings) {
   Monomorphizer m(bindings);
 
   // Clone variant definitions with substituted payload types
@@ -295,8 +297,7 @@ Monomorphizer::instantiate_enum(EnumDefAST *generic,
   }
 
   auto result = std::make_unique<EnumDefAST>(
-      sammine_util::QualifiedName::local(mangled_name),
-      sammine_util::Location{},
+      mono_name.to_qualified_name(), sammine_util::Location{},
       std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
