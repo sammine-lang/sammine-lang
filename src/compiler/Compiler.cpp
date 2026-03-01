@@ -51,6 +51,7 @@ class Compiler {
   std::map<compiler_option_enum, std::string> compiler_options;
   std::shared_ptr<LLVMRes> resPtr;
   std::string file_name, input;
+  std::string mod_name;
   std::vector<std::string> extra_object_files;
   std::filesystem::path stdlib_dir;
   std::string output_dir;
@@ -109,6 +110,7 @@ Compiler::Compiler(
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
 
+ this->mod_name = "sammine";
   if (!this->input.empty()) {
     this->file_name = "-s|--str";
     this->from_string = true;
@@ -119,8 +121,8 @@ Compiler::Compiler(
                "[Error during compiler initial phase]\n");
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "[Both the file name and the string input is empty]\n");
-
-    std::abort();
+    this->error = true;
+    return;
   }
   this->resPtr = std::make_shared<LLVMRes>();
 
@@ -174,7 +176,7 @@ void Compiler::parse() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start parsing stage...\n");
   });
-  Parser psr = Parser(tokStream, reporter);
+  Parser psr = Parser(tokStream, reporter, mod_name);
 
   auto result = psr.Parse();
   programAST = std::move(result);
@@ -765,6 +767,7 @@ void Compiler::print_timing_table(
 }
 
 void Compiler::start() {
+  if (this->error) return;
   struct Stage {
     const char *name;
     std::function<void(Compiler *)> fn;
