@@ -1,0 +1,10 @@
+# RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I  && %T/%base.exe| %check %full
+# CHECK: 0
+import dummy_enum;
+import std;
+
+let main() -> i32 {
+  let x = dummy_enum::dummy::A;
+  std::printf("%d", 0);
+  return 0;
+}

@@ -711,6 +711,42 @@ void Compiler::emit_interface() {
         out << ",\n";
       }
       out << "};\n";
+    } else if (auto *enum_def = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
+      if (!enum_def->is_exported)
+        continue;
+      out << "type " << enum_def->enum_name.with_module(stem).display();
+      if (!enum_def->type_params.empty()) {
+        out << "<";
+        for (size_t i = 0; i < enum_def->type_params.size(); i++) {
+          out << enum_def->type_params[i];
+          if (i + 1 < enum_def->type_params.size())
+            out << ", ";
+        }
+        out << ">";
+      }
+      if (enum_def->backing_type_name.has_value())
+        out << ": " << *enum_def->backing_type_name;
+      out << " = ";
+      for (size_t i = 0; i < enum_def->variants.size(); i++) {
+        auto &v = enum_def->variants[i];
+        out << v.name;
+        if (!v.payload_types.empty() || v.discriminant_value.has_value()) {
+          out << "(";
+          if (v.discriminant_value.has_value()) {
+            out << *v.discriminant_value;
+          } else {
+            for (size_t j = 0; j < v.payload_types.size(); j++) {
+              out << v.payload_types[j]->to_string();
+              if (j + 1 < v.payload_types.size())
+                out << ", ";
+            }
+          }
+          out << ")";
+        }
+        if (i + 1 < enum_def->variants.size())
+          out << " | ";
+      }
+      out << ";\n";
     }
   }
 }

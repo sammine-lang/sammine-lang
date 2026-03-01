@@ -200,6 +200,17 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'type'",
           type_tok->get_location(), {nullptr, FAILED});
 
+  // Handle qualified name (mod::EnumName) from .mni files
+  std::string qualified_module;
+  if (tokStream->peek()->tok_type == TokDoubleColon) {
+    tokStream->consume(); // consume ::
+    auto member = expect(TokID);
+    if (member) {
+      qualified_module = id->lexeme;
+      id = member;
+    }
+  }
+
   // Parse optional type parameters: type Option<T> = ...
   std::vector<std::string> enum_type_params;
   if (expect(TokLESS)) {
@@ -355,6 +366,9 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
               variants.empty() ? id->get_location() : variants.back().location);
 
   auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
+  if (!qualified_module.empty())
+    enum_def->enum_name = sammine_util::QualifiedName::qualified(
+        qualified_module, enum_def->enum_name.name);
   enum_def->type_params = std::move(enum_type_params);
   enum_def->backing_type_name = std::move(backing_type_name);
   // If any variant has an integer discriminant, mark as integer-backed
@@ -1121,7 +1135,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   if (!id)
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
-  // Handle qualified names: alias::member (e.g. m::add)
+  // Handle qualified names: alias::member or alias::enum::variant
   sammine_util::QualifiedName qn =
       sammine_util::QualifiedName::local(id->lexeme);
   auto qn_loc = id->get_location();
@@ -1132,6 +1146,17 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
             id->get_location(), {nullptr, FAILED});
     qn_loc = id->get_location() | member_id->get_location();
     qn = resolveQualifiedName(id->lexeme, member_id->lexeme);
+
+    // Handle third segment: module::enum::variant
+    if (tokStream->peek()->tok_type == TokDoubleColon) {
+      tokStream->consume(); // consume ::
+      REQUIRE(variant_id, TokID,
+              fmt::format("Expected variant name after '{}::'", qn.display()),
+              qn_loc, {nullptr, FAILED});
+      qn = sammine_util::QualifiedName::qualified(qn.mangled(),
+                                                   variant_id->lexeme);
+      qn_loc = qn_loc | variant_id->get_location();
+    }
   }
 
   // Speculative parse: f<TypeExpr, ...>(args) — generic call with explicit type args.
@@ -1380,7 +1405,7 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
             prefix_tok->get_location() | variant_tok->get_location();
 
       } else if (tokStream->peek()->tok_type == TokDoubleColon) {
-        // Qualified non-generic: Enum::Variant
+        // Qualified non-generic: Enum::Variant or Module::Enum::Variant
         auto dcolon = tokStream->consume();
         auto variant_tok = expect(TokenType::TokID);
         if (!variant_tok) {
@@ -1388,10 +1413,27 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
                     dcolon->get_location());
           return {nullptr, FAILED};
         }
-        pattern.variant_name =
-            sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
-        pattern.location =
-            prefix_tok->get_location() | variant_tok->get_location();
+        // Check for third segment: module::enum::variant
+        if (tokStream->peek()->tok_type == TokDoubleColon) {
+          tokStream->consume(); // consume ::
+          auto real_variant = expect(TokenType::TokID);
+          if (!real_variant) {
+            imm_error("Expected variant name after '::'",
+                      variant_tok->get_location());
+            return {nullptr, FAILED};
+          }
+          auto resolved = resolveQualifiedName(enum_prefix, variant_tok->lexeme);
+          pattern.variant_name =
+              sammine_util::QualifiedName::qualified(
+                  resolved.mangled(), real_variant->lexeme);
+          pattern.location =
+              prefix_tok->get_location() | real_variant->get_location();
+        } else {
+          pattern.variant_name =
+              sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
+          pattern.location =
+              prefix_tok->get_location() | variant_tok->get_location();
+        }
 
       } else {
         // Unqualified: just the variant name (e.g., Some, None, Red)
