@@ -171,6 +171,14 @@ public:
                                             bool resolve_alias = true)
       -> ParsedQualifiedName;
 
+  /// Speculatively parse <TypeExpr, ...> after a qualified name.
+  /// On success, populates type_args and may update qn/qn_loc if ::member follows.
+  /// On failure, rolls back the token stream and returns empty.
+  [[nodiscard]] auto
+  parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
+                            sammine_util::Location &qn_loc)
+      -> std::vector<std::unique_ptr<TypeExprAST>>;
+
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
   bool parsed_var_arg = false;

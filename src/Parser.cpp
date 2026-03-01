@@ -1106,65 +1106,8 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   auto qn = call_pqn.qn;
   auto qn_loc = call_pqn.location;
 
-  // Speculative parse: f<TypeExpr, ...>(args) — generic call with explicit type args.
-  // We try to parse <type_arg, ...> and check that a '(' follows.
-  // If any step fails, we rollback and fall through to normal parsing.
-  std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
-  if (tokStream->peek()->tok_type == TokLESS) {
-    tokStream->mark_rollback();
-    tokStream->consume(); // consume '<'
-
-    bool speculative_ok = true;
-    std::vector<std::unique_ptr<TypeExprAST>> parsed_types;
-
-    auto first_type = ParseTypeExpr();
-    if (!first_type)
-      speculative_ok = false;
-    else
-      parsed_types.push_back(std::move(first_type));
-
-    while (speculative_ok && tokStream->peek()->tok_type == TokComma) {
-      tokStream->consume(); // consume ','
-      auto next_type = ParseTypeExpr();
-      if (!next_type) {
-        speculative_ok = false;
-        break;
-      }
-      parsed_types.push_back(std::move(next_type));
-    }
-
-    if (speculative_ok && !consumeClosingAngleBracket())
-      speculative_ok = false;
-
-    if (speculative_ok && tokStream->peek()->tok_type == TokDoubleColon) {
-      // ID<Types>::Variant — generic enum constructor
-      tokStream->consume(); // consume ::
-      auto variant_id = expect(TokID);
-      if (variant_id) {
-        // Build mangled enum name: Option<i32>
-        std::string mangled = qn.mangled() + "<";
-        for (size_t i = 0; i < parsed_types.size(); i++) {
-          if (i > 0) mangled += ", ";
-          mangled += parsed_types[i]->to_string();
-        }
-        mangled += ">";
-        qn = sammine_util::QualifiedName::from_parts({mangled, variant_id->lexeme});
-        qn_loc = id->get_location() | variant_id->get_location();
-        explicit_type_args = std::move(parsed_types);
-      } else {
-        speculative_ok = false;
-      }
-    } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
-      // ID<Types>(args) — generic function call
-      explicit_type_args = std::move(parsed_types);
-    } else {
-      speculative_ok = false;
-    }
-
-    if (!speculative_ok) {
-      tokStream->rollback();
-    }
-  }
+  // Speculative parse: f<TypeExpr, ...>(args) or Name<Types>::member(args)
+  auto explicit_type_args = parseExplicitTypeArgsTail(qn, qn_loc);
 
   // Check for struct literal: ID { field: value, ... }
   // Lookahead to distinguish struct literal from a block that follows
@@ -1906,6 +1849,67 @@ auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
 
   return {sammine_util::QualifiedName::from_parts(std::move(parts), unresolved),
           loc};
+}
+
+auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
+                                       sammine_util::Location &qn_loc)
+    -> std::vector<std::unique_ptr<TypeExprAST>> {
+  if (tokStream->peek()->tok_type != TokLESS)
+    return {};
+
+  tokStream->mark_rollback();
+  tokStream->consume(); // consume '<'
+
+  bool speculative_ok = true;
+  std::vector<std::unique_ptr<TypeExprAST>> parsed_types;
+
+  auto first_type = ParseTypeExpr();
+  if (!first_type)
+    speculative_ok = false;
+  else
+    parsed_types.push_back(std::move(first_type));
+
+  while (speculative_ok && tokStream->peek()->tok_type == TokComma) {
+    tokStream->consume(); // consume ','
+    auto next_type = ParseTypeExpr();
+    if (!next_type) {
+      speculative_ok = false;
+      break;
+    }
+    parsed_types.push_back(std::move(next_type));
+  }
+
+  if (speculative_ok && !consumeClosingAngleBracket())
+    speculative_ok = false;
+
+  if (speculative_ok && tokStream->peek()->tok_type == TokDoubleColon) {
+    // Name<Types>::member — generic enum variant or typeclass method
+    tokStream->consume(); // consume ::
+    auto member_id = expect(TokID);
+    if (member_id) {
+      // Build mangled name with type args: e.g. "Option<i32>"
+      std::string mangled = qn.mangled() + "<";
+      for (size_t i = 0; i < parsed_types.size(); i++) {
+        if (i > 0) mangled += ", ";
+        mangled += parsed_types[i]->to_string();
+      }
+      mangled += ">";
+      qn = sammine_util::QualifiedName::from_parts(
+          {mangled, member_id->lexeme});
+      qn_loc = qn_loc | member_id->get_location();
+      return parsed_types;
+    }
+    speculative_ok = false;
+  } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
+    // Name<Types>(args) — generic function call
+    return parsed_types;
+  } else {
+    speculative_ok = false;
+  }
+
+  if (!speculative_ok)
+    tokStream->rollback();
+  return {};
 }
 
 auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,
