@@ -9,7 +9,7 @@
 | `Function` | `FunctionType` | `Type::Function(params)` |
 | `Pointer` | `PointerType` (`shared_ptr<Type>` — forward-decl needs indirection) | `Type::Pointer(pointee)` |
 | `Array` | `ArrayType` | `Type::Array(elem, size)` |
-| `Struct` | `StructType` | `Type::Struct(name, members)` |
+| `Struct` | `StructType` (`QualifiedName` name) | `Type::Struct(qn, members)` |
 | `Enum` | `EnumType` | `Type::Enum(name, variants)` |
 | `Tuple` | `TupleType` | `Type::Tuple(element_types)` |
 | `TypeParam` | `std::string` | `Type::TypeParam(name)` |
@@ -34,9 +34,9 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 ### Per-Node Property Structs
 | Struct | Fields | Populated by |
 |--------|--------|-------------|
-| `CallProps` | `callee_func_type`, `is_partial`, `resolved_generic_name`, `type_bindings`, `is_typeclass_call`, `is_enum_constructor`, `enum_variant_index` | `synthesize(CallExprAST*)` via `props_.call(id)` |
+| `CallProps` | `callee_func_type`, `is_partial`, `resolved_name` (`optional<MonomorphizedName>`), `type_bindings`, `is_typeclass_call`, `is_enum_constructor`, `enum_variant_index` | `synthesize(CallExprAST*)` via `props_.call(id)` |
 | `VariableProps` | `is_enum_unit_variant`, `enum_variant_index` | `synthesize(VariableExprAST*)` via `props_.variable(id)` |
-| `BinaryProps` | `resolved_op_method` | `synthesize(BinaryExprAST*)` via `props_.binary(id)` |
+| `BinaryProps` | `resolved_op_method` (`optional<MonomorphizedName>`) | `synthesize(BinaryExprAST*)` via `props_.binary(id)` |
 | `TypeAliasProps` | `resolved_type` | `visit(TypeAliasDefAST*)` via `props_.type_alias(id)` |
 | `TypeClassInstanceProps` | `concrete_type` | `visit(TypeClassInstanceAST*)` via `props_.type_class_instance(id)` |
 
@@ -114,7 +114,7 @@ Condition must be `bool` (skip if `Poisoned`), result always `unit`.
 | `/` | `Div::div` | i32, i64, f64 |
 | `%` | `Mod::mod` | i32, i64 |
 
-`synthesize_binary_operator()`: lookup `ClassName__lhs_type` in `type_class_instances` → set `resolved_op_method` (e.g. `Add__i32__add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
+`synthesize_binary_operator()`: lookup instance key `ClassName<lhs_type>` (e.g. `Add<i32>`) in `type_class_instances` → set `resolved_op_method` as `MonomorphizedName` (e.g. `Add<i32>::add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
 
 ## Three-Pass Registration (`visit(ProgramAST*)`)
 1. **Types + typeclasses**: structs, enums, **type aliases**, typeclass decls/instances, builtin ops → type maps, `variant_constructors`, typeclass data. Type aliases: `resolve_type_expr()` on the alias's type expr, register result in `typename_to_type`.
@@ -122,13 +122,29 @@ Condition must be `bool` (skip if `Poisoned`), result always `unit`.
 3. **Full type checking**: all definitions (structs/enums/type aliases skip if already visited)
 
 ## Typeclasses
-- `TypeClassInfo`: `name`, `type_param`, `methods`. `TypeClassInstanceInfo`: `class_name`, `concrete_type`, `method_mangled_names`.
-- Maps: `type_class_defs` (name → info), `type_class_instances` (`"Class__Type"` → info), `method_to_class` (method → class)
-- **Mangling**: `method` → `Class__Type__method` (e.g. `Sized__i32__sizeof`) — becomes the codegen function name
+- `TypeClassInfo`: `name`, `type_param`, `methods`. `TypeClassInstanceInfo`: `class_name`, `concrete_type`, `method_mangled_names` (`map<string, MonomorphizedName>`).
+- Maps: `type_class_defs` (name → info), `type_class_instances` (`"Class<Type>"` → info, e.g. `"Add<i32>"`), `method_to_class` (method → class)
+- **Mangling**: uses `MonomorphizedName::typeclass(class, type, method)` → `Class<Type>::method` (e.g. `Add<i32>::add`, `Sized<i32>::sizeof`)
+- **Instance key**: `MonomorphizedName::instance_key()` = `base.mangled() + type_args` (e.g. `"Add<i32>"`)
 - `register_typeclass_decl()`: temp scope with `type_param` as `TypeParam`, synthesize prototypes, populate `method_to_class`
-- `register_typeclass_instance()`: resolve concrete type, validate class, mangle names, update prototypes
-- **Dispatch** (`synthesize(CallExprAST*)` with `explicit_type_args`): lookup in `method_to_class` → resolve type arg → find instance → set `resolved_generic_name` + `is_typeclass_call`; not found → fall through to generic handling
-- Monomorphizing `print_size<T>` for `i32` resolves inner `sizeof<T>()` → `Sized__i32__sizeof`
+- `register_typeclass_instance()`: resolve concrete type, validate class, build `MonomorphizedName`, update prototypes
+- **Dispatch** (`synthesize_typeclass_call()`): supports BOTH syntaxes:
+  - Unqualified: `sizeof<i32>()` — lookup bare method name in `method_to_class`
+  - Qualified: `Add<i32>::add(x, y)` — extract class name from qualifier before `<`, method from last part
+- Both set `resolved_name` (`MonomorphizedName`) + `is_typeclass_call` on `CallProps`
+- Monomorphizing `print_size<T>` for `i32` resolves inner `sizeof<T>()` → `Sized<i32>::sizeof`
+
+### MonomorphizedName (`include/util/MonomorphizedName.h`)
+Encapsulates post-scope-gen monomorphization naming. Ensures `QualifiedName::local()` is never used after scope generation.
+
+| Factory | Example | `mangled()` | `to_qualified_name()` |
+|---|---|---|---|
+| `::generic(qn, "<i32>")` | `identity<i32>` | `base.mangled() + type_args` | preserves module structure |
+| `::typeclass("Add", "i32", "add")` | `Add<i32>::add` | `base.mangled() + type_args + "::" + method` | `local("Add<i32>::add")` |
+
+- `instance_key()`: `base.mangled() + type_args` — used as key in `type_class_instances`
+- `to_qualified_name()`: for generics, replaces last part of base with `name+type_args`; for typeclasses, returns `local(mangled())`
+- Stored in `CallProps::resolved_name`, `BinaryProps::resolved_op_method`, `TypeClassInstanceInfo::method_mangled_names`
 
 ## Monomorphized Generics
 

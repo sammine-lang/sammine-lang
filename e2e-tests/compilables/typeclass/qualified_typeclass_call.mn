@@ -1,0 +1,25 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK: 4
+# CHECK: 8
+
+# Qualified typeclass call syntax: ClassName<Type>::method()
+
+reuse printf(fmt : ptr<char>, ...) -> i32;
+
+typeclass MySize<T> {
+  mysize() -> i64;
+}
+
+instance MySize<i32> {
+  let mysize() -> i64 { 4 }
+}
+
+instance MySize<i64> {
+  let mysize() -> i64 { 8 }
+}
+
+let main() -> i32 {
+  printf("%ld\n", MySize<i32>::mysize());
+  printf("%ld\n", MySize<i64>::mysize());
+  return 0;
+}

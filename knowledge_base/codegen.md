@@ -85,24 +85,24 @@ If not in allocaValues but `Module->getFunction` found + type is Function → cr
 1. Register types: all `StructDefAST`/`EnumDefAST` → LLVM types
 2. Forward-declare: all `FuncDefAST`/`ExternAST`/`TypeClassInstanceAST` methods → `forward_declare()`/`getOrInsertFunction()`
 
-Eliminates definition-ordering constraints. Typeclass methods use mangled names (e.g. `Sized__i32__sizeof`).
+Eliminates definition-ordering constraints. Typeclass methods use mangled names (e.g. `Sized<i32>::sizeof`).
 
 ## ASTProperties in Codegen
 Both backends receive `const ASTProperties&` (stored as `props_` member). Node-specific decorated data is read from the side table, NOT from AST node fields:
 - `props_.call(ast->id())->callee_func_type` — resolved function type for calls
 - `props_.call(ast->id())->is_partial` — partial application detection
-- `props_.call(ast->id())->resolved_generic_name` — monomorphized/typeclass call target
+- `props_.call(ast->id())->resolved_name` — `optional<MonomorphizedName>` for monomorphized/typeclass call target; use `->mangled()` for name
 - `props_.variable(ast->id())->is_enum_unit_variant` — enum unit variant detection
-- `props_.binary(ast->id())->resolved_op_method` — operator overload target
+- `props_.binary(ast->id())->resolved_op_method` — `optional<MonomorphizedName>` for operator overload target; use `->mangled()` for name
 - `ast->get_type()` — node type (reads from ASTProperties via static pointer)
 
 ## Operator Overloading (`resolved_op_method`)
-Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_method` — if set, emit function call to typeclass method instead of native instruction. Both backends (MLIR uses `func::CallOp`).
+Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_method` — if `has_value()`, emit function call via `->mangled()` to typeclass method instead of native instruction. Both backends (MLIR uses `func::CallOp`).
 
 ## Typeclass Codegen
-- Instance methods → regular functions with mangled names. `TypeClassDeclAST`/`TypeClassInstanceAST` have no-op visitor stubs.
-- LLVM: type checker rewrites `functionName` to mangled name pre-codegen → uses `functionName.mangled()` directly
-- MLIR: `emitCallExpr` checks `resolved_generic_name` first, falls back to `functionName.mangled()`
+- Instance methods → regular functions with mangled names (e.g. `Add<i32>::add`). `TypeClassDeclAST`/`TypeClassInstanceAST` have no-op visitor stubs.
+- Type checker does NOT mutate `ast->functionName` — codegen reads `resolved_name` from `CallProps` for generic/typeclass calls
+- MLIR `emitCallExpr`: checks `cp->resolved_name` first (`->mangled()`), falls back to `ast->functionName.mangled()` for normal calls
 
 ## Export/IFunc Codegen
 - Exported functions in library modules → IFunc so importers call via mangled name (`module__func`), C uses plain name

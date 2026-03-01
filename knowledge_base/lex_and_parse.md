@@ -58,8 +58,17 @@ Top-level `ParseDefinition()` tries: `ParseTypeClassDecl`, `ParseTypeClassInstan
 
 ### Generic Type Parameters & Arguments
 - **Definitions** `let f<T, U>(...)`: `ParsePrototype()` parses optional `<T, U, ...>` between name and params → stored in `proto->type_params`
-- **Call sites** `f<i32, f64>(args)`: `ParseCallExpr()` uses speculative parsing with rollback for `<TypeExpr, ...>`. If parse fails → rollback, treat `<` as comparison.
+- **Call sites** `f<i32, f64>(args)`: `ParseCallExpr()` delegates to `parseExplicitTypeArgsTail()` for speculative `<TypeExpr, ...>` parsing
 - `consumeClosingAngleBracket()` splits `>>` → `>` + `>` and `>=` → `>` + `=` for nested generics
+
+### `parseExplicitTypeArgsTail()` (Parser helper)
+
+Extracted helper for speculative `<Type, ...>` parsing after a base name. Called by `ParseCallExpr()`. Handles three cases:
+1. `Name<Types>::member(args)` — qualified after type args (enum variant or typeclass method): extends `qn` with member name and populates `explicit_type_args`
+2. `Name<Types>(args)` — generic function call: populates `explicit_type_args`, `(` follows
+3. Rollback — `<` was not a type arg list (e.g. comparison operator)
+
+Uses `Lexer::save()`/`restore()` for rollback. Reuses `ParseTypeExpr()` and `consumeClosingAngleBracket()` for nested generics (e.g. `Option<ptr<i32>>`). Returns `vector<unique_ptr<TypeExprAST>>`.
 
 ### Enum Definitions, Type Aliases & Case Expressions
 - `type Name = V1(Type) | V2;` — pipe-separated variants (`TokORLogical`). Generic: `type Option<T> = Some(T) | None;`

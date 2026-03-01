@@ -2,6 +2,7 @@
 # CHECK:      34
 # CHECK-NEXT: (30, 40)
 # CHECK-NEXT: sizeof i32 = 4
+# CHECK-NEXT: sizeof i32 = 4
 # CHECK-NEXT: A
 
 # Line comments start with #
@@ -95,6 +96,7 @@ let main() -> i32 {
 
   # --- Sizeof (built-in typeclass) ---
   let sz = sizeof<i32>();                    # compile-time size info
+  let sz2 = Sized<i32>::sizeof();            # qualified typeclass call syntax
 
   # --- Chars ---
   let ch: char = 'A';
@@ -102,6 +104,7 @@ let main() -> i32 {
   std::printf("%d\n", fib(9));              # 34
   std::printf("(%d, %d)\n", v3.x, v3.y);   # (30, 40)
   std::printf("sizeof i32 = %ld\n", sz);   # sizeof i32 = 4
+  std::printf("sizeof i32 = %ld\n", sz2);  # sizeof i32 = 4 (qualified syntax)
   std::printf("%c\n", ch);                  # A
   return 0;                                  # explicit return
 }
