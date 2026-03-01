@@ -38,7 +38,7 @@ namespace AST {
 
 class Printable {};
 
-enum class TypeExprKind {
+enum class ParseKind {
   Simple,
   Pointer,
   Array,
@@ -48,11 +48,11 @@ enum class TypeExprKind {
 };
 
 class TypeExprAST {
-  TypeExprKind kind;
+  ParseKind kind;
 public:
-  TypeExprKind getKind() const { return kind; }
+  ParseKind getKind() const { return kind; }
   sammine_util::Location location;
-  TypeExprAST(TypeExprKind kind) : kind(kind) {}
+  TypeExprAST(ParseKind kind) : kind(kind) {}
   virtual ~TypeExprAST() = default;
   virtual std::string to_string() const = 0;
 };
@@ -61,18 +61,18 @@ class SimpleTypeExprAST : public TypeExprAST {
 public:
   sammine_util::QualifiedName name;
   explicit SimpleTypeExprAST(std::shared_ptr<Token> tok)
-      : TypeExprAST(TypeExprKind::Simple),
+      : TypeExprAST(ParseKind::Simple),
         name(sammine_util::QualifiedName::local(tok ? tok->lexeme : "")) {
     if (tok)
       location = tok->get_location();
   }
   explicit SimpleTypeExprAST(sammine_util::QualifiedName qn,
                              sammine_util::Location loc)
-      : TypeExprAST(TypeExprKind::Simple), name(std::move(qn)) {
+      : TypeExprAST(ParseKind::Simple), name(std::move(qn)) {
     location = loc;
   }
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Simple;
+    return node->getKind() == ParseKind::Simple;
   }
   std::string to_string() const override { return name.display(); }
 };
@@ -83,10 +83,10 @@ public:
   bool is_linear = false;
   explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee,
                               bool is_linear = false)
-      : TypeExprAST(TypeExprKind::Pointer), pointee(std::move(pointee)),
+      : TypeExprAST(ParseKind::Pointer), pointee(std::move(pointee)),
         is_linear(is_linear) {}
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Pointer;
+    return node->getKind() == ParseKind::Pointer;
   }
   std::string to_string() const override {
     return (is_linear ? "'" : "") + std::string("ptr<") + pointee->to_string() + ">";
@@ -98,10 +98,10 @@ public:
   std::unique_ptr<TypeExprAST> element;
   size_t size;
   ArrayTypeExprAST(std::unique_ptr<TypeExprAST> element, size_t size)
-      : TypeExprAST(TypeExprKind::Array), element(std::move(element)),
+      : TypeExprAST(ParseKind::Array), element(std::move(element)),
         size(size) {}
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Array;
+    return node->getKind() == ParseKind::Array;
   }
   std::string to_string() const override {
     return "[" + element->to_string() + ";" + std::to_string(size) + "]";
@@ -114,10 +114,10 @@ public:
   std::unique_ptr<TypeExprAST> returnType;
   FunctionTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> paramTypes,
                       std::unique_ptr<TypeExprAST> returnType)
-      : TypeExprAST(TypeExprKind::Function),
+      : TypeExprAST(ParseKind::Function),
         paramTypes(std::move(paramTypes)), returnType(std::move(returnType)) {}
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Function;
+    return node->getKind() == ParseKind::Function;
   }
   std::string to_string() const override {
     std::string res = "(";
@@ -139,12 +139,12 @@ public:
   GenericTypeExprAST(sammine_util::QualifiedName base_name,
                      std::vector<std::unique_ptr<TypeExprAST>> type_args,
                      sammine_util::Location loc)
-      : TypeExprAST(TypeExprKind::Generic), base_name(std::move(base_name)),
+      : TypeExprAST(ParseKind::Generic), base_name(std::move(base_name)),
         type_args(std::move(type_args)) {
     location = loc;
   }
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Generic;
+    return node->getKind() == ParseKind::Generic;
   }
   std::string to_string() const override {
     std::string res = base_name.display() + "<";
@@ -162,10 +162,10 @@ class TupleTypeExprAST : public TypeExprAST {
 public:
   std::vector<std::unique_ptr<TypeExprAST>> element_types;
   TupleTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> element_types)
-      : TypeExprAST(TypeExprKind::Tuple),
+      : TypeExprAST(ParseKind::Tuple),
         element_types(std::move(element_types)) {}
   static bool classof(const TypeExprAST *node) {
-    return node->getKind() == TypeExprKind::Tuple;
+    return node->getKind() == ParseKind::Tuple;
   }
   std::string to_string() const override {
     std::string res = "(";
