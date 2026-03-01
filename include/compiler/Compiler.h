@@ -21,6 +21,13 @@ enum compiler_option_enum {
   MLIR_IR,
   OUTPUT_DIR,
   IMPORT_PATHS,
+  LIB_FORMAT,
+};
+
+enum class LibFormat {
+  None,   // No library output (.o only, or link to .exe)
+  Static, // Emit .a archive
+  Shared, // Emit .so shared library
 };
 
 class CompilerRunner {

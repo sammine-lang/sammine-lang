@@ -77,6 +77,13 @@ int main(int argc, char *argv[]) {
       .append()
       .help("Add directory to import search path (repeatable).");
 
+  program.add_argument("--lib")
+      .default_value(std::string(""))
+      .implicit_value(std::string("shared"))
+      .nargs(0, 1)
+      .help("Emit library output instead of executable. Use --lib=static for "
+            "a .a archive, or --lib (no value) for a .so shared library.");
+
   if (argc < 1) {
     std::cerr << program;
     return 1;
@@ -129,6 +136,16 @@ int main(int argc, char *argv[]) {
       joined += ipaths[i];
     }
     compiler_options[IMPORT_PATHS] = joined;
+  }
+  {
+    auto lib_val = program.get("--lib");
+    if (!lib_val.empty() && lib_val != "static" && lib_val != "shared") {
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
+                 "Error: --lib only accepts 'static' (or no value for shared)\n");
+      std::cerr << program;
+      return 1;
+    }
+    compiler_options[LIB_FORMAT] = lib_val;
   }
   CompilerRunner::run(compiler_options);
   return 0;

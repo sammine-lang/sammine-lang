@@ -56,6 +56,7 @@ class Compiler {
   std::filesystem::path stdlib_dir;
   std::string output_dir;
   std::vector<std::string> import_paths;
+  LibFormat lib_format_ = LibFormat::None;
 
   AST::ASTProperties props_;
   sammine_util::Reporter reporter;
@@ -77,7 +78,16 @@ class Compiler {
   void optimize();
   void emit_object();
   void emit_interface();
+  void emit_library();
+  void emit_archive_impl();
+  void emit_shared_impl();
   void link();
+
+  static LibFormat parse_lib_format(const std::string &s) {
+    if (s == "static") return LibFormat::Static;
+    if (s == "shared") return LibFormat::Shared;
+    return LibFormat::None;
+  }
   void print_timing_table(
       const std::vector<std::pair<const char *, double>> &timings);
   void set_error() { error = true; }
@@ -160,6 +170,8 @@ Compiler::Compiler(
     if (!ec)
       stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
   }
+
+  lib_format_ = parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
 }
 
 void Compiler::lex() {
@@ -263,22 +275,35 @@ void Compiler::resolve_imports() {
                                        std::move(*it));
     }
 
-    // Track the .o file for linking (CWD, -I paths, source dir, then stdlib dir)
-    std::filesystem::path obj_path = import.module_name + ".o";
-    if (!std::filesystem::exists(obj_path)) {
-      for (auto &ipath : import_paths) {
-        auto candidate = std::filesystem::path(ipath) / (import.module_name + ".o");
+    // Track linkable artifact for this import (CWD, -I paths, source dir,
+    // then stdlib dir).  Search order per directory: .dylib → .a → .o
+    std::vector<std::string> lib_exts = {".so", ".a", ".o"};
+    std::filesystem::path obj_path;
+    auto find_lib = [&](const std::filesystem::path &dir) -> bool {
+      for (auto &ext : lib_exts) {
+        auto candidate = dir / (import.module_name + ext);
         if (std::filesystem::exists(candidate)) {
           obj_path = candidate;
-          break;
+          return true;
         }
       }
+      return false;
+    };
+    // CWD
+    find_lib(".");
+    // -I paths
+    if (obj_path.empty()) {
+      for (auto &ipath : import_paths)
+        if (find_lib(ipath))
+          break;
     }
-    if (!std::filesystem::exists(obj_path))
-      obj_path = source_dir / (import.module_name + ".o");
-    if (!std::filesystem::exists(obj_path) && !stdlib_dir.empty())
-      obj_path = stdlib_dir / (import.module_name + ".o");
-    if (std::filesystem::exists(obj_path))
+    // source dir
+    if (obj_path.empty())
+      find_lib(source_dir);
+    // stdlib dir
+    if (obj_path.empty() && !stdlib_dir.empty())
+      find_lib(stdlib_dir);
+    if (!obj_path.empty())
       extra_object_files.push_back(obj_path.string());
   }
 }
@@ -751,6 +776,91 @@ void Compiler::emit_interface() {
   }
 }
 
+void Compiler::emit_archive_impl() {
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
+               "Start emit archive stage...\n");
+  });
+
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string obj_file = output_path(stem + ".o");
+  std::string archive_file = output_path(stem + ".a");
+
+  // Collect all .o files into a temp directory, then create the archive.
+  // For .a deps, extract their members first.
+  auto tmp_dir =
+      std::filesystem::temp_directory_path() / ("sammine_ar_" + stem);
+  std::filesystem::create_directories(tmp_dir);
+
+  // Copy this module's .o
+  std::filesystem::copy_file(
+      obj_file, tmp_dir / std::filesystem::path(obj_file).filename(),
+      std::filesystem::copy_options::overwrite_existing);
+
+  for (auto &dep : extra_object_files) {
+    std::string ext = std::filesystem::path(dep).extension().string();
+    if (ext == ".a") {
+      // Extract archive members into temp dir
+      auto abs_dep = std::filesystem::absolute(dep).string();
+      std::string cmd =
+          fmt::format("cd {} && ar x {}", tmp_dir.string(), abs_dep);
+      std::system(cmd.c_str());
+    } else {
+      // .o or .so — copy directly
+      std::filesystem::copy_file(
+          dep, tmp_dir / std::filesystem::path(dep).filename(),
+          std::filesystem::copy_options::overwrite_existing);
+    }
+  }
+
+  // Create the archive from all collected .o files
+  auto abs_archive = std::filesystem::absolute(archive_file).string();
+  std::string cmd =
+      fmt::format("cd {} && ar rcs {} *.o", tmp_dir.string(), abs_archive);
+  int result = std::system(cmd.c_str());
+  if (result != 0)
+    fmt::print(stderr, "Failed to create archive {}\n", archive_file);
+
+  // Clean up temp directory
+  std::filesystem::remove_all(tmp_dir);
+}
+
+void Compiler::emit_shared_impl() {
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
+               "Start emit shared library stage...\n");
+  });
+
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string obj_file = output_path(stem + ".o");
+  std::string lib_file = output_path(stem + ".so");
+
+  std::string command =
+      fmt::format("clang++ -shared -o {} {}", lib_file, obj_file);
+  int result = std::system(command.c_str());
+  if (result != 0) {
+    fmt::print(stderr, "Failed to create shared library {}\n", lib_file);
+  }
+}
+
+void Compiler::emit_library() {
+  if (this->error || has_main || this->from_string)
+    return;
+  if (lib_format_ == LibFormat::None)
+    return;
+
+  switch (lib_format_) {
+  case LibFormat::Static:
+    emit_archive_impl();
+    break;
+  case LibFormat::Shared:
+    emit_shared_impl();
+    break;
+  case LibFormat::None:
+    break;
+  }
+}
+
 void Compiler::link() {
   if (this->error || this->from_string) {
     return;
@@ -821,6 +931,7 @@ void Compiler::start() {
       {"optimize", &Compiler::optimize},
       {"emit_obj", &Compiler::emit_object},
       {"emit_iface", &Compiler::emit_interface},
+      {"emit_library", &Compiler::emit_library},
       {"link", &Compiler::link},
   };
 
