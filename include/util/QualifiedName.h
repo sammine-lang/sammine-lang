@@ -28,7 +28,7 @@ struct QualifiedName {
   std::string mangled() const {
     if (module.empty())
       return name;
-    return module + "__" + name;
+    return module + "::" + name;
   }
 
   std::string display() const {
