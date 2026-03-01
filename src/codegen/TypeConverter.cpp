@@ -53,7 +53,7 @@ llvm::Type *TypeConverter::get_type(Type t) {
       return cached;
     sammine_util::abort(
         fmt::format("Enum '{}' not registered in TypeConverter",
-                    et.get_name().display()));
+                    et.get_name().mangled()));
   }
   case TypeKind::Tuple:
     sammine_util::abort("Tuple type not supported in old LLVM codegen");

@@ -36,7 +36,7 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
       for (auto &variant : enum_def->variants) {
         if (can_see(variant.name) == nameNotFound) {
           register_name(variant.name, enum_def->get_location());
-          variant_to_enum[variant.name] = enum_def->enum_name.name;
+          variant_to_enum[variant.name] = enum_def->enum_name.get_name();
         }
       }
     } else if (auto alias_def = llvm::dyn_cast<TypeAliasDefAST>(def.get())) {
@@ -180,20 +180,20 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   if (ast->functionName.is_unresolved()) {
     // Allow qualified names where the prefix is an enum name in scope
     // (e.g. Color::Red) — variant resolution deferred to type checker
-    if (can_see(ast->functionName.module) == nameFound)
+    if (can_see(ast->functionName.get_module()) == nameFound)
       return;
     add_error(ast->get_location(),
               fmt::format("Module '{}' is not imported",
-                          ast->functionName.module));
+                          ast->functionName.get_module()));
     return;
   }
 
   // Rewrite unqualified enum variant names to qualified form
   if (!ast->functionName.is_qualified()) {
-    auto it = variant_to_enum.find(ast->functionName.name);
+    auto it = variant_to_enum.find(ast->functionName.get_name());
     if (it != variant_to_enum.end()) {
       ast->functionName = sammine_util::QualifiedName::qualified(
-          it->second, ast->functionName.name);
+          it->second, ast->functionName.get_name());
       return;
     }
   }
@@ -201,13 +201,13 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   auto var_name = ast->functionName.mangled();
   if (can_see(var_name) == nameNotFound) {
     if (ast->functionName.is_qualified() &&
-        can_see(ast->functionName.module) == nameFound)
+        can_see(ast->functionName.get_qualifier()) == nameFound)
       return;
     add_error(
         ast->get_location(),
         fmt::format(
             "The called name {} for the call expression is not found before",
-            ast->functionName.display()));
+            ast->functionName.mangled()));
   }
 }
 

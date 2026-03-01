@@ -108,7 +108,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     REQUIRE(func_def != nullptr);
 
     REQUIRE(func_def->Prototype->return_type_expr->to_string() == "f64");
-    REQUIRE(func_def->Prototype->functionName.name == "f");
+    REQUIRE(func_def->Prototype->functionName.get_name() == "f");
     REQUIRE(func_def->Prototype->parameterVectors.size() == 1);
   }
 
@@ -128,7 +128,7 @@ TEST_CASE("Function declaration parsing", "[Parser]") {
     // Check if downcast is valid.
     REQUIRE(func_def != nullptr);
 
-    REQUIRE(func_def->Prototype->functionName.name == "f");
+    REQUIRE(func_def->Prototype->functionName.get_name() == "f");
     REQUIRE(func_def->Prototype->parameterVectors.size() == 3);
   }
 

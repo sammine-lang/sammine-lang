@@ -120,20 +120,12 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'struct'",
           struct_tok->get_location(), {nullptr, FAILED});
 
-  // Handle qualified name (mod::Struct) from .mni files
-  std::string qualified_module;
-  if (tokStream->peek()->tok_type == TokDoubleColon) {
-    tokStream->consume(); // consume ::
-    auto member = expect(TokID);
-    if (member) {
-      qualified_module = id->lexeme;
-      id = member;
-    }
-  }
+  auto struct_pqn = parseQualifiedNameTail(id, false);
 
   REQUIRE(left_curly, TokLeftCurly,
-          fmt::format("Expected '{{{{' after struct identifier {}", id->lexeme),
-          struct_tok->get_location() | id->get_location(), {nullptr, FAILED});
+          fmt::format("Expected '{{{{' after struct identifier {}",
+                      struct_pqn.qn.get_name()),
+          struct_tok->get_location() | struct_pqn.location, {nullptr, FAILED});
 
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
   while (!tokStream->isEnd()) {
@@ -146,12 +138,12 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
       REQUIRE(_comma, TokComma,
               fmt::format("Expected ',' after member {}", member_name),
               member_loc,
-              {std::make_unique<StructDefAST>(id, std::move(struct_members)),
+              {std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members)),
                FAILED});
       continue;
     }
     if (result != NONCOMMITTED) {
-      return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
+      return {std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members)),
               FAILED};
     }
     break;
@@ -176,18 +168,14 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
     }
     this->imm_error(msg, err_loc);
 
-    return {std::make_unique<StructDefAST>(id, std::move(struct_members)),
+    return {std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members)),
             FAILED};
   }
   if (!expect(TokSemiColon))
     imm_error("Expected ';' after struct definition",
               right_curly->get_location());
 
-  auto struct_def = std::make_unique<StructDefAST>(id, std::move(struct_members));
-  if (!qualified_module.empty())
-    struct_def->struct_name = sammine_util::QualifiedName::qualified(
-        qualified_module, struct_def->struct_name.name);
-  return {std::move(struct_def), SUCCESS};
+  return {std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members)), SUCCESS};
 }
 
 // type Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
@@ -200,16 +188,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'type'",
           type_tok->get_location(), {nullptr, FAILED});
 
-  // Handle qualified name (mod::EnumName) from .mni files
-  std::string qualified_module;
-  if (tokStream->peek()->tok_type == TokDoubleColon) {
-    tokStream->consume(); // consume ::
-    auto member = expect(TokID);
-    if (member) {
-      qualified_module = id->lexeme;
-      id = member;
-    }
-  }
+  auto enum_pqn = parseQualifiedNameTail(id, false);
 
   // Parse optional type parameters: type Option<T> = ...
   std::vector<std::string> enum_type_params;
@@ -290,7 +269,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
       imm_error("Expected variant name in type definition",
                 variants.empty() ? id->get_location()
                                  : variants.back().location);
-      return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
+      return {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)), FAILED};
     }
 
     EnumVariantDef variant;
@@ -306,7 +285,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
               "Negative discriminant values are not supported in "
               "integer-backed enums",
               tokStream->peek()->get_location());
-          return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+          return {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)),
                   FAILED};
         }
         // Integer discriminant: Foo(42)
@@ -320,7 +299,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
                             "got '{}'",
                             variant.name, num_tok->lexeme),
                 num_tok->get_location());
-            return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+            return {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)),
                     FAILED};
           }
           variant.discriminant_value = val;
@@ -331,7 +310,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
             imm_error(fmt::format("Expected type in payload of variant '{}'",
                                   variant.name),
                       variant.location);
-            return {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED};
+            return {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)), FAILED};
           }
           variant.payload_types.push_back(std::move(first_type));
 
@@ -340,7 +319,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
             if (!next_type) {
               imm_error("Expected type after ',' in variant payload",
                         variant.location);
-              return {std::make_unique<EnumDefAST>(id, std::move(variants)),
+              return {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)),
                       FAILED};
             }
             variant.payload_types.push_back(std::move(next_type));
@@ -351,7 +330,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
               fmt::format("Expected ')' to close payload of variant '{}'",
                           variant.name),
               variant.location,
-              {std::make_unique<EnumDefAST>(id, std::move(variants)), FAILED});
+              {std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants)), FAILED});
     }
 
     variants.push_back(std::move(variant));
@@ -365,10 +344,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
     imm_error("Expected ';' after type definition",
               variants.empty() ? id->get_location() : variants.back().location);
 
-  auto enum_def = std::make_unique<EnumDefAST>(id, std::move(variants));
-  if (!qualified_module.empty())
-    enum_def->enum_name = sammine_util::QualifiedName::qualified(
-        qualified_module, enum_def->enum_name.name);
+  auto enum_def = std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants));
   enum_def->type_params = std::move(enum_type_params);
   enum_def->backing_type_name = std::move(backing_type_name);
   // If any variant has an integer discriminant, mark as integer-backed
@@ -692,19 +668,9 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return nullptr;
   }
   if (auto id = expect(TokenType::TokID)) {
-    // Build the base name (simple or qualified)
-    sammine_util::QualifiedName base_name =
-        sammine_util::QualifiedName::local(id->lexeme);
-    auto loc = id->get_location();
-
-    if (tokStream->peek()->tok_type == TokDoubleColon) {
-      tokStream->consume(); // consume ::
-      REQUIRE(member_id, TokID,
-              fmt::format("Expected type name after '{}::'", id->lexeme),
-              id->get_location(), nullptr);
-      base_name = resolveQualifiedName(id->lexeme, member_id->lexeme);
-      loc = id->get_location() | member_id->get_location();
-    }
+    auto pqn = parseQualifiedNameTail(id);
+    auto base_name = pqn.qn;
+    auto loc = pqn.location;
 
     // Check for generic type args: Option<i32>, Result<i32, String>
     if (tokStream->peek()->tok_type == TokLESS) {
@@ -1136,28 +1102,9 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
     return {std::make_unique<CallExprAST>(nullptr), NONCOMMITTED};
 
   // Handle qualified names: alias::member or alias::enum::variant
-  sammine_util::QualifiedName qn =
-      sammine_util::QualifiedName::local(id->lexeme);
-  auto qn_loc = id->get_location();
-  if (tokStream->peek()->tok_type == TokDoubleColon) {
-    tokStream->consume(); // always consume the ::
-    REQUIRE(member_id, TokID,
-            fmt::format("Expected member name after '{}::'", id->lexeme),
-            id->get_location(), {nullptr, FAILED});
-    qn_loc = id->get_location() | member_id->get_location();
-    qn = resolveQualifiedName(id->lexeme, member_id->lexeme);
-
-    // Handle third segment: module::enum::variant
-    if (tokStream->peek()->tok_type == TokDoubleColon) {
-      tokStream->consume(); // consume ::
-      REQUIRE(variant_id, TokID,
-              fmt::format("Expected variant name after '{}::'", qn.display()),
-              qn_loc, {nullptr, FAILED});
-      qn = sammine_util::QualifiedName::qualified(qn.mangled(),
-                                                   variant_id->lexeme);
-      qn_loc = qn_loc | variant_id->get_location();
-    }
-  }
+  auto call_pqn = parseQualifiedNameTail(id);
+  auto qn = call_pqn.qn;
+  auto qn_loc = call_pqn.location;
 
   // Speculative parse: f<TypeExpr, ...>(args) — generic call with explicit type args.
   // We try to parse <type_arg, ...> and check that a '(' follows.
@@ -1201,7 +1148,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
           mangled += parsed_types[i]->to_string();
         }
         mangled += ">";
-        qn = sammine_util::QualifiedName::qualified(mangled, variant_id->lexeme);
+        qn = sammine_util::QualifiedName::from_parts({mangled, variant_id->lexeme});
         qn_loc = id->get_location() | variant_id->get_location();
         explicit_type_args = std::move(parsed_types);
       } else {
@@ -1400,46 +1347,25 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
           return {nullptr, FAILED};
         }
         pattern.variant_name =
-            sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
+            sammine_util::QualifiedName::from_parts({enum_prefix, variant_tok->lexeme});
         pattern.location =
             prefix_tok->get_location() | variant_tok->get_location();
 
-      } else if (tokStream->peek()->tok_type == TokDoubleColon) {
-        // Qualified non-generic: Enum::Variant or Module::Enum::Variant
-        auto dcolon = tokStream->consume();
-        auto variant_tok = expect(TokenType::TokID);
-        if (!variant_tok) {
-          imm_error("Expected variant name after '::'",
-                    dcolon->get_location());
-          return {nullptr, FAILED};
-        }
-        // Check for third segment: module::enum::variant
-        if (tokStream->peek()->tok_type == TokDoubleColon) {
-          tokStream->consume(); // consume ::
-          auto real_variant = expect(TokenType::TokID);
-          if (!real_variant) {
-            imm_error("Expected variant name after '::'",
-                      variant_tok->get_location());
-            return {nullptr, FAILED};
-          }
-          auto resolved = resolveQualifiedName(enum_prefix, variant_tok->lexeme);
-          pattern.variant_name =
-              sammine_util::QualifiedName::qualified(
-                  resolved.mangled(), real_variant->lexeme);
-          pattern.location =
-              prefix_tok->get_location() | real_variant->get_location();
-        } else {
-          pattern.variant_name =
-              sammine_util::QualifiedName::qualified(enum_prefix, variant_tok->lexeme);
-          pattern.location =
-              prefix_tok->get_location() | variant_tok->get_location();
-        }
-
       } else {
-        // Unqualified: just the variant name (e.g., Some, None, Red)
-        pattern.variant_name =
-            sammine_util::QualifiedName::local(prefix_tok->lexeme);
-        pattern.location = prefix_tok->get_location();
+        // Unified: handles unqualified, 2-segment (Enum::Variant),
+        // and 3-segment (Module::Enum::Variant)
+        auto pqn = parseQualifiedNameTail(prefix_tok, false);
+        // For 3-segment module::enum::variant, resolve the module alias
+        if (pqn.qn.depth() == 3) {
+          auto &parts = pqn.qn.parts();
+          auto it = alias_to_module.find(parts[0]);
+          bool unresolved = (it == alias_to_module.end());
+          std::string resolved_mod = unresolved ? parts[0] : it->second;
+          pqn.qn = sammine_util::QualifiedName::from_parts(
+              {resolved_mod, parts[1], parts[2]}, unresolved);
+        }
+        pattern.variant_name = pqn.qn;
+        pattern.location = pqn.location;
       }
 
       if (auto lparen = expect(TokenType::TokLeftParen)) {
@@ -1591,16 +1517,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   if (!id)
     return {nullptr, NONCOMMITTED};
 
-  // Handle qualified name (mod::func) from .mni files
-  std::string qualified_module;
-  if (tokStream->peek()->tok_type == TokDoubleColon) {
-    tokStream->consume(); // consume ::
-    auto member = expect(TokID);
-    if (member) {
-      qualified_module = id->lexeme;
-      id = member; // id now holds the function name token
-    }
-  }
+  auto proto_pqn = parseQualifiedNameTail(id, false);
 
   // Parse optional explicit type parameters: <T, U, ...>
   std::vector<std::string> type_params;
@@ -1640,12 +1557,9 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
 
   auto arrow = expect(TokArrow);
   if (!arrow) {
-    auto proto = std::make_unique<PrototypeAST>(id, std::move(params));
+    auto proto = std::make_unique<PrototypeAST>(proto_pqn.qn, proto_pqn.location, std::move(params));
     proto->is_var_arg = var_arg;
     proto->type_params = std::move(type_params);
-    if (!qualified_module.empty())
-      proto->functionName = sammine_util::QualifiedName::qualified(
-          qualified_module, proto->functionName.name);
     return {std::move(proto), SUCCESS};
   }
 
@@ -1653,13 +1567,11 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   bool has_return_type = return_type_expr != nullptr;
   if (!has_return_type)
     this->imm_error("Expected a return type after '->'", arrow->get_location());
-  auto proto = std::make_unique<PrototypeAST>(id, std::move(return_type_expr),
+  auto proto = std::make_unique<PrototypeAST>(proto_pqn.qn, proto_pqn.location,
+                                              std::move(return_type_expr),
                                               std::move(params));
   proto->is_var_arg = var_arg;
   proto->type_params = std::move(type_params);
-  if (!qualified_module.empty())
-    proto->functionName = sammine_util::QualifiedName::qualified(
-        qualified_module, proto->functionName.name);
   return {std::move(proto), has_return_type ? SUCCESS : FAILED};
 }
 
@@ -1960,6 +1872,40 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   return {std::make_unique<TypeClassInstanceAST>(
               kw, name_tok->lexeme, std::move(type_expr), std::move(methods)),
           SUCCESS};
+}
+
+auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
+                                    bool resolve_alias) -> ParsedQualifiedName {
+  std::vector<std::string> parts = {first_tok->lexeme};
+  Location loc = first_tok->get_location();
+
+  while (tokStream->peek()->tok_type == TokDoubleColon) {
+    tokStream->consume(); // consume ::
+    if (tokStream->peek()->tok_type == TokID) {
+      auto next = tokStream->consume();
+      parts.push_back(next->lexeme);
+      loc = loc | next->get_location();
+    } else {
+      // No TokID after ::, rollback the :: consumption
+      tokStream->rollback(1);
+      break;
+    }
+  }
+
+  if (parts.size() == 1)
+    return {sammine_util::QualifiedName::local(parts[0]), loc};
+
+  bool unresolved = false;
+  if (resolve_alias) {
+    auto it = alias_to_module.find(parts[0]);
+    if (it != alias_to_module.end())
+      parts[0] = it->second;
+    else
+      unresolved = true;
+  }
+
+  return {sammine_util::QualifiedName::from_parts(std::move(parts), unresolved),
+          loc};
 }
 
 auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,

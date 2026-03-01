@@ -187,7 +187,7 @@ void Compiler::parse() {
 
   for (auto &def : programAST->DefinitionVec)
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get()))
-      if (fd->Prototype->functionName.name == "main") {
+      if (fd->Prototype->functionName.get_name() == "main") {
         has_main = true;
         break;
       }
@@ -630,11 +630,11 @@ void Compiler::emit_interface() {
     switch (t.type_kind) {
     case TypeKind::Struct: {
       auto &st = std::get<StructType>(t.type_data);
-      return QualifiedName::local(st.get_name()).with_module(stem).display();
+      return QualifiedName::local(st.get_name()).with_module(stem).mangled();
     }
     case TypeKind::Enum: {
       auto &et = std::get<EnumType>(t.type_data);
-      return et.get_name().with_module(stem).display();
+      return et.get_name().with_module(stem).mangled();
     }
     case TypeKind::Pointer:
       return (t.is_linear ? "'" : "") + std::string("ptr<") +
@@ -688,21 +688,21 @@ void Compiler::emit_interface() {
     if (auto *func_def = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!func_def->is_exported)
         continue;
-      std::string name = func_def->Prototype->functionName.with_module(stem).display();
+      std::string name = func_def->Prototype->functionName.with_module(stem).mangled();
       emit_proto(name, func_def->Prototype.get(),
                  func_def->Prototype->is_var_arg);
     } else if (auto *extern_def = llvm::dyn_cast<AST::ExternAST>(def.get())) {
       if (!extern_def->is_exposed)
         continue;
       std::string name =
-          extern_def->Prototype->functionName.with_module(stem).display();
+          extern_def->Prototype->functionName.with_module(stem).mangled();
       emit_proto(name, extern_def->Prototype.get(),
                  extern_def->Prototype->is_var_arg);
     } else if (auto *struct_def = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (!struct_def->is_exported)
         continue;
       out << "struct "
-          << struct_def->struct_name.with_module(stem).display() << " {\n";
+          << struct_def->struct_name.with_module(stem).mangled() << " {\n";
       for (size_t i = 0; i < struct_def->struct_members.size(); i++) {
         auto &member = struct_def->struct_members[i];
         out << "  " << member->name;
@@ -714,7 +714,7 @@ void Compiler::emit_interface() {
     } else if (auto *enum_def = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (!enum_def->is_exported)
         continue;
-      out << "type " << enum_def->enum_name.with_module(stem).display();
+      out << "type " << enum_def->enum_name.with_module(stem).mangled();
       if (!enum_def->type_params.empty()) {
         out << "<";
         for (size_t i = 0; i < enum_def->type_params.size(); i++) {

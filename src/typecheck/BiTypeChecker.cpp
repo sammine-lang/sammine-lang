@@ -117,7 +117,7 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
     var->accept_vis(this);
   id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(),
                                            ast->get_type());
-  if (ast->functionName.name == "main") {
+  if (ast->functionName.get_name() == "main") {
     auto fn_type = std::get<FunctionType>(ast->get_type().type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type != Type::I32_t()) {
@@ -308,7 +308,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
           ast->get_location(),
           fmt::format("Invalid backing type '{}' for type '{}' — must be "
                       "i32, i64, u32, or u64",
-                      bt_name, ast->enum_name.display()));
+                      bt_name, ast->enum_name.mangled()));
       ast->set_type(Type::Poisoned());
       return;
     }
@@ -326,7 +326,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             variant.location,
             fmt::format("Integer-backed enum '{}': variant '{}' is missing a "
                         "discriminant value — all variants must have one",
-                        ast->enum_name.display(), variant.name));
+                        ast->enum_name.mangled(), variant.name));
         ast->set_type(Type::Poisoned());
         return;
       }
@@ -335,7 +335,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             variant.location,
             fmt::format("Integer-backed enum '{}': variant '{}' cannot have "
                         "both a discriminant value and type payloads",
-                        ast->enum_name.display(), variant.name));
+                        ast->enum_name.mangled(), variant.name));
         ast->set_type(Type::Poisoned());
         return;
       }
@@ -345,7 +345,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             variant.location,
             fmt::format("Integer-backed enum '{}': duplicate discriminant "
                         "value {} on variant '{}'",
-                        ast->enum_name.display(), val, variant.name));
+                        ast->enum_name.mangled(), val, variant.name));
         ast->set_type(Type::Poisoned());
         return;
       }
@@ -395,7 +395,7 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
     this->add_error(
         ast->get_location(),
         fmt::format("Cannot resolve type '{}' in type alias '{}'",
-                    ast->type_expr->to_string(), ast->alias_name.display()));
+                    ast->type_expr->to_string(), ast->alias_name.mangled()));
     ast->set_type(Type::Poisoned());
     return;
   }
@@ -457,7 +457,7 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
                                                     ast->arguments[i]->get_type())) {
       this->add_error(ast->arguments[i]->get_location(),
                       fmt::format("Argument {} to '{}': expected {}, got {}",
-                                  i + 1, ast->functionName.display(),
+                                  i + 1, ast->functionName.mangled(),
                                   params[i].to_string(),
                                   ast->arguments[i]->get_type().to_string()));
       if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->get_type()))
@@ -701,7 +701,7 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   inst_info.concrete_type = tcip.concrete_type;
 
   for (auto &method : ast->methods) {
-    std::string original_name = method->Prototype->functionName.name;
+    std::string original_name = method->Prototype->functionName.get_name();
     std::string mangled = ast->class_name + "__" +
                           tcip.concrete_type.to_string() + "__" + original_name;
     method->Prototype->functionName =

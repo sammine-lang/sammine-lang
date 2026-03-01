@@ -224,7 +224,7 @@ struct Type {
     case TypeKind::Struct:
       return std::get<StructType>(type_data).get_name();
     case TypeKind::Enum:
-      return std::get<EnumType>(type_data).get_name().display();
+      return std::get<EnumType>(type_data).get_name().mangled();
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Char:

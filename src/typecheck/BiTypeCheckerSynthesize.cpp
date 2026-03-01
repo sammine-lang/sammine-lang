@@ -136,7 +136,7 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
 
   LOG({
     fmt::print(stderr, "[typecheck] synthesize PrototypeAST: '{}' -> {}\n",
-               ast->functionName.display(), ast->get_type().to_string());
+               ast->functionName.mangled(), ast->get_type().to_string());
   });
   return ast->get_type();
 }
@@ -151,12 +151,12 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   // does NOT resolve unqualified enum variant names — that is the scope
   // generator's responsibility.
   if (ast->functionName.is_qualified()) {
-    auto enum_type_opt = get_typename_type(ast->functionName.module);
+    auto enum_type_opt = get_typename_type(ast->functionName.get_qualifier());
 
     // If not found and we have explicit type args, try generic enum instantiation
     if (!enum_type_opt && !ast->explicit_type_args.empty()) {
       // Extract base name (everything before '<')
-      auto module = ast->functionName.module;
+      auto module = ast->functionName.get_qualifier();
       auto angle_pos = module.find('<');
       if (angle_pos != std::string::npos) {
         std::string base_name = module.substr(0, angle_pos);
@@ -192,7 +192,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
     // Generic enum variant without explicit type args
     // (e.g., Some(42) rewritten to Option::Some(42) by scope generator)
     if (!enum_type_opt) {
-      auto vc_it = variant_constructors.find(ast->functionName.name);
+      auto vc_it = variant_constructors.find(ast->functionName.get_name());
       if (vc_it != variant_constructors.end())
         enum_type_opt = vc_it->second.first;
     }
@@ -200,12 +200,12 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
     if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
       auto &enum_type = *enum_type_opt;
       auto &et = std::get<EnumType>(enum_type.type_data);
-      auto variant_idx = et.get_variant_index(ast->functionName.name);
+      auto variant_idx = et.get_variant_index(ast->functionName.get_name());
       if (!variant_idx) {
         this->add_error(
             ast->get_location(),
             fmt::format("Type '{}' has no variant '{}'",
-                        ast->functionName.module, ast->functionName.name));
+                        ast->functionName.get_qualifier(), ast->functionName.get_name()));
         return ast->set_type(Type::Poisoned());
       }
       auto &vi = et.get_variant(*variant_idx);
@@ -214,7 +214,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
         this->add_error(
             ast->get_location(),
             fmt::format("Enum variant '{}::{}' expects {} arguments, got {}",
-                        ast->functionName.module, vi.name,
+                        ast->functionName.get_qualifier(), vi.name,
                         vi.payload_types.size(), ast->arguments.size()));
         return ast->set_type(Type::Poisoned());
       }
@@ -227,7 +227,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
               ast->arguments[i]->get_location(),
               fmt::format("Type mismatch in enum variant '{}::{}' argument {}: "
                           "expected {}, got {}",
-                          ast->functionName.module, vi.name, i + 1,
+                          ast->functionName.get_qualifier(), vi.name, i + 1,
                           vi.payload_types[i].to_string(),
                           arg_type.to_string()));
           if (auto hint =
@@ -324,7 +324,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
     this->add_error(
         ast->get_location(),
         fmt::format("Generic function '{}' expects {} arguments, got {}",
-                    ast->functionName.display(), params.size(),
+                    ast->functionName.mangled(), params.size(),
                     ast->arguments.size()));
     return ast->set_type(Type::Poisoned());
   }
@@ -338,7 +338,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
       this->add_error(
           ast->get_location(),
           fmt::format("Expected {} type argument(s) for '{}', got {}",
-                      type_params.size(), ast->functionName.display(),
+                      type_params.size(), ast->functionName.mangled(),
                       ast->explicit_type_args.size()));
       return ast->set_type(Type::Poisoned());
     }
@@ -359,7 +359,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         this->add_error(
             ast->arguments[i]->get_location(),
             fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
-                        ast->functionName.display(), expected.to_string(),
+                        ast->functionName.mangled(), expected.to_string(),
                         arg_type.to_string()));
         if (auto hint = incompatibility_hint(expected, arg_type))
           this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
@@ -382,7 +382,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         this->add_error(ast->arguments[i]->get_location(),
                         fmt::format("Type mismatch in argument {} of '{}': "
                                     "expected {}, got {}",
-                                    i + 1, ast->functionName.display(),
+                                    i + 1, ast->functionName.mangled(),
                                     expected.to_string(),
                                     arg_type.to_string()));
         return ast->set_type(Type::Poisoned());
@@ -396,7 +396,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
             ast->get_location(),
             fmt::format(
                 "Type parameter '{}' could not be inferred for '{}'",
-                tp, ast->functionName.display()));
+                tp, ast->functionName.mangled()));
         return ast->set_type(Type::Poisoned());
       }
     }
@@ -420,7 +420,7 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
   if (!ty.has_value()) {
     this->add_error(ast->get_location(),
                     fmt::format("Function '{}' not found",
-                                ast->functionName.display()));
+                                ast->functionName.mangled()));
     return ast->set_type(Type::Poisoned());
   }
 
@@ -429,7 +429,7 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
   if (ty->type_kind != TypeKind::Function) {
     this->add_error(ast->get_location(),
                     fmt::format("'{}' is not callable",
-                                ast->functionName.display()));
+                                ast->functionName.mangled()));
     return ast->set_type(Type::Poisoned());
   }
 
@@ -443,7 +443,7 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
           ast->get_location(),
           fmt::format("Variadic function '{}' requires at least {} "
                       "arguments, got {}",
-                      ast->functionName.display(), params.size(),
+                      ast->functionName.mangled(), params.size(),
                       ast->arguments.size()));
       return ast->set_type(Type::Poisoned());
     }
@@ -453,7 +453,7 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
   if (ast->arguments.size() > params.size()) {
     this->add_error(ast->get_location(),
                     fmt::format("Function '{}' expects {} arguments, got {}",
-                                ast->functionName.display(), params.size(),
+                                ast->functionName.mangled(), params.size(),
                                 ast->arguments.size()));
     return ast->set_type(Type::Poisoned());
   }
@@ -982,14 +982,14 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   if (ast->struct_name.is_unresolved()) {
     this->add_error(ast->get_location(),
                     fmt::format("Module '{}' is not imported",
-                                ast->struct_name.module));
+                                ast->struct_name.get_module()));
     return ast->set_type(Type::Poisoned());
   }
 
   auto type_opt = get_typename_type(ast->struct_name.mangled());
   if (!type_opt.has_value()) {
     this->add_error(ast->get_location(),
-                    fmt::format("Unknown struct type '{}'", ast->struct_name.display()));
+                    fmt::format("Unknown struct type '{}'", ast->struct_name.mangled()));
     return ast->set_type(Type::Poisoned());
   }
 
@@ -997,7 +997,7 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   if (struct_type.type_kind != TypeKind::Struct) {
     this->add_error(
         ast->get_location(),
-        fmt::format("'{}' is not a struct type", ast->struct_name.display()));
+        fmt::format("'{}' is not a struct type", ast->struct_name.mangled()));
     return ast->set_type(Type::Poisoned());
   }
 
@@ -1007,7 +1007,7 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   if (ast->field_names.size() != st.field_count()) {
     this->add_error(
         ast->get_location(),
-        fmt::format("Struct '{}' expects {} fields, got {}", ast->struct_name.display(),
+        fmt::format("Struct '{}' expects {} fields, got {}", ast->struct_name.mangled(),
                     st.field_count(), ast->field_names.size()));
     return ast->set_type(Type::Poisoned());
   }
@@ -1018,7 +1018,7 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
     if (!idx.has_value()) {
       this->add_error(
           ast->field_values[i]->get_location(),
-          fmt::format("Struct '{}' has no field named '{}'", ast->struct_name.display(),
+          fmt::format("Struct '{}' has no field named '{}'", ast->struct_name.mangled(),
                       ast->field_names[i]));
       return ast->set_type(Type::Poisoned());
     }
@@ -1165,12 +1165,12 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     }
 
     // Non-wildcard: look up variant in enum
-    auto variant_name = arm.pattern.variant_name.name;
+    auto variant_name = arm.pattern.variant_name.get_name();
     auto variant_idx = et.get_variant_index(variant_name);
     if (!variant_idx.has_value()) {
       this->add_error(arm.pattern.location,
                       fmt::format("Type '{}' has no variant '{}'",
-                                  et.get_name().display(), variant_name));
+                                  et.get_name().mangled(), variant_name));
       had_error = true;
       continue;
     }
@@ -1184,7 +1184,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
       this->add_error(
           arm.pattern.location,
           fmt::format("Pattern '{}::{}' expects {} bindings, got {}",
-                      et.get_name().display(), variant_name,
+                      et.get_name().mangled(), variant_name,
                       vi.payload_types.size(), arm.pattern.bindings.size()));
       had_error = true;
       continue;

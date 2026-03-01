@@ -74,7 +74,7 @@ public:
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Simple;
   }
-  std::string to_string() const override { return name.display(); }
+  std::string to_string() const override { return name.mangled(); }
 };
 
 class PointerTypeExprAST : public TypeExprAST {
@@ -147,7 +147,7 @@ public:
     return node->getKind() == ParseKind::Generic;
   }
   std::string to_string() const override {
-    std::string res = base_name.display() + "<";
+    std::string res = base_name.mangled() + "<";
     for (size_t i = 0; i < type_args.size(); i++) {
       res += type_args[i]->to_string();
       if (i != type_args.size() - 1)
@@ -243,14 +243,14 @@ public:
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(
-      std::shared_ptr<Token> functionName,
+      sammine_util::QualifiedName functionName,
+      sammine_util::Location name_loc,
       std::unique_ptr<TypeExprAST> return_type_expr,
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
       : AstBase(NodeKind::PrototypeAST),
         return_type_expr(std::move(return_type_expr)) {
-    assert(functionName);
-    this->functionName = sammine_util::QualifiedName::local(functionName->lexeme);
-    this->join_location(functionName);
+    this->functionName = std::move(functionName);
+    this->join_location(name_loc);
     if (this->return_type_expr)
       this->join_location(this->return_type_expr->location);
 
@@ -263,12 +263,12 @@ public:
   }
 
   explicit PrototypeAST(
-      std::shared_ptr<Token> functionName,
+      sammine_util::QualifiedName functionName,
+      sammine_util::Location name_loc,
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
       : AstBase(NodeKind::PrototypeAST) {
-    assert(functionName);
-    this->functionName = sammine_util::QualifiedName::local(functionName->lexeme);
-    this->join_location(functionName);
+    this->functionName = std::move(functionName);
+    this->join_location(name_loc);
 
     this->parameterVectors = std::move(parameterVectors);
 
@@ -347,14 +347,13 @@ public:
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
   bool is_exported = false;
 
-  explicit StructDefAST(std::shared_ptr<Token> struct_id,
+  explicit StructDefAST(sammine_util::QualifiedName name,
+                        sammine_util::Location name_loc,
                         decltype(struct_members) struct_members)
       : DefinitionAST(NodeKind::StructDefAST),
+        struct_name(std::move(name)),
         struct_members(std::move(struct_members)) {
-    if (struct_id)
-      struct_name = sammine_util::QualifiedName::local(struct_id->lexeme);
-
-    this->join_location(struct_id);
+    this->join_location(name_loc);
     for (auto &m : struct_members)
       this->join_location(m.get());
   }
@@ -378,12 +377,12 @@ public:
   bool is_exported = false;
   std::optional<std::string> backing_type_name;
 
-  explicit EnumDefAST(std::shared_ptr<Token> enum_id,
+  explicit EnumDefAST(sammine_util::QualifiedName name,
+                      sammine_util::Location name_loc,
                       std::vector<EnumVariantDef> variants)
-      : DefinitionAST(NodeKind::EnumDefAST), variants(std::move(variants)) {
-    if (enum_id)
-      enum_name = sammine_util::QualifiedName::local(enum_id->lexeme);
-    this->join_location(enum_id);
+      : DefinitionAST(NodeKind::EnumDefAST),
+        enum_name(std::move(name)), variants(std::move(variants)) {
+    this->join_location(name_loc);
     for (auto &v : this->variants)
       this->join_location(v.location);
   }

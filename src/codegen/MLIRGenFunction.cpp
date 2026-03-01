@@ -417,8 +417,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
 
   // Imported C externs are declared with their base name (e.g. "printf")
   if (!theModule.lookupSymbol(callee)) {
-    if (theModule.lookupSymbol(ast->functionName.name))
-      callee = ast->functionName.name;
+    if (theModule.lookupSymbol(ast->functionName.get_name()))
+      callee = ast->functionName.get_name();
   }
 
   // Path 1: Direct call (not partial) — callee found in module

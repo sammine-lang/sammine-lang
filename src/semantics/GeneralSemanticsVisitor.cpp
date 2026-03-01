@@ -21,7 +21,7 @@ void GeneralSemanticsVisitor::check_reserved_identifier(
 
 void GeneralSemanticsVisitor::preorder_walk(FuncDefAST *ast) {
   // Check function name for reserved "__"
-  check_reserved_identifier(ast->Prototype->functionName.name,
+  check_reserved_identifier(ast->Prototype->functionName.get_name(),
                             ast->Prototype->get_location());
   // Track all function blocks, storing whether they return unit
   func_blocks[ast->Block.get()] = ast->returnsUnit();
@@ -37,14 +37,14 @@ void GeneralSemanticsVisitor::preorder_walk(VarDefAST *ast) {
 }
 
 void GeneralSemanticsVisitor::preorder_walk(StructDefAST *ast) {
-  check_reserved_identifier(ast->struct_name.name, ast->get_location());
+  check_reserved_identifier(ast->struct_name.get_name(), ast->get_location());
 }
 
 void GeneralSemanticsVisitor::preorder_walk(EnumDefAST *ast) {
-  check_reserved_identifier(ast->enum_name.name, ast->get_location());
+  check_reserved_identifier(ast->enum_name.get_name(), ast->get_location());
 }
 void GeneralSemanticsVisitor::preorder_walk(TypeAliasDefAST *ast) {
-  check_reserved_identifier(ast->alias_name.name, ast->get_location());
+  check_reserved_identifier(ast->alias_name.get_name(), ast->get_location());
 }
 void GeneralSemanticsVisitor::preorder_walk(BlockAST *ast) {
   // Only reset for function blocks, not nested blocks

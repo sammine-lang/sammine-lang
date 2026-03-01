@@ -72,7 +72,9 @@ Monomorphizer::clone_prototype(PrototypeAST *proto,
     params.push_back(clone_typed_var(p.get()));
 
   auto result = std::make_unique<PrototypeAST>(
-      make_tok(mangled_name), clone_type_expr(proto->return_type_expr.get()),
+      sammine_util::QualifiedName::local(mangled_name),
+      sammine_util::Location{},
+      clone_type_expr(proto->return_type_expr.get()),
       std::move(params));
   // type_params left empty — this is a concrete instantiation
   return result;
@@ -292,8 +294,10 @@ Monomorphizer::instantiate_enum(EnumDefAST *generic,
     cloned_variants.push_back(std::move(cloned));
   }
 
-  auto result = std::make_unique<EnumDefAST>(make_tok(mangled_name),
-                                              std::move(cloned_variants));
+  auto result = std::make_unique<EnumDefAST>(
+      sammine_util::QualifiedName::local(mangled_name),
+      sammine_util::Location{},
+      std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
   // type_params left empty — this is a concrete instantiation

@@ -183,7 +183,7 @@ void LinearTypeChecker::check_block(BlockAST *ast) {
             fmt::format(
                 "Return value of '{}' has linear type '{}' and must not be "
                 "discarded",
-                call->functionName.display(), call->get_type().to_string()));
+                call->functionName.mangled(), call->get_type().to_string()));
       }
     }
   }

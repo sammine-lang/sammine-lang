@@ -57,7 +57,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
   // Compute the LLVM symbol name: mangle library functions with module$func
   // Externs keep their C names — aliases handle the mangled lookup.
   std::string llvm_name = ast->functionName.mangled();
-  if (!module_name.empty() && ast->functionName.name != "main" && !in_reuse &&
+  if (!module_name.empty() && ast->functionName.get_name() != "main" && !in_reuse &&
       !current_func_exported)
     llvm_name = ast->functionName.with_module(module_name).mangled();
 
@@ -106,7 +106,7 @@ void CgVisitor::preorder_walk(PrototypeAST *ast) {
   assert(F);
   LOG({
     fmt::print(stderr, "[codegen] register function '{}' with {} params\n",
-               ast->functionName.display(), ast->parameterVectors.size());
+               ast->functionName.mangled(), ast->parameterVectors.size());
   });
 }
 
@@ -284,7 +284,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
   if (callee && !(cp && cp->is_partial)) {
     LOG({
       fmt::print(stderr, "[codegen] call '{}': direct call with {} args\n",
-                 ast->functionName.display(), ast->arguments.size());
+                 ast->functionName.mangled(), ast->arguments.size());
     });
     // Skip arg count check for variadic functions (like printf)
     if (!callee->isVarArg() && ast->arguments.size() != callee->arg_size())
@@ -300,7 +300,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
       fmt::print(stderr,
                  "[codegen] call '{}': partial application, binding {} of {} "
                  "args, wrapper = __partial_{}\n",
-                 ast->functionName.display(), ast->arguments.size(), callee->arg_size(),
+                 ast->functionName.mangled(), ast->arguments.size(), callee->arg_size(),
                  partial_counter);
     });
     emitPartialApplication(ast, callee, ArgsVector);
@@ -314,7 +314,7 @@ void CgVisitor::postorder_walk(CallExprAST *ast) {
       fmt::print(stderr,
                  "[codegen] call '{}': indirect call through closure with {} "
                  "args\n",
-                 ast->functionName.display(), ast->arguments.size());
+                 ast->functionName.mangled(), ast->arguments.size());
     });
     this->abort_if_not(cp && cp->callee_func_type.has_value(),
                        "ICE: indirect call missing callee_func_type");

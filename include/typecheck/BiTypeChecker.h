@@ -307,7 +307,7 @@ public:
       if (simple->name.is_unresolved()) {
         this->add_error(type_expr->location,
                         fmt::format("Module '{}' is not imported",
-                                    simple->name.module));
+                                    simple->name.get_module()));
         return Type::Poisoned();
       }
       auto mangled = simple->name.mangled();
@@ -315,7 +315,7 @@ public:
       if (!get_type_opt.has_value()) {
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",
-                                    simple->name.display()));
+                                    simple->name.mangled()));
         return Type::Poisoned();
       }
       return get_type_opt.value();
@@ -368,7 +368,7 @@ public:
       if (it == generic_enum_defs.end()) {
         this->add_error(type_expr->location,
                         fmt::format("'{}' is not a generic type",
-                                    gen->base_name.display()));
+                                    gen->base_name.mangled()));
         return Type::Poisoned();
       }
 
@@ -377,7 +377,7 @@ public:
         this->add_error(
             type_expr->location,
             fmt::format("Generic type '{}' expects {} type argument(s), got {}",
-                        gen->base_name.display(),
+                        gen->base_name.mangled(),
                         generic_def->type_params.size(),
                         gen->type_args.size()));
         return Type::Poisoned();

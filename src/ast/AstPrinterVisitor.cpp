@@ -410,7 +410,7 @@ void AstPrinterVisitor::preorder_walk(ExternAST *ast) {}
 void AstPrinterVisitor::preorder_walk(FuncDefAST *ast) {}
 void AstPrinterVisitor::preorder_walk(StructDefAST *ast) {
   // print the record’s name at the current indent
-  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.display()));
+  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.mangled()));
 }
 void AstPrinterVisitor::preorder_walk(EnumDefAST *ast) {
   std::string variants_str;
@@ -428,13 +428,13 @@ void AstPrinterVisitor::preorder_walk(EnumDefAST *ast) {
     if (i + 1 < ast->variants.size())
       variants_str += " | ";
   }
-  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.display(), variants_str));
+  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.mangled(), variants_str));
 }
 void AstPrinterVisitor::preorder_walk(TypeAliasDefAST *ast) {
-  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.display(), ast->type_expr->to_string()));
+  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.mangled(), ast->type_expr->to_string()));
 }
 void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
-  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.display()));
+  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.mangled()));
 }
 void AstPrinterVisitor::preorder_walk(CallExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(ReturnExprAST *ast) {
@@ -620,7 +620,7 @@ void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
     if (arm.pattern.is_wildcard)
       arms_str += "_";
     else {
-      arms_str += arm.pattern.variant_name.display();
+      arms_str += arm.pattern.variant_name.mangled();
       if (!arm.pattern.bindings.empty()) {
         arms_str += "(";
         for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {

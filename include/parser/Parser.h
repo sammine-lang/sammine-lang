@@ -11,6 +11,12 @@
 //! \brief Defines Parser, which consumes tokens and constructs the AST
 
 namespace sammine_lang {
+
+struct ParsedQualifiedName {
+  sammine_util::QualifiedName qn;
+  sammine_util::Location location;
+};
+
 enum ParserError {
   SUCCESS,
   FAILED,
@@ -158,14 +164,12 @@ public:
                             const std::string &message = "")
       -> std::shared_ptr<Token>;
 
-  [[nodiscard]] auto resolveQualifiedName(const std::string &alias,
-                                          const std::string &member)
-      -> sammine_util::QualifiedName {
-    auto it = alias_to_module.find(alias);
-    if (it != alias_to_module.end())
-      return sammine_util::QualifiedName::qualified(it->second, member);
-    return sammine_util::QualifiedName::unresolved_qualified(alias, member);
-  }
+  /// Greedily consume ::ID pairs after an already-consumed first TokID.
+  /// \param first_tok     The already-consumed TokID token
+  /// \param resolve_alias If true, resolve first segment through alias_to_module
+  [[nodiscard]] auto parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
+                                            bool resolve_alias = true)
+      -> ParsedQualifiedName;
 
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
