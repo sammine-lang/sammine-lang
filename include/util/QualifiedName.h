@@ -3,22 +3,45 @@
 #include <utility>
 #include <vector>
 
+// Forward declarations for QualifiedName friends
+namespace sammine_lang {
+class Parser;
+namespace AST {
+class SimpleTypeExprAST;
+class TypeAliasDefAST;
+class CallExprAST;
+class StructLiteralExprAST;
+struct CasePattern;
+} // namespace AST
+} // namespace sammine_lang
+
 namespace sammine_util {
+
+struct MonomorphizedName;
 
 struct QualifiedName {
 private:
   std::vector<std::string> parts_; // ["math", "Color", "Red"]
   bool unresolved_ = false;
 
-public:
-  QualifiedName() : parts_{""} {}
-
-  // Factory methods
+  // local() is restricted to parsing/AST construction only.
+  // After scope generation, use MonomorphizedName instead.
   static QualifiedName local(std::string name) {
     QualifiedName qn;
     qn.parts_ = {std::move(name)};
     return qn;
   }
+
+  friend class sammine_lang::Parser;
+  friend class sammine_lang::AST::SimpleTypeExprAST;
+  friend class sammine_lang::AST::TypeAliasDefAST;
+  friend class sammine_lang::AST::CallExprAST;
+  friend class sammine_lang::AST::StructLiteralExprAST;
+  friend struct sammine_lang::AST::CasePattern;
+  friend struct sammine_util::MonomorphizedName;
+
+public:
+  QualifiedName() : parts_{""} {}
 
   static QualifiedName qualified(std::string module, std::string name) {
     QualifiedName qn;
