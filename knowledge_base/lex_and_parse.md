@@ -82,19 +82,30 @@ Top-level `ParseDefinition()` tries: `ParseTypeClassDecl`, `ParseTypeClassInstan
 
 ## QualifiedName (`include/util/QualifiedName.h`)
 
-| Method | Returns |
+Stores `vector<string> parts_` internally — supports arbitrary-depth names (`A::B::C::...`).
+
+| Factory | Result |
 |---|---|
-| `::local("add")` | Unqualified local name |
-| `::qualified("math", "add")` | Module-qualified name |
-| `::unresolved_qualified("x", "add")` | Alias not found in `alias_to_module` — enables import errors |
-| `.mangled()` | `"math__add"` — for scope lookups and codegen |
-| `.display()` | `"math::add"` — for error messages |
-| `.from_mangled("math__add")` | Parse mangled string back to QualifiedName |
-| `.with_module("mod")` | Copy with module set (if not already qualified) |
+| `::local("add")` | `["add"]` — unqualified local name |
+| `::qualified("math", "add")` | `["math", "add"]` — module-qualified name |
+| `::unresolved_qualified("x", "add")` | `["x", "add"]` + unresolved flag — alias not in `alias_to_module` |
+| `::from_parts({"math","Color","Red"})` | `["math", "Color", "Red"]` — arbitrary depth |
+
+| Accessor | Returns |
+|---|---|
+| `.get_name()` | Last part (`parts_.back()`) |
+| `.get_module()` | First part if depth>1, else `""` |
+| `.get_qualifier()` | All parts except last, joined with `::` |
+| `.mangled()` | All parts joined with `::` — used for scope lookups, codegen, AND error messages |
+| `.with_module("mod")` | Copy with module prepended (no-op if already qualified or mod is empty) |
+| `.depth()` / `.parts()` | Number of segments / raw vector access |
 
 **QualifiedName fields**: `CallExprAST::functionName`, `StructLiteralExprAST::struct_name`, `SimpleTypeExprAST::name`, `PrototypeAST::functionName`, `StructDefAST::struct_name`, `EnumDefAST::enum_name`
 **Plain string**: `VariableExprAST::variableName`
-Parser always consumes `::` after ID — never silently skips for unknown aliases.
+
+### `parseQualifiedNameTail()` (Parser helper)
+
+Unified helper in `Parser` that greedily consumes `::ID` pairs after an already-consumed first `TokID`. Parameters: `first_lexeme`, `first_loc`, `max_segments` (0=unlimited), `resolve_alias` (resolve first segment through `alias_to_module`). Returns `ParsedQualifiedName {qn, location}`. Used by `ParseStructDef`, `ParseEnumDef`, `ParsePrototype`, `ParseTypeExpr`, `ParseCallExpr`, and `ParseCaseExpr`. If `::` is not followed by `TokID`, rolls back and returns what it has.
 
 ## Type Expression Hierarchy
 

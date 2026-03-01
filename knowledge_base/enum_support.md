@@ -59,7 +59,7 @@ The `type` keyword serves double duty: enum definitions and type aliases.
 - Integer-backed enums flow into their backing type via `compatible_to_from()`
 - Negative discriminant values are rejected at parse time (TokSUB check in ParseEnumDef)
 - `variant_constructors` map: `variant_name → (enum_type, index)` — used for generic enum fallback and `VariableExprAST` unit variant lookup
-- Variant resolution in `synthesize(CallExprAST*)`: look up enum via `get_typename_type(module)`, fall back to `variant_constructors` for generics, then find variant by name
+- Variant resolution in `synthesize(CallExprAST*)`: look up enum via `get_typename_type(qualifier)` (uses `get_qualifier()` for the enum type name), fall back to `variant_constructors` for generics, then find variant by name
 - See `type_checking.md` for full enum type checker details (EnumType, variant constructors, case expressions, exhaustiveness)
 
 ## Scope Generator

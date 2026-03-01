@@ -51,7 +51,7 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 ## BiTypeChecker (`include/typecheck/BiTypeChecker.h`)
 - Bidirectional: `synthesize()` → types bottom-up, `postorder_walk()` → consistency top-down
 - Two lexical stacks: `id_to_type` (variable/function names), `typename_to_type` (type names); built-ins (i32/i64/f64/bool/char/unit) registered in `enter_new_scope()`
-- All lookups use `QualifiedName::mangled()`, all errors use `.display()`
+- All lookups and error messages use `QualifiedName::mangled()` (single string representation)
 - **Enum variant invariant**: all variant calls arrive pre-qualified by scope generator. Type checker does NOT resolve unqualified variants.
 
 ### `resolve_type_expr(TypeExprAST*)`
@@ -91,7 +91,7 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 ## Enum Types
 - `EnumType`: `QualifiedName` + vector of `VariantInfo`; nominal equality (by name)
 - `variant_constructors` map: `variant_name → (enum_type, variant_index)` — populated in `visit(EnumDefAST*)`
-- **Construction** (`synthesize(CallExprAST*)`): qualified path → lookup module in `typename_to_type` → resolve variant; fallback → `variant_constructors`. Validates args, sets `is_enum_constructor`/`enum_variant_index`.
+- **Construction** (`synthesize(CallExprAST*)`): qualified path → lookup qualifier (`get_qualifier()`) in `typename_to_type` → resolve variant; fallback → `variant_constructors`. Validates args, sets `is_enum_constructor`/`enum_variant_index`.
 - **Unit variants** (`synthesize(VariableExprAST*)`): name not in `id_to_type` → try `variant_constructors`; empty payload → `is_enum_unit_variant`; has payload → abort
 - **Generic enums**: `generic_enum_defs` → instantiated via `Monomorphizer::instantiate_enum()` → tracked in `instantiated_enums`/`monomorphized_enum_defs`
 
