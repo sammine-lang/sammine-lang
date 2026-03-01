@@ -132,14 +132,14 @@ void CgVisitor::preorder_walk(ProgramAST *ast) {
       if (sd->get_type().type_kind != TypeKind::Poisoned) {
         auto st = std::get<StructType>(sd->get_type().type_data);
         if (!llvm::StructType::getTypeByName(*resPtr->Context,
-                                             "sammine.struct." + st.get_name())) {
+                                             "sammine.struct." + st.get_name().mangled())) {
           std::vector<llvm::Type *> field_types;
           for (auto &ft : st.get_field_types())
             field_types.push_back(type_converter.get_type(ft));
           auto *llvm_struct = llvm::StructType::create(
               *resPtr->Context, field_types,
-              "sammine.struct." + st.get_name());
-          type_converter.register_struct_type(st.get_name(), llvm_struct);
+              "sammine.struct." + st.get_name().mangled());
+          type_converter.register_struct_type(st.get_name().mangled(), llvm_struct);
         }
       }
     } else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get())) {
@@ -214,7 +214,7 @@ void CgVisitor::preorder_walk(StructDefAST *ast) {
   auto st = std::get<StructType>(ast->get_type().type_data);
 
   // Skip if already registered (e.g. by forward-declaration pass)
-  if (type_converter.get_struct_type(st.get_name()))
+  if (type_converter.get_struct_type(st.get_name().mangled()))
     return;
 
   std::vector<llvm::Type *> field_llvm_types;
@@ -223,8 +223,8 @@ void CgVisitor::preorder_walk(StructDefAST *ast) {
 
   auto *llvm_struct = llvm::StructType::create(
       *resPtr->Context, field_llvm_types,
-      "sammine.struct." + st.get_name());
-  type_converter.register_struct_type(st.get_name(), llvm_struct);
+      "sammine.struct." + st.get_name().mangled());
+  type_converter.register_struct_type(st.get_name().mangled(), llvm_struct);
 }
 void CgVisitor::postorder_walk(ExternAST *ast) {
   in_reuse = false;
@@ -376,7 +376,10 @@ void CgVisitor::postorder_walk(BinaryExprAST *ast) {
 
   auto tok = ast->Op->tok_type;
   auto *bp = props_ ? props_->binary(ast->id()) : nullptr;
-  std::string resolved_op = bp ? bp->resolved_op_method : std::string();
+  std::string resolved_op =
+      (bp && bp->resolved_op_method.has_value())
+          ? bp->resolved_op_method->mangled()
+          : std::string();
   if (tok == TokenType::TokADD) {
     if (is_int)
       ast->val = resPtr->Builder->CreateAdd(L, R, "add_expr");
@@ -917,7 +920,7 @@ void CgVisitor::postorder_walk(StructLiteralExprAST *ast) {
     return;
 
   auto st = std::get<StructType>(ast->get_type().type_data);
-  auto *llvm_struct_ty = type_converter.get_struct_type(st.get_name());
+  auto *llvm_struct_ty = type_converter.get_struct_type(st.get_name().mangled());
 
   llvm::Value *agg = llvm::UndefValue::get(llvm_struct_ty);
   for (size_t i = 0; i < ast->field_values.size(); i++) {

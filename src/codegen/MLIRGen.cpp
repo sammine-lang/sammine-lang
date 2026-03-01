@@ -48,9 +48,10 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         for (auto &ft : st.get_field_types())
           fieldTypes.push_back(convertType(ft));
         auto structTy = mlir::LLVM::LLVMStructType::getIdentified(
-            builder.getContext(), kStructTypePrefix.str() + st.get_name());
+            builder.getContext(),
+            kStructTypePrefix.str() + st.get_name().mangled());
         (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
-        structTypes[st.get_name()] = structTy;
+        structTypes[st.get_name().mangled()] = structTy;
       }
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (ed->get_type().type_kind != TypeKind::Poisoned) {
@@ -192,7 +193,7 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   }
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(type.type_data);
-    return structTypes.at(st.get_name());
+    return structTypes.at(st.get_name().mangled());
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);

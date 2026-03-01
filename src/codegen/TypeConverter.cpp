@@ -39,12 +39,12 @@ llvm::Type *TypeConverter::get_type(Type t) {
     return llvm::StructType::getTypeByName(context, "sammine.closure");
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(t.type_data);
-    auto *cached = get_struct_type(st.get_name());
+    auto *cached = get_struct_type(st.get_name().mangled());
     if (cached)
       return cached;
     sammine_util::abort(
         fmt::format("Struct '{}' not registered in TypeConverter",
-                    st.get_name()));
+                    st.get_name().mangled()));
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(t.type_data);

@@ -630,7 +630,7 @@ void Compiler::emit_interface() {
     switch (t.type_kind) {
     case TypeKind::Struct: {
       auto &st = std::get<StructType>(t.type_data);
-      return QualifiedName::local(st.get_name()).with_module(stem).mangled();
+      return st.get_name().with_module(stem).mangled();
     }
     case TypeKind::Enum: {
       auto &et = std::get<EnumType>(t.type_data);

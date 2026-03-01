@@ -410,8 +410,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // the LLVM backend. Names already include module prefixes where needed
   // (e.g. "math$add" for imports, "wrapper" for local calls).
   std::string callee;
-  if (cp && cp->resolved_generic_name.has_value())
-    callee = *cp->resolved_generic_name;
+  if (cp && cp->resolved_name.has_value())
+    callee = cp->resolved_name->mangled();
   else
     callee = ast->functionName.mangled();
 

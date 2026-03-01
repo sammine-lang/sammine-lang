@@ -105,11 +105,15 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     return val;
   }
 
-  // Not in symbol table — check if it's a module-level function used as a value
+  // Not in symbol table — check if it's a module-level function used as a value.
+  // VariableExprAST stores a bare name (e.g. "foo"), but top-level functions
+  // may be registered under their module-qualified name (e.g. "mylib::foo").
+  // Try both the bare name and the module-qualified name.
   if (ast->get_type().type_kind == TypeKind::Function) {
     auto funcName = ast->variableName;
-    if (!theModule.lookupSymbol<mlir::func::FuncOp>(funcName))
-      funcName = mangleName(sammine_util::QualifiedName::local(funcName));
+    if (!theModule.lookupSymbol<mlir::func::FuncOp>(funcName) &&
+        !moduleName.empty())
+      funcName = moduleName + "::" + funcName;
     if (theModule.lookupSymbol<mlir::func::FuncOp>(funcName)) {
       auto ft = std::get<FunctionType>(ast->get_type().type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);
@@ -408,11 +412,11 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
   // User-defined operator via typeclass instance — emit a function call
   auto *bp = props_.binary(ast->id());
-  if (bp && !bp->resolved_op_method.empty()) {
-    auto funcOp =
-        theModule.lookupSymbol<mlir::func::FuncOp>(bp->resolved_op_method);
+  if (bp && bp->resolved_op_method.has_value()) {
+    auto opName = bp->resolved_op_method->mangled();
+    auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
     if (!funcOp)
-      funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(bp->resolved_op_method);
+      funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
     if (funcOp) {
       auto callOp = mlir::func::CallOp::create(builder, location, funcOp,
                                                  mlir::ValueRange{lhs, rhs});
@@ -734,7 +738,7 @@ mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
 mlir::Value
 MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   auto st = std::get<StructType>(ast->get_type().type_data);
-  auto structTy = structTypes.at(st.get_name());
+  auto structTy = structTypes.at(st.get_name().mangled());
   auto location = loc(ast);
 
   // Start with undef
