@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 42
+# CHECK:      42
 # CHECK-NEXT: 1000000
 # CHECK-NEXT: 3.140000
 # CHECK-NEXT: A

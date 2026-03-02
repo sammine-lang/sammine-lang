@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: and_true
+# CHECK:      and_true
 # CHECK-NEXT: and_false
 # CHECK-NEXT: or_true
 # CHECK-NEXT: or_false

@@ -1,5 +1,5 @@
 # RUN: %sammine --file %dir/Inputs/generic_level_c.mn %O && %sammine --file %dir/Inputs/generic_level_b.mn %O %I -I %dir/Inputs && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK: 77
+# CHECK:      77
 import generic_level_b;
 import std;
 

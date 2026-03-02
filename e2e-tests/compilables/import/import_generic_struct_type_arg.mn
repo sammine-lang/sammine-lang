@@ -1,6 +1,6 @@
 # RUN: %sammine --file %dir/Inputs/has_generic_struct.mn %O && %sammine --file %dir/Inputs/has_generic.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK: 10
-# CHECK: 20
+# CHECK:      10
+# CHECK-NEXT: 20
 import has_generic_struct as lib;
 import has_generic;
 import std;

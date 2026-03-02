@@ -1,5 +1,20 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: some branches
+# CHECK:          |break_branch_if_no_else_consume.mn:1:0
+# CHECK:          |──────────────────────────────────────────────────────────────────┬
+# CHECK-NEXT:     |                                                                  ╰─ Linear variable 'p' is consumed in some branches but not others
+# CHECK:         3|
+# CHECK-NEXT:    4|# CORRECT: Linear pointer consumed in then-branch but not in else.
+# CHECK-NEXT:    5|# With no else, the "else" state equals "before" (unconsumed).
+# CHECK-NEXT:    6|# Branch consistency should flag the mismatch.
+# CHECK-NEXT:    7|
+# CHECK-NEXT:    8|let main() -> i32 {
+# CHECK-NEXT:    9|  let p = alloc<i32>(1);
+# CHECK-NEXT:   10|  if (1 == 1) {
+# CHECK-NEXT:   11|    free(p);
+# CHECK-NEXT:   12|  };
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Linear pointer consumed in then-branch but not in else.
 # With no else, the "else" state equals "before" (unconsumed).

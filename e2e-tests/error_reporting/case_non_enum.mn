@@ -1,4 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |case_non_enum.mn:6:7
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  let x: i32 = 42;
+# CHECK-NEXT:    6|  case x {
+# CHECK-NEXT:     |       ┬
+# CHECK-NEXT:     |       ╰─ Case expression requires an enum type, got i32
+# CHECK-NEXT:    7|    _ => 0,
+# CHECK-NEXT:    8|  };
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 # CHECK-ERR: Case expression requires an enum type
 
 let main() -> i32 {

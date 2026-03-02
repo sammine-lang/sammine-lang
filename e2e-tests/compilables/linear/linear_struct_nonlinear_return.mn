@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: Cannot return 'w' of type 'Wrapper': non-linear ptr<i32> in field 'data'
+# CHECK:          |linear_struct_nonlinear_return.mn:14:2
+# CHECK-NEXT:   12|  let p : ptr<i32> = &x;
+# CHECK-NEXT:   13|  let w : Wrapper = Wrapper { data: p, tag: 1 };
+# CHECK-NEXT:   14|  return w;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'w' of type 'Wrapper': non-linear ptr<i32> in field 'data' (may reference a local variable)
+# CHECK-NEXT:   15|}
+# CHECK-NEXT:   16|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # Test: returning a struct with a non-linear pointer field is an error
 struct Wrapper {

@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O --diagnostics=dev 2>&1 | %check %full
-# CHECK:          |eof_caret.mn:7:30
+# CHECK:          |eof_caret.mn:7:29
 # CHECK:         7|let main() -> i32 { return 0;
 # CHECK:          |                             ^
-# CHECK-NEXT:     |                              Expected '}' to close statement block
-# CHECK-NEXT:     |                              [Error-borne `dev` location: Parser.cpp:1557]
+# CHECK-NEXT:     |                             Expected '}' to close statement block
+# CHECK-NEXT:     |                             [Error-borne `dev` location: Parser.cpp:1961]
 let main() -> i32 { return 0;

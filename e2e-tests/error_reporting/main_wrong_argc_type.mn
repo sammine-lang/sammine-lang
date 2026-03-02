@@ -1,5 +1,14 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: main's first parameter must be i32 (argc)
+# CHECK:          |main_wrong_argc_type.mn:4:9
+# CHECK:         3|
+# CHECK-NEXT:    4|let main(argc: f64, argv: ptr<ptr<char>>) -> i32 {
+# CHECK-NEXT:     |         ────────┬
+# CHECK-NEXT:     |                 ╰─ main's first parameter must be i32 (argc), found f64
+# CHECK-NEXT:    5|  return 0;
+# CHECK-NEXT:    6|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main(argc: f64, argv: ptr<ptr<char>>) -> i32 {
   return 0;

@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 77
+# CHECK:      77
 
 import std;
 

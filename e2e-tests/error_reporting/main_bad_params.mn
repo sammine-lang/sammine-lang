@@ -1,5 +1,14 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: main must take 0 or 2 parameters
+# CHECK:          |main_bad_params.mn:4:4
+# CHECK:         3|
+# CHECK-NEXT:    4|let main(x: f64) -> i32 {
+# CHECK-NEXT:     |    ──────────────────┬
+# CHECK-NEXT:     |                      ╰─ main must take 0 or 2 parameters (argc: i32, argv: ptr<ptr<char>>)
+# CHECK-NEXT:    5|  return 0;
+# CHECK-NEXT:    6|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main(x: f64) -> i32 {
   return 0;

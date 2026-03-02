@@ -1,5 +1,16 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: some branches but not others
+# CHECK:          |linear_if_mismatch.mn:1:0
+# CHECK:          |──────────────────────────────────────────────────────────────────┬
+# CHECK-NEXT:     |                                                                  ╰─ Linear variable 'p' is consumed in some branches but not others
+# CHECK:         3|
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  let p = alloc<i32>(1);
+# CHECK-NEXT:    6|  if true {
+# CHECK-NEXT:    7|    free(p);
+# CHECK-NEXT:    8|  } else {
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);

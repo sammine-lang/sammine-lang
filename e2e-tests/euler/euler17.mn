@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 21124
+# CHECK:      21124
 
 # Project Euler Problem 17: Number letter counts
 # If all numbers from 1 to 1000 inclusive were written out in words,

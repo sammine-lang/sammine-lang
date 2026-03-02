@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: Type mismatch
+# CHECK:          |i32_i64_mismatch.mn:5:16
+# CHECK-NEXT:    3|let main() -> i32 {
+# CHECK-NEXT:    4|  let a : i32 = 0;
+# CHECK-NEXT:    5|  let b : i64 = a;
+# CHECK-NEXT:     |                ┬
+# CHECK-NEXT:     |                ╰─ Type mismatch: expression has type i32, but variable declared as i64
+# CHECK-NEXT:    6|  return 0;
+# CHECK-NEXT:    7|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   let a : i32 = 0;
   let b : i64 = a;

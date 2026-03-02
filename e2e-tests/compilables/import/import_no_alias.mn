@@ -1,5 +1,5 @@
 # RUN: %sammine --file %dir/Inputs/math.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_no_alias.exe | %check %full
-# CHECK: 12
+# CHECK:      12
 
 import math;
 

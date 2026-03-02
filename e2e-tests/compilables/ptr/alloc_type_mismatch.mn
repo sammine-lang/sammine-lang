@@ -1,5 +1,14 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: alloc count must be an integer
+# CHECK:          |alloc_type_mismatch.mn:4:33
+# CHECK:         3|let main() -> i32 {
+# CHECK-NEXT:    4|  let p : 'ptr<f64> = alloc<f64>(3.14);
+# CHECK-NEXT:     |                                 ───┬
+# CHECK-NEXT:     |                                    ╰─ alloc count must be an integer, got 'float literal'
+# CHECK-NEXT:    5|  return 0;
+# CHECK-NEXT:    6|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   let p : 'ptr<f64> = alloc<f64>(3.14);
   return 0;

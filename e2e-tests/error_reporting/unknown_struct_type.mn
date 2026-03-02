@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Unknown struct type 'Foo'
+# CHECK:          |unknown_struct_type.mn:5:24
+# CHECK-NEXT:    3|
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  let p: i32 = Foo { x: 1 };
+# CHECK-NEXT:     |                        ┬
+# CHECK-NEXT:     |                        ╰─ Unknown struct type 'Foo'
+# CHECK-NEXT:    6|  return 0;
+# CHECK-NEXT:    7|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p: i32 = Foo { x: 1 };

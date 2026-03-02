@@ -1,5 +1,14 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: missing a discriminant value
+# CHECK:          |int_enum_mixed.mn:4:18
+# CHECK:         3|
+# CHECK-NEXT:    4|type Bad = A(0) | B(i32) | C(2);
+# CHECK-NEXT:     |                  ┬
+# CHECK-NEXT:     |                  ╰─ Integer-backed enum 'Bad': variant 'B' is missing a discriminant value — all variants must have one
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 type Bad = A(0) | B(i32) | C(2);
 

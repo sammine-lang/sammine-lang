@@ -1,8 +1,8 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: same ptr equal: 1
-# CHECK: same ptr not-equal: 0
-# CHECK: diff ptr equal: 0
-# CHECK: diff ptr not-equal: 1
+# CHECK:      same ptr equal: 1
+# CHECK-NEXT: same ptr not-equal: 0
+# CHECK-NEXT: diff ptr equal: 0
+# CHECK-NEXT: diff ptr not-equal: 1
 
 import std;
 

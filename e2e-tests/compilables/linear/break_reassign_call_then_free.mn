@@ -1,5 +1,18 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: already been consumed
+# CHECK:          |break_reassign_call_then_free.mn
+# CHECK-NEXT:   16|  let p = alloc<i32>(1);
+# CHECK-NEXT:   17|  *p = 42;
+# CHECK-NEXT:   18|  let v : i32 = consume_ptr(p);
+# CHECK-NEXT:     |                            ┬
+# CHECK-NEXT:     |                            ╰─ 'p' was previously consumed here
+# CHECK-NEXT:   19|  free(p);
+# CHECK-NEXT:     |  ─────┬
+# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:   20|  std::printf("%d
+# CHECK-NEXT:   21|", v);
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Passing linear pointer to a consuming function should
 # consume it. Freeing it after should be an error.

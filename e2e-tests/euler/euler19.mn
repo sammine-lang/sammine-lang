@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 171
+# CHECK:      171
 
 # Project Euler Problem 19: Counting Sundays
 # How many Sundays fell on the first of the month

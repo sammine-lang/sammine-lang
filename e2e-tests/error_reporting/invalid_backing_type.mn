@@ -1,5 +1,14 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Invalid backing type 'f64' for type 'Flags'
+# CHECK:          |invalid_backing_type.mn:4:5
+# CHECK:         3|
+# CHECK-NEXT:    4|type Flags: f64 = Read(1) | Write(2);
+# CHECK-NEXT:     |     ───────────────────────────┬
+# CHECK-NEXT:     |                                ╰─ Invalid backing type 'f64' for type 'Flags' — must be i32, i64, u32, or u64
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 type Flags: f64 = Read(1) | Write(2);
 

@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: Incompatible
+# CHECK:          |mixed_type_error.mn:7:12
+# CHECK-NEXT:    5|  let a : i32 = 5;
+# CHECK-NEXT:    6|  let b : f64 = 3.14;
+# CHECK-NEXT:    7|  let c = a + b;
+# CHECK-NEXT:     |            ┬
+# CHECK-NEXT:     |            ╰─ Incompatible types for operator '+': i32 and f64
+# CHECK-NEXT:    8|  return 0;
+# CHECK-NEXT:    9|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let a : i32 = 5;

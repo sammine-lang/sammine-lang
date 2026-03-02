@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Cannot negate unsigned type 'u32'
+# CHECK:          |unsigned_neg.mn:6:15
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  let x: u32 = 42u32;
+# CHECK-NEXT:    6|  let y: u32 = -x;
+# CHECK-NEXT:     |               ─┬
+# CHECK-NEXT:     |                ╰─ Cannot negate unsigned type 'u32'
+# CHECK-NEXT:    7|  return 0;
+# CHECK-NEXT:    8|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let x: u32 = 42u32;

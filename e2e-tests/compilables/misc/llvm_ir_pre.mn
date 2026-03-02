@@ -1,10 +1,32 @@
 # RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+# CHECK:      ; ModuleID = 'LLVMDialectModule'
+# CHECK-NEXT: source_filename = "LLVMDialectModule"
+# CHECK-NEXT: target datalayout = "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
+# CHECK:      declare ptr @malloc(i64)
+# CHECK:      declare void @free(ptr)
+# CHECK:      declare void @exit(i32)
+# CHECK:      define i64 @"Sized<i32>::Sized"() {
+# CHECK-NEXT:   ret i64 4
+# CHECK-NEXT: }
+# CHECK:      define i64 @"Sized<i64>::Sized"() {
+# CHECK-NEXT:   ret i64 8
+# CHECK-NEXT: }
+# CHECK:      define i64 @"Sized<f64>::Sized"() {
+# CHECK-NEXT:   ret i64 8
+# CHECK-NEXT: }
+# CHECK:      define i64 @"Sized<bool>::Sized"() {
+# CHECK-NEXT:   ret i64 1
+# CHECK-NEXT: }
+# CHECK:      define i32 @main() {
+# CHECK-NEXT:   %1 = alloca i32, i64 1, align 4
+# CHECK-NEXT:   store i32 42, ptr %1, align 4
+# CHECK-NEXT:   %2 = load i32, ptr %1, align 4
+# CHECK-NEXT:   ret i32 %2
+# CHECK-NEXT: }
+# CHECK:      !llvm.module.flags = !{!0}
+# CHECK:      !0 = !{i32 2, !"Debug Info Version", i32 3}
 
 # Pre-optimization IR should contain unoptimized patterns like alloca
-# CHECK: define i32 @main()
-# CHECK: alloca i32
-# CHECK: store i32 42
-# CHECK: ret i32
 
 let main() -> i32 {
   let x: i32 = 42;

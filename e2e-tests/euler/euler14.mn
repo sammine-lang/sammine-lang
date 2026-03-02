@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 837799
+# CHECK:      837799
 
 # Project Euler Problem 14: Longest Collatz sequence under 1,000,000
 

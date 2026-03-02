@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: inner_true
+# CHECK:      inner_true
 # CHECK-NEXT: outer_false
 
 import std;

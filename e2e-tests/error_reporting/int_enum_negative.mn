@@ -1,5 +1,11 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Negative discriminant values are not supported in integer-backed enums
+# CHECK:          |int_enum_negative.mn:4:13
+# CHECK:         3|
+# CHECK-NEXT:    4|type Foo = A(-1) | B(2);
+# CHECK-NEXT:     |             ^
+# CHECK-NEXT:     |             Negative discriminant values are not supported in integer-backed enums
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
 
 type Foo = A(-1) | B(2);
 

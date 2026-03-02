@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must be consumed
+# CHECK:          |break_scope_alloc_in_while.mn:13:4
+# CHECK-NEXT:   11|  let mut i : i32 = 0;
+# CHECK-NEXT:   12|  while (i < 1) {
+# CHECK-NEXT:   13|    let q = alloc<i32>(1);
+# CHECK-NEXT:     |    ───────────────────┬
+# CHECK-NEXT:     |                       ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   14|    *q = 42;
+# CHECK-NEXT:   15|    i = i + 1;
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Linear pointer allocated inside while body is caught at
 # function scope exit. Even though while's restore() doesn't remove

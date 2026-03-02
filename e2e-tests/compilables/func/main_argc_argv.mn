@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: argc = 1
+# CHECK:      argc = 1
 
 import std;
 

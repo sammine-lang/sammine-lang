@@ -1,6 +1,6 @@
 # RUN: %sammine --file %dir/Inputs/has_generic_struct.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_with_struct.exe | %check %full
-# CHECK: 1
-# CHECK: 2
+# CHECK:      1
+# CHECK-NEXT: 2
 
 import has_generic_struct as lib;
 import std;

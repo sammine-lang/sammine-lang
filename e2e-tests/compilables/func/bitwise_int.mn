@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 8
+# CHECK:      8
 # CHECK-NEXT: 14
 # CHECK-NEXT: 6
 # CHECK-NEXT: 40

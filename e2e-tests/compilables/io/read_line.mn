@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && echo "hello stdin" | %T/%base.exe | %check %full
-# CHECK: got: hello stdin
+# CHECK:      got: hello stdin
 
 import io;
 

@@ -1,5 +1,5 @@
 # RUN: %sammine --file %dir/Inputs/has_generic_case.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK: 2
+# CHECK:      2
 import has_generic_case;
 import std;
 

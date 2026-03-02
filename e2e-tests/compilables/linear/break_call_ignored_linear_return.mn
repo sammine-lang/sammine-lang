@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must not be discarded
+# CHECK:          |break_call_ignored_linear_return.mn:16:2
+# CHECK-NEXT:   14|
+# CHECK-NEXT:   15|let main() -> i32 {
+# CHECK-NEXT:   16|  make_ptr();
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Return value of 'make_ptr' has linear type ''ptr<i32>' and must not be discarded
+# CHECK-NEXT:   17|  std::printf("done\n");
+# CHECK-NEXT:   18|  return 0;
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Function returns a linear pointer, caller discards it.
 # The checker must reject this — it's a memory leak.

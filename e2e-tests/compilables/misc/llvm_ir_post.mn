@@ -1,9 +1,32 @@
 # RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+# CHECK:      ; ModuleID = 'LLVMDialectModule'
+# CHECK-NEXT: source_filename = "LLVMDialectModule"
+# CHECK-NEXT: target datalayout = "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
+# CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+# CHECK-NEXT: define noundef i64 @"Sized<i32>::Sized"() local_unnamed_addr #0 {
+# CHECK-NEXT:   ret i64 4
+# CHECK-NEXT: }
+# CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+# CHECK-NEXT: define noundef i64 @"Sized<i64>::Sized"() local_unnamed_addr #0 {
+# CHECK-NEXT:   ret i64 8
+# CHECK-NEXT: }
+# CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+# CHECK-NEXT: define noundef i64 @"Sized<f64>::Sized"() local_unnamed_addr #0 {
+# CHECK-NEXT:   ret i64 8
+# CHECK-NEXT: }
+# CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+# CHECK-NEXT: define noundef i64 @"Sized<bool>::Sized"() local_unnamed_addr #0 {
+# CHECK-NEXT:   ret i64 1
+# CHECK-NEXT: }
+# CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
+# CHECK-NEXT: define noundef i32 @main() local_unnamed_addr #0 {
+# CHECK-NEXT:   ret i32 42
+# CHECK-NEXT: }
+# CHECK:      attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memory(none) }
+# CHECK:      !llvm.module.flags = !{!0}
+# CHECK:      !0 = !{i32 2, !"Debug Info Version", i32 3}
 
 # Post-optimization IR should have the alloca optimized away
-# CHECK: define {{.*}}i32 @main()
-# CHECK: ret i32 42
-# CHECK-NOT: alloca
 
 let main() -> i32 {
   let x: i32 = 42;

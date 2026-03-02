@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must be consumed
+# CHECK:          |break_reassign_alloc_into_struct_literal.mn:15:2
+# CHECK-NEXT:   13|
+# CHECK-NEXT:   14|let main() -> i32 {
+# CHECK-NEXT:   15|  let b : Box = Box { data: alloc<i32>(1), tag: 1 };
+# CHECK-NEXT:     |  ──────────────────────────────────────────────┬
+# CHECK-NEXT:     |                                                ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   16|  *(b.data) = 99;
+# CHECK-NEXT:   17|  let v : i32 = *(b.data);
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: alloc<i32>(1) directly in struct literal creates a linear
 # pointer that is tracked via inner field tracking. Never freed = error.

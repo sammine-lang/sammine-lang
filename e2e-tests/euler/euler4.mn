@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 906609
+# CHECK:      906609
 
 # Project Euler Problem 4: Largest palindrome from product of two 3-digit numbers
 # Strategy: generate palindromes from largest to smallest, check factorability

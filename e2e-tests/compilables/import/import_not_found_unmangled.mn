@@ -1,8 +1,18 @@
 # RUN: %sammine --file %dir/Inputs/math.mn %O && ! %sammine --file %full %O %I -I %dir/Inputs --check 2>&1 | %check %full
+# CHECK:          |import_not_found_unmangled.mn:10:12
+# CHECK-NEXT:    8|
+# CHECK-NEXT:    9|let main() -> i32 {
+# CHECK-NEXT:   10|  m::divide(10, 2);
+# CHECK-NEXT:     |            ────┬
+# CHECK-NEXT:     |                ╰─ [SCOPE]: The called name math::divide for the call expression is not found before
+# CHECK-NEXT:   11|  return 0;
+# CHECK-NEXT:   12|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # Calling a function that doesn't exist in the imported module should
 # produce an error with the unmangled name (math::divide, not math$divide)
-# CHECK: Function 'math::divide' not found
 
 import math as m;
 

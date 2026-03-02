@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: while condition must be bool
+# CHECK:          |while_non_bool.mn:5:8
+# CHECK-NEXT:    3|
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  while 42 {
+# CHECK-NEXT:     |        ─┬
+# CHECK-NEXT:     |         ╰─ while condition must be bool, found numeric literal
+# CHECK-NEXT:    6|    return 0;
+# CHECK-NEXT:    7|  };
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   while 42 {

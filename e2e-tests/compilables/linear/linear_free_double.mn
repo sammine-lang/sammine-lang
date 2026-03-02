@@ -1,5 +1,18 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: already been consumed
+# CHECK:          |linear_free_double.mn
+# CHECK-NEXT:    4|let main() -> i32 {
+# CHECK-NEXT:    5|  let p = alloc<i32>(1);
+# CHECK-NEXT:    6|  free(p);
+# CHECK-NEXT:     |  ─────┬
+# CHECK-NEXT:     |       ╰─ 'p' was previously consumed here
+# CHECK-NEXT:    7|  free(p);
+# CHECK-NEXT:     |  ─────┬
+# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:    8|  return 0;
+# CHECK-NEXT:    9|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);

@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Wrong return type for function f, expected i32 but got f64
+# CHECK:          |return_type_mismatch.mn:5:2
+# CHECK-NEXT:    3|
+# CHECK-NEXT:    4|let f(x: i32) -> i32 {
+# CHECK-NEXT:    5|  return 3.14;
+# CHECK-NEXT:     |  ──────────┬
+# CHECK-NEXT:     |            ╰─ Wrong return type for function f, expected i32 but got float literal
+# CHECK-NEXT:    6|}
+# CHECK-NEXT:    7|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 let f(x: i32) -> i32 {
   return 3.14;

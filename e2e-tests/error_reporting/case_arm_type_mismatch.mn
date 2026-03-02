@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Case arms have incompatible types: expected i32, got f64
+# CHECK:          |case_arm_type_mismatch.mn:10:20
+# CHECK-NEXT:    8|  let x: i32 = case c {
+# CHECK-NEXT:    9|    Color::Red => 1,
+# CHECK-NEXT:   10|    Color::Green => 3.14,
+# CHECK-NEXT:     |                    ───┬
+# CHECK-NEXT:     |                       ╰─ Case arms have incompatible types: expected numeric literal, got float literal
+# CHECK-NEXT:   11|    Color::Blue => 3,
+# CHECK-NEXT:   12|  };
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 type Color = Red | Green | Blue;
 

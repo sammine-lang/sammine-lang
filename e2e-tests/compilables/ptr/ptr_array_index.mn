@@ -1,7 +1,7 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 10
-# CHECK: 30
-# CHECK: 99
+# CHECK:      10
+# CHECK-NEXT: 30
+# CHECK-NEXT: 99
 
 import std;
 

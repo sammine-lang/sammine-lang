@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: true_branch
+# CHECK:      true_branch
 # CHECK-NEXT: false_branch
 
 import std;

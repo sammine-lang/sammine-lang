@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Type 'Shape' has no variant 'Triangle'
+# CHECK:          |enum_wrong_variant.mn:7:33
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK-NEXT:    7|  let s: Shape = Shape::Triangle(1.0);
+# CHECK-NEXT:     |                                 ──┬
+# CHECK-NEXT:     |                                   ╰─ Type 'Shape' has no variant 'Triangle'
+# CHECK-NEXT:    8|  return 0;
+# CHECK-NEXT:    9|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 type Shape = Circle(f64) | Rect(f64, f64) | Point;
 

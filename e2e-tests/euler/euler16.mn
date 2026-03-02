@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 1366
+# CHECK:      1366
 
 # Project Euler Problem 16: Power digit sum
 # What is the sum of the digits of the number 2^1000?

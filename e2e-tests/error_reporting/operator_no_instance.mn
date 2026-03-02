@@ -1,4 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |operator_no_instance.mn:11:17
+# CHECK-NEXT:    9|  let a: Foo = Foo { x: 1 };
+# CHECK-NEXT:   10|  let b: Foo = Foo { x: 2 };
+# CHECK-NEXT:   11|  let c: Foo = a + b;
+# CHECK-NEXT:     |                 ┬
+# CHECK-NEXT:     |                 ╰─ No instance of Add<Foo> — cannot use '+' on this type
+# CHECK-NEXT:   12|  return 0;
+# CHECK-NEXT:   13|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 # CHECK-ERR: No instance of Add<Foo>
 
 struct Foo {

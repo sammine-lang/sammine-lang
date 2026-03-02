@@ -1,6 +1,6 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: got val: 42
-# CHECK: got nothing
+# CHECK:      got val: 42
+# CHECK-NEXT: got nothing
 
 import std;
 

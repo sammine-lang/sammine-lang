@@ -38,7 +38,7 @@ struct Vec2 { x: i32, y: i32, };
 
 # --- Operator overloading via typeclasses ---
 instance Add<Vec2> {
-  let add(a: Vec2, b: Vec2) -> Vec2 {
+  let Add(a: Vec2, b: Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
   }
 }
@@ -95,8 +95,8 @@ let main() -> i32 {
   let v3: Vec2 = v1 + v2;                   # uses Add<Vec2> instance
 
   # --- Sizeof (built-in typeclass) ---
-  let sz = sizeof<i32>();                    # compile-time size info
-  let sz2 = Sized<i32>::sizeof();            # qualified typeclass call syntax
+  let sz = Sized<i32>();                     # compile-time size info
+  let sz2 = Sized<i32>::Sized();             # qualified typeclass call syntax
 
   # --- Chars ---
   let ch: char = 'A';

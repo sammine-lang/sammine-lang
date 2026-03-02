@@ -1,5 +1,19 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: The name `x` has been introduced before
+# CHECK:          |shadowing.mn
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK-NEXT:    7|  let x : i32 = 5;
+# CHECK-NEXT:     |      ──────┬
+# CHECK-NEXT:     |            ╰─ [SCOPE]: The firstly defined `x` is here
+# CHECK-NEXT:    8|  if true {
+# CHECK-NEXT:    9|    let x : i32 = 10;
+# CHECK-NEXT:     |        ──────┬
+# CHECK-NEXT:     |              ╰─ [SCOPE]: The name `x` has been introduced before
+# CHECK-NEXT:   10|    std::printf("%d\n", x);
+# CHECK-NEXT:   11|  } else {
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 import std;
 

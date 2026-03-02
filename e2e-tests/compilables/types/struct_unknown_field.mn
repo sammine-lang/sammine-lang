@@ -1,12 +1,12 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |struct_unknown_field.mn:6:25
-# CHECK-NEXT:    4|
-# CHECK-NEXT:    5|let main() -> i32 {
-# CHECK-NEXT:    6|  let f : Foo = Foo { z: 42 };
+# CHECK:          |struct_unknown_field.mn:16:25
+# CHECK-NEXT:   14|
+# CHECK-NEXT:   15|let main() -> i32 {
+# CHECK-NEXT:   16|  let f : Foo = Foo { z: 42 };
 # CHECK-NEXT:     |                         ─┬
 # CHECK-NEXT:     |                          ╰─ Struct 'Foo' has no field named 'z'
-# CHECK-NEXT:    7|  return 0;
-# CHECK-NEXT:    8|}
+# CHECK-NEXT:   17|  return 0;
+# CHECK-NEXT:   18|}
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 # CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 # CHECK-NEXT: --------------------------------------------------------------------------

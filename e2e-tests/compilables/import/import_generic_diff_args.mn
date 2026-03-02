@@ -1,5 +1,5 @@
 # RUN: %sammine --file %dir/Inputs/has_generic_diff_args.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK: 42
+# CHECK:      42
 import has_generic_diff_args;
 import std;
 

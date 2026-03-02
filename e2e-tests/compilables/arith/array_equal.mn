@@ -1,8 +1,8 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: same arrays equal: 1
-# CHECK: same arrays not-equal: 0
-# CHECK: diff arrays equal: 0
-# CHECK: diff arrays not-equal: 1
+# CHECK:      same arrays equal: 1
+# CHECK-NEXT: same arrays not-equal: 0
+# CHECK-NEXT: diff arrays equal: 0
+# CHECK-NEXT: diff arrays not-equal: 1
 
 import std;
 

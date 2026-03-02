@@ -1,5 +1,23 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: Type 'T' not found in the current scope.
+# CHECK:          |missing_type_param_decl.mn
+# CHECK-NEXT:    3|
+# CHECK-NEXT:    4|# Using T without declaring <T> should be an error.
+# CHECK-NEXT:    5|let identity(x: T) -> T { x }
+# CHECK-NEXT:     |                ┬     ┬
+# CHECK-NEXT:     |                │     ╰─ Type 'T' not found in the current scope.
+# CHECK-NEXT:     |                ╰─────── Type 'T' not found in the current scope.
+# CHECK-NEXT:    6|
+# CHECK-NEXT:    7|let main() -> i32 {
+# CHECK-NEXT:    8|  let a = identity(42);
+# CHECK-NEXT:     |                   ─┬
+# CHECK-NEXT:     |                    ╰─ Argument 1 to 'identity': expected Poisoned, got numeric literal
+# CHECK-NEXT:     |                   ─┬
+# CHECK-NEXT:     |                    ╰─ note: 'identity' has signature: (Poisoned) -> Poisoned
+# CHECK-NEXT:    9|  return 0;
+# CHECK-NEXT:   10|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # Using T without declaring <T> should be an error.
 let identity(x: T) -> T { x }

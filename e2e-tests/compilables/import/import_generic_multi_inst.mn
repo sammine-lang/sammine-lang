@@ -1,6 +1,6 @@
 # RUN: %sammine --file %dir/Inputs/has_generic.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK: 42
-# CHECK: 7
+# CHECK:      42
+# CHECK-NEXT: 7
 import has_generic;
 import std;
 

@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must be consumed
+# CHECK:          |break_scope_alloc_in_if_branch.mn:12:4
+# CHECK-NEXT:   10|let main() -> i32 {
+# CHECK-NEXT:   11|  if (1 == 1) {
+# CHECK-NEXT:   12|    let q = alloc<i32>(1);
+# CHECK-NEXT:     |    ───────────────────┬
+# CHECK-NEXT:     |                       ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   13|    *q = 99;
+# CHECK-NEXT:   14|  } else {
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Linear pointer allocated inside if-branch is caught at
 # function scope exit by pop_scope_and_check(). Even though restore()

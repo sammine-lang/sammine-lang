@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Enum variant 'Shape::Circle' expects 1 arguments, got 2
+# CHECK:          |enum_variant_arg_count.mn:7:31
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK-NEXT:    7|  let s: Shape = Shape::Circle(1.0, 2.0);
+# CHECK-NEXT:     |                               ───────┬
+# CHECK-NEXT:     |                                      ╰─ Enum variant 'Shape::Circle' expects 1 arguments, got 2
+# CHECK-NEXT:    8|  return 0;
+# CHECK-NEXT:    9|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 type Shape = Circle(f64) | Rect(f64, f64) | Point;
 

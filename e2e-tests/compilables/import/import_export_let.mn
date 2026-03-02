@@ -1,5 +1,5 @@
 # RUN: %sammine --file %dir/Inputs/has_export_let.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_export_let.exe | %check %full
-# CHECK: hello from export let
+# CHECK:      hello from export let
 
 import has_export_let as lib;
 

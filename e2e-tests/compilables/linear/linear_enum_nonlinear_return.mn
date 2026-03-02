@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: Cannot return 'm' of type 'MaybePtr': non-linear ptr<i32> in variant 'Some'
+# CHECK:          |linear_enum_nonlinear_return.mn:10:2
+# CHECK-NEXT:    8|  let x : i32 = 42;
+# CHECK-NEXT:    9|  let m : MaybePtr = MaybePtr::Some(&x);
+# CHECK-NEXT:   10|  return m;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'm' of type 'MaybePtr': non-linear ptr<i32> in variant 'Some' (may reference a local variable)
+# CHECK-NEXT:   11|}
+# CHECK-NEXT:   12|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # Test: returning an enum variant wrapping a non-linear pointer is an error
 type MaybePtr = Some(ptr<i32>) | None;

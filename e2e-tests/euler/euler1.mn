@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 233168
+# CHECK:      233168
 
 # Project Euler Problem 1: Sum of multiples of 3 or 5 below 1000
 

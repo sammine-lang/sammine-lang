@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must be consumed
+# CHECK:          |linear_assign_overwrite.mn:7:2
+# CHECK-NEXT:    5|let main() -> i32 {
+# CHECK-NEXT:    6|  let p = alloc<i32>(1);
+# CHECK-NEXT:    7|  let q = alloc<i32>(1);
+# CHECK-NEXT:     |  ───────────────────┬
+# CHECK-NEXT:     |                     ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:    8|  free(p);
+# CHECK-NEXT:    9|  return 0;
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # Test: two linear pointers allocated, only one freed — the other leaks
 let main() -> i32 {

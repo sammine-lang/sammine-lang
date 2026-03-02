@@ -1,5 +1,15 @@
 # RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK: must be consumed
+# CHECK:          |break_reassign_partial_struct_free.mn:19:2
+# CHECK-NEXT:   17|  *p = 10;
+# CHECK-NEXT:   18|  *q = 20;
+# CHECK-NEXT:   19|  let s : TwoPtr = TwoPtr { a: p, b: q };
+# CHECK-NEXT:     |  ───────────────────────────────────┬
+# CHECK-NEXT:     |                                     ╰─ Linear variable 's.b' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   20|  let v : i32 = *(s.a);
+# CHECK-NEXT:   21|  free(s.a);
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 # CORRECT: Two linear pointers consumed into struct fields. Only s.a freed.
 # s.b leaks and the checker now correctly catches this.
