@@ -6,8 +6,6 @@
 *.lo
 *.o
 *.obj
-knowledge_base/
-plans/
 .serena/
 
 # Module interface files
