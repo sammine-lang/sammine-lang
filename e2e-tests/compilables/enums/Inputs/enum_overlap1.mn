@@ -1,0 +1,1 @@
+export type Overlap1 = A | B | Wrap(i32);

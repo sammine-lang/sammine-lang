@@ -1,0 +1,28 @@
+# RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe| %check %full
+# CHECK: got A
+# CHECK: got B
+# CHECK: got C
+import dummy_enum;
+import std;
+
+let main() -> i32 {
+  let x = A;
+  let y: dummy_enum::dummy = B;
+  let z: dummy_enum::dummy = C;
+  case x {
+    A => std::printf("got A\n"),
+    B => std::printf("got B\n"),
+    C => std::printf("got C\n"),
+  };
+  case y {
+    A => std::printf("got A\n"),
+    B => std::printf("got B\n"),
+    C => std::printf("got C\n"),
+  };
+  case z {
+    A => std::printf("got A\n"),
+    B => std::printf("got B\n"),
+    C => std::printf("got C\n"),
+  };
+  return 0;
+}
