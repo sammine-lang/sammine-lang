@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
+#include <memory>
 
 //! \file Utilities.h
 //! \brief Holds classes and functionalities for dealing with Error handling,
@@ -54,6 +55,11 @@ inline void log_diagnostics(const std::string &diagnostics) {
   fmt::print(stderr, fg(fmt::terminal_color::green), "{}\n", diagnostics);
 }
 
+struct SourceInfo {
+  std::string file_name;
+  std::string source_text;
+};
+
 //! A class representing a location for sammine-lang, this is helpful in
 //! debugging
 
@@ -65,6 +71,9 @@ class Location {
 public:
   // True location in original source code string
   int64_t source_start, source_end;
+
+  // Source file info (nullptr = main file)
+  std::shared_ptr<SourceInfo> source_info;
 
   // Default constructor
   Location() : source_start(0), source_end(0) {}
@@ -84,19 +93,23 @@ public:
   // Handle newline
   inline void newLine() { advance(); }
 
-  // Combine two locations
+  // Combine two locations — propagate non-null source_info
   Location operator|(const Location &other) const {
     Location result;
     result.source_start = std::min(source_start, other.source_start);
     result.source_end = std::max(source_end, other.source_end);
+    result.source_info = source_info ? source_info : other.source_info;
     return result;
   }
 
   void operator|=(const Location &other) {
     source_start = std::min(source_start, other.source_start);
     source_end = std::max(source_end, other.source_end);
+    if (!source_info)
+      source_info = other.source_info;
   }
-  operator std::pair<int64_t, int64_t>() const {
+
+  std::pair<int64_t, int64_t> as_pair() const {
     return std::make_pair(source_start, source_end);
   }
 
@@ -109,7 +122,9 @@ public:
 
   // Equality operator
   bool operator==(const Location &other) const {
-    return source_start == other.source_start && source_end == other.source_end;
+    return source_start == other.source_start &&
+           source_end == other.source_end &&
+           source_info.get() == other.source_info.get();
   }
 };
 class Reportee {
@@ -199,22 +214,10 @@ public:
 
   static DiagnosticData get_diagnostic_data(std::string_view str);
 
-private:
   inline static fmt::terminal_color LINE_COLOR =
       fmt::terminal_color::bright_magenta;
 
-  inline static fmt::terminal_color MSG_COLOR = fmt::terminal_color::blue;
-  std::string file_name;
-  std::string input;
-  std::vector<std::pair<std::int64_t, std::string_view>> diagnostic_data;
-  int64_t context_radius;
-  bool dev_mode = false;
   static fmt::terminal_color get_color_from(ReportKind report_kind);
-
-  void report_single_msg(std::pair<int64_t, int64_t> index_pair,
-                         const std::vector<std::string> &format_strs,
-                         const ReportKind report_kind,
-                         std::source_location src = std::source_location::current()) const;
 
   template <typename... T>
   static void print_fmt(fmt::terminal_color ts,
@@ -242,15 +245,28 @@ private:
       fmt::print(stderr, format_str, std::forward<T>(args)...);
   }
 
+  static void print_data_singular_line(std::string_view msg, int64_t col_start,
+                                       int64_t col_end);
+
+private:
+  inline static fmt::terminal_color MSG_COLOR = fmt::terminal_color::blue;
+  std::string file_name;
+  std::string input;
+  std::vector<std::pair<std::int64_t, std::string_view>> diagnostic_data;
+  int64_t context_radius;
+  bool dev_mode = false;
+
+  void report_single_msg(const Location &loc,
+                         const std::vector<std::string> &format_strs,
+                         const ReportKind report_kind,
+                         std::source_location src = std::source_location::current()) const;
+
   void indicate_singular_line(ReportKind report_kind, int64_t col_start,
                               int64_t col_end) const;
 
   static void report_singular_line(ReportKind report_kind,
                                    const std::vector<std::string> &msgs,
                                    int64_t col_start, int64_t col_end);
-
-  void print_data_singular_line(std::string_view msg, int64_t col_start,
-                                int64_t col_end) const;
 
 public:
   void report(const Reportee &reports) const;

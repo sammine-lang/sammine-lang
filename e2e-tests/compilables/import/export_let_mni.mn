@@ -1,9 +1,0 @@
-# RUN: %sammine --file %dir/Inputs/has_export_let.mn %O && cat %T/has_export_let.mni | %check %full
-
-# export let and export reuse appear in .mni; plain let and plain reuse do not
-# CHECK: reuse has_export_let::printf
-# CHECK: reuse has_export_let::greet_c
-
-let main() -> i32 {
-  return 0;
-}

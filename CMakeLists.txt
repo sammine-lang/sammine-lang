@@ -68,9 +68,9 @@ add_subdirectory(src)
 add_subdirectory(tools)
 
 # --- Standard library ---
-# Compile stdlib/std.mn using the freshly-built sammine binary to produce
-# std.o and std.mni in build/lib/sammine/. The compiler resolves `import std;`
-# by looking for .mni files in ../lib/sammine/ relative to its own binary.
+# Compile stdlib modules using the freshly-built sammine binary. Each module
+# produces a .so in build/lib/sammine/. The .mn source is also copied so that
+# `import` can parse it directly (no .mni files).
 set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
@@ -79,12 +79,19 @@ set(STDLIB_COPIED definitions.mn)
 
 foreach(mod ${STDLIB_COMPILED})
   add_custom_command(
-    OUTPUT ${STDLIB_DIR}/${mod}.o ${STDLIB_DIR}/${mod}.mni
+    OUTPUT ${STDLIB_DIR}/${mod}.so
     COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR}
     DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
-    COMMENT "Compiling stdlib/${mod}.mn"
+    COMMENT "Compiling stdlib/${mod}.mn → ${mod}.so"
   )
-  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.o ${STDLIB_DIR}/${mod}.mni)
+  # Copy .mn source for import resolution
+  add_custom_command(
+    OUTPUT ${STDLIB_DIR}/${mod}.mn
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn ${STDLIB_DIR}/${mod}.mn
+    DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
+    COMMENT "Copying stdlib/${mod}.mn"
+  )
+  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.so ${STDLIB_DIR}/${mod}.mn)
 endforeach()
 
 foreach(file ${STDLIB_COPIED})
@@ -97,7 +104,7 @@ foreach(file ${STDLIB_COPIED})
   list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
 endforeach()
 
-# --- io module: sammine wrapper + C runtime merged into single .o ---
+# --- io module: sammine wrapper + C runtime merged via --link ---
 # Compile io_runtime.c → io_runtime.o
 add_custom_command(
   OUTPUT ${STDLIB_DIR}/io_runtime.o
@@ -107,25 +114,24 @@ add_custom_command(
   COMMENT "Compiling stdlib/io_runtime.c"
 )
 
-# Compile io.mn → io.o + io.mni, then rename io.o to io_sammine.o
+# Compile io.mn → io.so, linking in the C runtime object
 add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io.mni
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn -O ${STDLIB_DIR}
-  COMMAND ${CMAKE_COMMAND} -E rename ${STDLIB_DIR}/io.o ${STDLIB_DIR}/io_sammine.o
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn
-  COMMENT "Compiling stdlib/io.mn"
+  OUTPUT ${STDLIB_DIR}/io.so
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
+          -O ${STDLIB_DIR} --link ${STDLIB_DIR}/io_runtime.o
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
+  COMMENT "Compiling stdlib/io.mn → io.so (with C runtime)"
 )
 
-# Merge into single io.o (preserves one-module = one-.o import invariant)
+# Copy io.mn source for import resolution
 add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io.o
-  COMMAND ld -r ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io_runtime.o
-          -o ${STDLIB_DIR}/io.o
-  DEPENDS ${STDLIB_DIR}/io_sammine.o ${STDLIB_DIR}/io_runtime.o
-  COMMENT "Merging io_sammine.o + io_runtime.o → io.o"
+  OUTPUT ${STDLIB_DIR}/io.mn
+  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io.mn
+  DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/io.mn
+  COMMENT "Copying stdlib/io.mn"
 )
 
-list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.o ${STDLIB_DIR}/io.mni)
+list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.so ${STDLIB_DIR}/io.mn)
 
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 

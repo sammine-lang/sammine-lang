@@ -23,7 +23,9 @@ std::shared_ptr<Token> Lexer::peek() { return tokStream->peek(); }
 std::shared_ptr<Token> Lexer::consume() { return tokStream->consume(); }
 
 void Lexer::updateLocation() {
+  auto si = location.source_info;
   location = sammine_util::Location(location.source_end, location.source_end);
+  location.source_info = si;
 }
 Lexer::Lexer(const std::string &input) : Lexer() {
   LOG({
@@ -35,6 +37,13 @@ Lexer::Lexer(const std::string &input) : Lexer() {
   cursor = 0;
   at_eof = false;
   tokStream->setTokenProducer([this]() { lexNextToken(); });
+}
+
+Lexer::Lexer(const std::string &input,
+             std::shared_ptr<sammine_util::SourceInfo> source_info)
+    : Lexer(input) {
+  source_info_ = std::move(source_info);
+  location.source_info = source_info_;
 }
 
 void Lexer::lexNextToken() {

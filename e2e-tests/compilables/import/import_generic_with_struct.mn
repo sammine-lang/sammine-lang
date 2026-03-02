@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_generic_struct.mn %O && %sammine --file %full %O %I && %T/import_generic_with_struct.exe | %check %full
+# RUN: %sammine --file %dir/Inputs/has_generic_struct.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_with_struct.exe | %check %full
 # CHECK: 1
 # CHECK: 2
 

@@ -362,7 +362,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   auto export_tok = expect(TokenType::TokExport);
   bool is_exported = export_tok != nullptr;
 
-  // 'reuse' — parse as ExternAST
+  // 'reuse' — parse as ExternAST (C function binding)
   // plain 'reuse' = module-private, 'export reuse' = re-exported
   if (auto reuse_tok = expect(TokenType::TokReuse)) {
     auto [prototype, result] = ParsePrototype();

@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_generic_deps.mn %O && %sammine --file %full %O %I && %T/import_generic_transitive.exe | %check %full
+# RUN: %sammine --file %dir/Inputs/has_generic_deps.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_transitive.exe | %check %full
 # CHECK: 99
 
 import has_generic_deps as lib;

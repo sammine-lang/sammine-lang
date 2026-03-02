@@ -39,6 +39,8 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <set>
 #include <sstream>
 
 #define DEBUG_TYPE "stages"
@@ -58,6 +60,7 @@ class Compiler {
   std::string output_dir;
   std::vector<std::string> import_paths;
   LibFormat lib_format_ = LibFormat::None;
+  std::vector<std::string> extra_link_objs_;
 
   AST::ASTProperties props_;
   sammine_util::Reporter reporter;
@@ -78,7 +81,6 @@ class Compiler {
   void codegen_mlir();
   void optimize();
   void emit_object();
-  void emit_interface();
   void emit_library();
   void emit_archive_impl();
   void emit_shared_impl();
@@ -173,6 +175,18 @@ Compiler::Compiler(
   }
 
   lib_format_ = parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
+
+  // Parse --link extra object files
+  {
+    std::string objs_str = compiler_options[compiler_option_enum::EXTRA_LINK_OBJS];
+    if (!objs_str.empty()) {
+      std::istringstream ss(objs_str);
+      std::string item;
+      while (std::getline(ss, item, ';'))
+        if (!item.empty())
+          extra_link_objs_.push_back(item);
+    }
+  }
 }
 
 void Compiler::lex() {
@@ -219,95 +233,168 @@ void Compiler::resolve_imports() {
   if (source_dir.empty())
     source_dir = ".";
 
-  for (auto &import : programAST->imports) {
-    // Look for .mni in CWD, -I paths, source dir, then stdlib dir
-    std::filesystem::path mni_path = import.module_name + ".mni";
-    if (!std::filesystem::exists(mni_path)) {
-      for (auto &ipath : import_paths) {
-        auto candidate = std::filesystem::path(ipath) / (import.module_name + ".mni");
-        if (std::filesystem::exists(candidate)) {
-          mni_path = candidate;
-          break;
-        }
-      }
-    }
-    if (!std::filesystem::exists(mni_path))
-      mni_path = source_dir / (import.module_name + ".mni");
-    if (!std::filesystem::exists(mni_path) && !stdlib_dir.empty())
-      mni_path = stdlib_dir / (import.module_name + ".mni");
-    if (!std::filesystem::exists(mni_path)) {
-      reporter.immediate_error(
-          fmt::format("Cannot find interface file '{}.mni'. Did you compile "
-                      "{}.mn first?",
-                      import.module_name, import.module_name),
-          import.location);
-      this->error = true;
-      return;
-    }
+  // Track already-imported modules to avoid duplicates in transitive chains.
+  std::set<std::string> imported_modules;
 
-    // Parse the .mni file — it contains valid sammine extern declarations
-    std::string mni_input = sammine_util::get_string_from_file(mni_path.string());
-    Lexer mni_lexer(mni_input);
-    auto mni_tok_stream = mni_lexer.getTokenStream();
-    Parser mni_parser(mni_tok_stream);
-    // Set up the module name as its own alias so that qualified type
-    // references like str::String resolve correctly in .mni files.
-    mni_parser.alias_to_module[import.module_name] = import.module_name;
-    auto mni_program = mni_parser.Parse();
-
-    if (mni_parser.has_errors()) {
-      reporter.immediate_error(
-          fmt::format("Failed to parse interface file '{}'", mni_path.string()),
-          import.location);
-      this->error = true;
-      return;
+  // Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
+  auto find_mn = [&](const std::string &mod_name,
+                     const std::filesystem::path &src_dir)
+      -> std::filesystem::path {
+    std::filesystem::path p = mod_name + ".mn";
+    if (std::filesystem::exists(p))
+      return p;
+    for (auto &ipath : import_paths) {
+      auto c = std::filesystem::path(ipath) / (mod_name + ".mn");
+      if (std::filesystem::exists(c))
+        return c;
     }
-
-    // Insert the extern declarations at the front of our DefinitionVec.
-    // Override their locations to point to the import statement so that
-    // error messages (e.g. name conflicts) reference the user's source.
-    for (auto it = mni_program->DefinitionVec.rbegin();
-         it != mni_program->DefinitionVec.rend(); ++it) {
-      (*it)->set_location(import.location);
-      if (auto *ext = llvm::dyn_cast<AST::ExternAST>(it->get())) {
-        ext->Prototype->set_location(import.location);
-      } else if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(it->get())) {
-        fd->Prototype->set_location(import.location);
-      }
-      programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                       std::move(*it));
+    p = src_dir / (mod_name + ".mn");
+    if (std::filesystem::exists(p))
+      return p;
+    if (!stdlib_dir.empty()) {
+      p = stdlib_dir / (mod_name + ".mn");
+      if (std::filesystem::exists(p))
+        return p;
     }
+    return {};
+  };
 
-    // Track linkable artifact for this import (CWD, -I paths, source dir,
-    // then stdlib dir).  Search order per directory: .dylib → .a → .o
-    std::vector<std::string> lib_exts = {".so", ".a", ".o"};
-    std::filesystem::path obj_path;
-    auto find_lib = [&](const std::filesystem::path &dir) -> bool {
-      for (auto &ext : lib_exts) {
-        auto candidate = dir / (import.module_name + ext);
-        if (std::filesystem::exists(candidate)) {
-          obj_path = candidate;
-          return true;
-        }
+  // Recursively import a module's definitions into programAST.
+  // - For direct imports: pull exported defs + all generic defs + link artifact.
+  // - For transitive imports (is_transitive=true): only pull generic function
+  //   defs and type defs needed by the monomorphizer — no link artifact.
+  std::function<bool(const std::string &, const std::filesystem::path &,
+                     const sammine_util::Location &, bool)>
+      import_module = [&](const std::string &mod_name,
+                          const std::filesystem::path &src_dir,
+                          const sammine_util::Location &loc,
+                          bool is_transitive) -> bool {
+    if (imported_modules.count(mod_name))
+      return true;
+    imported_modules.insert(mod_name);
+
+    auto mn_path = find_mn(mod_name, src_dir);
+    if (mn_path.empty()) {
+      if (!is_transitive) {
+        reporter.immediate_error(
+            fmt::format("Cannot find module '{}.mn'", mod_name), loc);
+        this->error = true;
       }
       return false;
-    };
-    // CWD
-    find_lib(".");
-    // -I paths
-    if (obj_path.empty()) {
-      for (auto &ipath : import_paths)
-        if (find_lib(ipath))
-          break;
     }
-    // source dir
-    if (obj_path.empty())
-      find_lib(source_dir);
-    // stdlib dir
-    if (obj_path.empty() && !stdlib_dir.empty())
-      find_lib(stdlib_dir);
-    if (!obj_path.empty())
-      extra_object_files.push_back(obj_path.string());
+
+    // Parse the .mn file with SourceInfo for cross-file error locations.
+    std::string mn_input = sammine_util::get_string_from_file(mn_path.string());
+    auto si = std::make_shared<sammine_util::SourceInfo>(
+        sammine_util::SourceInfo{mn_path.string(), mn_input});
+    Lexer mn_lexer(mn_input, si);
+    auto mn_tok_stream = mn_lexer.getTokenStream();
+    Parser mn_parser(mn_tok_stream);
+    mn_parser.alias_to_module[mod_name] = mod_name;
+    auto mn_program = mn_parser.Parse();
+
+    if (mn_parser.has_errors()) {
+      if (!is_transitive) {
+        reporter.immediate_error(
+            fmt::format("Failed to parse module '{}'", mn_path.string()), loc);
+        this->error = true;
+      }
+      return false;
+    }
+
+    // Recursively import this module's own dependencies (transitive).
+    auto mod_src_dir = mn_path.parent_path();
+    for (auto &sub_import : mn_program->imports)
+      import_module(sub_import.module_name, mod_src_dir,
+                    sub_import.location, true);
+
+    // Filter definitions and inject into programAST.
+    for (auto it = mn_program->DefinitionVec.rbegin();
+         it != mn_program->DefinitionVec.rend(); ++it) {
+      auto &def = *it;
+
+      if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+        bool is_generic = fd->Prototype->is_generic();
+        if (is_transitive && !is_generic)
+          continue; // transitive: only need generic defs
+        if (!is_transitive && !fd->is_exported && !is_generic)
+          continue; // direct: skip non-exported non-generic
+        fd->Prototype->functionName =
+            fd->Prototype->functionName.with_module(mod_name);
+
+        if (is_generic) {
+          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                           std::move(def));
+        } else {
+          // Non-generic exported → extern
+          auto ext = std::make_unique<AST::ExternAST>(
+              std::move(fd->Prototype));
+          ext->is_exposed = fd->is_exported;
+          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                           std::move(ext));
+        }
+      } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
+        if (is_transitive || !ext->is_exposed)
+          continue;
+        ext->Prototype->functionName =
+            ext->Prototype->functionName.with_module(mod_name);
+        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                         std::move(def));
+      } else if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
+        if (!sd->is_exported)
+          continue;
+        sd->struct_name = sd->struct_name.with_module(mod_name);
+        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                         std::move(def));
+      } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
+        if (!ed->is_exported)
+          continue;
+        ed->enum_name = ed->enum_name.with_module(mod_name);
+        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                         std::move(def));
+      } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {
+        if (!ta->is_exported)
+          continue;
+        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                         std::move(def));
+      }
+    }
+
+    // Track linkable artifact (only for direct imports).
+    if (!is_transitive) {
+      std::vector<std::string> lib_exts = {".so", ".a"};
+      std::filesystem::path obj_path;
+      auto find_lib = [&](const std::filesystem::path &dir) -> bool {
+        for (auto &ext : lib_exts) {
+          auto candidate = dir / (mod_name + ext);
+          if (std::filesystem::exists(candidate)) {
+            obj_path = candidate;
+            return true;
+          }
+        }
+        return false;
+      };
+      find_lib(".");
+      if (obj_path.empty()) {
+        for (auto &ipath : import_paths)
+          if (find_lib(ipath))
+            break;
+      }
+      if (obj_path.empty())
+        find_lib(src_dir);
+      if (obj_path.empty() && !stdlib_dir.empty())
+        find_lib(stdlib_dir);
+      if (!obj_path.empty())
+        extra_object_files.push_back(obj_path.string());
+    }
+
+    return true;
+  };
+
+  for (auto &import : programAST->imports) {
+    import_module(import.module_name, source_dir, import.location, false);
+    if (this->error)
+      return;
   }
 }
 
@@ -634,285 +721,6 @@ void Compiler::emit_object() {
   dest.flush();
 }
 
-void Compiler::emit_interface() {
-  if (this->error || has_main || this->from_string)
-    return;
-
-  LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-               "Start emit interface stage...\n");
-  });
-
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
-  std::string mni_file = output_path(stem + ".mni");
-  std::ofstream out(mni_file);
-  if (!out.is_open()) {
-    fmt::print(stderr, "Could not open {} for writing\n", mni_file);
-    return;
-  }
-
-  // Recursively qualify struct type names for .mni emission using QualifiedName
-  std::function<std::string(const Type &)> qualify_type =
-      [&stem, &qualify_type](const Type &t) -> std::string {
-    using sammine_util::QualifiedName;
-    switch (t.type_kind) {
-    case TypeKind::Struct: {
-      auto &st = std::get<StructType>(t.type_data);
-      return st.get_name().with_module(stem).mangled();
-    }
-    case TypeKind::Enum: {
-      auto &et = std::get<EnumType>(t.type_data);
-      return et.get_name().with_module(stem).mangled();
-    }
-    case TypeKind::Pointer:
-      return (t.is_linear ? "'" : "") + std::string("ptr<") +
-             qualify_type(std::get<PointerType>(t.type_data).get_pointee()) +
-             ">";
-    case TypeKind::Array: {
-      auto &arr = std::get<ArrayType>(t.type_data);
-      return "[" + qualify_type(arr.get_element()) + ";" +
-             std::to_string(arr.get_size()) + "]";
-    }
-    case TypeKind::Tuple: {
-      auto &tup = std::get<TupleType>(t.type_data);
-      std::string result = "(";
-      for (size_t i = 0; i < tup.size(); i++) {
-        result += qualify_type(tup.get_element(i));
-        if (i + 1 < tup.size())
-          result += ", ";
-      }
-      result += ")";
-      return result;
-    }
-    default:
-      return t.to_string();
-    }
-  };
-
-  auto emit_proto = [&out, &qualify_type](const std::string &name,
-                                          AST::PrototypeAST *proto,
-                                          bool is_var_arg) {
-    auto funcType = std::get<FunctionType>(proto->get_type().type_data);
-    auto paramTypes = funcType.get_params_types();
-    auto retType = funcType.get_return_type();
-
-    out << "reuse " << name << "(";
-    for (size_t i = 0; i < proto->parameterVectors.size(); i++) {
-      auto &param = proto->parameterVectors[i];
-      out << param->name;
-      out << " : " << qualify_type(paramTypes[i]);
-      if (i + 1 < proto->parameterVectors.size() || is_var_arg)
-        out << ", ";
-    }
-    if (is_var_arg)
-      out << "...";
-    out << ")";
-    if (retType.type_kind != TypeKind::Unit)
-      out << " -> " << qualify_type(retType);
-    out << ";\n";
-  };
-
-  // ── Phase 3: Collect transitive generic dependencies ──
-  // Build map of generic functions by unqualified name
-  std::map<std::string, AST::FuncDefAST *> generic_funcs;
-  for (auto &def : this->programAST->DefinitionVec) {
-    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      if (fd->Prototype->is_generic())
-        generic_funcs[fd->Prototype->functionName.get_name()] = fd;
-    }
-  }
-
-  // DFS to collect transitive generic deps
-  std::set<std::string> emit_set;  // names of generics to emit
-  std::set<std::string> visited;
-  std::function<void(AST::FuncDefAST *)> collect_transitive =
-      [&](AST::FuncDefAST *fd) {
-        auto name = fd->Prototype->functionName.get_name();
-        if (visited.count(name))
-          return;
-        visited.insert(name);
-        emit_set.insert(name);
-
-        // Collect all call names from this function's body
-        std::set<std::string> call_names;
-        if (fd->Block)
-          for (auto &s : fd->Block->Statements)
-            AST::collect_call_names(s.get(), call_names);
-
-        // Check if any callee is a generic function
-        for (auto &callee : call_names) {
-          auto it = generic_funcs.find(callee);
-          if (it != generic_funcs.end())
-            collect_transitive(it->second);
-        }
-      };
-
-  // Start from exported generic functions
-  for (auto &def : this->programAST->DefinitionVec) {
-    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      if (fd->is_exported && fd->Prototype->is_generic())
-        collect_transitive(fd);
-    }
-  }
-
-  // ── Phase 4: Check non-exported type dependencies ──
-  // Build set of exported types for checking
-  std::set<std::string> exported_types;
-  // Builtins are always available
-  for (auto b : kBuiltinTypeNames)
-    exported_types.insert(std::string(b));
-  for (auto &def : this->programAST->DefinitionVec) {
-    if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (sd->is_exported)
-        exported_types.insert(sd->struct_name.get_name());
-    } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (ed->is_exported)
-        exported_types.insert(ed->enum_name.get_name());
-    }
-  }
-
-  // Check each generic in emit_set for non-exported type deps
-  for (auto &name : emit_set) {
-    auto it = generic_funcs.find(name);
-    if (it == generic_funcs.end()) continue;
-    auto *fd = it->second;
-
-    std::set<std::string> type_names;
-    // Collect from prototype params
-    for (auto &param : fd->Prototype->parameterVectors)
-      if (param->type_expr)
-        AST::collect_type_names(param->type_expr.get(), type_names);
-    // Collect from return type
-    if (fd->Prototype->return_type_expr)
-      AST::collect_type_names(fd->Prototype->return_type_expr.get(), type_names);
-    // Collect from body
-    if (fd->Block)
-      for (auto &s : fd->Block->Statements)
-        AST::collect_expr_type_names(s.get(), type_names);
-
-    // Remove generic type params (they're not real types)
-    for (auto &tp : fd->Prototype->type_params)
-      type_names.erase(tp);
-
-    // Check each referenced type
-    for (auto &tn : type_names) {
-      if (exported_types.count(tn) == 0) {
-        // Check if it's actually a type defined in this module
-        bool is_module_type = false;
-        for (auto &d : this->programAST->DefinitionVec) {
-          if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(d.get())) {
-            if (sd->struct_name.get_name() == tn) { is_module_type = true; break; }
-          } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(d.get())) {
-            if (ed->enum_name.get_name() == tn) { is_module_type = true; break; }
-          }
-        }
-        if (is_module_type) {
-          reporter.immediate_error(
-              fmt::format("Type '{}' is used in exported generic function '{}' "
-                          "but is not exported. Add 'export' to the type definition.",
-                          tn, name),
-              fd->get_location());
-          this->error = true;
-          return;
-        }
-      }
-    }
-  }
-
-  // ── Phase 5: Emit non-generic definitions (existing loop, skip generics) ──
-  for (auto &def : this->programAST->DefinitionVec) {
-    if (auto *func_def = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      if (func_def->Prototype->is_generic())
-        continue;  // handled below
-      if (!func_def->is_exported)
-        continue;
-      std::string name = func_def->Prototype->functionName.with_module(stem).mangled();
-      emit_proto(name, func_def->Prototype.get(),
-                 func_def->Prototype->is_var_arg);
-    } else if (auto *extern_def = llvm::dyn_cast<AST::ExternAST>(def.get())) {
-      if (!extern_def->is_exposed)
-        continue;
-      std::string name =
-          extern_def->Prototype->functionName.with_module(stem).mangled();
-      emit_proto(name, extern_def->Prototype.get(),
-                 extern_def->Prototype->is_var_arg);
-    } else if (auto *struct_def = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (!struct_def->is_exported)
-        continue;
-      out << "struct "
-          << struct_def->struct_name.with_module(stem).mangled() << " {\n";
-      for (size_t i = 0; i < struct_def->struct_members.size(); i++) {
-        auto &member = struct_def->struct_members[i];
-        out << "  " << member->name;
-        if (member->type_expr)
-          out << ": " << member->type_expr->to_string();
-        out << ",\n";
-      }
-      out << "};\n";
-    } else if (auto *enum_def = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (!enum_def->is_exported)
-        continue;
-      out << "type " << enum_def->enum_name.with_module(stem).mangled();
-      if (!enum_def->type_params.empty()) {
-        out << "<";
-        for (size_t i = 0; i < enum_def->type_params.size(); i++) {
-          out << enum_def->type_params[i];
-          if (i + 1 < enum_def->type_params.size())
-            out << ", ";
-        }
-        out << ">";
-      }
-      if (enum_def->backing_type_name.has_value())
-        out << ": " << *enum_def->backing_type_name;
-      out << " = ";
-      for (size_t i = 0; i < enum_def->variants.size(); i++) {
-        auto &v = enum_def->variants[i];
-        out << v.name;
-        if (!v.payload_types.empty() || v.discriminant_value.has_value()) {
-          out << "(";
-          if (v.discriminant_value.has_value()) {
-            out << *v.discriminant_value;
-          } else {
-            for (size_t j = 0; j < v.payload_types.size(); j++) {
-              out << v.payload_types[j]->to_string();
-              if (j + 1 < v.payload_types.size())
-                out << ", ";
-            }
-          }
-          out << ")";
-        }
-        if (i + 1 < enum_def->variants.size())
-          out << " | ";
-      }
-      out << ";\n";
-    }
-  }
-
-  // ── Emit generic functions with full bodies ──
-  for (auto &def : this->programAST->DefinitionVec) {
-    auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get());
-    if (!fd || !fd->Prototype->is_generic())
-      continue;
-    if (emit_set.count(fd->Prototype->functionName.get_name()) == 0)
-      continue;
-
-    // Temporarily qualify the function name for emission
-    auto orig_name = fd->Prototype->functionName;
-    fd->Prototype->functionName =
-        fd->Prototype->functionName.with_module(stem);
-
-    // Exported generics keep "export", transitive deps don't
-    bool orig_exported = fd->is_exported;
-    if (!fd->is_exported)
-      fd->is_exported = false; // already false, just for clarity
-
-    out << fd->to_string() << "\n";
-
-    // Restore original name
-    fd->Prototype->functionName = orig_name;
-    fd->is_exported = orig_exported;
-  }
-}
 
 void Compiler::emit_archive_impl() {
   LOG({
@@ -935,21 +743,24 @@ void Compiler::emit_archive_impl() {
       obj_file, tmp_dir / std::filesystem::path(obj_file).filename(),
       std::filesystem::copy_options::overwrite_existing);
 
-  for (auto &dep : extra_object_files) {
+  auto copy_dep = [&](const std::string &dep) {
     std::string ext = std::filesystem::path(dep).extension().string();
     if (ext == ".a") {
-      // Extract archive members into temp dir
       auto abs_dep = std::filesystem::absolute(dep).string();
       std::string cmd =
           fmt::format("cd {} && ar x {}", tmp_dir.string(), abs_dep);
       std::system(cmd.c_str());
     } else {
-      // .o or .so — copy directly
       std::filesystem::copy_file(
           dep, tmp_dir / std::filesystem::path(dep).filename(),
           std::filesystem::copy_options::overwrite_existing);
     }
-  }
+  };
+
+  for (auto &dep : extra_object_files)
+    copy_dep(dep);
+  for (auto &dep : extra_link_objs_)
+    copy_dep(dep);
 
   // Create the archive from all collected .o files
   auto abs_archive = std::filesystem::absolute(archive_file).string();
@@ -973,8 +784,12 @@ void Compiler::emit_shared_impl() {
   std::string obj_file = output_path(stem + ".o");
   std::string lib_file = output_path(stem + ".so");
 
+  std::string extra;
+  for (auto &obj : extra_link_objs_)
+    extra += " " + obj;
   std::string command =
-      fmt::format("clang++ -shared -o {} {}", lib_file, obj_file);
+      fmt::format("clang++ -shared -undefined dynamic_lookup -o {} {}{}",
+                  lib_file, obj_file, extra);
   int result = std::system(command.c_str());
   if (result != 0) {
     fmt::print(stderr, "Failed to create shared library {}\n", lib_file);
@@ -984,8 +799,10 @@ void Compiler::emit_shared_impl() {
 void Compiler::emit_library() {
   if (this->error || has_main || this->from_string)
     return;
+
+  // Default to shared library when no --lib flag is given
   if (lib_format_ == LibFormat::None)
-    return;
+    lib_format_ = LibFormat::Shared;
 
   switch (lib_format_) {
   case LibFormat::Static:
@@ -997,6 +814,11 @@ void Compiler::emit_library() {
   case LibFormat::None:
     break;
   }
+
+  // Clean up intermediate .o — only the .a/.so is the deliverable
+  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string obj_file = output_path(stem + ".o");
+  std::filesystem::remove(obj_file);
 }
 
 void Compiler::link() {
@@ -1068,7 +890,6 @@ void Compiler::start() {
       {"codegen", &Compiler::codegen},
       {"optimize", &Compiler::optimize},
       {"emit_obj", &Compiler::emit_object},
-      {"emit_iface", &Compiler::emit_interface},
       {"emit_library", &Compiler::emit_library},
       {"link", &Compiler::link},
   };

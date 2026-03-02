@@ -110,7 +110,15 @@ void ScopeGeneratorVisitor::visit(ExternAST *ast) {
   ast->walk_with_postorder(this);
   scope_stack.pop_context();
 }
-void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
+  // For imported externs (qualified function name), qualify type references
+  // in the prototype so that e.g. `String` becomes `str::String`.
+  if (ast->Prototype->functionName.is_qualified()) {
+    insideImportedGenericFunc_ = true;
+    currentImportModule_ = ast->Prototype->functionName.get_module();
+    currentGenericTypeParams_ = {};
+  }
+}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
   // Detect imported generic function: name is qualified AND is_generic
   if (ast->Prototype->is_generic() &&
@@ -235,7 +243,12 @@ void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VarDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {
+  if (ast->Prototype->functionName.is_qualified()) {
+    insideImportedGenericFunc_ = false;
+    currentImportModule_.clear();
+  }
+}
 void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {
   insideImportedGenericFunc_ = false;
   currentImportModule_.clear();

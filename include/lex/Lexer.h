@@ -20,6 +20,7 @@ private:
   std::string stored_input;
   size_t cursor;
   bool at_eof;
+  std::shared_ptr<sammine_util::SourceInfo> source_info_;
 
   [[nodiscard]] size_t handleNumber(size_t i, const std::string &input);
   size_t handleSpaces(size_t i, const std::string &input);
@@ -52,6 +53,7 @@ private:
 
 public:
   explicit Lexer(const std::string &input);
+  Lexer(const std::string &input, std::shared_ptr<sammine_util::SourceInfo> source_info);
   Lexer() : location(), cursor(0), at_eof(false) {
     tokStream = std::make_shared<TokenStream>();
   }

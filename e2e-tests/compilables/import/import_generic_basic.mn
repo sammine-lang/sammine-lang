@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_generic.mn %O && %sammine --file %full %O %I && %T/import_generic_basic.exe | %check %full
+# RUN: %sammine --file %dir/Inputs/has_generic.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_basic.exe | %check %full
 # CHECK: 42
 
 import has_generic as g;

@@ -155,14 +155,14 @@ cluster_groups(const std::vector<GroupedReport> &groups, int64_t context_radius,
   for (size_t i = 0; i < sorted.size(); i++)
     sorted[i] = i;
   std::sort(sorted.begin(), sorted.end(), [&](size_t a, size_t b) {
-    Locator la(groups[a].loc, context_radius, diagnostic_data);
-    Locator lb(groups[b].loc, context_radius, diagnostic_data);
+    Locator la(groups[a].loc.as_pair(), context_radius, diagnostic_data);
+    Locator lb(groups[b].loc.as_pair(), context_radius, diagnostic_data);
     return la.get_lines_indices().first < lb.get_lines_indices().first;
   });
 
   std::vector<Cluster> clusters;
   for (size_t si : sorted) {
-    Locator locator(groups[si].loc, context_radius, diagnostic_data);
+    Locator locator(groups[si].loc.as_pair(), context_radius, diagnostic_data);
     auto [ls, le] = locator.get_lines_indices_with_radius();
     if (!clusters.empty() && ls <= clusters.back().line_end) {
       // Overlaps with previous cluster — merge.
@@ -227,7 +227,7 @@ void Reporter::report_singular_line(ReportKind report_kind,
   }
 }
 void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
-                                        int64_t col_end) const {
+                                        int64_t col_end) {
 
   for (int64_t j = 0; j < col_start; j++)
     fmt::print(stderr, "{}", msg[j]);
@@ -242,17 +242,25 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
 
   fmt::print(stderr, "\n");
 }
-void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
+void Reporter::report_single_msg(const Location &loc,
                                  const std::vector<std::string> &format_strs,
                                  const ReportKind report_kind,
                                  std::source_location src) const {
-  Locator locator(index_pair, context_radius, diagnostic_data);
+  // Use source_info from the location if available (imported file), otherwise
+  // fall back to the Reporter's own data (main file).
+  const std::string &diag_file =
+      loc.source_info ? loc.source_info->file_name : file_name;
+  const DiagnosticData diag_data =
+      loc.source_info ? get_diagnostic_data(loc.source_info->source_text)
+                      : diagnostic_data;
+
+  Locator locator(loc.as_pair(), context_radius, diag_data);
   auto [new_start, new_end] = locator.get_lines_indices_with_radius();
   auto [row_num, col_start, col_end] =
       locator.get_start_end_of_singular_line_token();
 
   print_fmt(LINE_COLOR, "    |");
-  print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name, row_num + 1,
+  print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", diag_file, row_num + 1,
             col_start);
   if (!locator.is_on_singular_line()) {
     for (const auto &s : format_strs) {
@@ -262,7 +270,7 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
   }
   for (auto i = new_start; i <= new_end; i++) {
     print_fmt(LINE_COLOR, "{:>4}|", i + 1);
-    std::string_view str = diagnostic_data[i].second;
+    std::string_view str = diag_data[i].second;
 
     if (locator.is_on_singular_line(i)) {
       print_data_singular_line(str, col_start, col_end);
@@ -281,42 +289,43 @@ void Reporter::report_single_msg(std::pair<int64_t, int64_t> index_pair,
   }
 }
 
-void Reporter::report(const Reportee &reports) const {
+// Render a set of clusters using the given diagnostic_data and file name.
+// Extracted to avoid duplicating the rendering code for each source-file
+// partition.
+static void render_clusters(
+    const std::vector<Cluster> &clusters,
+    const std::vector<GroupedReport> &groups,
+    const Reporter::DiagnosticData &diag_data,
+    const std::string &diag_file,
+    int64_t context_radius, bool dev_mode, bool &first) {
 
-  auto groups = group_reports(reports);
-  auto clusters = cluster_groups(groups, context_radius, diagnostic_data);
+  struct LineAnnotation {
+    int64_t col_start, col_end;
+    std::vector<std::string> msgs;
+    Reportee::ReportKind kind;
+  };
 
-  // Step 3: render each cluster as a single source snippet with
-  // carets (^^^) and messages interleaved under annotated lines.
-  bool first = true;
   for (const auto &cluster : clusters) {
     if (!first)
-      print_fmt(
-          LINE_COLOR,
+      Reporter::print_fmt(
+          Reporter::LINE_COLOR,
           "----------------------------------------------------------------"
           "----------\n");
     first = false;
 
-    // Map each source line number to the annotations that target it.
-    struct LineAnnotation {
-      int64_t col_start, col_end;
-      std::vector<std::string> msgs;
-      Reportee::ReportKind kind;
-    };
     std::map<int64_t, std::vector<LineAnnotation>> line_anns;
 
     for (size_t gi : cluster.group_indices) {
       const auto &g = groups[gi];
-      Locator locator(g.loc, context_radius, diagnostic_data);
+      Locator locator(g.loc.as_pair(), context_radius, diag_data);
       int64_t row, cs, ce;
       if (locator.is_on_singular_line()) {
         std::tie(row, cs, ce) = locator.get_start_end_of_singular_line_token();
       } else {
-        // Multi-line span: annotate start line from start col to end of line
         auto [r, c] = locator.get_row_col();
         row = r;
         cs = c;
-        ce = static_cast<int64_t>(diagnostic_data[r].second.size());
+        ce = static_cast<int64_t>(diag_data[r].second.size());
       }
       auto msgs = g.msgs;
       if (dev_mode) {
@@ -329,49 +338,40 @@ void Reporter::report(const Reportee &reports) const {
       line_anns[row].push_back({cs, ce, std::move(msgs), g.kind});
     }
 
-    // Single error → "file:line:col", multiple errors → just "file".
-    print_fmt(LINE_COLOR, "    |");
+    Reporter::print_fmt(Reporter::LINE_COLOR, "    |");
     if (cluster.group_indices.size() == 1) {
-      Locator locator(groups[cluster.group_indices[0]].loc, context_radius,
-                      diagnostic_data);
+      Locator locator(groups[cluster.group_indices[0]].loc.as_pair(),
+                      context_radius, diag_data);
       auto [row, col] = locator.get_row_col();
-      print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", file_name, row + 1,
-                col);
+      Reporter::print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", diag_file,
+                          row + 1, col);
     } else {
-      print_fmt(fmt::terminal_color::blue, "{}\n", file_name);
+      Reporter::print_fmt(fmt::terminal_color::blue, "{}\n", diag_file);
     }
 
-    // Walk the line range top-to-bottom. Plain lines print as-is;
-    // annotated lines get bold highlighting, carets, and messages.
     for (int64_t i = cluster.line_start; i <= cluster.line_end; i++) {
-      print_fmt(LINE_COLOR, "{:>4}|", i + 1);
-      std::string_view str = diagnostic_data[i].second;
+      Reporter::print_fmt(Reporter::LINE_COLOR, "{:>4}|", i + 1);
+      std::string_view str = diag_data[i].second;
       auto it = line_anns.find(i);
       if (it == line_anns.end() || it->second.empty()) {
         fmt::print(stderr, "{}\n", str);
         continue;
       }
-      print_data_singular_line(str, it->second[0].col_start,
-                               it->second[0].col_end);
-      // Partition annotations into runs of same-message same-kind
-      // (mergeable) vs others (rendered individually).
+      Reporter::print_data_singular_line(str, it->second[0].col_start,
+                                         it->second[0].col_end);
       auto &anns = it->second;
       size_t ai = 0;
       while (ai < anns.size()) {
-        // Find a run of annotations with identical msgs and kind.
         size_t run_end = ai + 1;
         while (run_end < anns.size() && anns[run_end].msgs == anns[ai].msgs &&
                anns[run_end].kind == anns[ai].kind)
           run_end++;
 
         {
-          // Ariadne-style render (works for single and merged groups).
           size_t n = run_end - ai;
           auto kind = anns[ai].kind;
 
-          // Compute effective span and pipe column for each annotation.
-          auto eff_span = [&](size_t idx,
-                              int64_t &es, int64_t &ee) {
+          auto eff_span = [&](size_t idx, int64_t &es, int64_t &ee) {
             es = anns[idx].col_start;
             ee = anns[idx].col_end;
             if (es == ee) {
@@ -385,72 +385,92 @@ void Reporter::report(const Reportee &reports) const {
             return ee - 1;
           };
 
-          // Aligned message column: rightmost pipe + 3 (for "╰─ ")
           auto msg_start = pipe_col(run_end - 1) + 3;
 
-          // First line: ─┬ style span markers.
-          print_fmt(LINE_COLOR, "    |");
+          Reporter::print_fmt(Reporter::LINE_COLOR, "    |");
           int64_t pos = 0;
           for (size_t k = ai; k < run_end; k++) {
             int64_t es, ee;
             eff_span(k, es, ee);
             auto pc = ee - 1;
             for (; pos < es; pos++)
-              print_fmt(kind, " ");
+              Reporter::print_fmt(kind, " ");
             for (; pos < pc; pos++)
-              print_fmt(kind, "\u2500"); // ─
-            print_fmt(kind, "\u252C"); // ┬
+              Reporter::print_fmt(kind, "\u2500");
+            Reporter::print_fmt(kind, "\u252C");
             pos++;
           }
-          print_fmt(kind, "\n");
+          Reporter::print_fmt(kind, "\n");
 
-          // Waterfall: for each annotation from rightmost to leftmost,
-          // print │ pipes for persisting spans, then ╰──── arrow to
-          // aligned message column.
           for (size_t mi = n; mi > 0; mi--) {
-            print_fmt(LINE_COLOR, "    |");
+            Reporter::print_fmt(Reporter::LINE_COLOR, "    |");
             pos = 0;
-            // │ for persisting spans 0..(mi-2)
             for (size_t k = ai; k < ai + mi - 1; k++) {
               auto pc = pipe_col(k);
               for (; pos < pc; pos++)
-                print_fmt(kind, " ");
-              print_fmt(kind, "\u2502"); // │
+                Reporter::print_fmt(kind, " ");
+              Reporter::print_fmt(kind, "\u2502");
               pos++;
             }
-            // ╰── turn with dashes extending to msg_start
             auto cur_pc = pipe_col(ai + mi - 1);
             for (; pos < cur_pc; pos++)
-              print_fmt(kind, " ");
-            print_fmt(kind, "\u2570"); // ╰
+              Reporter::print_fmt(kind, " ");
+            Reporter::print_fmt(kind, "\u2570");
             pos++;
             for (; pos < msg_start - 1; pos++)
-              print_fmt(kind, "\u2500"); // ─
-            print_fmt(kind, " ");
+              Reporter::print_fmt(kind, "\u2500");
+            Reporter::print_fmt(kind, " ");
             pos++;
-            // First message
             auto &cur_msgs = anns[ai + mi - 1].msgs;
-            print_fmt(kind, "{}\n", cur_msgs[0]);
-            // Continuation messages (e.g. dev location) — just indented
+            Reporter::print_fmt(kind, "{}\n", cur_msgs[0]);
             for (size_t msi = 1; msi < cur_msgs.size(); msi++) {
-              print_fmt(LINE_COLOR, "    |");
+              Reporter::print_fmt(Reporter::LINE_COLOR, "    |");
               pos = 0;
               for (size_t k = ai; k < ai + mi - 1; k++) {
                 auto pc = pipe_col(k);
                 for (; pos < pc; pos++)
-                  print_fmt(kind, " ");
-                print_fmt(kind, "\u2502"); // │
+                  Reporter::print_fmt(kind, " ");
+                Reporter::print_fmt(kind, "\u2502");
                 pos++;
               }
               for (; pos < msg_start; pos++)
-                print_fmt(kind, " ");
-              print_fmt(kind, "{}\n", cur_msgs[msi]);
+                Reporter::print_fmt(kind, " ");
+              Reporter::print_fmt(kind, "{}\n", cur_msgs[msi]);
             }
           }
         }
         ai = run_end;
       }
     }
+  }
+}
+
+void Reporter::report(const Reportee &reports) const {
+
+  auto groups = group_reports(reports);
+
+  // Partition groups by source_info pointer so that errors from different
+  // files are clustered independently (they have different diagnostic_data).
+  std::map<SourceInfo *, std::vector<size_t>> partitions;
+  for (size_t i = 0; i < groups.size(); i++)
+    partitions[groups[i].loc.source_info.get()].push_back(i);
+
+  bool first = true;
+
+  for (auto &[si_ptr, indices] : partitions) {
+    // Build a sub-vector of groups for this partition
+    std::vector<GroupedReport> sub_groups;
+    sub_groups.reserve(indices.size());
+    for (size_t idx : indices)
+      sub_groups.push_back(groups[idx]);
+
+    const DiagnosticData &diag_data =
+        si_ptr ? get_diagnostic_data(si_ptr->source_text) : diagnostic_data;
+    const std::string &diag_file = si_ptr ? si_ptr->file_name : file_name;
+
+    auto clusters = cluster_groups(sub_groups, context_radius, diag_data);
+    render_clusters(clusters, sub_groups, diag_data, diag_file, context_radius,
+                    dev_mode, first);
   }
 
   if (reports.has_message()) {

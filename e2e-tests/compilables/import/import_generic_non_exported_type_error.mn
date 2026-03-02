@@ -1,8 +1,0 @@
-# RUN: %sammine --file %dir/Inputs/has_generic_non_exported_type.mn %O --lib=static 2>&1 | %check %full
-# CHECK: Type 'Secret' is used in exported generic function 'wrap' but is not exported.
-
-import has_generic_non_exported_type as lib;
-
-let main() -> i32 {
-  return 0;
-}

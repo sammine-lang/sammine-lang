@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I  && %T/%base.exe| %check %full
+# RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe| %check %full
 # CHECK: 0
 import dummy_enum;
 import std;

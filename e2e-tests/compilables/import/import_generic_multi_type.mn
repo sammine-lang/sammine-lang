@@ -1,4 +1,4 @@
-# RUN: %sammine --file %dir/Inputs/has_generic_multi.mn %O && %sammine --file %full %O %I && %T/import_generic_multi_type.exe | %check %full
+# RUN: %sammine --file %dir/Inputs/has_generic_multi.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_multi_type.exe | %check %full
 # CHECK: 10
 # CHECK: 20
 
