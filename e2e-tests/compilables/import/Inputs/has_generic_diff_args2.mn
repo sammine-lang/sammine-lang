@@ -1,0 +1,7 @@
+let identity<T>(x : T) -> T {
+  x
+}
+
+export let first_as_i32<T>(x : T, y : i32) -> i32 {
+  identity<i32>(y)
+}

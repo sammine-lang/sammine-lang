@@ -130,9 +130,7 @@ void ScopeGeneratorVisitor::qualify_type_expr(TypeExprAST *expr) {
       if (simple->name.get_name() == tp)
         return;
     // Don't qualify builtin types
-    auto n = simple->name.get_name();
-    if (n == "i32" || n == "i64" || n == "f32" || n == "f64" || n == "bool" ||
-        n == "char" || n == "u32" || n == "u64" || n == "string" || n == "unit")
+    if (is_builtin_type_name(simple->name.get_name()))
       return;
     // Qualify if unqualified and the qualified version exists in scope
     if (!simple->name.is_qualified()) {

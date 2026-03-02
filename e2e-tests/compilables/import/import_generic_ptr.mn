@@ -1,0 +1,12 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_ptr.mn %O && %sammine --diagnostics=dev --file %full %O %I && %T/%base.exe | %check %full
+# CHECK: 99
+import has_generic_ptr;
+import std;
+
+let main() -> i32 {
+  let x: i32 = 99;
+  let p = &x;
+  let val = has_generic_ptr::deref_ptr<i32>(p);
+  std::printf("%d", val);
+  return 0;
+}

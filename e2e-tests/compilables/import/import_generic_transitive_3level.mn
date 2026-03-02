@@ -1,0 +1,10 @@
+# RUN: %sammine --file %dir/Inputs/generic_level_c.mn %O && %sammine --file %dir/Inputs/generic_level_b.mn %O %I && %sammine --diagnostics=dev --file %full %O %I && %T/%base.exe | %check %full
+# CHECK: 77
+import generic_level_b;
+import std;
+
+let main() -> i32 {
+  let result = generic_level_b::wrap_id<i32>(77);
+  std::printf("%d", result);
+  return 0;
+}

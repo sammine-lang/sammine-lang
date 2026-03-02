@@ -1,11 +1,13 @@
 #pragma once
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 //! \file Types.h
@@ -382,6 +384,16 @@ struct Type {
 
 std::optional<std::string> incompatibility_hint(const Type &expected,
                                                 const Type &actual);
+
+inline constexpr std::array<std::string_view, 10> kBuiltinTypeNames = {
+    "i32", "i64", "f32", "f64", "bool", "char", "u32", "u64", "string", "unit"};
+
+inline bool is_builtin_type_name(std::string_view name) {
+  for (auto b : kBuiltinTypeNames)
+    if (b == name)
+      return true;
+  return false;
+}
 
 struct TypeMapOrdering {
   // TODO: Planned for future subtyping support — don't remove

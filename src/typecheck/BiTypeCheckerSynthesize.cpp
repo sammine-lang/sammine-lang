@@ -391,6 +391,9 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
           this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
         return ast->set_type(Type::Poisoned());
       }
+      if (arg_type.is_polymorphic_numeric()) {
+        resolve_literal_type(ast->arguments[i].get(), expected);
+      }
     }
   } else {
     // Infer type arguments from call arguments

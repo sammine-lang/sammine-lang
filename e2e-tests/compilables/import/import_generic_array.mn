@@ -1,0 +1,11 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_array.mn %O && %sammine --diagnostics=dev --file %full %O %I && %T/%base.exe | %check %full
+# CHECK: 10
+import has_generic_array;
+import std;
+
+let main() -> i32 {
+  let arr: [i32; 3] = [10, 20, 30];
+  let x = has_generic_array::first_elem<i32>(arr);
+  std::printf("%d", x);
+  return 0;
+}

@@ -1,0 +1,5 @@
+import generic_level_c;
+
+export let wrap_id<T>(x : T) -> T {
+  generic_level_c::base_id<T>(x)
+}

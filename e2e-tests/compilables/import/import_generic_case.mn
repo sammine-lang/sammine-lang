@@ -1,0 +1,11 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_case.mn %O && %sammine --diagnostics=dev --file %full %O %I && %T/%base.exe | %check %full
+# CHECK: 2
+import has_generic_case;
+import std;
+
+let main() -> i32 {
+  let c = has_generic_case::Color::Green;
+  let result = has_generic_case::color_to_int<i32>(c, 0);
+  std::printf("%d", result);
+  return 0;
+}

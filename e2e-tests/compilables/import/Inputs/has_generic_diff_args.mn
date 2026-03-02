@@ -1,0 +1,7 @@
+let to_i32<T>(x : T) -> i32 {
+  42
+}
+
+export let apply_diff<T>(x : T) -> i32 {
+  to_i32<T>(x)
+}

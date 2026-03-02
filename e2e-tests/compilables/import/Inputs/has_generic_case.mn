@@ -1,0 +1,9 @@
+export type Color = Red | Green | Blue;
+
+export let color_to_int<T>(x : Color, default_val : T) -> i32 {
+  case x {
+    Color::Red => 1,
+    Color::Green => 2,
+    Color::Blue => 3,
+  }
+}

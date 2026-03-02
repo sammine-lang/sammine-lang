@@ -1,0 +1,10 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_diff_args.mn %O && %sammine --diagnostics=dev --file %full %O %I && %T/%base.exe | %check %full
+# CHECK: 42
+import has_generic_diff_args;
+import std;
+
+let main() -> i32 {
+  let result = has_generic_diff_args::apply_diff<f64>(3.14);
+  std::printf("%d", result);
+  return 0;
+}
