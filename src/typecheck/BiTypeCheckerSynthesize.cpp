@@ -12,6 +12,21 @@
 //!        generic unification/substitution for BiTypeCheckerVisitor.
 namespace sammine_lang::AST {
 
+/// Format a generic call's display name with resolved type args,
+/// e.g. "g::identity<i32>" or "swap<i32, f64>".
+static std::string
+format_generic_call_name(const sammine_util::QualifiedName &fn_name,
+                         const std::vector<std::string> &type_params,
+                         const std::unordered_map<std::string, Type> &bindings) {
+  std::string result = fn_name.mangled() + "<";
+  for (size_t i = 0; i < type_params.size(); i++) {
+    if (i > 0) result += ", ";
+    auto it = bindings.find(type_params[i]);
+    result += (it != bindings.end()) ? it->second.to_string() : type_params[i];
+  }
+  return result + ">";
+}
+
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
 }
@@ -382,13 +397,20 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         return ast->set_type(Type::Poisoned());
       auto expected = substitute(params[i], bindings);
       if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
+        auto call_name = format_generic_call_name(
+            ast->functionName.with_alias(), type_params, bindings);
         this->add_error(
             ast->arguments[i]->get_location(),
             fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
-                        ast->functionName.mangled(), expected.to_string(),
+                        call_name, expected.to_string(),
                         arg_type.to_string()));
         if (auto hint = incompatibility_hint(expected, arg_type))
           this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
+        auto mono_sig = substitute(generic_type, bindings);
+        this->add_diagnostics(
+            ast->arguments[i]->get_location(),
+            fmt::format("note: '{}' has signature: {}",
+                        call_name, mono_sig.to_string()));
         return ast->set_type(Type::Poisoned());
       }
       if (arg_type.is_polymorphic_numeric()) {
@@ -407,13 +429,21 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         resolve_literal_type(ast->arguments[i].get(), arg_type);
       }
       if (!unify(params[i], arg_type, bindings)) {
+        auto call_name = format_generic_call_name(
+            ast->functionName.with_alias(),
+            generic_def->Prototype->type_params, bindings);
         auto expected = substitute(params[i], bindings);
         this->add_error(ast->arguments[i]->get_location(),
                         fmt::format("Type mismatch in argument {} of '{}': "
                                     "expected {}, got {}",
-                                    i + 1, ast->functionName.mangled(),
+                                    i + 1, call_name,
                                     expected.to_string(),
                                     arg_type.to_string()));
+        auto mono_sig = substitute(generic_type, bindings);
+        this->add_diagnostics(
+            ast->arguments[i]->get_location(),
+            fmt::format("note: '{}' has signature: {}",
+                        call_name, mono_sig.to_string()));
         return ast->set_type(Type::Poisoned());
       }
     }
@@ -1363,7 +1393,7 @@ bool BiTypeCheckerVisitor::unify(
 }
 
 Type BiTypeCheckerVisitor::substitute(
-    const Type &type, const std::unordered_map<std::string, Type> &bindings) {
+    const Type &type, const std::unordered_map<std::string, Type> &bindings) const {
   if (type.type_kind == TypeKind::TypeParam) {
     auto name = std::get<std::string>(type.type_data);
     auto it = bindings.find(name);

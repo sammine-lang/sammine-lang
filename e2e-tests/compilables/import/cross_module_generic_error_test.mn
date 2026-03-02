@@ -1,0 +1,11 @@
+# RUN: ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
+# CHECK: expected i32, got float literal
+# CHECK: expected i32, got ptr<char>
+
+import has_generic as g;
+import std;
+
+let main() -> i32 {
+  std::printf("%d %d\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
+  return 0;
+}

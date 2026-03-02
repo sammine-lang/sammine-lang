@@ -1,5 +1,6 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK: Argument 2 to 'add': expected i32, got f64
+# CHECK: note: 'add' has signature: (i32, i32) -> i32
 
 let add(a: i32, b: i32) -> i32 {
   return a + b;

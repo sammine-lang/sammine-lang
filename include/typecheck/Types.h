@@ -274,9 +274,9 @@ struct Type {
     case TypeKind::String:
       return fmt::format("\"{}\"", std::get<std::string>(type_data));
     case TypeKind::Integer:
-      return "Integer";
+      return "numeric literal";
     case TypeKind::Flt:
-      return "Flt";
+      return "float literal";
     case TypeKind::TypeParam:
       return std::get<std::string>(type_data);
     }

@@ -1,0 +1,11 @@
+# RUN: %sammine --file %dir/Inputs/typed_helper.mn %O && ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
+# CHECK: expected i32, got f64
+
+import typed_helper as h;
+import std;
+
+let main() -> i32 {
+  let x: f64 = 3.14;
+  std::printf("%d\n", h::double_it(x));
+  return 0;
+}

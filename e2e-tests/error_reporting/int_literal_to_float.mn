@@ -1,5 +1,5 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Type mismatch: expression has type Integer, but variable declared as f64
+# CHECK: Type mismatch: expression has type numeric literal, but variable declared as f64
 
 let main() -> i32 {
   let x: f64 = 1;

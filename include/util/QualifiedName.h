@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -22,6 +23,7 @@ struct MonomorphizedName;
 struct QualifiedName {
 private:
   std::vector<std::string> parts_; // ["math", "Color", "Red"]
+  std::optional<std::string> module_alias_; // original alias before resolution
   bool unresolved_ = false;
 
   // local() is restricted to parsing/AST construction only.
@@ -58,10 +60,12 @@ public:
   }
 
   static QualifiedName from_parts(std::vector<std::string> parts,
-                                  bool unresolved = false) {
+                                  bool unresolved = false,
+                                  std::optional<std::string> module_alias = std::nullopt) {
     QualifiedName qn;
     qn.parts_ = std::move(parts);
     qn.unresolved_ = unresolved;
+    qn.module_alias_ = std::move(module_alias);
     return qn;
   }
 
@@ -91,6 +95,16 @@ public:
     for (size_t i = 1; i < parts_.size(); i++)
       result += "::" + parts_[i];
     return result;
+  }
+
+  // Return a copy with the original alias swapped back in
+  QualifiedName with_alias() const {
+    if (module_alias_) {
+      auto copy = *this;
+      copy.parts_[0] = *module_alias_;
+      return copy;
+    }
+    return *this;
   }
 
   // Return a copy with module prepended (if not already qualified)

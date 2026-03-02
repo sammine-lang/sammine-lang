@@ -467,11 +467,16 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
                                                     ast->arguments[i]->get_type())) {
       this->add_error(ast->arguments[i]->get_location(),
                       fmt::format("Argument {} to '{}': expected {}, got {}",
-                                  i + 1, ast->functionName.mangled(),
+                                  i + 1, ast->functionName.with_alias().mangled(),
                                   params[i].to_string(),
                                   ast->arguments[i]->get_type().to_string()));
       if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->get_type()))
         this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
+      this->add_diagnostics(
+          ast->arguments[i]->get_location(),
+          fmt::format("note: '{}' has signature: {}",
+                      ast->functionName.with_alias().mangled(),
+                      cp.callee_func_type->to_string()));
     } else if (ast->arguments[i]->get_type().is_polymorphic_numeric()) {
       resolve_literal_type(ast->arguments[i].get(), params[i]);
     }

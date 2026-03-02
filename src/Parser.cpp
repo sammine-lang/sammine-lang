@@ -1303,9 +1303,17 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
           auto &parts = pqn.qn.parts();
           auto it = alias_to_module.find(parts[0]);
           bool unresolved = (it == alias_to_module.end());
-          std::string resolved_mod = unresolved ? parts[0] : it->second;
+          std::optional<std::string> module_alias;
+          std::string resolved_mod;
+          if (unresolved) {
+            resolved_mod = parts[0];
+          } else {
+            module_alias = parts[0];
+            resolved_mod = it->second;
+          }
           pqn.qn = sammine_util::QualifiedName::from_parts(
-              {resolved_mod, parts[1], parts[2]}, unresolved);
+              {resolved_mod, parts[1], parts[2]}, unresolved,
+              std::move(module_alias));
         }
         pattern.variant_name = pqn.qn;
         pattern.location = pqn.location;
@@ -1839,15 +1847,18 @@ auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
     return {sammine_util::QualifiedName::local(parts[0]), loc};
 
   bool unresolved = false;
+  std::optional<std::string> module_alias;
   if (resolve_alias) {
     auto it = alias_to_module.find(parts[0]);
-    if (it != alias_to_module.end())
-      parts[0] = it->second;
-    else
+    if (it != alias_to_module.end()) {
+      module_alias = parts[0]; // save original alias (e.g. "h")
+      parts[0] = it->second;  // resolve to module name (e.g. "typed_helper")
+    } else
       unresolved = true;
   }
 
-  return {sammine_util::QualifiedName::from_parts(std::move(parts), unresolved),
+  return {sammine_util::QualifiedName::from_parts(std::move(parts), unresolved,
+                                                   std::move(module_alias)),
           loc};
 }
 

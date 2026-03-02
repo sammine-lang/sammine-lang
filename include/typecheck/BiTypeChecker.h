@@ -49,7 +49,7 @@ public:
   bool unify(const Type &pattern, const Type &concrete,
              std::unordered_map<std::string, Type> &bindings);
   Type substitute(const Type &type,
-                  const std::unordered_map<std::string, Type> &bindings);
+                  const std::unordered_map<std::string, Type> &bindings) const;
   bool contains_type_param(const Type &type, const std::string &param_name);
 
   virtual void enter_new_scope() override {
