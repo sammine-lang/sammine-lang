@@ -216,6 +216,8 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
     check_tuple_literal(tl);
   else if (auto *dr = llvm::dyn_cast<DerefExprAST>(stmt))
     check_deref(dr);
+  else if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(stmt))
+    check_addr_of(addr);
   // All other nodes (number, string, etc.): no linear state changes
 }
 
@@ -375,6 +377,22 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
     for (auto &arg : ast->arguments)
       check_stmt(arg.get());
   }
+}
+
+// ── check_addr_of ───────────────────────────────────────────────────
+
+void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
+  // Forbid &expr when the operand is linear. Taking the address of a linear
+  // value creates a non-linear pointer to it, which would allow aliasing
+  // and break the single-owner invariant.
+  if (ast->operand->get_type().is_linear) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Cannot take address of a linear value — "
+                    "linear values cannot be aliased"));
+    return;
+  }
+  check_stmt(ast->operand.get());
 }
 
 // ── check_deref ─────────────────────────────────────────────────────

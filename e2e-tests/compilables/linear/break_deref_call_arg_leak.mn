@@ -1,0 +1,29 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |break_deref_call_arg_leak.mn:14:2
+# CHECK-NEXT:   12|
+# CHECK-NEXT:   13|let main() -> i32 {
+# CHECK-NEXT:   14|  let a = alloc<i32>(1);
+# CHECK-NEXT:     |  ───────────────────┬
+# CHECK-NEXT:     |                     ╰─ Linear variable 'a' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   15|  *a = 42;
+# CHECK-NEXT:   16|  let result : i32 = double_it(*a);
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Passing *a to a function does NOT consume a.
+# Forgetting to free a afterward is a leak error.
+
+import std;
+
+let double_it(x: i32) -> i32 {
+  return x * 2;
+}
+
+let main() -> i32 {
+  let a = alloc<i32>(1);
+  *a = 42;
+  let result : i32 = double_it(*a);
+  std::printf("%d\n", result);
+  return 0;
+}

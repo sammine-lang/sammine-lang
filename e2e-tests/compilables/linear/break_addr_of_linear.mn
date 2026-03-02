@@ -1,0 +1,29 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |break_addr_of_linear.mn
+# CHECK-NEXT:   10|  let a = alloc<i32>(1);
+# CHECK-NEXT:   11|  *a = 42;
+# CHECK-NEXT:   12|  let b = &a;
+# CHECK-NEXT:     |          ─┬
+# CHECK-NEXT:     |           ╰─ Cannot take address of a linear value — linear values cannot be aliased
+# CHECK-NEXT:     |  ─────────┬
+# CHECK-NEXT:     |           ╰─ Linear variable 'b' must be consumed before scope exit (use free() to deallocate)
+# CHECK-NEXT:   13|  let v : i32 = *(*b);
+# CHECK-NEXT:   14|  free(a);
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Taking &a where a is linear creates an alias to the linear value,
+# breaking the single-owner invariant.
+
+import std;
+
+let main() -> i32 {
+  let a = alloc<i32>(1);
+  *a = 42;
+  let b = &a;
+  let v : i32 = *(*b);
+  free(a);
+  std::printf("%d\n", v);
+  return 0;
+}
