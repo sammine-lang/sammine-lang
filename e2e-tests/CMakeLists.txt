@@ -8,3 +8,11 @@ add_custom_target(e2e-tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# Clean stale lit Output directories (compiled .o, .exe, .so artifacts)
+add_custom_target(clean-tests
+    COMMAND ${CMAKE_COMMAND} -E echo "Removing lit Output directories..."
+    COMMAND find ${CMAKE_SOURCE_DIR}/e2e-tests -name Output -type d -exec rm -rf {} +
+    COMMAND ${CMAKE_COMMAND} -E echo "Done."
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
