@@ -16,8 +16,9 @@ public:
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
   // variant_name → enum_name (for tracking which enum owns each variant)
   std::map<std::string, std::string> variant_to_enum;
-  // Track when we're inside an imported generic function body
-  bool insideImportedGenericFunc_ = false;
+  // Track when we're inside an imported definition whose type expressions
+  // need module-qualifying (imported generic functions and imported externs)
+  bool insideImportedDef_ = false;
   std::string currentImportModule_;
   // Type params of the current imported generic function (skip qualification)
   std::vector<std::string> currentGenericTypeParams_;

@@ -114,7 +114,7 @@ void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
   // For imported externs (qualified function name), qualify type references
   // in the prototype so that e.g. `String` becomes `str::String`.
   if (ast->Prototype->functionName.is_qualified()) {
-    insideImportedGenericFunc_ = true;
+    insideImportedDef_ = true;
     currentImportModule_ = ast->Prototype->functionName.get_module();
     currentGenericTypeParams_ = {};
   }
@@ -123,13 +123,13 @@ void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
   // Detect imported generic function: name is qualified AND is_generic
   if (ast->Prototype->is_generic() &&
       ast->Prototype->functionName.is_qualified()) {
-    insideImportedGenericFunc_ = true;
+    insideImportedDef_ = true;
     currentImportModule_ = ast->Prototype->functionName.get_module();
     currentGenericTypeParams_ = ast->Prototype->type_params;
   }
 }
 void ScopeGeneratorVisitor::qualify_type_expr(TypeExprAST *expr) {
-  if (!expr || !insideImportedGenericFunc_)
+  if (!expr || !insideImportedDef_)
     return;
 
   if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(expr)) {
@@ -194,12 +194,12 @@ void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   }
 
   // Qualify return type expression for imported generic functions
-  if (insideImportedGenericFunc_ && ast->return_type_expr) {
+  if (insideImportedDef_ && ast->return_type_expr) {
     qualify_type_expr(ast->return_type_expr.get());
   }
 }
 void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {
-  if (insideImportedGenericFunc_) {
+  if (insideImportedDef_) {
     for (auto &type_arg : ast->explicit_type_args) {
       qualify_type_expr(type_arg.get());
     }
@@ -216,14 +216,14 @@ void ScopeGeneratorVisitor::preorder_walk(BlockAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IfExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(UnitExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypedVarAST *ast) {
-  if (insideImportedGenericFunc_ && ast->type_expr) {
+  if (insideImportedDef_ && ast->type_expr) {
     qualify_type_expr(ast->type_expr.get());
   }
 }
 void ScopeGeneratorVisitor::preorder_walk(DerefExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(AddrOfExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(AllocExprAST *ast) {
-  if (insideImportedGenericFunc_ && ast->type_arg) {
+  if (insideImportedDef_ && ast->type_arg) {
     qualify_type_expr(ast->type_arg.get());
   }
 }
@@ -245,12 +245,12 @@ void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VarDefAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {
   if (ast->Prototype->functionName.is_qualified()) {
-    insideImportedGenericFunc_ = false;
+    insideImportedDef_ = false;
     currentImportModule_.clear();
   }
 }
 void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {
-  insideImportedGenericFunc_ = false;
+  insideImportedDef_ = false;
   currentImportModule_.clear();
   currentGenericTypeParams_.clear();
 }
@@ -261,7 +261,7 @@ void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   // Qualify call names with explicit type args in imported generic bodies
   // (must run BEFORE the early return below)
-  if (!ast->explicit_type_args.empty() && insideImportedGenericFunc_ &&
+  if (!ast->explicit_type_args.empty() && insideImportedDef_ &&
       !ast->functionName.is_qualified()) {
     auto qualified = ast->functionName.with_module(currentImportModule_);
     if (can_see(qualified.mangled()) == nameFound) {
@@ -288,7 +288,7 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   if (!ast->functionName.is_qualified()) {
     auto it = variant_to_enum.find(ast->functionName.get_name());
     if (it != variant_to_enum.end()) {
-      if (insideImportedGenericFunc_) {
+      if (insideImportedDef_) {
         // math::Color::Red (3-part qualified name)
         ast->functionName = sammine_util::QualifiedName::from_parts(
             {currentImportModule_, it->second, ast->functionName.get_name()});
@@ -304,7 +304,7 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   auto var_name = ast->functionName.mangled();
   if (can_see(var_name) == nameNotFound) {
     // Try qualifying with import module prefix for imported generic bodies
-    if (insideImportedGenericFunc_ && !ast->functionName.is_qualified()) {
+    if (insideImportedDef_ && !ast->functionName.is_qualified()) {
       auto qualified = ast->functionName.with_module(currentImportModule_);
       if (can_see(qualified.mangled()) == nameFound) {
         ast->functionName = qualified;
@@ -333,7 +333,7 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
   auto var_name = ast->variableName;
   if (can_see(var_name) == nameNotFound) {
     // Try qualifying with import module prefix for imported generic bodies
-    if (insideImportedGenericFunc_) {
+    if (insideImportedDef_) {
       auto qualified =
           sammine_util::QualifiedName::qualified(currentImportModule_, var_name);
       if (can_see(qualified.mangled()) == nameFound) {
@@ -361,7 +361,7 @@ void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
   // Qualify struct names in imported generic function bodies
-  if (insideImportedGenericFunc_ && !ast->struct_name.is_qualified()) {
+  if (insideImportedDef_ && !ast->struct_name.is_qualified()) {
     auto qualified = ast->struct_name.with_module(currentImportModule_);
     if (can_see(qualified.mangled()) == nameFound &&
         can_see(ast->struct_name.mangled()) == nameNotFound) {
