@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 15 24
+# CHECK:      15 24
 
 import std;
 
@@ -9,7 +9,7 @@ struct Vec2 {
 };
 
 instance Mul<Vec2> {
-  let mul(lhs: Vec2, rhs: Vec2) -> Vec2 {
+  let Mul(lhs: Vec2, rhs: Vec2) -> Vec2 {
     Vec2 { x: lhs.x * rhs.x, y: lhs.y * rhs.y }
   }
 }

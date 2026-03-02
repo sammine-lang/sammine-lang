@@ -1,39 +1,47 @@
 typeclass Sized<T> {
-  sizeof() -> i64;
+  Sized() -> i64;
 }
 
 instance Sized<i32> {
-  let sizeof() -> i64 { 4i64 }
+  let Sized() -> i64 { 4i64 }
 }
 
 instance Sized<i64> {
-  let sizeof() -> i64 { 8i64 }
+  let Sized() -> i64 { 8i64 }
 }
 
 instance Sized<f64> {
-  let sizeof() -> i64 { 8i64 }
+  let Sized() -> i64 { 8i64 }
 }
 
 instance Sized<bool> {
-  let sizeof() -> i64 { 1i64 }
+  let Sized() -> i64 { 1i64 }
 }
 
 typeclass Add<T> {
-  add(a: T, b: T) -> T;
+  Add(a: T, b: T) -> T;
 }
 
 typeclass Sub<T> {
-  sub(a: T, b: T) -> T;
+  Sub(a: T, b: T) -> T;
 }
 
 typeclass Mul<T> {
-  mul(a: T, b: T) -> T;
+  Mul(a: T, b: T) -> T;
 }
 
 typeclass Div<T> {
-  div(a: T, b: T) -> T;
+  Div(a: T, b: T) -> T;
 }
 
 typeclass Mod<T> {
-  mod(a: T, b: T) -> T;
+  Mod(a: T, b: T) -> T;
+}
+
+typeclass Hash<T> {
+  Hash(val: T) -> u64;
+}
+
+typeclass Indexer<T, E> {
+  Indexer(coll: T, idx: i64) -> E;
 }

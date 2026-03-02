@@ -1,14 +1,14 @@
 # RUN: %sammine --file %full %O && %T/sizeof_basic.exe | %check %full
-# CHECK: 4
-# CHECK: 8
-# CHECK: 8
-# CHECK: 1
+# CHECK:      4
+# CHECK-NEXT: 8
+# CHECK-NEXT: 8
+# CHECK-NEXT: 1
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 let main() -> i32 {
-  printf("%ld\n", sizeof<i32>());
-  printf("%ld\n", sizeof<i64>());
-  printf("%ld\n", sizeof<f64>());
-  printf("%ld\n", sizeof<bool>());
+  printf("%ld\n", Sized<i32>());
+  printf("%ld\n", Sized<i64>());
+  printf("%ld\n", Sized<f64>());
+  printf("%ld\n", Sized<bool>());
   return 0;
 }

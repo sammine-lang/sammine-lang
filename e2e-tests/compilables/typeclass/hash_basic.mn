@@ -1,0 +1,16 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      42
+
+import std;
+
+struct Point { x: i32, y: i32, };
+
+instance Hash<Point> {
+  let Hash(val: Point) -> u64 { 42u64 }
+}
+
+let main() -> i32 {
+  let p: Point = Point { x: 1, y: 2 };
+  std::printf("%lu\n", Hash<Point>(p));
+  return 0;
+}

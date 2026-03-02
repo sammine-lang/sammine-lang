@@ -677,12 +677,26 @@ void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
   generic_postprint();
 }
 void AstPrinterVisitor::preorder_walk(TypeClassDeclAST *ast) {
-  add_to_rep(fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name,
-                         ast->type_param));
+  std::string params;
+  for (size_t i = 0; i < ast->type_params.size(); i++) {
+    if (i > 0)
+      params += ", ";
+    params += ast->type_params[i];
+  }
+  add_to_rep(
+      fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name, params));
 }
 void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
-  add_to_rep(fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name,
-                         ast->concrete_type_expr ? ast->concrete_type_expr->to_string() : "?"));
+  std::string types;
+  for (size_t i = 0; i < ast->concrete_type_exprs.size(); i++) {
+    if (i > 0)
+      types += ", ";
+    types += ast->concrete_type_exprs[i]
+                 ? ast->concrete_type_exprs[i]->to_string()
+                 : "?";
+  }
+  add_to_rep(
+      fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name, types));
 }
 void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}

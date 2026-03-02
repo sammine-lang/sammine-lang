@@ -1,5 +1,5 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 20 25
+# CHECK:      20 25
 
 import std;
 
@@ -9,7 +9,7 @@ struct Vec2 {
 };
 
 instance Sub<Vec2> {
-  let sub(lhs: Vec2, rhs: Vec2) -> Vec2 {
+  let Sub(lhs: Vec2, rhs: Vec2) -> Vec2 {
     Vec2 { x: lhs.x - rhs.x, y: lhs.y - rhs.y }
   }
 }

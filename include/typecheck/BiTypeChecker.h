@@ -149,13 +149,13 @@ public:
   // Type class data structures
   struct TypeClassInfo {
     std::string name;
-    std::string type_param;
+    std::vector<std::string> type_params;
     std::vector<PrototypeAST *> methods;
   };
 
   struct TypeClassInstanceInfo {
     std::string class_name;
-    Type concrete_type;
+    std::vector<Type> concrete_types;
     std::unordered_map<std::string, sammine_util::MonomorphizedName>
         method_mangled_names;
   };

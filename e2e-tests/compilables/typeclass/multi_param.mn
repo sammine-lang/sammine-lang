@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      41
+
+import std;
+
+struct Celsius { val: i32, };
+struct Fahrenheit { val: i32, };
+
+typeclass Converter<From, To> {
+  Converter(x: From) -> To;
+}
+
+instance Converter<Celsius, Fahrenheit> {
+  let Converter(x: Celsius) -> Fahrenheit {
+    Fahrenheit { val: x.val * 9 / 5 + 32 }
+  }
+}
+
+let main() -> i32 {
+  let c: Celsius = Celsius { val: 5 };
+  let f: Fahrenheit = Converter<Celsius, Fahrenheit>(c);
+  std::printf("%d\n", f.val);
+  return 0;
+}

@@ -1,13 +1,13 @@
 # RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: 4
-# CHECK: 8
+# CHECK:      4
+# CHECK-NEXT: 8
 
 # A generic function that calls a typeclass method with its type parameter.
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 
 let print_size<T>(x: T) -> i64 {
-  sizeof<T>()
+  Sized<T>()
 }
 
 let main() -> i32 {

@@ -681,11 +681,11 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
 
   TypeClassInfo info;
   info.name = ast->class_name;
-  info.type_param = ast->type_param;
+  info.type_params = ast->type_params;
 
   enter_new_scope();
-  typename_to_type.registerNameT(ast->type_param,
-                                 Type::TypeParam(ast->type_param));
+  for (auto &param : ast->type_params)
+    typename_to_type.registerNameT(param, Type::TypeParam(param));
 
   for (auto &proto : ast->methods) {
     proto->accept_synthesis(this);
@@ -700,9 +700,13 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
 void BiTypeCheckerVisitor::register_typeclass_instance(
     TypeClassInstanceAST *ast) {
   auto &tcip = props_.type_class_instance(ast->id());
-  tcip.concrete_type = resolve_type_expr(ast->concrete_type_expr.get());
-  if (tcip.concrete_type.is_poisoned())
-    return;
+
+  for (auto &type_expr : ast->concrete_type_exprs) {
+    auto resolved = resolve_type_expr(type_expr.get());
+    if (resolved.is_poisoned())
+      return;
+    tcip.concrete_types.push_back(resolved);
+  }
 
   auto it = type_class_defs.find(ast->class_name);
   if (it == type_class_defs.end()) {
@@ -711,20 +715,38 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     return;
   }
 
+  auto &tc = it->second;
+  if (tcip.concrete_types.size() != tc.type_params.size()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Type class '{}' expects {} type argument(s), got {}",
+                    ast->class_name, tc.type_params.size(),
+                    tcip.concrete_types.size()));
+    return;
+  }
+
+  // Build comma-joined type string for instance key
+  std::string concrete_types_str;
+  for (size_t i = 0; i < tcip.concrete_types.size(); i++) {
+    if (i > 0)
+      concrete_types_str += ", ";
+    concrete_types_str += tcip.concrete_types[i].to_string();
+  }
+
   TypeClassInstanceInfo inst_info;
   inst_info.class_name = ast->class_name;
-  inst_info.concrete_type = tcip.concrete_type;
+  inst_info.concrete_types = tcip.concrete_types;
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
     auto mono = sammine_util::MonomorphizedName::typeclass(
-        ast->class_name, tcip.concrete_type.to_string(), original_name);
+        ast->class_name, concrete_types_str, original_name);
     method->Prototype->functionName = mono.to_qualified_name();
     inst_info.method_mangled_names[original_name] = mono;
   }
 
   auto inst_key = sammine_util::MonomorphizedName::typeclass(
-      ast->class_name, tcip.concrete_type.to_string(), "");
+      ast->class_name, concrete_types_str, "");
   type_class_instances[inst_key.instance_key()] = std::move(inst_info);
 }
 
@@ -736,19 +758,19 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
   };
 
   static const BuiltinEntry entries[] = {
-      {"Add", "add", Type::I32_t()}, {"Add", "add", Type::I64_t()},
-      {"Add", "add", Type::U32_t()}, {"Add", "add", Type::U64_t()},
-      {"Add", "add", Type::F64_t()}, {"Add", "add", Type::Char()},
-      {"Sub", "sub", Type::I32_t()}, {"Sub", "sub", Type::I64_t()},
-      {"Sub", "sub", Type::U32_t()}, {"Sub", "sub", Type::U64_t()},
-      {"Sub", "sub", Type::F64_t()}, {"Mul", "mul", Type::I32_t()},
-      {"Mul", "mul", Type::I64_t()}, {"Mul", "mul", Type::U32_t()},
-      {"Mul", "mul", Type::U64_t()}, {"Mul", "mul", Type::F64_t()},
-      {"Div", "div", Type::I32_t()}, {"Div", "div", Type::I64_t()},
-      {"Div", "div", Type::U32_t()}, {"Div", "div", Type::U64_t()},
-      {"Div", "div", Type::F64_t()}, {"Mod", "mod", Type::I32_t()},
-      {"Mod", "mod", Type::I64_t()}, {"Mod", "mod", Type::U32_t()},
-      {"Mod", "mod", Type::U64_t()},
+      {"Add", "Add", Type::I32_t()}, {"Add", "Add", Type::I64_t()},
+      {"Add", "Add", Type::U32_t()}, {"Add", "Add", Type::U64_t()},
+      {"Add", "Add", Type::F64_t()}, {"Add", "Add", Type::Char()},
+      {"Sub", "Sub", Type::I32_t()}, {"Sub", "Sub", Type::I64_t()},
+      {"Sub", "Sub", Type::U32_t()}, {"Sub", "Sub", Type::U64_t()},
+      {"Sub", "Sub", Type::F64_t()}, {"Mul", "Mul", Type::I32_t()},
+      {"Mul", "Mul", Type::I64_t()}, {"Mul", "Mul", Type::U32_t()},
+      {"Mul", "Mul", Type::U64_t()}, {"Mul", "Mul", Type::F64_t()},
+      {"Div", "Div", Type::I32_t()}, {"Div", "Div", Type::I64_t()},
+      {"Div", "Div", Type::U32_t()}, {"Div", "Div", Type::U64_t()},
+      {"Div", "Div", Type::F64_t()}, {"Mod", "Mod", Type::I32_t()},
+      {"Mod", "Mod", Type::I64_t()}, {"Mod", "Mod", Type::U32_t()},
+      {"Mod", "Mod", Type::U64_t()},
   };
 
   for (auto &e : entries) {
@@ -760,7 +782,7 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
 
     TypeClassInstanceInfo info;
     info.class_name = e.class_name;
-    info.concrete_type = e.type;
+    info.concrete_types = {e.type};
     info.method_mangled_names[e.method_name] = mono;
     type_class_instances[key] = std::move(info);
   }

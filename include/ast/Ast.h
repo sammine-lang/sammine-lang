@@ -848,13 +848,13 @@ public:
 class TypeClassDeclAST : public DefinitionAST {
 public:
   std::string class_name;
-  std::string type_param;
+  std::vector<std::string> type_params;
   std::vector<std::unique_ptr<PrototypeAST>> methods;
   explicit TypeClassDeclAST(std::shared_ptr<Token> tok, std::string name,
-                            std::string param,
+                            std::vector<std::string> params,
                             std::vector<std::unique_ptr<PrototypeAST>> methods)
       : DefinitionAST(NodeKind::TypeClassDeclAST),
-        class_name(std::move(name)), type_param(std::move(param)),
+        class_name(std::move(name)), type_params(std::move(params)),
         methods(std::move(methods)) {
     this->join_location(tok);
   }
@@ -864,15 +864,15 @@ public:
 class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;
-  std::unique_ptr<TypeExprAST> concrete_type_expr;
+  std::vector<std::unique_ptr<TypeExprAST>> concrete_type_exprs;
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(
       std::shared_ptr<Token> tok, std::string class_name,
-      std::unique_ptr<TypeExprAST> type_expr,
+      std::vector<std::unique_ptr<TypeExprAST>> type_exprs,
       std::vector<std::unique_ptr<FuncDefAST>> methods)
       : DefinitionAST(NodeKind::TypeClassInstanceAST),
         class_name(std::move(class_name)),
-        concrete_type_expr(std::move(type_expr)),
+        concrete_type_exprs(std::move(type_exprs)),
         methods(std::move(methods)) {
     this->join_location(tok);
   }

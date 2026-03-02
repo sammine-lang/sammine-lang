@@ -34,7 +34,7 @@ struct TypeAliasProps {
 };
 
 struct TypeClassInstanceProps {
-  Type concrete_type = Type::NonExistent();
+  std::vector<Type> concrete_types;
 };
 
 class ASTProperties {

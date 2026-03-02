@@ -1765,6 +1765,16 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
           name_tok->get_location(), {nullptr, FAILED});
   REQUIRE(param_tok, TokID, "Expected type parameter",
           name_tok->get_location(), {nullptr, FAILED});
+
+  std::vector<std::string> type_params;
+  type_params.push_back(param_tok->lexeme);
+  while (tokStream->peek()->tok_type == TokComma) {
+    tokStream->consume(); // consume ','
+    REQUIRE(next_param, TokID, "Expected type parameter after ','",
+            kw->get_location(), {nullptr, FAILED});
+    type_params.push_back(next_param->lexeme);
+  }
+
   if (!consumeClosingAngleBracket()) {
     imm_error("Expected '>' to close type class type parameter",
               param_tok->get_location());
@@ -1784,7 +1794,7 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
   REQUIRE(_rc, TokRightCurly, "Expected '}' to close type class",
           kw->get_location(), {nullptr, FAILED});
   return {std::make_unique<TypeClassDeclAST>(kw, name_tok->lexeme,
-                                             param_tok->lexeme,
+                                             std::move(type_params),
                                              std::move(methods)),
           SUCCESS};
 }
@@ -1798,11 +1808,25 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
           kw->get_location(), {nullptr, FAILED});
   REQUIRE(_lt, TokLESS, "Expected '<' after type class name",
           name_tok->get_location(), {nullptr, FAILED});
-  auto type_expr = ParseTypeExpr();
-  if (!type_expr) {
+
+  std::vector<std::unique_ptr<TypeExprAST>> type_exprs;
+  auto first_type_expr = ParseTypeExpr();
+  if (!first_type_expr) {
     imm_error("Expected type in instance declaration", kw->get_location());
     return {nullptr, FAILED};
   }
+  type_exprs.push_back(std::move(first_type_expr));
+  while (tokStream->peek()->tok_type == TokComma) {
+    tokStream->consume(); // consume ','
+    auto next_type_expr = ParseTypeExpr();
+    if (!next_type_expr) {
+      imm_error("Expected type after ',' in instance declaration",
+                kw->get_location());
+      return {nullptr, FAILED};
+    }
+    type_exprs.push_back(std::move(next_type_expr));
+  }
+
   if (!consumeClosingAngleBracket()) {
     imm_error("Expected '>' to close instance type", kw->get_location());
     return {nullptr, FAILED};
@@ -1821,7 +1845,7 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   REQUIRE(_rc, TokRightCurly, "Expected '}' to close instance",
           kw->get_location(), {nullptr, FAILED});
   return {std::make_unique<TypeClassInstanceAST>(
-              kw, name_tok->lexeme, std::move(type_expr), std::move(methods)),
+              kw, name_tok->lexeme, std::move(type_exprs), std::move(methods)),
           SUCCESS};
 }
 

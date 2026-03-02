@@ -308,17 +308,33 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     return std::nullopt;
   auto &tc = tc_it->second;
 
-  Type concrete = resolve_type_expr(ast->explicit_type_args[0].get());
-  if (concrete.type_kind == TypeKind::Poisoned)
+  if (ast->explicit_type_args.size() != tc.type_params.size()) {
+    add_error(ast->get_location(),
+              fmt::format("Type class '{}' expects {} type argument(s), got {}",
+                          class_name, tc.type_params.size(),
+                          ast->explicit_type_args.size()));
     return ast->set_type(Type::Poisoned());
+  }
+
+  std::vector<Type> concrete_types;
+  std::string concrete_types_str;
+  for (size_t i = 0; i < ast->explicit_type_args.size(); i++) {
+    Type concrete = resolve_type_expr(ast->explicit_type_args[i].get());
+    if (concrete.type_kind == TypeKind::Poisoned)
+      return ast->set_type(Type::Poisoned());
+    if (i > 0)
+      concrete_types_str += ", ";
+    concrete_types_str += concrete.to_string();
+    concrete_types.push_back(concrete);
+  }
 
   std::string key = sammine_util::MonomorphizedName::typeclass(
-      class_name, concrete.to_string(), "").instance_key();
+      class_name, concrete_types_str, "").instance_key();
   auto inst_it = type_class_instances.find(key);
   if (inst_it == type_class_instances.end()) {
     add_error(ast->get_location(),
               fmt::format("No instance of {}<{}>", class_name,
-                          concrete.to_string()));
+                          concrete_types_str));
     return ast->set_type(Type::Poisoned());
   }
 
@@ -351,7 +367,8 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
 
   auto return_type = func_type.get_return_type();
   std::unordered_map<std::string, Type> bindings;
-  bindings[tc.type_param] = concrete;
+  for (size_t i = 0; i < tc.type_params.size(); i++)
+    bindings[tc.type_params[i]] = concrete_types[i];
   return ast->set_type(substitute(return_type, bindings));
 }
 
@@ -653,9 +670,9 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   // Arithmetic operators dispatch through typeclasses
   static const std::unordered_map<int, std::pair<std::string, std::string>>
       op_to_class = {
-          {TokADD, {"Add", "add"}}, {TokSUB, {"Sub", "sub"}},
-          {TokMUL, {"Mul", "mul"}}, {TokDIV, {"Div", "div"}},
-          {TokMOD, {"Mod", "mod"}},
+          {TokADD, {"Add", "Add"}}, {TokSUB, {"Sub", "Sub"}},
+          {TokMUL, {"Mul", "Mul"}}, {TokDIV, {"Div", "Div"}},
+          {TokMOD, {"Mod", "Mod"}},
       };
 
   auto it = op_to_class.find(ast->Op->tok_type);

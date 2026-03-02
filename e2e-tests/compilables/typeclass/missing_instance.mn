@@ -1,9 +1,19 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: No instance of Sized<ptr<i32>>
+# CHECK:          |missing_instance.mn:7:18
+# CHECK-NEXT:    5|
+# CHECK-NEXT:    6|let main() -> i32 {
+# CHECK-NEXT:    7|  printf("%ld\n", Sized<ptr<i32>>());
+# CHECK-NEXT:     |                  ────┬
+# CHECK-NEXT:     |                      ╰─ No instance of Sized<ptr<i32>>
+# CHECK-NEXT:    8|  return 0;
+# CHECK-NEXT:    9|}
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 
 let main() -> i32 {
-  printf("%ld\n", sizeof<ptr<i32>>());
+  printf("%ld\n", Sized<ptr<i32>>());
   return 0;
 }

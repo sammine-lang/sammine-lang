@@ -1,0 +1,25 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      30
+
+import std;
+
+struct IntList {
+  a: i32,
+  b: i32,
+  c: i32,
+};
+
+instance Indexer<IntList, i32> {
+  let Indexer(coll: IntList, idx: i64) -> i32 {
+    if idx == 0i64 { coll.a }
+    else if idx == 1i64 { coll.b }
+    else { coll.c }
+  }
+}
+
+let main() -> i32 {
+  let list: IntList = IntList { a: 10, b: 20, c: 30 };
+  let val: i32 = Indexer<IntList, i32>(list, 2i64);
+  std::printf("%d\n", val);
+  return 0;
+}
