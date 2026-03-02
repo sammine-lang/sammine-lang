@@ -1,0 +1,11 @@
+# RUN: %sammine --file %dir/Inputs/has_generic.mn %O && %sammine --file %full %O %I && %T/import_generic_basic.exe | %check %full
+# CHECK: 42
+
+import has_generic as g;
+import std;
+
+let main() -> i32 {
+  let x: i32 = g::identity<i32>(42);
+  std::printf("%d\n", x);
+  return 0;
+}

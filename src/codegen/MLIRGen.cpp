@@ -38,8 +38,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
       builder.getContext(), kClosureTypeName);
   (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
 
-  // Pre-pass: register struct types and forward-declare functions so that
-  // references can find them even if the definition comes later.
+  // Pre-pass 1: register struct and enum types so that function
+  // forward-declarations can reference them (monomorphized functions may
+  // appear before imported struct definitions in the DefinitionVec).
   for (auto &def : program->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (sd->get_type().type_kind != TypeKind::Poisoned) {
@@ -79,7 +80,12 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         (void)enumTy.setBody(fields, /*isPacked=*/false);
         enumTypes[name] = enumTy;
       }
-    } else if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+    }
+  }
+
+  // Pre-pass 2: forward-declare functions (now that all types are registered).
+  for (auto &def : program->DefinitionVec) {
+    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!fd->Prototype->is_generic())
         forwardDeclareFunc(fd->Prototype.get());
     } else if (auto *tci =

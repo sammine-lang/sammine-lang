@@ -1,0 +1,7 @@
+let helper<T>(x : T) -> T {
+  x
+}
+
+export let apply<T>(x : T) -> T {
+  helper<T>(x)
+}

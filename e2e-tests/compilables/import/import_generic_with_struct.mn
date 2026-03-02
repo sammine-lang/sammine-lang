@@ -1,0 +1,13 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_struct.mn %O && %sammine --file %full %O %I && %T/import_generic_with_struct.exe | %check %full
+# CHECK: 1
+# CHECK: 2
+
+import has_generic_struct as lib;
+import std;
+
+let main() -> i32 {
+  let p: lib::Point = lib::make_point<i32>(0);
+  std::printf("%d\n", p.x);
+  std::printf("%d\n", p.y);
+  return 0;
+}

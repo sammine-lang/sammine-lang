@@ -1,0 +1,7 @@
+export let first<T, U>(a : T, b : U) -> T {
+  a
+}
+
+export let second<T, U>(a : T, b : U) -> U {
+  b
+}

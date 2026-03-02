@@ -270,6 +270,8 @@ void Compiler::resolve_imports() {
       (*it)->set_location(import.location);
       if (auto *ext = llvm::dyn_cast<AST::ExternAST>(it->get())) {
         ext->Prototype->set_location(import.location);
+      } else if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(it->get())) {
+        fd->Prototype->set_location(import.location);
       }
       programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                        std::move(*it));
@@ -709,8 +711,260 @@ void Compiler::emit_interface() {
     out << ";\n";
   };
 
+  // ── Phase 3: Collect transitive generic dependencies ──
+  // Build map of generic functions by unqualified name
+  std::map<std::string, AST::FuncDefAST *> generic_funcs;
+  for (auto &def : this->programAST->DefinitionVec) {
+    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+      if (fd->Prototype->is_generic())
+        generic_funcs[fd->Prototype->functionName.get_name()] = fd;
+    }
+  }
+
+  // Walk an expression tree to find call names (for transitive dep collection)
+  std::function<void(const AST::ExprAST *, std::set<std::string> &)>
+      collect_call_names = [&collect_call_names](const AST::ExprAST *expr,
+                                                  std::set<std::string> &names) {
+    if (!expr) return;
+    if (auto *call = llvm::dyn_cast<AST::CallExprAST>(expr)) {
+      names.insert(call->functionName.get_name());
+      for (auto &arg : call->arguments)
+        collect_call_names(arg.get(), names);
+    } else if (auto *bin = llvm::dyn_cast<AST::BinaryExprAST>(expr)) {
+      collect_call_names(bin->LHS.get(), names);
+      collect_call_names(bin->RHS.get(), names);
+    } else if (auto *ret = llvm::dyn_cast<AST::ReturnExprAST>(expr)) {
+      collect_call_names(ret->return_expr.get(), names);
+    } else if (auto *vardef = llvm::dyn_cast<AST::VarDefAST>(expr)) {
+      collect_call_names(vardef->Expression.get(), names);
+    } else if (auto *ifexpr = llvm::dyn_cast<AST::IfExprAST>(expr)) {
+      collect_call_names(ifexpr->bool_expr.get(), names);
+      if (ifexpr->thenBlockAST)
+        for (auto &s : ifexpr->thenBlockAST->Statements)
+          collect_call_names(s.get(), names);
+      if (ifexpr->elseBlockAST)
+        for (auto &s : ifexpr->elseBlockAST->Statements)
+          collect_call_names(s.get(), names);
+    } else if (auto *wh = llvm::dyn_cast<AST::WhileExprAST>(expr)) {
+      collect_call_names(wh->condition.get(), names);
+      if (wh->body)
+        for (auto &s : wh->body->Statements)
+          collect_call_names(s.get(), names);
+    } else if (auto *cs = llvm::dyn_cast<AST::CaseExprAST>(expr)) {
+      collect_call_names(cs->scrutinee.get(), names);
+      for (auto &arm : cs->arms)
+        if (arm.body)
+          for (auto &s : arm.body->Statements)
+            collect_call_names(s.get(), names);
+    } else if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(expr)) {
+      collect_call_names(idx->array_expr.get(), names);
+      collect_call_names(idx->index_expr.get(), names);
+    } else if (auto *arr = llvm::dyn_cast<AST::ArrayLiteralExprAST>(expr)) {
+      for (auto &e : arr->elements)
+        collect_call_names(e.get(), names);
+    } else if (auto *sl = llvm::dyn_cast<AST::StructLiteralExprAST>(expr)) {
+      for (auto &v : sl->field_values)
+        collect_call_names(v.get(), names);
+    } else if (auto *fa = llvm::dyn_cast<AST::FieldAccessExprAST>(expr)) {
+      collect_call_names(fa->object_expr.get(), names);
+    } else if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(expr)) {
+      collect_call_names(deref->operand.get(), names);
+    } else if (auto *addr = llvm::dyn_cast<AST::AddrOfExprAST>(expr)) {
+      collect_call_names(addr->operand.get(), names);
+    } else if (auto *alloc = llvm::dyn_cast<AST::AllocExprAST>(expr)) {
+      collect_call_names(alloc->operand.get(), names);
+    } else if (auto *fr = llvm::dyn_cast<AST::FreeExprAST>(expr)) {
+      collect_call_names(fr->operand.get(), names);
+    } else if (auto *ln = llvm::dyn_cast<AST::LenExprAST>(expr)) {
+      collect_call_names(ln->operand.get(), names);
+    } else if (auto *neg = llvm::dyn_cast<AST::UnaryNegExprAST>(expr)) {
+      collect_call_names(neg->operand.get(), names);
+    } else if (auto *tup = llvm::dyn_cast<AST::TupleLiteralExprAST>(expr)) {
+      for (auto &e : tup->elements)
+        collect_call_names(e.get(), names);
+    }
+    // NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
+    // VariableExprAST, UnitExprAST — no children to recurse into
+  };
+
+  // DFS to collect transitive generic deps
+  std::set<std::string> emit_set;  // names of generics to emit
+  std::set<std::string> visited;
+  std::function<void(AST::FuncDefAST *)> collect_transitive =
+      [&](AST::FuncDefAST *fd) {
+        auto name = fd->Prototype->functionName.get_name();
+        if (visited.count(name))
+          return;
+        visited.insert(name);
+        emit_set.insert(name);
+
+        // Collect all call names from this function's body
+        std::set<std::string> call_names;
+        if (fd->Block)
+          for (auto &s : fd->Block->Statements)
+            collect_call_names(s.get(), call_names);
+
+        // Check if any callee is a generic function
+        for (auto &callee : call_names) {
+          auto it = generic_funcs.find(callee);
+          if (it != generic_funcs.end())
+            collect_transitive(it->second);
+        }
+      };
+
+  // Start from exported generic functions
+  for (auto &def : this->programAST->DefinitionVec) {
+    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+      if (fd->is_exported && fd->Prototype->is_generic())
+        collect_transitive(fd);
+    }
+  }
+
+  // ── Phase 4: Check non-exported type dependencies ──
+  // Collect type names referenced by generic functions in the emit set
+  std::function<void(const AST::TypeExprAST *, std::set<std::string> &)>
+      collect_type_names = [&collect_type_names](const AST::TypeExprAST *expr,
+                                                  std::set<std::string> &names) {
+    if (!expr) return;
+    if (auto *simple = llvm::dyn_cast<AST::SimpleTypeExprAST>(expr)) {
+      names.insert(simple->name.get_name());
+    } else if (auto *ptr = llvm::dyn_cast<AST::PointerTypeExprAST>(expr)) {
+      collect_type_names(ptr->pointee.get(), names);
+    } else if (auto *arr = llvm::dyn_cast<AST::ArrayTypeExprAST>(expr)) {
+      collect_type_names(arr->element.get(), names);
+    } else if (auto *gen = llvm::dyn_cast<AST::GenericTypeExprAST>(expr)) {
+      names.insert(gen->base_name.get_name());
+      for (auto &arg : gen->type_args)
+        collect_type_names(arg.get(), names);
+    } else if (auto *func = llvm::dyn_cast<AST::FunctionTypeExprAST>(expr)) {
+      for (auto &p : func->paramTypes)
+        collect_type_names(p.get(), names);
+      collect_type_names(func->returnType.get(), names);
+    } else if (auto *tup = llvm::dyn_cast<AST::TupleTypeExprAST>(expr)) {
+      for (auto &e : tup->element_types)
+        collect_type_names(e.get(), names);
+    }
+  };
+
+  // Walk expressions to find type names (from AllocExprAST, VarDefAST, etc.)
+  std::function<void(const AST::ExprAST *, std::set<std::string> &)>
+      collect_expr_type_names = [&collect_expr_type_names, &collect_type_names](
+                                     const AST::ExprAST *expr,
+                                     std::set<std::string> &names) {
+    if (!expr) return;
+    if (auto *vardef = llvm::dyn_cast<AST::VarDefAST>(expr)) {
+      if (vardef->TypedVar && vardef->TypedVar->type_expr)
+        collect_type_names(vardef->TypedVar->type_expr.get(), names);
+      collect_expr_type_names(vardef->Expression.get(), names);
+    } else if (auto *alloc = llvm::dyn_cast<AST::AllocExprAST>(expr)) {
+      collect_type_names(alloc->type_arg.get(), names);
+      collect_expr_type_names(alloc->operand.get(), names);
+    } else if (auto *sl = llvm::dyn_cast<AST::StructLiteralExprAST>(expr)) {
+      names.insert(sl->struct_name.get_name());
+      for (auto &v : sl->field_values)
+        collect_expr_type_names(v.get(), names);
+    } else if (auto *call = llvm::dyn_cast<AST::CallExprAST>(expr)) {
+      for (auto &ta : call->explicit_type_args)
+        collect_type_names(ta.get(), names);
+      for (auto &arg : call->arguments)
+        collect_expr_type_names(arg.get(), names);
+    } else if (auto *bin = llvm::dyn_cast<AST::BinaryExprAST>(expr)) {
+      collect_expr_type_names(bin->LHS.get(), names);
+      collect_expr_type_names(bin->RHS.get(), names);
+    } else if (auto *ret = llvm::dyn_cast<AST::ReturnExprAST>(expr)) {
+      collect_expr_type_names(ret->return_expr.get(), names);
+    } else if (auto *ifexpr = llvm::dyn_cast<AST::IfExprAST>(expr)) {
+      collect_expr_type_names(ifexpr->bool_expr.get(), names);
+      if (ifexpr->thenBlockAST)
+        for (auto &s : ifexpr->thenBlockAST->Statements)
+          collect_expr_type_names(s.get(), names);
+      if (ifexpr->elseBlockAST)
+        for (auto &s : ifexpr->elseBlockAST->Statements)
+          collect_expr_type_names(s.get(), names);
+    } else if (auto *wh = llvm::dyn_cast<AST::WhileExprAST>(expr)) {
+      collect_expr_type_names(wh->condition.get(), names);
+      if (wh->body)
+        for (auto &s : wh->body->Statements)
+          collect_expr_type_names(s.get(), names);
+    } else if (auto *cs = llvm::dyn_cast<AST::CaseExprAST>(expr)) {
+      collect_expr_type_names(cs->scrutinee.get(), names);
+      for (auto &arm : cs->arms)
+        if (arm.body)
+          for (auto &s : arm.body->Statements)
+            collect_expr_type_names(s.get(), names);
+    }
+    // Other expr types don't contain type references
+  };
+
+  // Build set of exported types for checking
+  std::set<std::string> exported_types;
+  // Builtins are always available
+  for (auto &builtin : {"i32", "i64", "f32", "f64", "bool", "char", "u32",
+                         "u64", "string", "unit"})
+    exported_types.insert(builtin);
+  for (auto &def : this->programAST->DefinitionVec) {
+    if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
+      if (sd->is_exported)
+        exported_types.insert(sd->struct_name.get_name());
+    } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
+      if (ed->is_exported)
+        exported_types.insert(ed->enum_name.get_name());
+    }
+  }
+
+  // Check each generic in emit_set for non-exported type deps
+  for (auto &name : emit_set) {
+    auto it = generic_funcs.find(name);
+    if (it == generic_funcs.end()) continue;
+    auto *fd = it->second;
+
+    std::set<std::string> type_names;
+    // Collect from prototype params
+    for (auto &param : fd->Prototype->parameterVectors)
+      if (param->type_expr)
+        collect_type_names(param->type_expr.get(), type_names);
+    // Collect from return type
+    if (fd->Prototype->return_type_expr)
+      collect_type_names(fd->Prototype->return_type_expr.get(), type_names);
+    // Collect from body
+    if (fd->Block)
+      for (auto &s : fd->Block->Statements)
+        collect_expr_type_names(s.get(), type_names);
+
+    // Remove generic type params (they're not real types)
+    for (auto &tp : fd->Prototype->type_params)
+      type_names.erase(tp);
+
+    // Check each referenced type
+    for (auto &tn : type_names) {
+      if (exported_types.count(tn) == 0) {
+        // Check if it's actually a type defined in this module
+        bool is_module_type = false;
+        for (auto &d : this->programAST->DefinitionVec) {
+          if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(d.get())) {
+            if (sd->struct_name.get_name() == tn) { is_module_type = true; break; }
+          } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(d.get())) {
+            if (ed->enum_name.get_name() == tn) { is_module_type = true; break; }
+          }
+        }
+        if (is_module_type) {
+          reporter.immediate_error(
+              fmt::format("Type '{}' is used in exported generic function '{}' "
+                          "but is not exported. Add 'export' to the type definition.",
+                          tn, name),
+              fd->get_location());
+          this->error = true;
+          return;
+        }
+      }
+    }
+  }
+
+  // ── Phase 5: Emit non-generic definitions (existing loop, skip generics) ──
   for (auto &def : this->programAST->DefinitionVec) {
     if (auto *func_def = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+      if (func_def->Prototype->is_generic())
+        continue;  // handled below
       if (!func_def->is_exported)
         continue;
       std::string name = func_def->Prototype->functionName.with_module(stem).mangled();
@@ -773,6 +1027,31 @@ void Compiler::emit_interface() {
       }
       out << ";\n";
     }
+  }
+
+  // ── Emit generic functions with full bodies ──
+  for (auto &def : this->programAST->DefinitionVec) {
+    auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get());
+    if (!fd || !fd->Prototype->is_generic())
+      continue;
+    if (emit_set.count(fd->Prototype->functionName.get_name()) == 0)
+      continue;
+
+    // Temporarily qualify the function name for emission
+    auto orig_name = fd->Prototype->functionName;
+    fd->Prototype->functionName =
+        fd->Prototype->functionName.with_module(stem);
+
+    // Exported generics keep "export", transitive deps don't
+    bool orig_exported = fd->is_exported;
+    if (!fd->is_exported)
+      fd->is_exported = false; // already false, just for clarity
+
+    out << fd->to_string() << "\n";
+
+    // Restore original name
+    fd->Prototype->functionName = orig_name;
+    fd->is_exported = orig_exported;
   }
 }
 

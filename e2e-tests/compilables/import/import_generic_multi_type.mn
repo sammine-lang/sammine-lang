@@ -1,0 +1,14 @@
+# RUN: %sammine --file %dir/Inputs/has_generic_multi.mn %O && %sammine --file %full %O %I && %T/import_generic_multi_type.exe | %check %full
+# CHECK: 10
+# CHECK: 20
+
+import has_generic_multi as lib;
+import std;
+
+let main() -> i32 {
+  let a: i32 = lib::first<i32, i64>(10, 20i64);
+  let b: i64 = lib::second<i32, i64>(10, 20i64);
+  std::printf("%d\n", a);
+  std::printf("%ld\n", b);
+  return 0;
+}

@@ -1,0 +1,8 @@
+# RUN: %sammine --file %dir/Inputs/has_generic.mn %O && cat %T/has_generic.mni | %check %full
+
+# Verify .mni contains full generic function definition (not reuse)
+# CHECK: export let has_generic::identity<T>(x : T) -> T
+
+let main() -> i32 {
+  return 0;
+}

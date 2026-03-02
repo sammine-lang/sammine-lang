@@ -225,6 +225,7 @@ public:
     if (name)
       this->name = name->lexeme;
   }
+  std::string to_string() const;
   AST_NODE_METHODS("TypedVarAST", NodeKind::TypedVarAST)
 };
 
@@ -280,6 +281,8 @@ public:
 
   bool returnsUnit() const { return return_type_expr == nullptr; }
 
+  std::string to_string() const;
+
   AST_NODE_METHODS("PrototypeAST", NodeKind::PrototypeAST)
 };
 
@@ -305,6 +308,7 @@ public:
     return node->getKind() >= NodeKind::FirstExpr &&
            node->getKind() <= NodeKind::LastExpr;
   }
+  virtual std::string to_string() const = 0;
 };
 
 //! \brief An AST to simulate a { } code block
@@ -315,6 +319,7 @@ class BlockAST : public AstBase, public Printable {
 public:
   BlockAST() : AstBase(NodeKind::BlockAST) {}
   std::vector<std::unique_ptr<ExprAST>> Statements;
+  std::string to_string() const;
   AST_NODE_METHODS("BlockAST", NodeKind::BlockAST)
 };
 
@@ -336,6 +341,8 @@ public:
   std::string getFunctionName() const { return Prototype->functionName.mangled(); }
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
+
+  std::string to_string() const;
 
   AST_NODE_METHODS("FuncDefAST", NodeKind::FuncDefAST)
 };
@@ -445,6 +452,7 @@ public:
     this->join_location(this->Expression.get());
   };
 
+  std::string to_string() const override;
   AST_NODE_METHODS("VarDefAST", NodeKind::VarDefAST)
 };
 class NumberExprAST : public ExprAST {
@@ -457,6 +465,7 @@ public:
     join_location(t);
     number = t->lexeme;
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("NumberExprAST", NodeKind::NumberExprAST)
 };
 class StringExprAST : public ExprAST {
@@ -469,6 +478,7 @@ public:
     join_location(t);
     string_content = t->lexeme;
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("StringExprAST", NodeKind::StringExprAST)
 };
 
@@ -479,6 +489,7 @@ public:
       : ExprAST(NodeKind::BoolExprAST), b(b) {
     this->location = loc;
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("BoolExprAST", NodeKind::BoolExprAST)
 };
 class CharExprAST : public ExprAST {
@@ -488,6 +499,7 @@ public:
       : ExprAST(NodeKind::CharExprAST), value(value) {
     this->location = loc;
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("CharExprAST", NodeKind::CharExprAST)
 };
 class BinaryExprAST : public ExprAST {
@@ -503,6 +515,7 @@ public:
         ->join_location(this->RHS.get());
   }
 
+  std::string to_string() const override;
   AST_NODE_METHODS("BinaryExprAST", NodeKind::BinaryExprAST)
 };
 class ReturnExprAST : public ExprAST {
@@ -529,6 +542,7 @@ public:
     this->join_location(this->return_expr.get());
   }
 
+  std::string to_string() const override;
   AST_NODE_METHODS("ReturnExprAST", NodeKind::ReturnExprAST)
 };
 class CallExprAST : public ExprAST {
@@ -560,6 +574,7 @@ public:
     this->arguments = std::move(arguments);
   }
 
+  std::string to_string() const override;
   AST_NODE_METHODS("CallExprAST", NodeKind::CallExprAST)
 };
 
@@ -577,6 +592,7 @@ public:
   };
   explicit UnitExprAST() : ExprAST(NodeKind::UnitExprAST), is_implicit(true) {}
 
+  std::string to_string() const override;
   AST_NODE_METHODS("UnitExprAST", NodeKind::UnitExprAST)
 };
 class IfExprAST : public ExprAST {
@@ -594,6 +610,7 @@ public:
         ->join_location(this->elseBlockAST.get());
   }
 
+  std::string to_string() const override;
   AST_NODE_METHODS("IfExprAST", NodeKind::IfExprAST)
 };
 class VariableExprAST : public ExprAST {
@@ -606,6 +623,7 @@ public:
       variableName = var->lexeme;
   };
 
+  std::string to_string() const override;
   AST_NODE_METHODS("VariableExprAST", NodeKind::VariableExprAST)
 };
 class DerefExprAST : public ExprAST {
@@ -616,6 +634,7 @@ public:
       : ExprAST(NodeKind::DerefExprAST), operand(std::move(operand)) {
     this->join_location(star_tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("DerefExprAST", NodeKind::DerefExprAST)
 };
 
@@ -627,6 +646,7 @@ public:
       : ExprAST(NodeKind::AddrOfExprAST), operand(std::move(operand)) {
     this->join_location(amp_tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("AddrOfExprAST", NodeKind::AddrOfExprAST)
 };
 class AllocExprAST : public ExprAST {
@@ -640,6 +660,7 @@ public:
         operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("AllocExprAST", NodeKind::AllocExprAST)
 };
 
@@ -651,6 +672,7 @@ public:
       : ExprAST(NodeKind::FreeExprAST), operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("FreeExprAST", NodeKind::FreeExprAST)
 };
 class ArrayLiteralExprAST : public ExprAST {
@@ -663,6 +685,7 @@ public:
       if (e)
         this->join_location(e.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("ArrayLiteralExprAST", NodeKind::ArrayLiteralExprAST)
 };
 
@@ -677,6 +700,7 @@ public:
     this->join_location(this->array_expr.get())
         ->join_location(this->index_expr.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("IndexExprAST", NodeKind::IndexExprAST)
 };
 
@@ -688,6 +712,7 @@ public:
       : ExprAST(NodeKind::LenExprAST), operand(std::move(operand)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("LenExprAST", NodeKind::LenExprAST)
 };
 
@@ -699,6 +724,7 @@ public:
       : ExprAST(NodeKind::UnaryNegExprAST), operand(std::move(operand)) {
     this->join_location(op_tok)->join_location(this->operand.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("UnaryNegExprAST", NodeKind::UnaryNegExprAST)
 };
 
@@ -734,6 +760,7 @@ public:
       if (v)
         this->join_location(v.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("StructLiteralExprAST", NodeKind::StructLiteralExprAST)
 };
 
@@ -750,6 +777,7 @@ public:
     if (field_tok)
       this->field_name = field_tok->lexeme;
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("FieldAccessExprAST", NodeKind::FieldAccessExprAST)
 };
 
@@ -784,6 +812,7 @@ public:
     }
   }
 
+  std::string to_string() const override;
   AST_NODE_METHODS("CaseExprAST", NodeKind::CaseExprAST)
 };
 
@@ -798,6 +827,7 @@ public:
     this->join_location(this->condition.get())
         ->join_location(this->body.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("WhileExprAST", NodeKind::WhileExprAST)
 };
 
@@ -811,6 +841,7 @@ public:
       if (e)
         this->join_location(e.get());
   }
+  std::string to_string() const override;
   AST_NODE_METHODS("TupleLiteralExprAST", NodeKind::TupleLiteralExprAST)
 };
 

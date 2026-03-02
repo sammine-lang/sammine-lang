@@ -1,0 +1,7 @@
+struct Secret {
+  val: i32,
+};
+
+export let wrap<T>(x : T) -> Secret {
+  Secret { val: 1 }
+}

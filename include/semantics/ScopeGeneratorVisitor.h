@@ -16,9 +16,15 @@ public:
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
   // variant_name → enum_name (for tracking which enum owns each variant)
   std::map<std::string, std::string> variant_to_enum;
+  // Track when we're inside an imported generic function body
+  bool insideImportedGenericFunc_ = false;
+  std::string currentImportModule_;
+  // Type params of the current imported generic function (skip qualification)
+  std::vector<std::string> currentGenericTypeParams_;
   ScopeGeneratorVisitor() {
     scope_stack.push_context();
   }
+  void qualify_type_expr(TypeExprAST *expr);
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register

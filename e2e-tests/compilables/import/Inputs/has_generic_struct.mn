@@ -1,0 +1,8 @@
+export struct Point {
+  x: i32,
+  y: i32,
+};
+
+export let make_point<T>(val : T) -> Point {
+  Point { x: 1, y: 2 }
+}
