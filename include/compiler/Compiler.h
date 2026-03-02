@@ -22,7 +22,6 @@ enum compiler_option_enum {
   OUTPUT_DIR,
   IMPORT_PATHS,
   LIB_FORMAT,
-  EXTRA_LINK_OBJS,
 };
 
 enum class LibFormat {

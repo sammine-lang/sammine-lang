@@ -84,11 +84,6 @@ int main(int argc, char *argv[]) {
       .help("Emit library output instead of executable. Use --lib=static for "
             "a .a archive, or --lib (no value) for a .so shared library.");
 
-  program.add_argument("--link")
-      .default_value(std::vector<std::string>{})
-      .append()
-      .help("Extra object files to include in library output (repeatable).");
-
   if (argc < 1) {
     std::cerr << program;
     return 1;
@@ -151,16 +146,6 @@ int main(int argc, char *argv[]) {
       return 1;
     }
     compiler_options[LIB_FORMAT] = lib_val;
-  }
-  {
-    auto link_objs = program.get<std::vector<std::string>>("--link");
-    std::string joined;
-    for (size_t i = 0; i < link_objs.size(); i++) {
-      if (i > 0)
-        joined += ";";
-      joined += link_objs[i];
-    }
-    compiler_options[EXTRA_LINK_OBJS] = joined;
   }
   CompilerRunner::run(compiler_options);
   return 0;

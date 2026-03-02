@@ -175,18 +175,6 @@ Compiler::Compiler(
   }
 
   lib_format_ = parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
-
-  // Parse --link extra object files
-  {
-    std::string objs_str = compiler_options[compiler_option_enum::EXTRA_LINK_OBJS];
-    if (!objs_str.empty()) {
-      std::istringstream ss(objs_str);
-      std::string item;
-      while (std::getline(ss, item, ';'))
-        if (!item.empty())
-          extra_link_objs_.push_back(item);
-    }
-  }
 }
 
 void Compiler::lex() {
@@ -803,6 +791,27 @@ void Compiler::emit_library() {
   // Default to shared library when no --lib flag is given
   if (lib_format_ == LibFormat::None)
     lib_format_ = LibFormat::Shared;
+
+  // Auto-detect <stem>_runtime.o for library builds.
+  {
+    std::string stem = std::filesystem::path(this->file_name).stem().string();
+    std::string runtime_obj = stem + "_runtime.o";
+    bool found = false;
+    if (!output_dir.empty()) {
+      auto candidate = std::filesystem::path(output_dir) / runtime_obj;
+      if (std::filesystem::exists(candidate)) {
+        extra_link_objs_.push_back(candidate.string());
+        found = true;
+      }
+    }
+    if (!found) {
+      auto source_dir = std::filesystem::path(file_name).parent_path();
+      if (source_dir.empty()) source_dir = ".";
+      auto candidate = source_dir / runtime_obj;
+      if (std::filesystem::exists(candidate))
+        extra_link_objs_.push_back(candidate.string());
+    }
+  }
 
   switch (lib_format_) {
   case LibFormat::Static:

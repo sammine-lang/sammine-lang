@@ -104,7 +104,7 @@ foreach(file ${STDLIB_COPIED})
   list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
 endforeach()
 
-# --- io module: sammine wrapper + C runtime merged via --link ---
+# --- io module: sammine wrapper + C runtime (auto-detected) ---
 # Compile io_runtime.c → io_runtime.o
 add_custom_command(
   OUTPUT ${STDLIB_DIR}/io_runtime.o
@@ -114,11 +114,11 @@ add_custom_command(
   COMMENT "Compiling stdlib/io_runtime.c"
 )
 
-# Compile io.mn → io.so, linking in the C runtime object
+# Compile io.mn → io.so (auto-detects io_runtime.o in -O dir)
 add_custom_command(
   OUTPUT ${STDLIB_DIR}/io.so
   COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
-          -O ${STDLIB_DIR} --link ${STDLIB_DIR}/io_runtime.o
+          -O ${STDLIB_DIR}
   DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
   COMMENT "Compiling stdlib/io.mn → io.so (with C runtime)"
 )
