@@ -14,8 +14,8 @@ public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
   LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
-  // variant_name → enum_name (for tracking which enum owns each variant)
-  std::map<std::string, std::string> variant_to_enum;
+  // variant_name → list of owning enum QualifiedNames
+  std::map<std::string, std::vector<sammine_util::QualifiedName>> variant_to_enum;
   // Track when we're inside an imported definition whose type expressions
   // need module-qualifying (imported generic functions and imported externs)
   bool insideImportedDef_ = false;

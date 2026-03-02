@@ -36,8 +36,8 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
       for (auto &variant : enum_def->variants) {
         if (can_see(variant.name) == nameNotFound) {
           register_name(variant.name, enum_def->get_location());
-          variant_to_enum[variant.name] = enum_def->enum_name.get_name();
         }
+        variant_to_enum[variant.name].push_back(enum_def->enum_name);
       }
     } else if (auto alias_def = llvm::dyn_cast<TypeAliasDefAST>(def.get())) {
       fn_name = alias_def->alias_name.mangled();
@@ -288,15 +288,19 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   if (!ast->functionName.is_qualified()) {
     auto it = variant_to_enum.find(ast->functionName.get_name());
     if (it != variant_to_enum.end()) {
-      if (insideImportedDef_) {
-        // math::Color::Red (3-part qualified name)
-        ast->functionName = sammine_util::QualifiedName::from_parts(
-            {currentImportModule_, it->second, ast->functionName.get_name()});
-      } else {
-        // Color::Red (existing behavior)
-        ast->functionName = sammine_util::QualifiedName::qualified(
-            it->second, ast->functionName.get_name());
+      auto &enum_names = it->second;
+      if (enum_names.size() > 1) {
+        add_error(ast->get_location(),
+          fmt::format("[SCOPE]: Variant name '{}' is ambiguous — "
+                      "multiple enums define this variant. "
+                      "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
+                      ast->functionName.get_name(), ast->functionName.get_name()));
+        return;
       }
+      // Build qualified name: enum parts + variant name
+      auto parts = enum_names[0].parts();
+      parts.push_back(ast->functionName.get_name());
+      ast->functionName = sammine_util::QualifiedName::from_parts(parts);
       return;
     }
   }
@@ -317,7 +321,7 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
     add_error(
         ast->get_location(),
         fmt::format(
-            "The called name {} for the call expression is not found before",
+            "[SCOPE]: The called name {} for the call expression is not found before",
             ast->functionName.mangled()));
   }
 }
@@ -331,6 +335,26 @@ void ScopeGeneratorVisitor::postorder_walk(CharExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
 
   auto var_name = ast->variableName;
+
+  // Check if this is an unqualified enum variant reference
+  auto vit = variant_to_enum.find(var_name);
+  if (vit != variant_to_enum.end()) {
+    auto &enum_names = vit->second;
+    if (enum_names.size() > 1) {
+      add_error(ast->get_location(),
+        fmt::format("[SCOPE]: Variant name '{}' is ambiguous — "
+                    "multiple enums define this variant. "
+                    "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
+                    var_name, var_name));
+      return;
+    }
+    // Rewrite to qualified form: e.g., "A" → "Color::A" or "dummy_enum::dummy::A"
+    auto parts = enum_names[0].parts();
+    parts.push_back(var_name);
+    ast->variableName = sammine_util::QualifiedName::from_parts(parts).mangled();
+    return;
+  }
+
   if (can_see(var_name) == nameNotFound) {
     // Try qualifying with import module prefix for imported generic bodies
     if (insideImportedDef_) {

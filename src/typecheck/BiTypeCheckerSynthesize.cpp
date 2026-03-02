@@ -193,10 +193,10 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       }
     }
 
-    // Generic enum variant without explicit type args
-    // (e.g., Some(42) rewritten to Option::Some(42) by scope generator)
+    // Enum variant without explicit type args — use fully-qualified mangled name
+    // (e.g., Some(42) rewritten to Option::Some by scope generator)
     if (!enum_type_opt) {
-      auto vc_it = variant_constructors.find(ast->functionName.get_name());
+      auto vc_it = variant_constructors.find(ast->functionName.mangled());
       if (vc_it != variant_constructors.end())
         enum_type_opt = vc_it->second.first;
     }
