@@ -352,6 +352,7 @@ class StructDefAST : public DefinitionAST {
 public:
   sammine_util::QualifiedName struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
+  std::vector<std::string> type_params;
   bool is_exported = false;
 
   explicit StructDefAST(sammine_util::QualifiedName name,

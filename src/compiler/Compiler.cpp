@@ -5,8 +5,6 @@
 #include "compiler/Compiler.h"
 #include "ast/Ast.h"
 #include "ast/ASTProperties.h"
-#include "ast/AstWalkers.h"
-#include "codegen/CodegenVisitor.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
@@ -468,6 +466,13 @@ void Compiler::typecheck() {
   AST::AstBase::set_properties(&props_);
   auto vs = sammine_lang::AST::BiTypeCheckerVisitor(props_);
   programAST->accept_vis(&vs);
+
+  // Inject monomorphized generic struct definitions at the front.
+  for (auto it = vs.monomorphized_struct_defs.rbegin();
+       it != vs.monomorphized_struct_defs.rend(); ++it) {
+    programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                     std::move(*it));
+  }
 
   // Inject monomorphized generic enum definitions at the front.
   for (auto it = vs.monomorphized_enum_defs.rbegin();

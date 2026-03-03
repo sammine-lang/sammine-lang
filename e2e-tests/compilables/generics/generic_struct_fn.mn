@@ -1,0 +1,19 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      99
+
+import std;
+
+struct Box<T> {
+  value: T,
+};
+
+let get_value(b: Box<i32>) -> i32 {
+  b.value
+}
+
+let main() -> i32 {
+  let b = Box<i32>{ value: 99 };
+  let v = get_value(b);
+  std::printf("%d", v);
+  return 0;
+}

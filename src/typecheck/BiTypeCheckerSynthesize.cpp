@@ -738,6 +738,8 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
       ast->set_type(Type::U64_t());
     else if (suffix == "f64")
       ast->set_type(Type::F64_t());
+    else if (suffix == "f32")
+      ast->set_type(Type::F32_t());
     else
       this->abort_on(
           true,
@@ -1043,6 +1045,7 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
   if (operand_type.type_kind != TypeKind::I32_t &&
       operand_type.type_kind != TypeKind::I64_t &&
       operand_type.type_kind != TypeKind::F64_t &&
+      operand_type.type_kind != TypeKind::F32_t &&
       operand_type.type_kind != TypeKind::Integer &&
       operand_type.type_kind != TypeKind::Flt) {
     this->add_error(ast->get_location(),
@@ -1065,6 +1068,73 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   }
 
   auto type_opt = get_typename_type(ast->struct_name.mangled());
+
+  // If not found and name contains '<', try generic struct instantiation
+  if (!type_opt.has_value()) {
+    auto name = ast->struct_name.mangled();
+    auto angle_pos = name.find('<');
+    if (angle_pos != std::string::npos) {
+      std::string base_name = name.substr(0, angle_pos);
+      auto it = generic_struct_defs.find(base_name);
+      if (it != generic_struct_defs.end()) {
+        auto *generic_def = it->second;
+
+        // Extract type args string: everything between < and >
+        auto type_args_str = name.substr(angle_pos);
+
+        // Parse the type arg names from the mangled name
+        // e.g. "Pair<i32, f64>" -> type_args = "i32", "f64"
+        auto inner = name.substr(angle_pos + 1, name.size() - angle_pos - 2);
+        std::vector<std::string> type_arg_names;
+        size_t start = 0;
+        int depth = 0;
+        for (size_t i = 0; i < inner.size(); i++) {
+          if (inner[i] == '<') depth++;
+          else if (inner[i] == '>') depth--;
+          else if (inner[i] == ',' && depth == 0) {
+            auto arg = inner.substr(start, i - start);
+            // trim whitespace
+            auto first = arg.find_first_not_of(' ');
+            auto last = arg.find_last_not_of(' ');
+            if (first != std::string::npos)
+              type_arg_names.push_back(arg.substr(first, last - first + 1));
+            start = i + 1;
+          }
+        }
+        auto last_arg = inner.substr(start);
+        auto first = last_arg.find_first_not_of(' ');
+        auto last = last_arg.find_last_not_of(' ');
+        if (first != std::string::npos)
+          type_arg_names.push_back(last_arg.substr(first, last - first + 1));
+
+        if (type_arg_names.size() == generic_def->type_params.size()) {
+          Monomorphizer::SubstitutionMap bindings;
+          bool ok = true;
+          for (size_t i = 0; i < type_arg_names.size(); i++) {
+            auto resolved = get_typename_type(type_arg_names[i]);
+            if (!resolved.has_value()) {
+              ok = false;
+              break;
+            }
+            bindings[generic_def->type_params[i]] = resolved.value();
+          }
+
+          if (ok && !instantiated_structs.contains(name)) {
+            auto mono = sammine_util::MonomorphizedName::generic(
+                generic_def->struct_name, type_args_str);
+            auto cloned = Monomorphizer::instantiate_struct(
+                generic_def, mono, bindings);
+            cloned->accept_vis(this);
+            instantiated_structs.insert(name);
+            monomorphized_struct_defs.push_back(std::move(cloned));
+          }
+
+          type_opt = get_typename_type(name);
+        }
+      }
+    }
+  }
+
   if (!type_opt.has_value()) {
     this->add_error(ast->get_location(),
                     fmt::format("Unknown struct type '{}'", ast->struct_name.mangled()));

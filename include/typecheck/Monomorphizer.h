@@ -23,6 +23,11 @@ public:
                    const sammine_util::MonomorphizedName &mono_name,
                    const SubstitutionMap &bindings);
 
+  static std::unique_ptr<StructDefAST>
+  instantiate_struct(StructDefAST *generic,
+                     const sammine_util::MonomorphizedName &mono_name,
+                     const SubstitutionMap &bindings);
+
 private:
   const SubstitutionMap &bindings;
   explicit Monomorphizer(const SubstitutionMap &bindings)

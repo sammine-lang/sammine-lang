@@ -257,8 +257,16 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
-  // Skip if already registered (e.g. by first pass)
+  // Generic struct: register as template, skip concrete registration
+  if (!ast->type_params.empty()) {
+    if (!ast->get_type().synthesized()) {
+      generic_struct_defs[ast->struct_name.mangled()] = ast;
+      ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
+    }
+    return;
+  }
 
+  // Skip if already registered (e.g. by first pass)
   if (ast->get_type().synthesized())
     return;
 
@@ -287,7 +295,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
       generic_enum_defs[ast->enum_name.mangled()] = ast;
-      ast->set_type(Type::Poisoned()); // mark as visited (not concretely usable)
+      ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
   }
@@ -760,15 +768,19 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
   static const BuiltinEntry entries[] = {
       {"Add", "Add", Type::I32_t()}, {"Add", "Add", Type::I64_t()},
       {"Add", "Add", Type::U32_t()}, {"Add", "Add", Type::U64_t()},
-      {"Add", "Add", Type::F64_t()}, {"Add", "Add", Type::Char()},
+      {"Add", "Add", Type::F64_t()}, {"Add", "Add", Type::F32_t()},
+      {"Add", "Add", Type::Char()},
       {"Sub", "Sub", Type::I32_t()}, {"Sub", "Sub", Type::I64_t()},
       {"Sub", "Sub", Type::U32_t()}, {"Sub", "Sub", Type::U64_t()},
-      {"Sub", "Sub", Type::F64_t()}, {"Mul", "Mul", Type::I32_t()},
+      {"Sub", "Sub", Type::F64_t()}, {"Sub", "Sub", Type::F32_t()},
+      {"Mul", "Mul", Type::I32_t()},
       {"Mul", "Mul", Type::I64_t()}, {"Mul", "Mul", Type::U32_t()},
       {"Mul", "Mul", Type::U64_t()}, {"Mul", "Mul", Type::F64_t()},
+      {"Mul", "Mul", Type::F32_t()},
       {"Div", "Div", Type::I32_t()}, {"Div", "Div", Type::I64_t()},
       {"Div", "Div", Type::U32_t()}, {"Div", "Div", Type::U64_t()},
-      {"Div", "Div", Type::F64_t()}, {"Mod", "Mod", Type::I32_t()},
+      {"Div", "Div", Type::F64_t()}, {"Div", "Div", Type::F32_t()},
+      {"Mod", "Mod", Type::I32_t()},
       {"Mod", "Mod", Type::I64_t()}, {"Mod", "Mod", Type::U32_t()},
       {"Mod", "Mod", Type::U64_t()},
   };

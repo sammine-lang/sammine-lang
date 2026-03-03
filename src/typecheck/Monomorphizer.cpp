@@ -260,4 +260,23 @@ Monomorphizer::instantiate_enum(
   return result;
 }
 
+std::unique_ptr<StructDefAST>
+Monomorphizer::instantiate_struct(
+    StructDefAST *generic,
+    const sammine_util::MonomorphizedName &mono_name,
+    const SubstitutionMap &bindings) {
+  Monomorphizer m(bindings);
+
+  // Clone struct members with substituted types
+  std::vector<std::unique_ptr<TypedVarAST>> cloned_members;
+  for (auto &member : generic->struct_members)
+    cloned_members.push_back(m.clone_typed_var(member.get()));
+
+  auto result = std::make_unique<StructDefAST>(
+      mono_name.to_qualified_name(), generic->get_location(),
+      std::move(cloned_members));
+  // type_params left empty — this is a concrete instantiation
+  return result;
+}
+
 } // namespace sammine_lang::AST

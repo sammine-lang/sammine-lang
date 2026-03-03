@@ -45,6 +45,11 @@ public:
   std::vector<std::unique_ptr<EnumDefAST>> monomorphized_enum_defs;
   std::set<std::string> instantiated_enums;
 
+  // Generic struct support
+  std::unordered_map<std::string, StructDefAST *> generic_struct_defs;
+  std::vector<std::unique_ptr<StructDefAST>> monomorphized_struct_defs;
+  std::set<std::string> instantiated_structs;
+
   // Unification and substitution helpers
   bool unify(const Type &pattern, const Type &concrete,
              std::unordered_map<std::string, Type> &bindings);
@@ -61,6 +66,7 @@ public:
     typename_to_type.registerNameT("u32", Type::U32_t());
     typename_to_type.registerNameT("u64", Type::U64_t());
     typename_to_type.registerNameT("f64", Type::F64_t());
+    typename_to_type.registerNameT("f32", Type::F32_t());
     typename_to_type.registerNameT("bool", Type::Bool());
     typename_to_type.registerNameT("char", Type::Char());
     typename_to_type.registerNameT("unit", Type::Unit());
@@ -364,22 +370,32 @@ public:
     if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(type_expr)) {
       auto base_mangled = gen->base_name.mangled();
 
-      // Look up the generic enum definition
-      auto it = generic_enum_defs.find(base_mangled);
-      if (it == generic_enum_defs.end()) {
+      // Determine if this is a generic enum or generic struct
+      auto enum_it = generic_enum_defs.find(base_mangled);
+      auto struct_it = generic_struct_defs.find(base_mangled);
+      bool is_enum = (enum_it != generic_enum_defs.end());
+      bool is_struct = (struct_it != generic_struct_defs.end());
+
+      if (!is_enum && !is_struct) {
         this->add_error(type_expr->location,
                         fmt::format("'{}' is not a generic type",
                                     gen->base_name.mangled()));
         return Type::Poisoned();
       }
 
-      auto *generic_def = it->second;
-      if (gen->type_args.size() != generic_def->type_params.size()) {
+      size_t expected_params = is_enum
+          ? enum_it->second->type_params.size()
+          : struct_it->second->type_params.size();
+      const auto &param_names = is_enum
+          ? enum_it->second->type_params
+          : struct_it->second->type_params;
+
+      if (gen->type_args.size() != expected_params) {
         this->add_error(
             type_expr->location,
             fmt::format("Generic type '{}' expects {} type argument(s), got {}",
                         gen->base_name.mangled(),
-                        generic_def->type_params.size(),
+                        expected_params,
                         gen->type_args.size()));
         return Type::Poisoned();
       }
@@ -394,7 +410,7 @@ public:
           return Type::Poisoned();
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
-        bindings[generic_def->type_params[i]] = resolved;
+        bindings[param_names[i]] = resolved;
         if (i > 0) type_args += ", ";
         type_args += resolved.to_string();
       }
@@ -407,27 +423,41 @@ public:
       // a generic function), we can't instantiate yet — return a placeholder
       // that will be resolved when the outer function is monomorphized.
       if (has_unresolved_type_param) {
-        // Check if the typename is already registered (from a previous pass)
         auto existing = this->get_typename_type(mangled);
         if (existing.has_value())
           return existing.value();
-        // Not yet — just return the type param so it propagates
         return Type::Poisoned();
       }
 
-      // Already instantiated?
-      if (instantiated_enums.contains(mangled)) {
-        auto existing = this->get_typename_type(mangled);
-        if (existing.has_value())
-          return existing.value();
-      }
+      if (is_enum) {
+        // Already instantiated?
+        if (instantiated_enums.contains(mangled)) {
+          auto existing = this->get_typename_type(mangled);
+          if (existing.has_value())
+            return existing.value();
+        }
 
-      // Instantiate the generic enum
-      auto cloned = Monomorphizer::instantiate_enum(generic_def, mono,
-                                                     bindings);
-      cloned->accept_vis(this);
-      instantiated_enums.insert(mangled);
-      monomorphized_enum_defs.push_back(std::move(cloned));
+        // Instantiate the generic enum
+        auto cloned = Monomorphizer::instantiate_enum(enum_it->second, mono,
+                                                       bindings);
+        cloned->accept_vis(this);
+        instantiated_enums.insert(mangled);
+        monomorphized_enum_defs.push_back(std::move(cloned));
+      } else {
+        // Already instantiated?
+        if (instantiated_structs.contains(mangled)) {
+          auto existing = this->get_typename_type(mangled);
+          if (existing.has_value())
+            return existing.value();
+        }
+
+        // Instantiate the generic struct
+        auto cloned = Monomorphizer::instantiate_struct(struct_it->second, mono,
+                                                         bindings);
+        cloned->accept_vis(this);
+        instantiated_structs.insert(mangled);
+        monomorphized_struct_defs.push_back(std::move(cloned));
+      }
 
       auto result = this->get_typename_type(mangled);
       return result.has_value() ? result.value() : Type::Poisoned();

@@ -18,6 +18,7 @@ enum class TypeKind {
   U32_t,
   U64_t,
   F64_t,
+  F32_t,
   Unit,
   Bool,
   Char,
@@ -33,7 +34,8 @@ enum class TypeKind {
   Poisoned,
   Integer,
   Flt,
-  TypeParam
+  TypeParam,
+  Generic
 };
 
 struct Type;
@@ -148,6 +150,7 @@ struct Type {
   static Type U32_t() { return Type{TypeKind::U32_t, std::monostate()}; }
   static Type U64_t() { return Type{TypeKind::U64_t, std::monostate()}; }
   static Type F64_t() { return Type{TypeKind::F64_t, std::monostate()}; }
+  static Type F32_t() { return Type{TypeKind::F32_t, std::monostate()}; }
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
   static Type Char() { return Type{TypeKind::Char, std::monostate()}; }
   static Type Poisoned() { return Type{TypeKind::Poisoned, std::monostate()}; }
@@ -155,6 +158,7 @@ struct Type {
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
   static Type Integer() { return Type{TypeKind::Integer, std::monostate()}; }
   static Type Flt() { return Type{TypeKind::Flt, std::monostate()}; }
+  static Type Generic() { return Type{TypeKind::Generic, std::monostate()}; }
   static Type String(const std::string &str) {
     return Type{TypeKind::String, str};
   }
@@ -193,8 +197,7 @@ struct Type {
     return this->type_kind != TypeKind::Poisoned;
   }
   bool synthesized() const {
-    return this->type_kind != TypeKind::NonExistent ||
-           this->type_kind == TypeKind::Poisoned;
+    return this->type_kind != TypeKind::NonExistent;
   }
   Type(TypeKind type_kind, TypeData type_data)
       : type_kind(type_kind), type_data(type_data) {}
@@ -223,6 +226,8 @@ struct Type {
       return "u64";
     case TypeKind::F64_t:
       return "f64";
+    case TypeKind::F32_t:
+      return "f32";
     case TypeKind::Unit:
       return "()";
     case TypeKind::Struct:
@@ -279,6 +284,8 @@ struct Type {
       return "float literal";
     case TypeKind::TypeParam:
       return std::get<std::string>(type_data);
+    case TypeKind::Generic:
+      return "generic template";
     }
     sammine_util::abort("Reaching the end of switch case and still cant "
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
@@ -293,6 +300,7 @@ struct Type {
     case TypeKind::U32_t:
     case TypeKind::U64_t:
     case TypeKind::F64_t:
+    case TypeKind::F32_t:
     case TypeKind::Bool:
     case TypeKind::Char:
     case TypeKind::Unit:

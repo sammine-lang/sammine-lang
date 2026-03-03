@@ -43,7 +43,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   // appear before imported struct definitions in the DefinitionVec).
   for (auto &def : program->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (sd->get_type().type_kind != TypeKind::Poisoned) {
+      if (sd->get_type().type_kind == TypeKind::Struct) {
         auto st = std::get<StructType>(sd->get_type().type_data);
         llvm::SmallVector<mlir::Type> fieldTypes;
         for (auto &ft : st.get_field_types())
@@ -55,7 +55,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         structTypes[st.get_name().mangled()] = structTy;
       }
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (ed->get_type().type_kind != TypeKind::Poisoned) {
+      if (ed->get_type().type_kind == TypeKind::Enum) {
         auto et = std::get<EnumType>(ed->get_type().type_data);
         // Integer-backed enums are bare integers — no struct registration
         if (et.is_integer_backed())
@@ -178,6 +178,8 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   case TypeKind::F64_t:
   case TypeKind::Flt:
     return builder.getF64Type();
+  case TypeKind::F32_t:
+    return builder.getF32Type();
   case TypeKind::Bool:
     return builder.getI1Type();
   case TypeKind::Char:
@@ -215,12 +217,28 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     return mlir::LLVM::LLVMStructType::getLiteral(builder.getContext(),
                                                    elemTypes);
   }
-  case TypeKind::Never:
   case TypeKind::NonExistent:
+    imm_error("type was never resolved (NonExistent) — "
+              "this is a compiler bug: a type expression was not "
+              "visited during type checking");
   case TypeKind::Poisoned:
+    imm_error("poisoned type reached codegen — "
+              "a type error should have been reported and "
+              "compilation halted before codegen");
+  case TypeKind::Generic:
+    imm_error("generic template type reached codegen — "
+              "this is a compiler bug: the generic definition was "
+              "not monomorphized before codegen");
   case TypeKind::TypeParam:
-    sammine_util::abort(
-        fmt::format("MLIRGen: unsupported type '{}'", type.to_string()));
+    imm_error(fmt::format(
+        "unresolved type parameter '{}' reached codegen — "
+        "this is a compiler bug: the type parameter was not substituted "
+        "during monomorphization",
+        type.to_string()));
+  case TypeKind::Never:
+    imm_error("'never' type reached codegen — "
+              "this is a compiler bug: a diverging expression's "
+              "type was not handled before codegen");
   }
 }
 
@@ -239,7 +257,8 @@ bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
 }
 
 bool MLIRGenImpl::isFloatType(const Type &type) {
-  return type.type_kind == TypeKind::F64_t || type.type_kind == TypeKind::Flt;
+  return type.type_kind == TypeKind::F64_t || type.type_kind == TypeKind::F32_t ||
+         type.type_kind == TypeKind::Flt;
 }
 
 bool MLIRGenImpl::isBoolType(const Type &type) {
@@ -255,7 +274,7 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
   case TypeKind::U64_t:
     return builder.getI64Type();
   default:
-    sammine_util::abort("Invalid enum backing type");
+    imm_error("invalid enum backing type — expected i32, i64, u32, or u64");
   }
 }
 
@@ -279,8 +298,8 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     for (auto &method : tci->methods)
       emitFunction(method.get());
   } else {
-    sammine_util::abort(fmt::format(
-        "MLIRGen: unknown definition type '{}'", def->getTreeName()));
+    imm_error(fmt::format("unknown definition type '{}'", def->getTreeName()),
+              def->get_location());
   }
 }
 
@@ -362,9 +381,9 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
   if (auto *tupleLit = llvm::dyn_cast<AST::TupleLiteralExprAST>(ast))
     return emitTupleLiteralExpr(tupleLit);
 
-  sammine_util::abort(
-      fmt::format("MLIRGen: unsupported expression type '{}'",
-                  ast->getTreeName()));
+  imm_error(fmt::format("unsupported expression type '{}'",
+                        ast->getTreeName()),
+            ast->get_location());
 }
 
 // ===--- Block and variable definition ---===
@@ -441,9 +460,13 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   case TypeKind::F64_t:
   case TypeKind::Flt:
     return 8;
+  case TypeKind::F32_t:
+    return 4;
   case TypeKind::Bool:
   case TypeKind::Char:
     return 1;
+  case TypeKind::Unit:
+    return 0;
   case TypeKind::Pointer:
   case TypeKind::String:
     return 8;
@@ -503,10 +526,28 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     }
     return size;
   }
-  default:
-    sammine_util::abort(
-        fmt::format("MLIRGen: cannot compute size of type '{}'",
-                    type.to_string()));
+  case TypeKind::NonExistent:
+    imm_error("getTypeSize: type was never resolved (NonExistent) — "
+              "this is a compiler bug: a type expression was not "
+              "visited during type checking");
+  case TypeKind::Poisoned:
+    imm_error("getTypeSize: poisoned type reached codegen — "
+              "a type error should have been reported and "
+              "compilation halted before codegen");
+  case TypeKind::Generic:
+    imm_error("getTypeSize: generic template type reached codegen — "
+              "this is a compiler bug: the generic definition was "
+              "not monomorphized before codegen");
+  case TypeKind::TypeParam:
+    imm_error(fmt::format(
+        "getTypeSize: unresolved type parameter '{}' reached codegen — "
+        "this is a compiler bug: the type parameter was not substituted "
+        "during monomorphization",
+        type.to_string()));
+  case TypeKind::Never:
+    imm_error("getTypeSize: 'never' type reached codegen — "
+              "this is a compiler bug: a diverging expression's "
+              "type was not handled before codegen");
   }
 }
 

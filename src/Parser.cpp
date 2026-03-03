@@ -122,6 +122,32 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
 
   auto struct_pqn = parseQualifiedNameTail(id, false);
 
+  // Parse optional type parameters: struct Pair<T, U> { ... };
+  std::vector<std::string> struct_type_params;
+  if (expect(TokLESS)) {
+    auto first = expect(TokID);
+    if (!first) {
+      this->imm_error("Expected type parameter name after '<'",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+    struct_type_params.push_back(first->lexeme);
+    while (expect(TokComma)) {
+      auto next = expect(TokID);
+      if (!next) {
+        this->imm_error("Expected type parameter name after ','",
+                        id->get_location());
+        return {nullptr, FAILED};
+      }
+      struct_type_params.push_back(next->lexeme);
+    }
+    if (!consumeClosingAngleBracket()) {
+      this->imm_error("Expected '>' after type parameter list",
+                      id->get_location());
+      return {nullptr, FAILED};
+    }
+  }
+
   REQUIRE(left_curly, TokLeftCurly,
           fmt::format("Expected '{{{{' after struct identifier {}",
                       struct_pqn.qn.get_name()),
@@ -175,7 +201,9 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
     imm_error("Expected ';' after struct definition",
               right_curly->get_location());
 
-  return {std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members)), SUCCESS};
+  auto struct_def = std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members));
+  struct_def->type_params = std::move(struct_type_params);
+  return {std::move(struct_def), SUCCESS};
 }
 
 // type Name = Variant1(Type) | Variant2 | Variant3(Type, Type);
@@ -1935,6 +1963,16 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
       return parsed_types;
     }
     speculative_ok = false;
+  } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftCurly) {
+    // Name<Types>{ — generic struct literal
+    std::string mangled = qn.mangled() + "<";
+    for (size_t i = 0; i < parsed_types.size(); i++) {
+      if (i > 0) mangled += ", ";
+      mangled += parsed_types[i]->to_string();
+    }
+    mangled += ">";
+    qn = sammine_util::QualifiedName::local(mangled);
+    return parsed_types;
   } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
     // Name<Types>(args) — generic function call
     return parsed_types;

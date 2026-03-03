@@ -37,6 +37,7 @@ public:
       : builder(&context), moduleName(moduleName), fileName(fileName),
         diagnosticData(
             sammine_util::Reporter::get_diagnostic_data(sourceText)),
+        reporter(fileName, sourceText, 3),
         props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
@@ -48,6 +49,16 @@ public:
   std::string moduleName;
   std::string fileName;
   sammine_util::Reporter::DiagnosticData diagnosticData;
+  sammine_util::Reporter reporter;
+
+  /// Emit an ariadne-style error before aborting. If a Location is provided,
+  /// the error points to the offending source span; otherwise shows "In <file>".
+  [[noreturn]] void
+  imm_error(const std::string &msg,
+            sammine_util::Location loc = sammine_util::Location(-1, -1)) {
+    reporter.immediate_error(msg, loc);
+    sammine_util::abort(msg);
+  }
 
   AST::LexicalStack<mlir::Value, std::monostate> symbolTable;
 

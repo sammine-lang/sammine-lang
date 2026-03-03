@@ -1,0 +1,15 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      42 3.14
+
+import std;
+
+struct Pair<T, U> {
+  first: T,
+  second: U,
+};
+
+let main() -> i32 {
+  let p = Pair<i32, f64>{ first: 42, second: 3.14 };
+  std::printf("%d %.2f", p.first, p.second);
+  return 0;
+}
