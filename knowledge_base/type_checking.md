@@ -4,7 +4,7 @@
 
 | `TypeKind` | `TypeData` variant | Factory |
 |---|---|---|
-| `I32_t`, `I64_t`, `F64_t`, `Unit`, `Bool`, `Char`, `String`, `Never`, `NonExistent`, `Poisoned` | `std::monostate` | `Type::I32_t()`, etc. |
+| `I32_t`, `I64_t`, `U32_t`, `U64_t`, `F64_t`, `F32_t`, `Unit`, `Bool`, `Char`, `String`, `Never`, `NonExistent`, `Poisoned` | `std::monostate` | `Type::I32_t()`, etc. |
 | `Integer`, `Flt` | `std::monostate` | Polymorphic literals — default to `I32_t`/`F64_t` via `default_polymorphic_type()` |
 | `Function` | `FunctionType` | `Type::Function(params)` |
 | `Pointer` | `PointerType` (`shared_ptr<Type>` — forward-decl needs indirection) | `Type::Pointer(pointee)` |
@@ -50,7 +50,7 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 
 ## BiTypeChecker (`include/typecheck/BiTypeChecker.h`)
 - Bidirectional: `synthesize()` → types bottom-up, `postorder_walk()` → consistency top-down
-- Two lexical stacks: `id_to_type` (variable/function names), `typename_to_type` (type names); built-ins (i32/i64/f64/bool/char/unit) registered in `enter_new_scope()`
+- Two lexical stacks: `id_to_type` (variable/function names), `typename_to_type` (type names); built-ins (i32/i64/u32/u64/f64/f32/bool/char/unit) registered in `enter_new_scope()`
 - All lookups and error messages use `QualifiedName::mangled()` (single string representation)
 - **Enum variant invariant**: all variant calls arrive pre-qualified by scope generator. Type checker does NOT resolve unqualified variants.
 
@@ -66,7 +66,7 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 
 ### Literal Synthesis
 - Integer (no decimal) → `Integer`; with decimal → `Flt` — defaulted when no context narrows
-- Number suffixes (`i32`/`i64`/`f64`): extract suffix, strip from `ast->number`, set type; invalid → abort
+- Number suffixes (`i32`/`i64`/`u32`/`u64`/`f64`/`f32`): extract suffix, strip from `ast->number`, set type; invalid → abort
 - `StringExprAST` → `ptr<char>`, `CharExprAST` → `Char`
 - `main`: must return `i32`, take 0 or 2 params (`(i32, ptr<ptr<char>>)`)
 
@@ -108,11 +108,11 @@ Condition must be `bool` (skip if `Poisoned`), result always `unit`.
 
 | Op | Method | Built-in instances |
 |---|---|---|
-| `+` | `Add::add` | i32, i64, f64, char |
-| `-` | `Sub::sub` | i32, i64, f64 |
-| `*` | `Mul::mul` | i32, i64, f64 |
-| `/` | `Div::div` | i32, i64, f64 |
-| `%` | `Mod::mod` | i32, i64 |
+| `+` | `Add::add` | i32, i64, u32, u64, f64, f32, char |
+| `-` | `Sub::sub` | i32, i64, u32, u64, f64, f32 |
+| `*` | `Mul::mul` | i32, i64, u32, u64, f64, f32 |
+| `/` | `Div::div` | i32, i64, u32, u64, f64, f32 |
+| `%` | `Mod::mod` | i32, i64, u32, u64 |
 
 `synthesize_binary_operator()`: lookup instance key `ClassName<lhs_type>` (e.g. `Add<i32>`) in `type_class_instances` → set `resolved_op_method` as `MonomorphizedName` (e.g. `Add<i32>::add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
 
@@ -189,7 +189,7 @@ Called at every `compatible_to_from` failure site in `BiTypeChecker.cpp` (5 site
 4. Add `to_string()` case
 5. Register in `enter_new_scope()` if named
 6. Handle all `switch(type_kind)` (`-Wswitch` enforces)
-7. Add case to `TypeConverter::get_type()` and `get_cmp_func()`
+7. Add case to `convertType()` in `MLIRGen.cpp`, plus `isFloatType()`/`getTypeSize()` if applicable
 
 ## Adding a New AST Node to Type Checker
 1. Add `synthesize()` in `BiTypeChecker.h`

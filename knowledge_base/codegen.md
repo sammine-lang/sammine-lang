@@ -1,94 +1,80 @@
 # Codegen Patterns
 
-## TypeConverter (`src/codegen/TypeConverter.cpp`)
+## Type Mapping (MLIR backend — `convertType()` in `MLIRGen.cpp`)
 
-| TypeKind | LLVM Type | MLIR Type |
-|---|---|---|
-| `I32_t` | `getInt32Ty` | `builder.getI32Type()` |
-| `I64_t` | `getInt64Ty` | `builder.getI64Type()` |
-| `F64_t` | `getDoubleTy` | `builder.getF64Type()` |
-| `Bool` | `getInt1Ty` | `getI1Type()` |
-| `Char` | `getInt8Ty` | `getI8Type()` |
-| `Unit` | `getVoidTy` | `NoneType` (0 results) |
-| `String` | `StructType{ptr, i32}` | `!llvm.ptr` (C string interop) |
-| `Pointer` | `PointerType::get(ctx, 0)` (opaque) | `!llvm.ptr` |
-| `Function` | `sammine.closure` struct | `closureType` (`LLVMStructType{ ptr, ptr }`) |
-| `Array` | N/A (alloca-based) | `MemRefType::get({size}, elemType)` |
-| `Struct` | `get_struct_type(name)` | `structTypes` map |
-| `Enum` | `get_enum_type(name)` | `enumTypes` map |
-| `Tuple` | N/A | `LLVMStructType::getLiteral(ctx, elementTypes)` |
+| TypeKind | MLIR Type |
+|---|---|
+| `I32_t`, `U32_t`, `Integer` | `builder.getI32Type()` |
+| `I64_t`, `U64_t` | `builder.getI64Type()` |
+| `F64_t`, `Flt` | `builder.getF64Type()` |
+| `F32_t` | `builder.getF32Type()` |
+| `Bool` | `getI1Type()` |
+| `Char` | `getI8Type()` |
+| `Unit` | `NoneType` (0 results) |
+| `String` | `!llvm.ptr` (C string interop) |
+| `Pointer` | `!llvm.ptr` |
+| `Function` | `closureType` (`LLVMStructType{ ptr, ptr }`) |
+| `Array` | `LLVMArrayType` |
+| `Struct` | `structTypes` map |
+| `Enum` | `enumTypes` map (or integer backing type) |
+| `Tuple` | `LLVMStructType::getLiteral(ctx, elementTypes)` |
 
-- `NumberExprAST`: `I32_t`→`stoi`, `I64_t`→`stoll`, `F64_t`→`stod` (suffix already stripped by type checker)
-- `CharExprAST`: LLVM `ConstantInt::get(getInt8Ty, value)`, MLIR `ConstantIntOp::create(builder, loc, uint8_t(value), 8)`
-- `get_cmp_func(Type, Type, TokenType)` → `CmpInst::Predicate`: integers/char/bool→`ICMP_*`, float→`FCMP_*`, pointer→`ICMP_EQ`/`ICMP_NE` only, unit/function→abort
+- `NumberExprAST`: integer → `stoll`, float → `stod` + `APFloat` (f32 uses `APFloat::convert(IEEEsingle())`)
+- `CharExprAST`: `ConstantIntOp::create(builder, loc, uint8_t(value), 8)`
+- Comparisons: integers/char/bool → `arith::CmpIOp`, float → `arith::CmpFOp`, pointer → `ICMP_EQ`/`ICMP_NE` only
 
-## CgVisitor (`src/codegen/CodegenVisitor.cpp`)
-- Extends `ScopedASTVisitor`; `allocaValues` stack maps variable names → `AllocaInst*`
-- **Deref (`*p`)**: visit traverses operand, postorder does `CreateLoad(pointee_type, val)`
-- **AddrOf (`&x`)**: visit skips operand load — gets alloca directly from `allocaValues`
-- **Alloc (`alloc<T>(count)`)**: `sizeof(T)*count` via DataLayout → `malloc(total_size)` → pointer
-- **Free (`free(expr)`)**: calls `free(operand_val)`, sets `ast->val = nullptr`
-
-## Assignment Codegen (`postorder_walk(BinaryExprAST*)`)
-`TokASSIGN` LHS forms (both backends — MLIR uses `LLVM::StoreOp`/`memref::StoreOp`):
-- `VariableExprAST` — look up alloca, `CreateStore(RHS, alloca)`
-- `DerefExprAST` — use `operand->val` (pointer), `CreateStore(RHS, pointer)`
+## Assignment Codegen
+`TokASSIGN` LHS forms (MLIR uses `LLVM::StoreOp`):
+- `VariableExprAST` — look up alloca, store
+- `DerefExprAST` — use operand (pointer), store
 - `IndexExprAST` + `DerefExprAST` — `(*ptr)[i] = val`: GEP through pointer, store
 - `IndexExprAST` + `VariableExprAST` — `arr[i] = val`: GEP into alloca, store
 
 ## Pointer-to-Array Indexing (`(*ptr)[i]`)
-- `visit(IndexExprAST*)`: if array_expr is `DerefExprAST`, visits only `deref->operand` (skips full array load)
-- `postorder_walk`: `GEP(arr_type, ptr_val, {0, idx})` + `CreateLoad` for element access
-- Bounds checking via `emitBoundsCheck()` in both direct and pointer-to-array cases
-- Immutable pointer params get `readonly nocapture` attributes (`FunctionCodegen.cpp`)
-
-## Array Equality (`emitArrayComparison`)
-- Element-wise loop comparison, short-circuits on first mismatch → `false`; all match → `true`
-- `!=` via `CreateNot` of `==` result; nested arrays handled recursively
-- Dispatched from `postorder_walk(BinaryExprAST*)` when `lhs_type.type_kind == TypeKind::Array`
+- Bounds checking via `emitBoundsCheck()`
+- GEP through pointer into array element
 
 ## Enum Codegen
 - **Layout**: `{ i32 tag, [N x i8] payload }` (named `sammine.enum.<name>`); unit-only enums → just `{ i32 }`
-- **Type registration**: `preorder_walk(ProgramAST*)`/`generate()` pre-pass computes max payload size via DataLayout
-- **Unit variant**: `UndefValue` + `InsertValue(tag, {0})`
-- **Payload variant** (`emitEnumConstructor`): alloca enum type, store tag via `StructGEP(0)`, GEP into byte buffer for payload fields, load complete value
-- **Pattern matching** (`CaseExprAST`): LLVM uses `switch` on tag + PHI merge; MLIR uses cascading `cmpi` + `cf::CondBranchOp` + merge blocks with block arguments
-- Both backends: payload extraction via byte-offset GEP, bindings stored in allocaValues/symbolTable
+- **Type registration**: `generate()` pre-pass computes max payload size via DataLayout
+- **Unit variant**: `UndefOp` + `InsertValueOp(tag, {0})`
+- **Payload variant** (`emitEnumConstructor`): alloca enum type, store tag, GEP into byte buffer for payload fields, load complete value
+- **Pattern matching** (`CaseExprAST`): cascading `cmpi` + `cf::CondBranchOp` + merge blocks with block arguments
+- Payload extraction via byte-offset GEP, bindings stored in symbolTable
 
 ## While Loop Codegen
-Both backends: header/body/exit blocks. LLVM: `CreateCondBr`/`CreateBr`. MLIR: `cf::CondBranchOp`/`cf::BranchOp`. Unit-typed (no result).
+Header/body/exit blocks. `cf::CondBranchOp`/`cf::BranchOp`. Unit-typed (no result).
 
 ## First-Class Functions & Closures
 
 ### Closure Representation
-- Fat pointer: `%sammine.closure = type { ptr, ptr }` (code_ptr, env_ptr)
-- Created once in `preorder_walk(ProgramAST*)`; `get_type(Function)` → `%sammine.closure`
-- `get_closure_function_type(FunctionType)` → `ret(ptr, params...)` (env ptr prepended)
+- Fat pointer: `!llvm.struct<"sammine.closure", (ptr, ptr)>` (code_ptr, env_ptr)
+- `getClosureFunctionType(FunctionType)` → `ret(ptr, params...)` (env ptr prepended)
 
 ### Wrapper Generation (`getOrCreateClosureWrapper`)
 When a named function is used as a value (e.g. `let f = square`): generates `__wrap_<name>` that accepts-and-ignores env ptr, forwards args to original. Cached in `closure_wrappers`.
 
-### Three Call Paths (`postorder_walk(CallExprAST*)`)
-1. **Direct**: `Module->getFunction` found + not partial → `CreateCall(callee, args)` (zero overhead)
-2. **Partial**: found + `is_partial` → generate `__partial_N` wrapper with env struct for bound args → `%sammine.closure`
-3. **Indirect**: callee not in Module (local variable) → load closure, `ExtractValue` code/env → `CreateCall(funcType, codePtr, {envPtr, args...})`
+### Three Call Paths (`emitCallExpr`)
+1. **Direct**: function found + not partial → `func::CallOp` (zero overhead)
+2. **Partial**: found + `is_partial` → generate `__partial_N` wrapper with env struct for bound args → closure struct
+3. **Indirect**: local variable → load closure, `ExtractValueOp` code/env → `LLVM::CallOp(funcType, codePtr, {envPtr, args...})`
 
 ### VariableExprAST Function References
-If not in allocaValues but `Module->getFunction` found + type is Function → create wrapper → build `%sammine.closure { wrapper, null }`
+If not in symbolTable but function exists + type is Function → create wrapper → build closure struct `{ wrapper, null }`
 
 ### Partial Application
 - Bound args in stack-allocated env struct; `__partial_N` wrapper loads bound args via GEP+Load, calls original
 - Unique names via `partial_counter`. **Stack limitation**: closures cannot escape defining scope
 
 ## Forward Declarations
-`preorder_walk(ProgramAST*)` two phases:
-1. Register types: all `StructDefAST`/`EnumDefAST` → LLVM types
-2. Forward-declare: all `FuncDefAST`/`ExternAST`/`TypeClassInstanceAST` methods → `forward_declare()`/`getOrInsertFunction()`
+`generate()` two phases:
+1. Register types: all `StructDefAST`/`EnumDefAST` → MLIR types
+2. Forward-declare: all `FuncDefAST`/`ExternAST`/`TypeClassInstanceAST` methods
 
 Eliminates definition-ordering constraints. Typeclass methods use mangled names (e.g. `Sized<i32>::sizeof`).
 
 ## ASTProperties in Codegen
-Both backends receive `const ASTProperties&` (stored as `props_` member). Node-specific decorated data is read from the side table, NOT from AST node fields:
+MLIR backend receives `const ASTProperties&` (stored as `props_` member). Node-specific decorated data is read from the side table, NOT from AST node fields:
 - `props_.call(ast->id())->callee_func_type` — resolved function type for calls
 - `props_.call(ast->id())->is_partial` — partial application detection
 - `props_.call(ast->id())->resolved_name` — `optional<MonomorphizedName>` for monomorphized/typeclass call target; use `->mangled()` for name
@@ -97,7 +83,7 @@ Both backends receive `const ASTProperties&` (stored as `props_` member). Node-s
 - `ast->get_type()` — node type (reads from ASTProperties via static pointer)
 
 ## Operator Overloading (`resolved_op_method`)
-Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_method` — if `has_value()`, emit function call via `->mangled()` to typeclass method instead of native instruction. Both backends (MLIR uses `func::CallOp`).
+Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_method` — if `has_value()`, emit `func::CallOp` via `->mangled()` to typeclass method instead of native instruction.
 
 ## Typeclass Codegen
 - Instance methods → regular functions with mangled names (e.g. `Add<i32>::add`). `TypeClassDeclAST`/`TypeClassInstanceAST` have no-op visitor stubs.
@@ -111,21 +97,22 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_me
 - MLIR: IFuncs created post-lowering in `Compiler::codegen_mlir()` on the LLVM IR module
 
 ## Runtime Function Declarations
-`malloc`, `free`, `printf`, `exit` declared in `preorder_walk(ProgramAST*)`. Helpers: `CodegenUtils::declare_malloc()`/`declare_free()`/`declare_fn()` in `src/codegen/CodegenUtils.cpp`.
+`malloc`, `free`, `exit` declared in `generate()` as `llvm.func` or `func.func`.
 
 ## Generics / Monomorphization
-- `CgVisitor::visit(FuncDefAST*)`: if `is_generic()` → skip (template only)
+- `emitFunction()`: if `is_generic()` → skip (template only)
 - Monomorphized copies have empty `type_params` + concrete types → normal codegen
-- `TypeKind::TypeParam` → abort in `get_type()`/`get_cmp_func()` (must never reach codegen)
+- `TypeKind::TypeParam` → abort in `convertType()` (must never reach codegen)
 - Monomorphized defs injected at **front** of `DefinitionVec` — codegen'd before call sites
 - Monomorphizer deep-clones AST with type substitution; must handle all ExprAST subtypes
 
-## 5 Visitors to Update per New AST Node
+## 4 Visitors to Update per New AST Node
 1. `AstPrinterVisitor` (`src/ast/AstPrinterVisitor.cpp`) — visit + pre/post stubs
 2. `BiTypeCheckerVisitor` (`src/typecheck/BiTypeChecker.cpp`) — synthesize + pre/post
-3. `CgVisitor` (`src/codegen/CodegenVisitor.cpp`) — codegen in pre/post/visit
-4. `ScopeGeneratorVisitor` (`src/semantics/ScopeGeneratorVisitor.cpp`) — empty pre/post stubs
-5. `GeneralSemanticsVisitor` (`include/semantics/GeneralSemanticsVisitor.h`) — empty pre/post stubs (inline)
+3. `ScopeGeneratorVisitor` (`src/semantics/ScopeGeneratorVisitor.cpp`) — empty pre/post stubs
+4. `GeneralSemanticsVisitor` (`include/semantics/GeneralSemanticsVisitor.h`) — empty pre/post stubs (inline)
+
+Plus add `emitXxxExpr()` to `MLIRGenExpr.cpp` and `dynamic_cast` dispatch in `emitExpr()`.
 
 ## MLIR Backend
 
@@ -158,8 +145,8 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_me
 
 ### Variable Model
 - All non-array variables: `llvm.alloca` + `llvm.store` (uniform, mutable and immutable)
-- Arrays: `memref<NxT>` registered directly in `symbolTable`
-- `emitVariableExpr`: `MemRefType` → array (return directly), `LLVMPointerType` → load via `LLVM::LoadOp`, else SSA passthrough
+- Arrays: `LLVMArrayType` — stored as `!llvm.ptr` (alloca) in symbolTable; `emitVariableExpr` returns pointer without loading for arrays
+- `emitVariableExpr`: `LLVMPointerType` → load via `LLVM::LoadOp`, array type → return directly, else SSA passthrough
 
 ### IfExprAST
 - Uses `cf::CondBranchOp` + merge blocks with block arguments (NOT `scf.if`)
@@ -187,20 +174,17 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_me
 
 ### Lowering Pipeline
 ```
-scf-to-cf → arith-to-llvm → memref-to-llvm → cf-to-llvm → func-to-llvm → reconcile-unrealized-casts → translateModuleToLLVMIR
+scf-to-cf → arith-to-llvm → cf-to-llvm → func-to-llvm → reconcile-unrealized-casts → translateModuleToLLVMIR
 ```
-Order matters: SCF → CF before CF → LLVM; MemRef before final reconcile.
+Order matters: SCF → CF before CF → LLVM. (memref removed — arrays use LLVM dialect directly)
 
 ### CMake
-- MLIR found via `-DMLIR_DIR=...`; Compiler.cpp loads 6 dialects: `arith`, `func`, `LLVM`, `scf`, `cf`, `memref`
+- MLIR found via `-DMLIR_DIR=...`; Compiler.cpp loads 5 dialects: `arith`, `func`, `LLVM`, `scf`, `cf`
 - `MLIRBackend` links: `MLIRIR`, `MLIRParser`, `MLIRSupport`, `MLIRPass`, dialect + conversion libraries
 
 ### Known Limitations
 - `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not yet supported
 - MLIR does not yet support module imports (IFunc creation happens at Compiler level on lowered LLVM IR)
-
-### Coverage
-Both backends support the full language (except limitations above).
 
 ## Build & Test
 ```bash
