@@ -242,7 +242,8 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
   }
   // Polymorphic float literal can flow into any concrete float type
   if (b.type_kind == TypeKind::Flt) {
-    return a.type_kind == TypeKind::F64_t || a.type_kind == TypeKind::Flt;
+    return a.type_kind == TypeKind::F64_t || a.type_kind == TypeKind::F32_t ||
+           a.type_kind == TypeKind::Flt;
   }
 
   // Integer-backed enum can flow into its backing type
