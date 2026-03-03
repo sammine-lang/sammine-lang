@@ -141,7 +141,8 @@ public:
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,
-                                            Location qn_loc) -> p<ExprAST>;
+                                            Location qn_loc,
+                                            std::vector<std::unique_ptr<TypeExprAST>> type_args = {}) -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArguments() -> ListResult<ExprAST>;
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;

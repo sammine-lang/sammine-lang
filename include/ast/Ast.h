@@ -734,6 +734,7 @@ public:
   sammine_util::QualifiedName struct_name;
   std::vector<std::string> field_names;
   std::vector<std::unique_ptr<ExprAST>> field_values;
+  std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   explicit StructLiteralExprAST(
       std::shared_ptr<Token> name_tok,
       std::vector<std::string> field_names,

@@ -188,9 +188,12 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::make_unique<UnaryNegExprAST>(make_tok("-"),
                                                clone_expr(neg->operand.get()));
   } else if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(expr)) {
-    result = std::make_unique<StructLiteralExprAST>(
+    auto cloned_sl = std::make_unique<StructLiteralExprAST>(
         sl->struct_name, sl->get_location(), sl->field_names,
         clone_expr_vec(sl->field_values));
+    for (auto &ta : sl->explicit_type_args)
+      cloned_sl->explicit_type_args.push_back(clone_type_expr(ta.get()));
+    result = std::move(cloned_sl);
   } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr)) {
     result = std::make_unique<FieldAccessExprAST>(
         clone_expr(fa->object_expr.get()), make_tok(fa->field_name));

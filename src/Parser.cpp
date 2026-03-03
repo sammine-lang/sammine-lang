@@ -1071,7 +1071,8 @@ auto Parser::ParseReturnExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParseStructLiteralExpr(sammine_util::QualifiedName qn,
-                                    Location qn_loc) -> p<ExprAST> {
+                                    Location qn_loc,
+                                    std::vector<std::unique_ptr<TypeExprAST>> type_args) -> p<ExprAST> {
   auto lbrace = tokStream->consume(); // consume {
   std::vector<std::string> field_names;
   std::vector<std::unique_ptr<ExprAST>> field_values;
@@ -1119,9 +1120,10 @@ auto Parser::ParseStructLiteralExpr(sammine_util::QualifiedName qn,
           {std::make_unique<StructLiteralExprAST>(
                qn, qn_loc, std::move(field_names), std::move(field_values)),
            FAILED});
-  return {std::make_unique<StructLiteralExprAST>(
-              qn, qn_loc, std::move(field_names), std::move(field_values)),
-          had_error ? FAILED : SUCCESS};
+  auto sl = std::make_unique<StructLiteralExprAST>(
+      qn, qn_loc, std::move(field_names), std::move(field_values));
+  sl->explicit_type_args = std::move(type_args);
+  return {std::move(sl), had_error ? FAILED : SUCCESS};
 }
 
 auto Parser::ParseCallExpr() -> p<ExprAST> {
@@ -1160,7 +1162,7 @@ auto Parser::ParseCallExpr() -> p<ExprAST> {
   }();
 
   if (is_struct_literal)
-    return ParseStructLiteralExpr(std::move(qn), qn_loc);
+    return ParseStructLiteralExpr(std::move(qn), qn_loc, std::move(explicit_type_args));
 
   auto [args, result] = ParseArguments();
   if (result == SUCCESS) {
@@ -1964,14 +1966,8 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
     }
     speculative_ok = false;
   } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftCurly) {
-    // Name<Types>{ — generic struct literal
-    std::string mangled = qn.mangled() + "<";
-    for (size_t i = 0; i < parsed_types.size(); i++) {
-      if (i > 0) mangled += ", ";
-      mangled += parsed_types[i]->to_string();
-    }
-    mangled += ">";
-    qn = sammine_util::QualifiedName::local(mangled);
+    // Name<Types>{ — generic struct literal; keep qn unmangled,
+    // type args are carried structurally on StructLiteralExprAST
     return parsed_types;
   } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
     // Name<Types>(args) — generic function call
