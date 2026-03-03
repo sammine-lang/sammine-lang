@@ -17,7 +17,6 @@ enum compiler_option_enum {
   CHECK,
   TIME,
   ARGV0,
-  BACKEND,
   MLIR_IR,
   OUTPUT_DIR,
   IMPORT_PATHS,

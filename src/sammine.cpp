@@ -116,7 +116,6 @@ int main(int argc, char *argv[]) {
     } else {
       compiler_options[TIME] = "false";
     }
-    compiler_options[BACKEND] = "mlir";
   } catch (const std::exception &err) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
                "Error while parsing arguments\n");
