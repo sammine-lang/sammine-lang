@@ -44,7 +44,7 @@ mlir::LLVM::LLVMFunctionType
 MLIRGenImpl::getClosureFuncType(const FunctionType &ft) {
   auto retType = ft.get_return_type();
   if (retType.type_kind == TypeKind::Array)
-    sammine_util::abort("MLIRGen: closure returning array not supported");
+    imm_error("closure returning array not supported");
 
   auto ptrTy = llvmPtrTy();
   llvm::SmallVector<mlir::Type> params;
@@ -204,9 +204,9 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
                 .getResult();
       mlir::func::ReturnOp::create(builder, location,
                                    mlir::ValueRange{zeroVal});
-      sammine_util::abort(fmt::format(
-          "MLIRGen: non-void function '{}' has no return value — compiler bug",
-          funcName));
+      imm_error(fmt::format(
+          "non-void function '{}' has no return value — compiler bug",
+          funcName), ast->get_location());
     }
   }
 

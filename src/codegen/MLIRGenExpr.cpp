@@ -20,8 +20,14 @@ mlir::Value MLIRGenImpl::emitNumberExpr(AST::NumberExprAST *ast) {
   if (isFloatType(type)) {
     auto mlirType = mlir::cast<mlir::FloatType>(convertType(type));
     double val = std::stod(ast->number);
+    llvm::APFloat apVal(val);
+    if (type.type_kind == TypeKind::F32_t) {
+      bool losesInfo = false;
+      apVal.convert(llvm::APFloat::IEEEsingle(),
+                    llvm::APFloat::rmNearestTiesToEven, &losesInfo);
+    }
     return mlir::arith::ConstantFloatOp::create(
-               builder, location, mlirType, llvm::APFloat(val))
+               builder, location, mlirType, apVal)
         .getResult();
   }
 
@@ -125,8 +131,8 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     }
   }
 
-  sammine_util::abort(
-      fmt::format("MLIRGen: unknown variable '{}'", ast->variableName));
+  imm_error(fmt::format("unknown variable '{}'", ast->variableName),
+            ast->get_location());
 }
 
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
@@ -171,7 +177,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       return rhs;
     }
 
-    sammine_util::abort("MLIRGen: unsupported assignment LHS");
+    imm_error("unsupported assignment LHS", ast->get_location());
   }
 
   mlir::Value lhs = emitExpr(ast->LHS.get());
@@ -288,9 +294,9 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
             .getResult();
       default:
-        sammine_util::abort(fmt::format(
-            "MLIRGen: unsupported integer comparison operator '{}'",
-            ast->Op->lexeme));
+        imm_error(fmt::format("unsupported integer operator '{}'",
+                              ast->Op->lexeme),
+                  ast->get_location());
       }
       return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
           .getResult();
@@ -318,9 +324,9 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         pred = mlir::arith::CmpFPredicate::OGE;
         break;
       default:
-        sammine_util::abort(fmt::format(
-            "MLIRGen: unsupported float comparison operator '{}'",
-            ast->Op->lexeme));
+        imm_error(fmt::format("unsupported float operator '{}'",
+                              ast->Op->lexeme),
+                  ast->get_location());
       }
       return mlir::arith::CmpFOp::create(builder, location, pred, lhs, rhs)
           .getResult();
@@ -342,7 +348,8 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         pred = mlir::arith::CmpIPredicate::ne;
         break;
       default:
-        sammine_util::abort("MLIRGen: only == and != supported for pointers");
+        imm_error("only == and != supported for pointers",
+                  ast->get_location());
       }
       return mlir::arith::CmpIOp::create(builder, location, pred,
                                            lhsInt, rhsInt)
@@ -372,7 +379,9 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
         return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
             .getResult();
       default:
-        sammine_util::abort("MLIRGen: unsupported bool operator");
+        imm_error(fmt::format("unsupported bool operator '{}'",
+                              ast->Op->lexeme),
+                  ast->get_location());
       }
       return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
           .getResult();
@@ -424,9 +433,9 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
     }
   }
 
-  sammine_util::abort(
-      fmt::format("MLIRGen: unsupported binary operator '{}'",
-                  ast->Op->lexeme));
+  imm_error(fmt::format("unsupported binary operator '{}'",
+                        ast->Op->lexeme),
+            ast->get_location());
 }
 
 mlir::Value MLIRGenImpl::emitUnaryNegExpr(AST::UnaryNegExprAST *ast) {
@@ -450,7 +459,9 @@ mlir::Value MLIRGenImpl::emitUnaryNegExpr(AST::UnaryNegExprAST *ast) {
         .getResult();
   }
 
-  sammine_util::abort("MLIRGen: unsupported unary negation type");
+  imm_error(fmt::format("unsupported unary negation on type '{}'",
+                        type.to_string()),
+            ast->get_location());
 }
 
 mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
@@ -681,7 +692,8 @@ mlir::Value MLIRGenImpl::emitDerefExpr(AST::DerefExprAST *ast) {
 mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
   auto *varExpr = llvm::dyn_cast<AST::VariableExprAST>(ast->operand.get());
   if (!varExpr)
-    sammine_util::abort("MLIRGen: address-of (&) requires a variable operand");
+    imm_error("address-of (&) requires a variable operand",
+              ast->get_location());
 
   // All variables (including arrays) are in llvm.alloca — return the pointer
   return symbolTable.get_from_name(varExpr->variableName);
@@ -941,7 +953,7 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
     elemEq = mlir::arith::CmpIOp::create(
         builder, location, mlir::arith::CmpIPredicate::eq, lhsInt, rhsInt);
   } else
-    sammine_util::abort("MLIRGen: unsupported array element type for comparison");
+    imm_error("unsupported array element type for comparison");
 
   // If equal → increment and loop back to header; else → mismatch
   auto one = mlir::arith::ConstantIndexOp::create(builder, location, 1);
