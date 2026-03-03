@@ -77,6 +77,7 @@ public:
   }
   BiTypeCheckerVisitor(ASTProperties &props) : props_(props) {
     this->enter_new_scope();
+    type_map_ordering.populate();
   }
 
   std::optional<Type> get_type_from_id(const std::string &str) const {
@@ -332,7 +333,7 @@ public:
       auto pointee = resolve_type_expr(ptr->pointee.get());
       if (pointee.is_poisoned()) return pointee;
       auto result = Type::Pointer(pointee);
-      result.is_linear = ptr->is_linear;
+      result.linearity = ptr->is_linear ? Linearity::Linear : Linearity::NonLinear;
       return result;
     }
 

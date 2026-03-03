@@ -138,11 +138,18 @@ public:
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, TupleType, std::string, std::monostate>;
 
+enum class Mutability : uint8_t { Immutable = 0, Mutable = 1 };
+enum class Linearity : uint8_t { NonLinear = 0, Linear = 1 };
+
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
-  bool is_mutable = false;
-  bool is_linear = false;
+  Mutability mutability = Mutability::Immutable;
+  Linearity linearity = Linearity::NonLinear;
+
+  // Compat accessors for migration
+  bool is_mutable_v() const { return mutability == Mutability::Mutable; }
+  bool is_linear_v() const { return linearity == Linearity::Linear; }
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
   static Type I32_t() { return Type{TypeKind::I32_t, std::monostate()}; }
@@ -239,7 +246,7 @@ struct Type {
     case TypeKind::Char:
       return "char";
     case TypeKind::Pointer:
-      return (is_linear ? "'" : "") + std::string("ptr<") +
+      return (linearity == Linearity::Linear ? "'" : "") + std::string("ptr<") +
              std::get<PointerType>(type_data).get_pointee().to_string() + ">";
     case TypeKind::Array:
       return "[" + std::get<ArrayType>(type_data).get_element().to_string() +
@@ -334,7 +341,7 @@ struct Type {
   }
 
   bool containsLinear() const {
-    if (is_linear)
+    if (linearity == Linearity::Linear)
       return true;
     bool found = false;
     forEachInnerType([&](const Type &inner) {
@@ -404,12 +411,20 @@ inline bool is_builtin_type_name(std::string_view name) {
 }
 
 struct TypeMapOrdering {
-  // TODO: Planned for future subtyping support — don't remove
   std::map<Type, Type> type_map;
-  // TODO: Planned for future subtyping support — don't remove
+
+  /// Populate the type lattice with built-in subtype edges
+  void populate();
+
   std::vector<Type> visit_ancestor(const Type &t) const;
-  // TODO: Planned for future subtyping support — don't remove
   std::optional<Type> lowest_common_type(const Type &a, const Type &b) const;
 
-  bool compatible_to_from(const Type &a, const Type &b) const;
+  /// Full check: structure + qualifiers (use for assignments, args, returns)
+  bool compatible_to_from(const Type &to, const Type &from) const;
+
+  /// Structure only: ignores mutability/linearity (use for if/case arm unification)
+  bool structurally_compatible(const Type &to, const Type &from) const;
+
+  /// Qualifier check only: mutability + linearity
+  bool qualifier_compatible(const Type &to, const Type &from) const;
 };

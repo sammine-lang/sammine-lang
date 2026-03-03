@@ -1,5 +1,6 @@
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
+#include <algorithm>
 #include <set>
 #include <span>
 //! \file Types.cpp
@@ -107,7 +108,7 @@ bool Type::operator<(const Type &t) const {
 }
 bool Type::operator>(const Type &t) const { return t < *this; }
 // Compares fundamental type structure only (TypeKind + TypeData).
-// Qualifiers like is_mutable and is_linear are intentionally ignored — use
+// Qualifiers like mutability and linearity are intentionally ignored — use
 // compatible_to_from() for directional compatibility checks.
 bool Type::operator==(const Type &other) const {
   if (this->type_kind != other.type_kind)
@@ -159,14 +160,14 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
 
 std::optional<std::string> incompatibility_hint(const Type &expected,
                                                 const Type &actual) {
-  // Linearity mismatch: both pointers but different is_linear
+  // Linearity mismatch: both pointers but different linearity
   if (expected.type_kind == TypeKind::Pointer &&
       actual.type_kind == TypeKind::Pointer &&
-      expected.is_linear != actual.is_linear) {
+      expected.linearity != actual.linearity) {
     auto pointee = std::get<PointerType>(expected.type_data)
                        .get_pointee()
                        .to_string();
-    if (actual.is_linear) {
+    if (actual.linearity == Linearity::Linear) {
       return fmt::format(
           "note: 'ptr<{}>' is a linear (owned) pointer, 'ptr<{}>' is "
           "non-linear — these are incompatible",
@@ -180,7 +181,8 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
   }
 
   // Mutability mismatch
-  if (expected.is_mutable && !actual.is_mutable && !actual.is_literal()) {
+  if (expected.mutability == Mutability::Mutable &&
+      actual.mutability != Mutability::Mutable && !actual.is_literal()) {
     return "note: expected a mutable value, but got an immutable one";
   }
 
@@ -213,50 +215,59 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
   return std::nullopt;
 }
 
-bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
-  // Never is compatible with any type (bottom type subtyping rule)
-  // Since Never represents "no value is ever produced", it can be assigned
-  // to any type because the assignment will never actually happen.
-  if (b.type_kind == TypeKind::Never) {
-    return true;
-  }
+void TypeMapOrdering::populate() {
+  // Polymorphic integer narrowing: Integer is parent of all concrete ints
+  type_map[Type::I32_t()] = Type::Integer();
+  type_map[Type::I64_t()] = Type::Integer();
+  type_map[Type::U32_t()] = Type::Integer();
+  type_map[Type::U64_t()] = Type::Integer();
 
-  if (a.type_kind == TypeKind::NonExistent &&
-      b.type_kind != TypeKind::NonExistent) {
-    return true;
-  }
+  // Polymorphic float narrowing: Flt is parent of all concrete floats
+  type_map[Type::F32_t()] = Type::Flt();
+  type_map[Type::F64_t()] = Type::Flt();
+}
 
-
-  // Linearity check: linear and non-linear pointers are incompatible
-  if (a.type_kind == TypeKind::Pointer && b.type_kind == TypeKind::Pointer) {
-    if (a.is_linear != b.is_linear) {
+bool TypeMapOrdering::qualifier_compatible(const Type &to,
+                                            const Type &from) const {
+  // Linearity for pointers: must match exactly
+  // ('ptr<T> and ptr<T> have different ownership semantics)
+  if (to.type_kind == TypeKind::Pointer && from.type_kind == TypeKind::Pointer) {
+    if (to.linearity != from.linearity)
       return false;
-    }
   }
+  return true;
+}
 
-  // Polymorphic integer literal can flow into concrete integer types
-  if (b.type_kind == TypeKind::Integer) {
-    return a.type_kind == TypeKind::I32_t || a.type_kind == TypeKind::I64_t ||
-           a.type_kind == TypeKind::U32_t || a.type_kind == TypeKind::U64_t ||
-           a.type_kind == TypeKind::Integer;
-  }
-  // Polymorphic float literal can flow into any concrete float type
-  if (b.type_kind == TypeKind::Flt) {
-    return a.type_kind == TypeKind::F64_t || a.type_kind == TypeKind::F32_t ||
-           a.type_kind == TypeKind::Flt;
+bool TypeMapOrdering::structurally_compatible(const Type &to,
+                                               const Type &from) const {
+  // Never is compatible with any type (bottom type subtyping rule)
+  if (from.type_kind == TypeKind::Never)
+    return true;
+
+  if (to.type_kind == TypeKind::NonExistent &&
+      from.type_kind != TypeKind::NonExistent)
+    return true;
+
+  // Polymorphic numeric: use the lattice.
+  // "from" is polymorphic (Integer or Flt) — check if "from" appears in
+  // "to"'s ancestor chain (meaning "to" narrows to "from"'s category).
+  if (from.is_polymorphic_numeric()) {
+    auto ancestors = visit_ancestor(to);
+    return std::any_of(ancestors.begin(), ancestors.end(),
+                       [&](const Type &t) { return t == from; });
   }
 
   // Integer-backed enum can flow into its backing type
-  if (b.type_kind == TypeKind::Enum) {
-    auto &et = std::get<EnumType>(b.type_data);
-    if (et.is_integer_backed() && a.type_kind == et.get_backing_type())
+  if (from.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(from.type_data);
+    if (et.is_integer_backed() && to.type_kind == et.get_backing_type())
       return true;
   }
 
   // Tuple compatibility: element-wise, same arity
-  if (a.type_kind == TypeKind::Tuple && b.type_kind == TypeKind::Tuple) {
-    auto &at = std::get<TupleType>(a.type_data);
-    auto &bt = std::get<TupleType>(b.type_data);
+  if (to.type_kind == TypeKind::Tuple && from.type_kind == TypeKind::Tuple) {
+    auto &at = std::get<TupleType>(to.type_data);
+    auto &bt = std::get<TupleType>(from.type_data);
     if (at.size() != bt.size())
       return false;
     for (size_t i = 0; i < at.size(); i++) {
@@ -266,5 +277,12 @@ bool TypeMapOrdering::compatible_to_from(const Type &a, const Type &b) const {
     return true;
   }
 
-  return a == b;
+  return to == from;
+}
+
+bool TypeMapOrdering::compatible_to_from(const Type &to,
+                                          const Type &from) const {
+  if (!qualifier_compatible(to, from))
+    return false;
+  return structurally_compatible(to, from);
 }

@@ -384,6 +384,20 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   ast->set_type(enum_type);
   typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
 
+  // Add lattice edge: integer-backed enum → backing type
+  if (ast->is_integer_backed) {
+    auto backing = [&]() -> Type {
+      switch (backing_type) {
+      case TypeKind::I32_t: return Type::I32_t();
+      case TypeKind::I64_t: return Type::I64_t();
+      case TypeKind::U32_t: return Type::U32_t();
+      case TypeKind::U64_t: return Type::U64_t();
+      default: return Type::I32_t();
+      }
+    }();
+    type_map_ordering.type_map[enum_type] = backing;
+  }
+
   // Register variant constructors with qualified keys (enum_name::variant_name)
   // so lookups match the fully-qualified names produced by scope generator
   auto &et = std::get<EnumType>(enum_type.type_data);

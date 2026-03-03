@@ -108,14 +108,14 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
     ast->set_type(Type::Poisoned());
   }
 
-  { auto t = ast->get_type(); t.is_mutable = ast->is_mutable; ast->set_type(t); }
+  { auto t = ast->get_type(); t.mutability = ast->is_mutable ? Mutability::Mutable : Mutability::Immutable; ast->set_type(t); }
 
   id_to_type.registerNameT(ast->TypedVar->name, ast->get_type());
   LOG({
     fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} ({}{})\n",
                ast->TypedVar->name, ast->get_type().to_string(),
                ast->is_mutable ? "mutable" : "immutable",
-               ast->get_type().is_linear ? ", linear" : "");
+               ast->get_type().is_linear_v() ? ", linear" : "");
   });
   return ast->get_type();
 }
@@ -576,11 +576,11 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   // One polymorphic, one concrete: resolve polymorphic to concrete
   if (ast->LHS->get_type().is_polymorphic_numeric() &&
       !ast->RHS->get_type().is_polymorphic_numeric()) {
-    if (type_map_ordering.compatible_to_from(ast->RHS->get_type(), ast->LHS->get_type()))
+    if (type_map_ordering.structurally_compatible(ast->RHS->get_type(), ast->LHS->get_type()))
       resolve_literal_type(ast->LHS.get(), ast->RHS->get_type());
   } else if (ast->RHS->get_type().is_polymorphic_numeric() &&
              !ast->LHS->get_type().is_polymorphic_numeric()) {
-    if (type_map_ordering.compatible_to_from(ast->LHS->get_type(), ast->RHS->get_type()))
+    if (type_map_ordering.structurally_compatible(ast->LHS->get_type(), ast->RHS->get_type()))
       resolve_literal_type(ast->RHS.get(), ast->LHS->get_type());
   }
 
@@ -619,7 +619,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
 
   if (ast->Op->is_assign()) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-      if (!var->get_type().is_mutable) {
+      if (!var->get_type().is_mutable_v()) {
         this->add_error(
             ast->Op->get_location(),
             fmt::format("Cannot reassign immutable variable '{}'. "
@@ -630,7 +630,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
       if (auto *arr_var =
               llvm::dyn_cast<VariableExprAST>(idx->array_expr.get())) {
-        if (!arr_var->get_type().is_mutable) {
+        if (!arr_var->get_type().is_mutable_v()) {
           this->add_error(
               ast->Op->get_location(),
               fmt::format(
@@ -842,14 +842,14 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
     return ast->set_type(then_type);
   }
 
-  // Both branches must have compatible types
+  // Both branches must have compatible types (structural only — ignore qualifiers)
   if (then_type != else_type) {
-    if (type_map_ordering.compatible_to_from(else_type, then_type)) {
+    if (type_map_ordering.structurally_compatible(else_type, then_type)) {
       resolve_literal_type(ast->thenBlockAST->Statements.back().get(),
                            else_type);
       ast->thenBlockAST->set_type(else_type);
       return ast->set_type(else_type);
-    } else if (type_map_ordering.compatible_to_from(then_type, else_type)) {
+    } else if (type_map_ordering.structurally_compatible(then_type, else_type)) {
       resolve_literal_type(ast->elseBlockAST->Statements.back().get(),
                            then_type);
       ast->elseBlockAST->set_type(then_type);
@@ -870,7 +870,7 @@ Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
     return ast->get_type();
   auto ast_type = resolve_type_expr(ast->type_expr.get());
 
-  ast_type.is_mutable = ast->is_mutable;
+  ast_type.mutability = ast->is_mutable ? Mutability::Mutable : Mutability::Immutable;
   id_to_type.registerNameT(ast->name, ast_type);
   return ast->set_type(ast_type);
 }
@@ -922,7 +922,7 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
-  { auto t = Type::Pointer(element_type); t.is_linear = true; ast->set_type(t); } // alloc always produces linear pointers
+  { auto t = Type::Pointer(element_type); t.linearity = Linearity::Linear; ast->set_type(t); } // alloc always produces linear pointers
   return ast->get_type();
 }
 
@@ -1268,14 +1268,14 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
       auto arm_type = arm.body->accept_synthesis(this);
       exit_new_scope();
 
-      // Unify with result type
+      // Unify with result type (structural only — ignore qualifiers)
       if (result_type.type_kind == TypeKind::Never) {
         result_type = arm_type;
       } else if (arm_type.type_kind != TypeKind::Never &&
                  arm_type != result_type) {
-        if (type_map_ordering.compatible_to_from(result_type, arm_type)) {
+        if (type_map_ordering.structurally_compatible(result_type, arm_type)) {
           // arm_type is compatible with result_type, keep result_type
-        } else if (type_map_ordering.compatible_to_from(arm_type, result_type)) {
+        } else if (type_map_ordering.structurally_compatible(arm_type, result_type)) {
           result_type = arm_type;
         } else {
           this->add_error(
@@ -1330,14 +1330,14 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     auto arm_type = arm.body->accept_synthesis(this);
     exit_new_scope();
 
-    // Unify with result type (same Never logic as IfExprAST)
+    // Unify with result type (structural only — ignore qualifiers)
     if (result_type.type_kind == TypeKind::Never) {
       result_type = arm_type;
     } else if (arm_type.type_kind != TypeKind::Never &&
                arm_type != result_type) {
-      if (type_map_ordering.compatible_to_from(result_type, arm_type)) {
+      if (type_map_ordering.structurally_compatible(result_type, arm_type)) {
         // arm_type is compatible with result_type, keep result_type
-      } else if (type_map_ordering.compatible_to_from(arm_type, result_type)) {
+      } else if (type_map_ordering.structurally_compatible(arm_type, result_type)) {
         result_type = arm_type;
       } else {
         this->add_error(

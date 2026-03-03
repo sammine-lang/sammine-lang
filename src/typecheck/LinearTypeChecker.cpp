@@ -152,7 +152,7 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
 
   // Register linear parameters (including wrapper types with linear fields)
   for (auto &param : ast->Prototype->parameterVectors) {
-    if (param->get_type().is_linear) {
+    if (param->get_type().linearity == Linearity::Linear) {
       register_linear(param->name, param->get_location());
     } else if (param->get_type().containsLinear()) {
       register_linear(param->name, param->get_location());
@@ -177,7 +177,7 @@ void LinearTypeChecker::check_block(BlockAST *ast) {
                       "Linear pointer from alloc is discarded"
                       " (must be stored in a variable)");
     } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt.get())) {
-      if (call->get_type().is_linear || call->get_type().containsLinear()) {
+      if (call->get_type().linearity == Linearity::Linear || call->get_type().containsLinear()) {
         this->add_error(
             call->get_location(),
             fmt::format(
@@ -241,7 +241,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     check_stmt(ast->Expression.get());
     // Register any linear vars from the destructured elements
     for (auto &var : ast->destructure_vars) {
-      if (var->get_type().is_linear)
+      if (var->get_type().linearity == Linearity::Linear)
         register_linear(var->name, var->get_location());
     }
     return;
@@ -252,7 +252,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     auto *info = find_linear(var->variableName);
     if (info) {
       consume(info, loc);
-      if (ast->get_type().is_linear) {
+      if (ast->get_type().linearity == Linearity::Linear) {
         register_linear(ast->TypedVar->name, loc);
       } else if (ast->get_type().containsLinear()) {
         // Move of wrapper type — register inner linear tracking on dest
@@ -270,7 +270,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
         consume(child, loc);
-        if (ast->get_type().is_linear) {
+        if (ast->get_type().linearity == Linearity::Linear) {
           register_linear(ast->TypedVar->name, loc);
         } else if (ast->get_type().containsLinear()) {
           register_linear(ast->TypedVar->name, loc);
@@ -286,7 +286,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   check_stmt(ast->Expression.get());
 
   // If the variable itself is linear, register it
-  if (ast->get_type().is_linear) {
+  if (ast->get_type().linearity == Linearity::Linear) {
     register_linear(ast->TypedVar->name, loc);
   } else if (ast->get_type().containsLinear()) {
     // Wrapper type: track inner linear fields (struct, tuple, array)
@@ -317,7 +317,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     // LHS: check for overwrite without consuming, or re-register
     if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       auto *lhs_info = find_linear(lhs_var->variableName);
-      if (lhs_info && ast->RHS->get_type().is_linear) {
+      if (lhs_info && ast->RHS->get_type().linearity == Linearity::Linear) {
         if (lhs_info->state == VarState::Unconsumed) {
           this->add_error(
               ast->get_location(),
@@ -351,7 +351,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
               llvm::dyn_cast<VariableExprAST>(ast->arguments[i].get())) {
         auto *info = find_linear(var->variableName);
         if (info &&
-            (params[i].is_linear || params[i].containsLinear())) {
+            (params[i].linearity == Linearity::Linear || params[i].containsLinear())) {
           consume(info, ast->get_location());
           continue;
         }
@@ -363,7 +363,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
                 llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
           auto *child = find_child(obj->variableName, fa->field_name);
           if (child &&
-              (params[i].is_linear || params[i].containsLinear())) {
+              (params[i].linearity == Linearity::Linear || params[i].containsLinear())) {
             consume(child, ast->get_location());
             continue;
           }
@@ -385,7 +385,7 @@ void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
   // Forbid &expr when the operand is linear. Taking the address of a linear
   // value creates a non-linear pointer to it, which would allow aliasing
   // and break the single-owner invariant.
-  if (ast->operand->get_type().is_linear) {
+  if (ast->operand->get_type().linearity == Linearity::Linear) {
     this->add_error(
         ast->get_location(),
         fmt::format("Cannot take address of a linear value — "
@@ -464,7 +464,7 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
 // e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
 // NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
 static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
-  if (t.type_kind == TypeKind::Pointer && !t.is_linear)
+  if (t.type_kind == TypeKind::Pointer && t.linearity != Linearity::Linear)
     return fmt::format("non-linear {}", t.to_string());
 
   if (t.type_kind == TypeKind::Struct) {
@@ -685,7 +685,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
             parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
                                                  parent.name + "." + names[i], {}};
         // Recurse: field itself may be a struct/array/tuple with linear innards
-        if (!types[i].is_linear)
+        if (types[i].linearity != Linearity::Linear)
           register_inner_linear(child, types[i], loc);
       }
     }
@@ -697,7 +697,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
         auto &child =
             parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
                                             parent.name + "." + key, {}};
-        if (!tt.get_element(i).is_linear)
+        if (tt.get_element(i).linearity != Linearity::Linear)
           register_inner_linear(child, tt.get_element(i), loc);
       }
     }
@@ -707,7 +707,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
       auto &child =
           parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
                                           parent.name + "[*]", {}};
-      if (!at.get_element().is_linear)
+      if (at.get_element().linearity != Linearity::Linear)
         register_inner_linear(child, at.get_element(), loc);
     }
   }
