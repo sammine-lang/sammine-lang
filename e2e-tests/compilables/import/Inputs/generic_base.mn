@@ -1,0 +1,7 @@
+export let identity<T>(x : T) -> T {
+  x
+}
+
+export let first<T>(a : T, b : T) -> T {
+  a
+}

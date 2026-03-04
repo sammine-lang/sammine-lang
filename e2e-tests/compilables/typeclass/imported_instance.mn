@@ -1,0 +1,12 @@
+# RUN: %sammine --file %full %O -I %dir/Inputs && %T/%base.exe | %check %full
+# CHECK:      32
+# CHECK-NEXT: 64
+
+import has_instance;
+import std;
+
+let main() -> i32 {
+  std::printf("%ld\n", describe<i32>());
+  std::printf("%ld\n", describe<i64>());
+  return 0;
+}

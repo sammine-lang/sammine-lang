@@ -1,0 +1,11 @@
+import generic_base;
+
+export let apply_both<T>(x : T, y : T) -> T {
+  let a = generic_base::identity<T>(x);
+  let b = generic_base::first<T>(x, y);
+  b
+}
+
+export let nested_identity<T>(x : T) -> T {
+  generic_base::identity<T>(generic_base::identity<T>(x))
+}

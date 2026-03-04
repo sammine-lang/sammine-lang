@@ -343,6 +343,16 @@ void Compiler::resolve_imports() {
           continue;
         programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                          std::move(def));
+      } else if (llvm::isa<AST::TypeClassDeclAST>(def.get())) {
+        if (!is_transitive) {
+          programAST->DefinitionVec.insert(
+              programAST->DefinitionVec.begin(), std::move(def));
+        }
+      } else if (llvm::isa<AST::TypeClassInstanceAST>(def.get())) {
+        if (!is_transitive) {
+          programAST->DefinitionVec.insert(
+              programAST->DefinitionVec.begin(), std::move(def));
+        }
       }
     }
 

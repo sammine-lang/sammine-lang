@@ -1,0 +1,13 @@
+# RUN: %sammine --file %dir/Inputs/generic_base.mn %O && %sammine --file %dir/Inputs/generic_mid.mn %O %I -I %dir/Inputs && %sammine --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
+# CHECK: 10 3.14 99
+
+import generic_mid;
+import std;
+
+let main() -> i32 {
+  let a = generic_mid::apply_both<i32>(10, 20);
+  let b = generic_mid::apply_both<f64>(3.14, 2.71);
+  let c = generic_mid::nested_identity<i32>(99);
+  std::printf("%d %.2f %d", a, b, c);
+  return 0;
+}
