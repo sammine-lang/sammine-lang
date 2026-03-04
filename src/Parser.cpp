@@ -70,7 +70,7 @@ auto Parser::ParseImport() -> std::optional<AST::ImportDecl> {
   }
 
   if (!expect(TokSemiColon))
-    imm_error("Expected ';' after import statement", decl.location);
+    imm_error("Missing ';' after import statement", decl.location);
   return decl;
 }
 
@@ -96,7 +96,8 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
     return programAST;
   }
   if (!tokStream->isEnd())
-    this->imm_error("Expected a valid declaration",
+    this->imm_error("Unexpected token — expected 'let', 'struct', 'type', "
+                    "'import', 'reuse', or 'typeclass'",
                     tokStream->currentLocation());
   return programAST;
 }
@@ -283,7 +284,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
       return {nullptr, FAILED};
     }
     if (!expect(TokSemiColon))
-      imm_error("Expected ';' after type alias definition",
+      imm_error("Missing ';' — type aliases must end with ';'",
                 id->get_location());
     auto alias = std::make_unique<TypeAliasDefAST>(id, std::move(type_expr));
     return {std::move(alias), SUCCESS};
@@ -369,7 +370,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   }
 
   if (!expect(TokSemiColon))
-    imm_error("Expected ';' after type definition",
+    imm_error("Missing ';' — enum definitions must end with ';'",
               variants.empty() ? id->get_location() : variants.back().location);
 
   auto enum_def = std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location, std::move(variants));
@@ -396,7 +397,7 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
     auto [prototype, result] = ParsePrototype();
     if (result == SUCCESS) {
       if (!expect(TokSemiColon))
-        imm_error("Expected ';' after reuse declaration",
+        imm_error("Missing ';' after reuse declaration",
                   reuse_tok->get_location());
       auto node = std::make_unique<ExternAST>(std::move(prototype));
       node->is_exposed = is_exported;
@@ -515,7 +516,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     }
     auto semicolon = expect(TokenType::TokSemiColon, true);
     if (!semicolon) {
-      this->imm_error("Expected ';' after variable definition",
+      this->imm_error("Missing ';' after variable definition",
                       tokStream->currentLocation());
       return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr),
                                           is_mutable),
@@ -536,7 +537,8 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   }
   auto assign_tok = expect(TokenType::TokASSIGN, true, TokSemiColon);
   if (!assign_tok) {
-    this->imm_error("Expected '=' in variable definition",
+    this->imm_error("Missing '=' in variable definition — syntax is "
+                    "'let name: type = value;'",
                     typedVar->get_location());
     return {std::make_unique<VarDefAST>(let, std::move(typedVar), nullptr,
                                         is_mutable),
@@ -557,7 +559,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     return {std::make_unique<VarDefAST>(let, std::move(typedVar),
                                         std::move(expr), is_mutable),
             SUCCESS};
-  this->imm_error("Expected ';' after variable definition",
+  this->imm_error("Missing ';' after variable definition",
                   tokStream->currentLocation());
   return {std::make_unique<VarDefAST>(let, std::move(typedVar), std::move(expr),
                                       is_mutable),
@@ -1059,7 +1061,7 @@ auto Parser::ParseReturnExpr() -> p<ExprAST> {
     return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
             FAILED};
   REQUIRE(
-      _semi, TokSemiColon, "Expected ';' after return statement",
+      _semi, TokSemiColon, "Missing ';' after return statement",
       return_tok->get_location(),
       {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)), FAILED});
   if (result == NONCOMMITTED)
@@ -1578,7 +1580,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
         break;
       }
       this->imm_error(
-          fmt::format("Expected ';' after expression statement, found '{}'",
+          fmt::format("Missing ';' after expression — found '{}' instead",
                       tok->lexeme),
           tok->get_location());
       blockAST->Statements.push_back(std::move(a));

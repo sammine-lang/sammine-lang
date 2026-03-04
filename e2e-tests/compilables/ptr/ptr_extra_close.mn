@@ -3,7 +3,7 @@
 # CHECK:         3|let main() -> i32 {
 # CHECK-NEXT:    4|  let p : ptr<i32>> = alloc<i32>(1);
 # CHECK-NEXT:     |      ^^^^^^^
-# CHECK-NEXT:     |      Expected '=' in variable definition
+# CHECK-NEXT:     |      Missing '=' in variable definition — syntax is 'let name: type = value;'
 # CHECK-NEXT:    5|  return 0;
 # CHECK-NEXT:    6|}
 let main() -> i32 {
