@@ -198,7 +198,7 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
             FAILED};
   }
   if (!expect(TokSemiColon))
-    imm_error("Expected ';' after struct definition",
+    imm_error("Missing ';' — struct definitions must end with '};'",
               right_curly->get_location());
 
   auto struct_def = std::make_unique<StructDefAST>(struct_pqn.qn, struct_pqn.location, std::move(struct_members));
