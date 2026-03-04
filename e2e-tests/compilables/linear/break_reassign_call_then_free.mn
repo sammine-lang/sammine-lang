@@ -4,10 +4,10 @@
 # CHECK-NEXT:   17|  *p = 42;
 # CHECK-NEXT:   18|  let v : i32 = consume_ptr(p);
 # CHECK-NEXT:     |                            ┬
-# CHECK-NEXT:     |                            ╰─ 'p' was previously consumed here
+# CHECK-NEXT:     |                            ╰─ 'p' was passed to function here
 # CHECK-NEXT:   19|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already passed to function previously
 # CHECK-NEXT:   20|  std::printf("%d
 # CHECK-NEXT:   21|", v);
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

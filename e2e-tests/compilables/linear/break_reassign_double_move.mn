@@ -4,10 +4,10 @@
 # CHECK-NEXT:   11|  *p = 42;
 # CHECK-NEXT:   12|  let q = p;
 # CHECK-NEXT:     |  ────────┬
-# CHECK-NEXT:     |          ╰─ 'p' was previously consumed here
+# CHECK-NEXT:     |          ╰─ 'p' was moved here
 # CHECK-NEXT:   13|  let r = p;
 # CHECK-NEXT:     |  ────────┬
-# CHECK-NEXT:     |          ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:     |          ╰─ Cannot use linear variable 'p' — it was already moved previously
 # CHECK-NEXT:   14|  free(q);
 # CHECK-NEXT:   15|  free(r);
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

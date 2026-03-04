@@ -4,12 +4,12 @@
 # CHECK-NEXT:    5|  let p = alloc<i32>(1);
 # CHECK-NEXT:    6|  let a : ['ptr<i32>;1] = [p];
 # CHECK-NEXT:     |                           ┬
-# CHECK-NEXT:     |                           ╰─ 'p' was previously consumed here
+# CHECK-NEXT:     |                           ╰─ 'p' was moved into array here
 # CHECK-NEXT:     |  ─────────────────────────┬
 # CHECK-NEXT:     |                           ╰─ Linear variable 'a[*]' must be consumed before scope exit (use free() to deallocate)
 # CHECK-NEXT:    7|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into array previously
 # CHECK-NEXT:    8|  return 0;
 # CHECK-NEXT:    9|}
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

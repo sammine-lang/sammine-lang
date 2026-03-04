@@ -41,21 +41,23 @@ void LinearTypeChecker::register_linear(const std::string &name,
                                         sammine_util::Location loc) {
   if (scope_stack.empty())
     return;
-  scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name, {}};
+  scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name, {}, {}};
 }
 
-void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc) {
+void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc,
+                                const std::string &reason) {
   if (info->state == VarState::Consumed) {
     this->add_error(
-        loc, fmt::format("Linear variable '{}' has already been consumed",
-                         info->name));
+        loc, fmt::format("Cannot use linear variable '{}' — it was already {} previously",
+                         info->name, info->consume_reason));
     this->add_error(
         info->consume_location,
-        fmt::format("'{}' was previously consumed here", info->name));
+        fmt::format("'{}' was {} here", info->name, info->consume_reason));
     return;
   }
   info->state = VarState::Consumed;
   info->consume_location = loc;
+  info->consume_reason = reason;
 }
 
 VarInfo *LinearTypeChecker::find_linear(const std::string &name) {
@@ -216,6 +218,8 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
     check_tuple_literal(tl);
   else if (auto *dr = llvm::dyn_cast<DerefExprAST>(stmt))
     check_deref(dr);
+  else if (auto *idx = llvm::dyn_cast<IndexExprAST>(stmt))
+    check_index(idx);
   else if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(stmt))
     check_addr_of(addr);
   // All other nodes (number, string, etc.): no linear state changes
@@ -235,7 +239,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
       auto *info = find_linear(var->variableName);
       if (info)
-        consume(info, loc);
+        consume(info, loc, "destructured");
     }
     // Walk into RHS for other expressions
     check_stmt(ast->Expression.get());
@@ -251,7 +255,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      consume(info, loc);
+      consume(info, loc, "moved");
       if (ast->get_type().linearity == Linearity::Linear) {
         register_linear(ast->TypedVar->name, loc);
       } else if (ast->get_type().containsLinear()) {
@@ -269,7 +273,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
-        consume(child, loc);
+        consume(child, loc, "moved");
         if (ast->get_type().linearity == Linearity::Linear) {
           register_linear(ast->TypedVar->name, loc);
         } else if (ast->get_type().containsLinear()) {
@@ -307,7 +311,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
       auto *rhs_info = find_linear(var->variableName);
       if (rhs_info)
-        consume(rhs_info, ast->get_location());
+        consume(rhs_info, ast->get_location(), "moved");
       else
         check_stmt(ast->RHS.get());
     } else {
@@ -352,7 +356,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
         auto *info = find_linear(var->variableName);
         if (info &&
             (params[i].linearity == Linearity::Linear || params[i].containsLinear())) {
-          consume(info, ast->get_location());
+          consume(info, ast->get_location(), "passed to function");
           continue;
         }
       }
@@ -364,7 +368,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
           auto *child = find_child(obj->variableName, fa->field_name);
           if (child &&
               (params[i].linearity == Linearity::Linear || params[i].containsLinear())) {
-            consume(child, ast->get_location());
+            consume(child, ast->get_location(), "passed to function");
             continue;
           }
         }
@@ -404,12 +408,12 @@ void LinearTypeChecker::check_deref(DerefExprAST *ast) {
     if (info && info->state == VarState::Consumed) {
       this->add_error(
           ast->get_location(),
-          fmt::format("Cannot dereference linear variable '{}' — it has "
-                      "already been consumed",
-                      var->variableName));
+          fmt::format("Cannot dereference '{}' — it was already {} previously",
+                      var->variableName, info->consume_reason));
       this->add_error(
           info->consume_location,
-          fmt::format("'{}' was consumed here", var->variableName));
+          fmt::format("'{}' was {} here", var->variableName,
+                      info->consume_reason));
       return;
     }
   }
@@ -420,12 +424,12 @@ void LinearTypeChecker::check_deref(DerefExprAST *ast) {
       if (child && child->state == VarState::Consumed) {
         this->add_error(
             ast->get_location(),
-            fmt::format("Cannot dereference '{}' — it has "
-                        "already been consumed",
-                        child->name));
+            fmt::format("Cannot dereference '{}' — it was already {} previously",
+                        child->name, child->consume_reason));
         this->add_error(
             child->consume_location,
-            fmt::format("'{}' was consumed here", child->name));
+            fmt::format("'{}' was {} here", child->name,
+                        child->consume_reason));
         return;
       }
     }
@@ -434,13 +438,53 @@ void LinearTypeChecker::check_deref(DerefExprAST *ast) {
   check_stmt(ast->operand.get());
 }
 
+// ── check_index ─────────────────────────────────────────────────────
+
+void LinearTypeChecker::check_index(IndexExprAST *ast) {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->array_expr.get())) {
+    auto *info = find_linear(var->variableName);
+    if (info && info->state == VarState::Consumed) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Cannot index '{}' — it was already {} previously",
+                      var->variableName, info->consume_reason));
+      this->add_error(
+          info->consume_location,
+          fmt::format("'{}' was {} here", var->variableName,
+                      info->consume_reason));
+      return;
+    }
+  }
+  // Handle struct_var.ptr_field[i] — check if field has been consumed
+  if (auto *fa =
+          llvm::dyn_cast<FieldAccessExprAST>(ast->array_expr.get())) {
+    if (auto *obj =
+            llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+      auto *child = find_child(obj->variableName, fa->field_name);
+      if (child && child->state == VarState::Consumed) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Cannot index '{}' — it was already {} previously",
+                        child->name, child->consume_reason));
+        this->add_error(
+            child->consume_location,
+            fmt::format("'{}' was {} here", child->name,
+                        child->consume_reason));
+        return;
+      }
+    }
+  }
+  check_stmt(ast->array_expr.get());
+  check_stmt(ast->index_expr.get());
+}
+
 // ── check_free ──────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_free(FreeExprAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
-      consume(info, ast->get_location());
+      consume(info, ast->get_location(), "freed");
       return;
     }
   }
@@ -449,7 +493,7 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
     if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
-        consume(child, ast->get_location());
+        consume(child, ast->get_location(), "freed");
         return;
       }
     }
@@ -515,7 +559,7 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
     auto *info = find_linear(var->variableName);
     if (info) {
       // Returning a linear pointer (or wrapper): ownership transfers to caller
-      consume(info, ast->get_location());
+      consume(info, ast->get_location(), "returned");
       return;
     }
     // Returning a type that contains a non-linear pointer — error (may dangle)
@@ -535,7 +579,7 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
     if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
-        consume(child, ast->get_location());
+        consume(child, ast->get_location(), "returned");
         return;
       }
     }
@@ -633,7 +677,7 @@ void LinearTypeChecker::check_struct_literal(StructLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(field_val.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(info, ast->get_location());
+        consume(info, ast->get_location(), "moved into struct");
         continue;
       }
     }
@@ -648,7 +692,7 @@ void LinearTypeChecker::check_array_literal(ArrayLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(info, ast->get_location());
+        consume(info, ast->get_location(), "moved into array");
         continue;
       }
     }
@@ -663,7 +707,7 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
       auto *info = find_linear(var->variableName);
       if (info) {
-        consume(info, ast->get_location());
+        consume(info, ast->get_location(), "moved into tuple");
         continue;
       }
     }
@@ -683,7 +727,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
       if (types[i].containsLinear()) {
         auto &child =
             parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
-                                                 parent.name + "." + names[i], {}};
+                                                 parent.name + "." + names[i], {}, {}};
         // Recurse: field itself may be a struct/array/tuple with linear innards
         if (types[i].linearity != Linearity::Linear)
           register_inner_linear(child, types[i], loc);
@@ -696,7 +740,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
         auto key = std::to_string(i);
         auto &child =
             parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
-                                            parent.name + "." + key, {}};
+                                            parent.name + "." + key, {}, {}};
         if (tt.get_element(i).linearity != Linearity::Linear)
           register_inner_linear(child, tt.get_element(i), loc);
       }
@@ -706,7 +750,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     if (at.get_element().containsLinear()) {
       auto &child =
           parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
-                                          parent.name + "[*]", {}};
+                                          parent.name + "[*]", {}, {}};
       if (at.get_element().linearity != Linearity::Linear)
         register_inner_linear(child, at.get_element(), loc);
     }

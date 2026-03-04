@@ -4,10 +4,10 @@
 # CHECK-NEXT:    6|  *p = 42;
 # CHECK-NEXT:    7|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ 'p' was consumed here
+# CHECK-NEXT:     |       ╰─ 'p' was freed here
 # CHECK-NEXT:    8|  let v : i32 = *p;
 # CHECK-NEXT:     |                ─┬
-# CHECK-NEXT:     |                 ╰─ Cannot dereference linear variable 'p' — it has already been consumed
+# CHECK-NEXT:     |                 ╰─ Cannot dereference 'p' — it was already freed previously
 # CHECK-NEXT:    9|  return 0;
 # CHECK-NEXT:   10|}
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

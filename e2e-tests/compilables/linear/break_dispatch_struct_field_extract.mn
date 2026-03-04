@@ -4,10 +4,10 @@
 # CHECK-NEXT:   17|  let b : Box = Box { data: p, tag: 1 };
 # CHECK-NEXT:   18|  let q : 'ptr<i32> = b.data;
 # CHECK-NEXT:     |  ─────────────────────────┬
-# CHECK-NEXT:     |                           ╰─ 'b.data' was previously consumed here
+# CHECK-NEXT:     |                           ╰─ 'b.data' was moved here
 # CHECK-NEXT:   19|  let r : 'ptr<i32> = b.data;
 # CHECK-NEXT:     |  ─────────────────────────┬
-# CHECK-NEXT:     |                           ╰─ Linear variable 'b.data' has already been consumed
+# CHECK-NEXT:     |                           ╰─ Cannot use linear variable 'b.data' — it was already moved previously
 # CHECK-NEXT:   20|  let v : i32 = *q;
 # CHECK-NEXT:   21|  free(q);
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

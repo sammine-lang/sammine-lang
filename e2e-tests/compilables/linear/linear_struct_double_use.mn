@@ -4,12 +4,12 @@
 # CHECK-NEXT:   11|  *p = 42;
 # CHECK-NEXT:   12|  let b : Box = Box { data: p, tag: 1 };
 # CHECK-NEXT:     |                            ────────┬
-# CHECK-NEXT:     |                                    ╰─ 'p' was previously consumed here
+# CHECK-NEXT:     |                                    ╰─ 'p' was moved into struct here
 # CHECK-NEXT:     |  ──────────────────────────────────┬
 # CHECK-NEXT:     |                                    ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
 # CHECK-NEXT:   13|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into struct previously
 # CHECK-NEXT:   14|  return 0;
 # CHECK-NEXT:   15|}
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

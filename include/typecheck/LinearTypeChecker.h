@@ -22,6 +22,7 @@ struct VarInfo {
   sammine_util::Location def_location;
   sammine_util::Location consume_location;
   std::string name;
+  std::string consume_reason;
   // Recursive: per-field/element tracking for wrapper types with linear innards
   std::unordered_map<std::string, VarInfo> children;
 };
@@ -38,7 +39,8 @@ class LinearTypeChecker : public sammine_util::Reportee {
 
   // Variable tracking
   void register_linear(const std::string &name, sammine_util::Location loc);
-  void consume(VarInfo *info, sammine_util::Location loc);
+  void consume(VarInfo *info, sammine_util::Location loc,
+               const std::string &reason = "consumed");
   VarInfo *find_linear(const std::string &name);
 
   // Get merged view of all scopes for snapshotting
@@ -65,6 +67,7 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_case(CaseExprAST *ast);
   void check_addr_of(AddrOfExprAST *ast);
   void check_deref(DerefExprAST *ast);
+  void check_index(IndexExprAST *ast);
   void check_struct_literal(StructLiteralExprAST *ast);
   void check_array_literal(ArrayLiteralExprAST *ast);
   void check_tuple_literal(TupleLiteralExprAST *ast);

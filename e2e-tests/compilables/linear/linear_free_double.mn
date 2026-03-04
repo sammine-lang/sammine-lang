@@ -4,10 +4,10 @@
 # CHECK-NEXT:    5|  let p = alloc<i32>(1);
 # CHECK-NEXT:    6|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ 'p' was previously consumed here
+# CHECK-NEXT:     |       ╰─ 'p' was freed here
 # CHECK-NEXT:    7|  free(p);
 # CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Linear variable 'p' has already been consumed
+# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already freed previously
 # CHECK-NEXT:    8|  return 0;
 # CHECK-NEXT:    9|}
 # CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
