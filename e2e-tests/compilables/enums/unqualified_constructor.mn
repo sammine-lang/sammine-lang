@@ -6,7 +6,6 @@
 import std;
 
 type Color = Red | Green | Blue;
-type Option<T> = Some(T) | None;
 
 let main() -> i32 {
   let c: Color = Red;

@@ -5,8 +5,8 @@
 import std;
 
 let main() -> i32 {
-  let x: Option<i32> = Option<i32>::Some(42);
-  let y: Option<i32> = Option<i32>::None;
+  let x: Option<i32> = Some(42);
+  let y: Option<i32> = None;
 
   case x {
     Some(v) => std::printf("has value: %d\n", v),

@@ -45,3 +45,5 @@ typeclass Hash<T> {
 typeclass Indexer<T, E> {
   Indexer(coll: T, idx: i64) -> E;
 }
+
+type Option<T> = Some(T) | None;
