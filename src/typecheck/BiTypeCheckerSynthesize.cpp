@@ -977,13 +977,8 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     return ast->get_type();
 
   auto arr_type = ast->array_expr->accept_synthesis(this);
-  if (arr_type.type_kind != TypeKind::Array) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Cannot index non-array type '{}'", arr_type.to_string()));
-    return ast->set_type(Type::Poisoned());
-  }
 
+  // Validate index type (shared for both array and pointer)
   auto idx_type = ast->index_expr->accept_synthesis(this);
   if (idx_type.type_kind == TypeKind::Integer) {
     resolve_literal_type(ast->index_expr.get(), Type::I32_t());
@@ -994,25 +989,40 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
       idx_type.type_kind != TypeKind::U32_t &&
       idx_type.type_kind != TypeKind::U64_t) {
     this->add_error(ast->get_location(),
-                    fmt::format("Array index must be integer, got '{}'",
+                    fmt::format("Index must be integer type, got '{}'",
                                 idx_type.to_string()));
     return ast->set_type(Type::Poisoned());
   }
 
-  auto &arr_data = std::get<ArrayType>(arr_type.type_data);
-  if (auto *num = llvm::dyn_cast<NumberExprAST>(ast->index_expr.get())) {
-    int idx = std::stoi(num->number);
-    int size = static_cast<int>(arr_data.get_size());
-    if (idx < 0 || idx >= size) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Array index out of bounds: index {} on array of size {}",
-                      idx, size));
-      return ast->set_type(Type::Poisoned());
+  // Array indexing (existing path)
+  if (arr_type.type_kind == TypeKind::Array) {
+    auto &arr_data = std::get<ArrayType>(arr_type.type_data);
+    if (auto *num = llvm::dyn_cast<NumberExprAST>(ast->index_expr.get())) {
+      int idx = std::stoi(num->number);
+      int size = static_cast<int>(arr_data.get_size());
+      if (idx < 0 || idx >= size) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format(
+                "Array index out of bounds: index {} on array of size {}",
+                idx, size));
+        return ast->set_type(Type::Poisoned());
+      }
     }
+    return ast->set_type(arr_data.get_element());
   }
 
-  return ast->set_type(arr_data.get_element());
+  // Pointer indexing: ptr<T>[i] -> T
+  if (arr_type.type_kind == TypeKind::Pointer) {
+    auto &ptr_data = std::get<PointerType>(arr_type.type_data);
+    return ast->set_type(ptr_data.get_pointee());
+  }
+
+  this->add_error(
+      ast->get_location(),
+      fmt::format("Cannot index type '{}' — no Indexer instance found",
+                  arr_type.to_string()));
+  return ast->set_type(Type::Poisoned());
 }
 Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   if (ast->synthesized())

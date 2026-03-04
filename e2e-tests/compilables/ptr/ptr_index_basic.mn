@@ -1,0 +1,18 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      10
+# CHECK-NEXT: 20
+# CHECK-NEXT: 42
+
+import std;
+
+let main() -> i32 {
+  let mut p : 'ptr<i32> = alloc<i32>(3);
+  p[0] = 10;
+  p[1] = 20;
+  p[2] = 42;
+  std::printf("%d\n", p[0]);
+  std::printf("%d\n", p[1]);
+  std::printf("%d\n", p[2]);
+  free(p);
+  return 0;
+}

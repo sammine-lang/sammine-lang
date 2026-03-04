@@ -147,6 +147,9 @@ public:
                                mlir::Location location);
   void emitPtrArrayStore(mlir::Value ptr, mlir::Value idx, mlir::Value val,
                          const ArrayType &arrType, mlir::Location location);
+  mlir::Value emitPtrElementGEP(mlir::Value ptr, mlir::Value idx,
+                                 const Type &pointeeType,
+                                 mlir::Location location);
   mlir::Value emitLenExpr(AST::LenExprAST *ast);
   mlir::Value emitDerefExpr(AST::DerefExprAST *ast);
   mlir::Value emitAddrOfExpr(AST::AddrOfExprAST *ast);

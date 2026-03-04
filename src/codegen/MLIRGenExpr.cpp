@@ -150,7 +150,7 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       return rhs;
     }
 
-    // arr[i] = val  (or (*ptr)[i] = val)
+    // arr[i] = val  or  ptr[i] = val
     if (auto *idxExpr =
             llvm::dyn_cast<AST::IndexExprAST>(ast->LHS.get())) {
       auto arr = emitExpr(idxExpr->array_expr.get());
@@ -159,9 +159,19 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
       if (!arr || !idx || !rhs)
         return nullptr;
 
-      // All arrays are !llvm.ptr — use LLVM GEP + store
+      auto baseType = idxExpr->array_expr->get_type();
+
+      // Pointer index assignment: ptr<T>[i] = val -> GEP + store
+      if (baseType.type_kind == TypeKind::Pointer) {
+        auto &ptrData = std::get<PointerType>(baseType.type_data);
+        auto gep = emitPtrElementGEP(arr, idx, ptrData.get_pointee(), location);
+        mlir::LLVM::StoreOp::create(builder, location, rhs, gep);
+        return rhs;
+      }
+
+      // Array index assignment (existing path)
       auto arrType =
-          std::get<ArrayType>(idxExpr->array_expr->get_type().type_data);
+          std::get<ArrayType>(baseType.type_data);
       emitPtrArrayStore(arr, idx, rhs, arrType, location);
       return rhs;
     }
@@ -615,7 +625,19 @@ mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
   if (!arr || !idx)
     return nullptr;
 
-  auto arrType = std::get<ArrayType>(ast->array_expr->get_type().type_data);
+  auto baseType = ast->array_expr->get_type();
+
+  // Pointer indexing: ptr<T>[i] -> GEP + load
+  if (baseType.type_kind == TypeKind::Pointer) {
+    auto &ptrData = std::get<PointerType>(baseType.type_data);
+    auto pointee = ptrData.get_pointee();
+    auto elemMlirType = convertType(pointee);
+    auto gep = emitPtrElementGEP(arr, idx, pointee, location);
+    return mlir::LLVM::LoadOp::create(builder, location, elemMlirType, gep);
+  }
+
+  // Array indexing (existing path)
+  auto arrType = std::get<ArrayType>(baseType.type_data);
 
   // Cast i32 index to index type for bounds check
   auto indexVal = mlir::arith::IndexCastOp::create(
@@ -653,6 +675,17 @@ void MLIRGenImpl::emitPtrArrayStore(mlir::Value ptr, mlir::Value idx,
                                      mlir::Location location) {
   auto gepOp = emitPtrArrayGEP(ptr, idx, arrType, location);
   mlir::LLVM::StoreOp::create(builder, location, val, gepOp);
+}
+
+mlir::Value MLIRGenImpl::emitPtrElementGEP(mlir::Value ptr, mlir::Value idx,
+                                            const Type &pointeeType,
+                                            mlir::Location location) {
+  auto elemMlirType = convertType(pointeeType);
+  // Pointer arithmetic GEP: ptr + idx * sizeof(elemType)
+  // Single index {idx}, unlike array GEP which uses {0, idx}
+  return mlir::LLVM::GEPOp::create(
+      builder, location, llvmPtrTy(), elemMlirType, ptr,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{idx});
 }
 
 mlir::Value MLIRGenImpl::emitLenExpr(AST::LenExprAST *ast) {

@@ -1,0 +1,8 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Cannot index type 'i32'
+
+let main() -> i32 {
+  let x : i32 = 42;
+  x[0];
+  return 0;
+}
