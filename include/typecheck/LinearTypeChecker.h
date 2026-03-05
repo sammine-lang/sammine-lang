@@ -2,6 +2,7 @@
 #include "ast/Ast.h"
 #include "ast/ASTProperties.h"
 #include "util/Utilities.h"
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -48,6 +49,17 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void restore(const LinearVarMap &snap);
 
   // Branch analysis
+  enum class BranchAgreement { AllUnconsumed, AllConsumed, Mismatch };
+
+  using StateExtractor =
+      std::function<std::optional<VarState>(const LinearVarMap &)>;
+
+  BranchAgreement check_agreement(const std::vector<LinearVarMap> &branches,
+                                  const StateExtractor &get_state);
+  void apply_consistency(BranchAgreement result, VarInfo *info,
+                         const std::string &display_name,
+                         sammine_util::Location loc);
+
   void check_branch_consistency(const LinearVarMap &before,
                                 const std::vector<LinearVarMap> &branches,
                                 sammine_util::Location loc);
@@ -71,6 +83,20 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_struct_literal(StructLiteralExprAST *ast);
   void check_array_literal(ArrayLiteralExprAST *ast);
   void check_tuple_literal(TupleLiteralExprAST *ast);
+
+  // Use-after-consume check: emits error if info is already consumed.
+  // Returns true if consumed (caller should bail), false if ok.
+  bool check_use_after_consume(VarInfo *info, sammine_util::Location use_loc,
+                               const std::string &verb);
+
+  // Register a variable as linear if its type is or contains linear.
+  void register_if_linear(const std::string &name, const Type &type,
+                          sammine_util::Location loc);
+
+  // Consume linear vars/fields in a list of element expressions.
+  void consume_elements(
+      const std::vector<std::unique_ptr<ExprAST>> &elements,
+      sammine_util::Location loc, const std::string &reason);
 
   // Recursive inner-linear tracking for wrapper types
   void register_inner_linear(VarInfo &parent, const Type &t,
