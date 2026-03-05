@@ -104,11 +104,10 @@ void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
   }
 }
 void ScopeGeneratorVisitor::visit(ExternAST *ast) {
-  scope_stack.push_context();
+  decltype(scope_stack)::Guard scope(scope_stack);
   ast->walk_with_preorder(this);
   ast->Prototype->accept_vis(this);
   ast->walk_with_postorder(this);
-  scope_stack.pop_context();
 }
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
   // For imported externs (qualified function name), qualify type references

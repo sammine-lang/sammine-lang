@@ -410,45 +410,44 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
 
     // Register concrete bindings in a temporary scope so resolve_type_expr
     // can resolve generic struct types (e.g. Vec<T> → Vec<i32>).
-    typename_to_type.push_context();
-    for (auto &[pname, ptype] : bindings)
-      typename_to_type.registerNameT(pname, ptype);
+    {
+      decltype(typename_to_type)::Guard scope(typename_to_type);
+      for (auto &[pname, ptype] : bindings)
+        typename_to_type.registerNameT(pname, ptype);
 
-    for (size_t i = 0; i < ast->arguments.size(); i++) {
-      auto arg_type = ast->arguments[i]->accept_synthesis(this);
-      if (arg_type.type_kind == TypeKind::Poisoned) {
-        typename_to_type.pop_context();
-        return ast->set_type(Type::Poisoned());
-      }
-      // Resolve expected type from the parameter AST with concrete bindings,
-      // rather than substitute() on the possibly-placeholder stored type.
-      auto *param_type_ast =
-          generic_def->Prototype->parameterVectors[i]->type_expr.get();
-      auto expected = param_type_ast ? resolve_type_expr(param_type_ast)
-                                     : substitute(params[i], bindings);
-      if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
-        auto call_name = format_generic_call_name(
-            ast->functionName.with_alias(), type_params, bindings);
-        this->add_error(
-            ast->arguments[i]->get_location(),
-            fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
-                        call_name, expected.to_string(),
-                        arg_type.to_string()));
-        if (auto hint = incompatibility_hint(expected, arg_type))
-          this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
-        auto mono_sig = substitute(generic_type, bindings);
-        this->add_diagnostics(
-            ast->arguments[i]->get_location(),
-            fmt::format("note: '{}' has signature: {}",
-                        call_name, mono_sig.to_string()));
-        typename_to_type.pop_context();
-        return ast->set_type(Type::Poisoned());
-      }
-      if (arg_type.is_polymorphic_numeric()) {
-        resolve_literal_type(ast->arguments[i].get(), expected);
+      for (size_t i = 0; i < ast->arguments.size(); i++) {
+        auto arg_type = ast->arguments[i]->accept_synthesis(this);
+        if (arg_type.type_kind == TypeKind::Poisoned) {
+          return ast->set_type(Type::Poisoned());
+        }
+        // Resolve expected type from the parameter AST with concrete bindings,
+        // rather than substitute() on the possibly-placeholder stored type.
+        auto *param_type_ast =
+            generic_def->Prototype->parameterVectors[i]->type_expr.get();
+        auto expected = param_type_ast ? resolve_type_expr(param_type_ast)
+                                       : substitute(params[i], bindings);
+        if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
+          auto call_name = format_generic_call_name(
+              ast->functionName.with_alias(), type_params, bindings);
+          this->add_error(
+              ast->arguments[i]->get_location(),
+              fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
+                          call_name, expected.to_string(),
+                          arg_type.to_string()));
+          if (auto hint = incompatibility_hint(expected, arg_type))
+            this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
+          auto mono_sig = substitute(generic_type, bindings);
+          this->add_diagnostics(
+              ast->arguments[i]->get_location(),
+              fmt::format("note: '{}' has signature: {}",
+                          call_name, mono_sig.to_string()));
+          return ast->set_type(Type::Poisoned());
+        }
+        if (arg_type.is_polymorphic_numeric()) {
+          resolve_literal_type(ast->arguments[i].get(), expected);
+        }
       }
     }
-    typename_to_type.pop_context();
   } else {
     // Infer type arguments from call arguments
     for (size_t i = 0; i < ast->arguments.size(); i++) {
@@ -511,11 +510,10 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
   // instantiated through the normal resolve_type_expr path.
   auto *ret_type_ast = generic_def->Prototype->return_type_expr.get();
   if (ret_type_ast) {
-    typename_to_type.push_context();
+    decltype(typename_to_type)::Guard scope(typename_to_type);
     for (auto &[pname, ptype] : bindings)
       typename_to_type.registerNameT(pname, ptype);
     auto resolved_ret = resolve_type_expr(ret_type_ast);
-    typename_to_type.pop_context();
     return ast->set_type(resolved_ret);
   }
   return ast->set_type(substitute(func.get_return_type(), bindings));

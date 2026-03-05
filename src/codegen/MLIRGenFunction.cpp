@@ -113,7 +113,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
     return;
 
   auto location = loc(ast);
-  symbolTable.push_context();
+  decltype(symbolTable)::Guard scope(symbolTable);
 
   auto funcType = buildFuncType(ast->Prototype.get());
   std::string funcName = mangleName(ast->Prototype->functionName);
@@ -211,7 +211,6 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   }
 
   currentSretBuffer = nullptr;
-  symbolTable.pop_context();
 }
 
 void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {

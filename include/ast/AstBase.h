@@ -250,6 +250,18 @@ public:
     this->pop();
   }
 
+  /// RAII guard: pushes on construction, pops on destruction.
+  class Guard {
+    LexicalStack &stack_;
+  public:
+    explicit Guard(LexicalStack &stack) : stack_(stack) {
+      stack_.push_context();
+    }
+    ~Guard() { stack_.pop_context(); }
+    Guard(const Guard &) = delete;
+    Guard &operator=(const Guard &) = delete;
+  };
+
   void registerNameT(const std::string &name, T l) {
     return this->top().registerNameT(name, l);
   }
