@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ast/Ast.h"
 #include "ast/ASTProperties.h"
+#include "ast/Ast.h"
 #include "ast/AstBase.h"
 #include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
@@ -331,15 +331,17 @@ public:
 
     if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(type_expr)) {
       auto pointee = resolve_type_expr(ptr->pointee.get());
-      if (pointee.is_poisoned()) return pointee;
+      if (pointee.is_poisoned())
+        return pointee;
       auto result = Type::Pointer(pointee);
-      result.linearity = ptr->is_linear ? Linearity::Linear : Linearity::NonLinear;
+      result.linearity =
+          ptr->is_linear ? Linearity::Linear : Linearity::NonLinear;
       return result;
     }
 
     if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(type_expr)) {
       auto elem = resolve_type_expr(arr->element.get());
-      return elem.is_poisoned() ? elem : Type::Array(elem, arr->size) ;
+      return elem.is_poisoned() ? elem : Type::Array(elem, arr->size);
     }
 
     if (auto *fn = llvm::dyn_cast<FunctionTypeExprAST>(type_expr)) {
@@ -384,19 +386,16 @@ public:
         return Type::Poisoned();
       }
 
-      size_t expected_params = is_enum
-          ? enum_it->second->type_params.size()
-          : struct_it->second->type_params.size();
-      const auto &param_names = is_enum
-          ? enum_it->second->type_params
-          : struct_it->second->type_params;
+      size_t expected_params = is_enum ? enum_it->second->type_params.size()
+                                       : struct_it->second->type_params.size();
+      const auto &param_names = is_enum ? enum_it->second->type_params
+                                        : struct_it->second->type_params;
 
       if (gen->type_args.size() != expected_params) {
         this->add_error(
             type_expr->location,
             fmt::format("Generic type '{}' expects {} type argument(s), got {}",
-                        gen->base_name.mangled(),
-                        expected_params,
+                        gen->base_name.mangled(), expected_params,
                         gen->type_args.size()));
         return Type::Poisoned();
       }
@@ -412,21 +411,42 @@ public:
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
         bindings[param_names[i]] = resolved;
-        if (i > 0) type_args += ", ";
+        if (i > 0)
+          type_args += ", ";
         type_args += resolved.to_string();
       }
       type_args += ">";
-      auto mono = sammine_util::MonomorphizedName::generic(
-          gen->base_name, type_args);
+      auto mono =
+          sammine_util::MonomorphizedName::generic(gen->base_name, type_args);
       auto mangled = mono.mangled();
 
-      // If type args contain unresolved type params (e.g. Option<T> inside
-      // a generic function), we can't instantiate yet — return a placeholder
-      // that will be resolved when the outer function is monomorphized.
+      // If type args contain unresolved type params (e.g. Vec<T> inside
+      // a generic function prototype), we can't instantiate yet — build a
+      // placeholder StructType with TypeParam fields so substitute() can
+      // replace them when concrete bindings are known.
       if (has_unresolved_type_param) {
         auto existing = this->get_typename_type(mangled);
         if (existing.has_value())
           return existing.value();
+
+        if (is_struct) {
+          auto *sdef = struct_it->second;
+          std::vector<std::string> fnames;
+          std::vector<Type> ftypes;
+          for (auto &[pname, ptype] : bindings)
+            typename_to_type.registerNameT(pname, ptype);
+          for (auto &member : sdef->struct_members) {
+            fnames.push_back(member->name);
+            ftypes.push_back(member->type_expr
+                                 ? resolve_type_expr(member->type_expr.get())
+                                 : Type::Poisoned());
+          }
+          auto placeholder =
+              Type::Struct(sammine_util::QualifiedName::from_parts({mangled}),
+                           std::move(fnames), std::move(ftypes));
+          typename_to_type.registerNameT(mangled, placeholder);
+          return placeholder;
+        }
         return Type::Poisoned();
       }
 
@@ -439,8 +459,8 @@ public:
         }
 
         // Instantiate the generic enum
-        auto cloned = Monomorphizer::instantiate_enum(enum_it->second, mono,
-                                                       bindings);
+        auto cloned =
+            Monomorphizer::instantiate_enum(enum_it->second, mono, bindings);
         cloned->accept_vis(this);
         instantiated_enums.insert(mangled);
         monomorphized_enum_defs.push_back(std::move(cloned));
@@ -454,7 +474,7 @@ public:
 
         // Instantiate the generic struct
         auto cloned = Monomorphizer::instantiate_struct(struct_it->second, mono,
-                                                         bindings);
+                                                        bindings);
         cloned->accept_vis(this);
         instantiated_structs.insert(mangled);
         monomorphized_struct_defs.push_back(std::move(cloned));

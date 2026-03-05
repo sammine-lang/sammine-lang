@@ -408,11 +408,24 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
       bindings[type_params[i]] = resolved;
     }
 
+    // Register concrete bindings in a temporary scope so resolve_type_expr
+    // can resolve generic struct types (e.g. Vec<T> → Vec<i32>).
+    typename_to_type.push_context();
+    for (auto &[pname, ptype] : bindings)
+      typename_to_type.registerNameT(pname, ptype);
+
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto arg_type = ast->arguments[i]->accept_synthesis(this);
-      if (arg_type.type_kind == TypeKind::Poisoned)
+      if (arg_type.type_kind == TypeKind::Poisoned) {
+        typename_to_type.pop_context();
         return ast->set_type(Type::Poisoned());
-      auto expected = substitute(params[i], bindings);
+      }
+      // Resolve expected type from the parameter AST with concrete bindings,
+      // rather than substitute() on the possibly-placeholder stored type.
+      auto *param_type_ast =
+          generic_def->Prototype->parameterVectors[i]->type_expr.get();
+      auto expected = param_type_ast ? resolve_type_expr(param_type_ast)
+                                     : substitute(params[i], bindings);
       if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
         auto call_name = format_generic_call_name(
             ast->functionName.with_alias(), type_params, bindings);
@@ -428,12 +441,14 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
             ast->arguments[i]->get_location(),
             fmt::format("note: '{}' has signature: {}",
                         call_name, mono_sig.to_string()));
+        typename_to_type.pop_context();
         return ast->set_type(Type::Poisoned());
       }
       if (arg_type.is_polymorphic_numeric()) {
         resolve_literal_type(ast->arguments[i].get(), expected);
       }
     }
+    typename_to_type.pop_context();
   } else {
     // Infer type arguments from call arguments
     for (size_t i = 0; i < ast->arguments.size(); i++) {
@@ -489,6 +504,20 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
       sammine_util::MonomorphizedName::generic(ast->functionName, type_args);
   props_.call(ast->id()).type_bindings = bindings;
   props_.call(ast->id()).callee_func_type = generic_type;
+
+  // Resolve return type by re-evaluating the return type AST with concrete
+  // bindings registered, rather than using substitute(). This ensures that
+  // generic struct return types (e.g. Box<T> → Box<i32>) get properly
+  // instantiated through the normal resolve_type_expr path.
+  auto *ret_type_ast = generic_def->Prototype->return_type_expr.get();
+  if (ret_type_ast) {
+    typename_to_type.push_context();
+    for (auto &[pname, ptype] : bindings)
+      typename_to_type.registerNameT(pname, ptype);
+    auto resolved_ret = resolve_type_expr(ret_type_ast);
+    typename_to_type.pop_context();
+    return ast->set_type(resolved_ret);
+  }
   return ast->set_type(substitute(func.get_return_type(), bindings));
 }
 
@@ -1499,6 +1528,19 @@ Type BiTypeCheckerVisitor::substitute(
     for (auto &e : tt.get_element_types())
       elems.push_back(substitute(e, bindings));
     return Type::Tuple(std::move(elems));
+  }
+  if (type.type_kind == TypeKind::Struct) {
+    auto &st = std::get<StructType>(type.type_data);
+    std::vector<Type> ftypes;
+    bool changed = false;
+    for (auto &ft : st.get_field_types()) {
+      auto sub = substitute(ft, bindings);
+      if (sub != ft) changed = true;
+      ftypes.push_back(sub);
+    }
+    if (!changed) return type;
+    return Type::Struct(st.get_name(),
+                        st.get_field_names(), std::move(ftypes));
   }
   return type;
 }
