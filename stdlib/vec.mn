@@ -1,0 +1,36 @@
+export struct Vec<T> {
+  data: 'ptr<T>,
+  length: i64,
+  cap: i64,
+};
+
+export let new<T>(cap: i64) -> Vec<T> {
+  Vec<T> { data: alloc<T>(cap), length: 0i64, cap: cap }
+}
+
+let grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
+  let new_c = old_c * 2i64;
+  let mut new_d = alloc<T>(new_c);
+  let mut i: i64 = 0i64;
+  while i < l {
+    new_d[i] = old_d[i];
+    i = i + 1i64;
+  };
+  free(old_d);
+  new_d
+}
+
+export let push<T>(v: Vec<T>, val: T) -> Vec<T> {
+  if v.length == v.cap {
+    let mut d2 = grow_buf<T>(v.data, v.length, v.cap);
+    d2[v.length] = val;
+    Vec<T> { data: d2, length: v.length + 1i64, cap: v.cap * 2i64 }
+  } else {
+    v.data[v.length] = val;
+    Vec<T> { data: v.data, length: v.length + 1i64, cap: v.cap }
+  }
+}
+
+export let delete<T>(v: Vec<T>) -> unit {
+  free(v.data)
+}

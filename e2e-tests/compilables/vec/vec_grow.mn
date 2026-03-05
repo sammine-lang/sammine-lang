@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      0 1 2 3 4 5 6 7 8 9
+
+import std;
+import vec;
+
+let main() -> i32 {
+  let v0 = vec::new<i32>(2);
+  let v1 = vec::push<i32>(v0, 0);
+  let v2 = vec::push<i32>(v1, 1);
+  let v3 = vec::push<i32>(v2, 2);
+  let v4 = vec::push<i32>(v3, 3);
+  let v5 = vec::push<i32>(v4, 4);
+  let v6 = vec::push<i32>(v5, 5);
+  let v7 = vec::push<i32>(v6, 6);
+  let v8 = vec::push<i32>(v7, 7);
+  let v9 = vec::push<i32>(v8, 8);
+  let v10 = vec::push<i32>(v9, 9);
+  std::printf("%d %d %d %d %d %d %d %d %d %d",
+    v10.data[0], v10.data[1], v10.data[2], v10.data[3], v10.data[4],
+    v10.data[5], v10.data[6], v10.data[7], v10.data[8], v10.data[9]);
+  vec::delete<i32>(v10);
+  return 0;
+}

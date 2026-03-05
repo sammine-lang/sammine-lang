@@ -1,0 +1,16 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      1 2 3 4
+
+import std;
+import vec;
+
+struct Point { x: i32, y: i32, };
+
+let main() -> i32 {
+  let v0 = vec::new<Point>(4);
+  let v1 = vec::push<Point>(v0, Point { x: 1, y: 2 });
+  let v2 = vec::push<Point>(v1, Point { x: 3, y: 4 });
+  std::printf("%d %d %d %d", v2.data[0].x, v2.data[0].y, v2.data[1].x, v2.data[1].y);
+  vec::delete<Point>(v2);
+  return 0;
+}

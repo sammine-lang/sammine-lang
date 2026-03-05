@@ -18,6 +18,10 @@ instance Sized<bool> {
   let Sized() -> i64 { 1i64 }
 }
 
+instance Sized<char> {
+  let Sized() -> i64 { 1i64 }
+}
+
 typeclass Add<T> {
   Add(a: T, b: T) -> T;
 }

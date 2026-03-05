@@ -75,7 +75,7 @@ set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
 set(STDLIB_COMPILED std str)
-set(STDLIB_COPIED definitions.mn)
+set(STDLIB_COPIED definitions.mn vec.mn)
 
 foreach(mod ${STDLIB_COMPILED})
   add_custom_command(

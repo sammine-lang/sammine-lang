@@ -1,0 +1,9 @@
+# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+# CHECK:      Linear variable 'v.data' must be consumed before scope exit
+
+import vec;
+
+let main() -> i32 {
+  let v = vec::new<i32>(4);
+  return 0;
+}
