@@ -97,10 +97,12 @@ void LinearTypeChecker::check_branch_consistency(
     sammine_util::Location loc) {
   // For each linear var that was Unconsumed before branches:
   // all branches must agree — either all consume it or none do.
+  // This also applies to child linear vars inside wrapper structs.
   for (auto &[name, before_info] : before) {
     if (before_info.state != VarState::Unconsumed)
       continue;
 
+    // Check the var itself
     bool first_consumed = false;
     bool has_mismatch = false;
 
@@ -124,13 +126,50 @@ void LinearTypeChecker::check_branch_consistency(
           fmt::format("Linear variable '{}' is consumed in some branches but "
                       "not others",
                       name));
-      // Mark consumed to prevent cascading "must be consumed" at scope exit
       if (info)
         info->state = VarState::Consumed;
     } else if (first_consumed && info) {
-      // All branches consumed it — set directly (not via consume() to
-      // avoid "already consumed" false positive)
       info->state = VarState::Consumed;
+    }
+
+    // Check children (e.g. v.data inside a struct wrapper)
+    for (auto &[child_name, child_before] : before_info.children) {
+      if (child_before.state != VarState::Unconsumed)
+        continue;
+
+      bool child_first_consumed = false;
+      bool child_mismatch = false;
+
+      for (size_t i = 0; i < branches.size(); i++) {
+        auto it = branches[i].find(name);
+        if (it == branches[i].end())
+          continue;
+        auto cit = it->second.children.find(child_name);
+        if (cit == it->second.children.end())
+          continue;
+        bool consumed = (cit->second.state == VarState::Consumed);
+        if (i == 0) {
+          child_first_consumed = consumed;
+        } else if (consumed != child_first_consumed) {
+          child_mismatch = true;
+          break;
+        }
+      }
+
+      if (child_mismatch) {
+        this->add_error(
+            loc,
+            fmt::format("Linear variable '{}' is consumed in some branches but "
+                        "not others",
+                        child_before.name));
+        auto *child_info = info ? find_child(name, child_name) : nullptr;
+        if (child_info)
+          child_info->state = VarState::Consumed;
+      } else if (child_first_consumed) {
+        auto *child_info = info ? find_child(name, child_name) : nullptr;
+        if (child_info)
+          child_info->state = VarState::Consumed;
+      }
     }
   }
 }
@@ -150,6 +189,10 @@ void LinearTypeChecker::check_program(ProgramAST *ast) {
 }
 
 void LinearTypeChecker::check_func(FuncDefAST *ast) {
+  // Skip generic function templates — only check monomorphized copies.
+  if (ast->Prototype->is_generic())
+    return;
+
   push_scope();
 
   // Register linear parameters (including wrapper types with linear fields)
@@ -680,6 +723,16 @@ void LinearTypeChecker::check_struct_literal(StructLiteralExprAST *ast) {
         consume(info, ast->get_location(), "moved into struct");
         continue;
       }
+    } else if (auto *fa =
+                   llvm::dyn_cast<FieldAccessExprAST>(field_val.get())) {
+      if (auto *obj =
+              llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+        auto *child = find_child(obj->variableName, fa->field_name);
+        if (child) {
+          consume(child, ast->get_location(), "moved into struct");
+          continue;
+        }
+      }
     }
     check_stmt(field_val.get());
   }
@@ -695,6 +748,16 @@ void LinearTypeChecker::check_array_literal(ArrayLiteralExprAST *ast) {
         consume(info, ast->get_location(), "moved into array");
         continue;
       }
+    } else if (auto *fa =
+                   llvm::dyn_cast<FieldAccessExprAST>(elem.get())) {
+      if (auto *obj =
+              llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+        auto *child = find_child(obj->variableName, fa->field_name);
+        if (child) {
+          consume(child, ast->get_location(), "moved into array");
+          continue;
+        }
+      }
     }
     check_stmt(elem.get());
   }
@@ -709,6 +772,16 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
       if (info) {
         consume(info, ast->get_location(), "moved into tuple");
         continue;
+      }
+    } else if (auto *fa =
+                   llvm::dyn_cast<FieldAccessExprAST>(elem.get())) {
+      if (auto *obj =
+              llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
+        auto *child = find_child(obj->variableName, fa->field_name);
+        if (child) {
+          consume(child, ast->get_location(), "moved into tuple");
+          continue;
+        }
       }
     }
     check_stmt(elem.get());
