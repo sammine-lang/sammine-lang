@@ -28,7 +28,7 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
 
   if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(expr)) {
     return std::make_unique<PointerTypeExprAST>(
-        clone_type_expr(ptr->pointee.get()));
+        clone_type_expr(ptr->pointee.get()), ptr->is_linear);
   }
 
   if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(expr)) {
