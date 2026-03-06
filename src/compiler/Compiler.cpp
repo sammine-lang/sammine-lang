@@ -363,7 +363,10 @@ void Compiler::resolve_imports() {
 
     // Track linkable artifact (only for direct imports).
     if (!is_transitive) {
-      std::vector<std::string> lib_exts = {".so", ".a"};
+      std::vector<std::string> lib_exts =
+          lib_format_ == LibFormat::Static
+              ? std::vector<std::string>{".a", ".so"}
+              : std::vector<std::string>{".so", ".a"};
       std::filesystem::path obj_path;
       auto find_lib = [&](const std::filesystem::path &dir) -> bool {
         for (auto &ext : lib_exts) {

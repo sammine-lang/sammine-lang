@@ -84,6 +84,12 @@ foreach(mod ${STDLIB_COMPILED})
     DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
     COMMENT "Compiling stdlib/${mod}.mn → ${mod}.so"
   )
+  add_custom_command(
+    OUTPUT ${STDLIB_DIR}/${mod}.a
+    COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR} --lib=static
+    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
+    COMMENT "Compiling stdlib/${mod}.mn → ${mod}.a"
+  )
   # Copy .mn source for import resolution
   add_custom_command(
     OUTPUT ${STDLIB_DIR}/${mod}.mn
@@ -91,7 +97,7 @@ foreach(mod ${STDLIB_COMPILED})
     DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
     COMMENT "Copying stdlib/${mod}.mn"
   )
-  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.so ${STDLIB_DIR}/${mod}.mn)
+  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.so ${STDLIB_DIR}/${mod}.a ${STDLIB_DIR}/${mod}.mn)
 endforeach()
 
 foreach(file ${STDLIB_COPIED})
@@ -122,6 +128,13 @@ add_custom_command(
   DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
   COMMENT "Compiling stdlib/io.mn → io.so (with C runtime)"
 )
+add_custom_command(
+  OUTPUT ${STDLIB_DIR}/io.a
+  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
+          -O ${STDLIB_DIR} --lib=static
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
+  COMMENT "Compiling stdlib/io.mn → io.a (with C runtime)"
+)
 
 # Copy io.mn source for import resolution
 add_custom_command(
@@ -131,7 +144,7 @@ add_custom_command(
   COMMENT "Copying stdlib/io.mn"
 )
 
-list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.so ${STDLIB_DIR}/io.mn)
+list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.so ${STDLIB_DIR}/io.a ${STDLIB_DIR}/io.mn)
 
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 
