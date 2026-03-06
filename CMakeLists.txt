@@ -87,7 +87,7 @@ foreach(mod ${STDLIB_COMPILED})
   add_custom_command(
     OUTPUT ${STDLIB_DIR}/${mod}.a
     COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR} --lib=static
-    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
+    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn ${STDLIB_DIR}/${mod}.so
     COMMENT "Compiling stdlib/${mod}.mn → ${mod}.a"
   )
   # Copy .mn source for import resolution
@@ -132,7 +132,7 @@ add_custom_command(
   OUTPUT ${STDLIB_DIR}/io.a
   COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
           -O ${STDLIB_DIR} --lib=static
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
+  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o ${STDLIB_DIR}/io.so
   COMMENT "Compiling stdlib/io.mn → io.a (with C runtime)"
 )
 
