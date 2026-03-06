@@ -31,6 +31,8 @@ Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
   return Type::NonExistent();
 }
 
+// Variable definition: infers type from expression, checks against annotation if present.
+// Polymorphic literals (Integer/Flt) resolve to the annotated type via compatible_to_from.
 Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
@@ -157,6 +159,8 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
   return ast->get_type();
 }
 
+// Call resolution order: enum variant → generic function → typeclass method → normal call.
+// If fewer args than params, creates a partial application (closure).
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
@@ -580,6 +584,8 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
   return ast->set_type(Type::Never());
 }
+// Binary ops: resolved via typeclass instances (e.g. Add<i32>::add for `+`).
+// Comparison ops return bool. Assignment checks mutability. Logical ops require bool.
 Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();

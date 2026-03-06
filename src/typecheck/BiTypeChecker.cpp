@@ -13,9 +13,13 @@
 #include "util/Logging.h"
 
 //! \file BiTypeChecker.cpp
-//! \brief Implementation of BiTypeCheckerVisitor: visit() methods,
-//! registration,
-//!        and helpers. Synthesize methods are in BiTypeCheckerSynthesize.cpp.
+//! \brief Bidirectional type checker. Uses two operations:
+//!   - synthesize(): infer a type bottom-up from an expression (in BiTypeCheckerSynthesize.cpp)
+//!   - check/visit(): validate against an expected type top-down
+//! Three-pass approach over ProgramAST:
+//!   1) Register all type definitions (structs, enums, typeclasses, aliases)
+//!   2) Pre-register all function signatures (enables mutual recursion)
+//!   3) Full type checking of function bodies + expressions
 namespace sammine_lang::AST {
 
 // visit overrides — explicit traversal order

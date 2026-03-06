@@ -25,6 +25,8 @@ class Function;
 namespace sammine_lang {
 namespace AST {
 
+/// Discriminator for all AST node types. Used with LLVM-style RTTI (classof).
+/// FirstExpr..LastExpr and FirstDef..LastDef ranges enable isa<ExprAST>/isa<DefinitionAST>.
 enum class NodeKind {
   // Direct AstBase children (not ExprAST, not DefinitionAST)
   ProgramAST,
@@ -84,6 +86,10 @@ struct ASTPrinter {
   static void print(AstBase *t);
   static void print(ProgramAST *t);
 };
+/// Base visitor for AST traversal. Each node type has three methods:
+/// - visit(): main dispatch (called by accept_vis)
+/// - preorder_walk(): called before visiting children (e.g. ScopeGenerator)
+/// - postorder_walk(): called after visiting children
 class ASTVisitor : public sammine_util::Reportee {
 protected:
   ProgramAST *top_level_ast = nullptr;
@@ -235,6 +241,9 @@ public:
   virtual ~ASTVisitor() = 0;
 };
 
+/// Stack of scoped symbol tables with parent-chain lookup.
+/// Each context can see names from its parent scope via recursive queries.
+/// T = value type (e.g. mlir::Value, Type), S = secondary data (often monostate).
 template <class T, class S>
 class LexicalStack : public std::stack<LexicalContext<T, S>> {
 public:
@@ -286,6 +295,7 @@ public:
   LexicalContext<T, S> *parent_scope() { return this->top().parent_scope; }
 };
 
+/// Visitor that manages scope enter/exit around function bodies.
 class ScopedASTVisitor : public ASTVisitor {
 public:
   virtual void enter_new_scope() = 0;
@@ -299,6 +309,8 @@ public:
   virtual ~ScopedASTVisitor() = 0;
 };
 
+/// Bidirectional type checker interface. synthesize() infers types bottom-up.
+/// Implemented by BiTypeCheckerVisitor.
 class TypeCheckerVisitor {
 public:
   virtual Type synthesize(ProgramAST *ast) = 0;
@@ -340,6 +352,9 @@ public:
   virtual ~TypeCheckerVisitor() = 0;
 };
 
+/// Double-dispatch interface for AST nodes. Enables visitor pattern
+/// without dynamic_cast on the visitor side — each node calls the
+/// correct overload via its generated accept_vis/accept_synthesis methods.
 class Visitable {
 public:
   virtual ~Visitable() = default;
@@ -350,12 +365,14 @@ public:
   virtual std::string getTreeName() const = 0;
 };
 
+/// Base class for all AST nodes. Provides LLVM-style RTTI (via NodeKind),
+/// source location tracking (via join_location), and type storage (via ASTProperties).
 class AstBase : public Visitable {
   NodeKind kind;
-  NodeId node_id_;
+  NodeId node_id_;  // unique ID for ASTProperties type lookup
 
   static inline std::atomic<NodeId> next_id_{0};
-  static inline ASTProperties *current_props_ = nullptr;
+  static inline ASTProperties *current_props_ = nullptr; // externalized type storage
 
   void change_location(sammine_util::Location loc) {
     if (first_location) {
@@ -376,9 +393,8 @@ public:
   static void reset_id_counter() { next_id_ = 0; }
   static void set_properties(ASTProperties *p) { current_props_ = p; }
   NodeKind getKind() const { return kind; }
-  // INFO: Parser error
-  bool pe = false;
-  llvm::Value *val;
+  bool pe = false;       // parser error: set when a child is null (failed parse)
+  llvm::Value *val;      // legacy LLVM codegen value (unused with MLIR backend)
   AstBase *join_location(AstBase *ast) {
     if (!ast)
       pe = true;

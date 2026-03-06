@@ -12,36 +12,43 @@
 #include <vector>
 //! \file Types.h
 //! \brief Defines the core Type system for Sammine
+/// Discriminator for all types in the sammine type system.
+/// Concrete types (I32_t..Tuple) represent real runtime values.
+/// Pseudo-types (Never..Generic) exist only during type checking.
 enum class TypeKind {
+  // --- Concrete scalar types ---
   I32_t,
   I64_t,
-  U32_t,
-  U64_t,
+  U32_t,   // unsigned 32-bit — requires explicit suffix (42u32)
+  U64_t,   // unsigned 64-bit — requires explicit suffix (100u64)
   F64_t,
-  F32_t,
-  Unit,
+  F32_t,   // 32-bit float — suffix syntax: 3.14f32
+  Unit,    // void-like type, written as ()
   Bool,
   Char,
   String,
+  // --- Compound types (carry TypeData payload) ---
   Function,
   Pointer,
   Array,
   Struct,
   Enum,
   Tuple,
-  Never,
-  NonExistent,
-  Poisoned,
-  Integer,
-  Flt,
-  TypeParam,
-  Generic
+  // --- Pseudo-types (type checker internal, never reach codegen) ---
+  Never,       // diverging expressions (e.g. return, abort)
+  NonExistent, // not-yet-typed AST node (default before synthesis)
+  Poisoned,    // type error sentinel — suppresses cascading errors
+  Integer,     // polymorphic integer literal — flows into i32/i64/u32/u64 via context
+  Flt,         // polymorphic float literal — flows into f64/f32 via context
+  TypeParam,   // generic type parameter (e.g. T in identity<T>)
+  Generic      // uninstantiated generic function/struct template
 };
 
 struct Type;
 class FunctionType;
 
 using TypePtr = std::shared_ptr<Type>;
+/// Function type: (param_types) -> return_type, with optional vararg for C FFI.
 class FunctionType {
   std::vector<Type> param_types;
   TypePtr return_type; // shared_ptr because Type is incomplete here
@@ -59,6 +66,7 @@ public:
   // Legacy: total_types = [params..., return_type]
   FunctionType(const std::vector<Type> &total_types, bool var_arg = false);
 };
+/// Pointer type: ptr<T> (non-linear) or 'ptr<T> (linear, must be freed).
 class PointerType {
   TypePtr pointee;
 
@@ -67,6 +75,7 @@ public:
   Type get_pointee() const;
   PointerType(Type pointee);
 };
+/// Fixed-size array type: [T; N]. Bounds-checked at runtime.
 class ArrayType {
   TypePtr element;
   size_t size;
@@ -77,6 +86,7 @@ public:
   size_t get_size() const;
   ArrayType(Type element, size_t size);
 };
+/// Named product type with ordered fields. Name is qualified (e.g. mod::Point).
 class StructType {
   sammine_util::QualifiedName name;
   std::vector<std::string> field_names;
@@ -96,14 +106,16 @@ public:
              std::vector<std::string> field_names,
              std::vector<Type> field_types);
 };
+/// Sum type with named variants. Supports unit variants, payload variants,
+/// and integer-backed enums (explicit discriminant values, optional backing type).
 class EnumType {
   sammine_util::QualifiedName name;
 
 public:
   struct VariantInfo {
     std::string name;
-    std::vector<Type> payload_types;
-    std::optional<int64_t> discriminant_value;
+    std::vector<Type> payload_types;          // empty for unit variants
+    std::optional<int64_t> discriminant_value; // set for integer-backed enums
   };
 
 private:
@@ -125,6 +137,7 @@ public:
            bool integer_backed = false,
            TypeKind backing_type = TypeKind::I32_t);
 };
+/// Anonymous product type: (T, U, V). Supports destructuring via let (a, b) = t.
 class TupleType {
   std::shared_ptr<std::vector<Type>> element_types;
 
@@ -135,12 +148,17 @@ public:
   Type get_element(size_t idx) const;
   TupleType(std::vector<Type> element_types);
 };
+/// Payload for compound types. std::string holds TypeParam names and String values.
+/// std::monostate for scalar types that carry no extra data.
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, TupleType, std::string, std::monostate>;
 
 enum class Mutability : uint8_t { Immutable = 0, Mutable = 1 };
-enum class Linearity : uint8_t { NonLinear = 0, Linear = 1 };
+enum class Linearity : uint8_t { NonLinear = 0, Linear = 1 }; // Linear = must be consumed exactly once
 
+/// Core type representation. Every AST node gets a Type via ASTProperties.
+/// type_kind discriminates, type_data carries compound type details,
+/// mutability/linearity are orthogonal qualifiers.
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
@@ -300,6 +318,7 @@ struct Type {
 
   bool is_poisoned() const { return this->type_kind == TypeKind::Poisoned; }
 
+  /// Returns true for types that can appear as literal values (scalars + polymorphic).
   bool is_literal() const {
     switch (type_kind) {
     case TypeKind::I32_t:
@@ -322,10 +341,12 @@ struct Type {
     }
   }
 
+  /// True for unresolved numeric literals (Integer/Flt) that need context to specialize.
   bool is_polymorphic_numeric() const {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
 
+  /// True for compound types that contain inner types (used by forEachInnerType).
   bool isTypeWrapping() const {
     switch (type_kind) {
     case TypeKind::Pointer:
@@ -340,6 +361,7 @@ struct Type {
     }
   }
 
+  /// Recursively checks if this type or any nested type has linear ownership.
   bool containsLinear() const {
     if (linearity == Linearity::Linear)
       return true;
@@ -351,6 +373,7 @@ struct Type {
     return found;
   }
 
+  /// Visits all immediately-nested types (pointee, elements, fields, params, etc.).
   template <typename F> void forEachInnerType(F &&callback) const {
     switch (type_kind) {
     case TypeKind::Pointer: {
@@ -410,6 +433,9 @@ inline bool is_builtin_type_name(std::string_view name) {
   return false;
 }
 
+/// Type lattice for subtyping and compatibility checks.
+/// Maps child types to parent types (e.g. Integer→i32, Flt→f64).
+/// Used by the type checker to resolve polymorphic literals and validate assignments.
 struct TypeMapOrdering {
   std::map<Type, Type> type_map;
 

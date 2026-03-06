@@ -43,7 +43,8 @@
 
 #define DEBUG_TYPE "stages"
 
-// INFO: Declaration
+// Compiler: orchestrates the full compilation pipeline.
+// Each stage method short-circuits if `this->error` is set.
 namespace sammine_lang {
 class Compiler {
   std::shared_ptr<TokenStream> tokStream;
@@ -106,7 +107,6 @@ public:
 } // namespace sammine_lang
   //
 
-// INFO: Defn
 namespace sammine_lang {
 void CompilerRunner::run(
     std::map<compiler_option_enum, std::string> &compiler_options) {
@@ -175,6 +175,7 @@ Compiler::Compiler(
   lib_format_ = parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
 }
 
+// Stage 1: Tokenize source into a TokenStream.
 void Compiler::lex() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -184,6 +185,7 @@ void Compiler::lex() {
   tokStream = lexer->getTokenStream();
 }
 
+// Stage 2: Parse tokens into AST. Also detects whether `main` exists (→ executable vs library).
 void Compiler::parse() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -206,6 +208,9 @@ void Compiler::parse() {
       }
 }
 
+// Stage 3: Resolve `import` declarations by parsing .mn files on the fly.
+// Recursively handles transitive imports. Deduplicates via canonical module name.
+// Exported defs become ExternASTs; generic defs are inlined for monomorphization.
 void Compiler::resolve_imports() {
   if (this->error || programAST->imports.empty())
     return;
@@ -394,6 +399,7 @@ void Compiler::resolve_imports() {
   }
 }
 
+// Stage 4: Load stdlib/definitions.mn (builtin type defs). Executables only.
 void Compiler::load_definitions() {
   if (this->error || !has_main)
     return;
@@ -430,8 +436,10 @@ void Compiler::load_definitions() {
   }
 }
 
+// Stage 5: Two semantic sub-passes:
+// 1) ScopeGenerator: builds scopes, resolves names, qualifies enum variants
+// 2) GeneralSemantics: general validation checks
 void Compiler::semantics() {
-  // INFO: ScopeGeneratorVisitor
   {
     if (this->error) {
       return;
@@ -465,6 +473,9 @@ void Compiler::semantics() {
   }
 }
 
+// Stage 6: Bidirectional type checking + monomorphization.
+// Infers types bottom-up, checks assignments/calls, instantiates generics.
+// Monomorphized defs are injected at the front of DefinitionVec for codegen.
 void Compiler::typecheck() {
   if (this->error) {
     return;
@@ -503,6 +514,7 @@ void Compiler::typecheck() {
   this->error = vs.has_errors();
 }
 
+// Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly once.
 void Compiler::linear_check() {
   if (this->error)
     return;
@@ -555,6 +567,9 @@ void Compiler::codegen() {
   codegen_mlir();
 }
 
+// MLIR codegen: registers dialects (Arith, Func, LLVM, SCF, CF), generates MLIR
+// from AST via mlirGen(), then lowers MLIR→LLVM IR. Transfers data layout/triple
+// from the template LLVMRes module to the newly lowered module.
 void Compiler::codegen_mlir() {
   mlir::MLIRContext mlirCtx;
   mlirCtx.getOrLoadDialect<mlir::arith::ArithDialect>();
@@ -624,6 +639,7 @@ void Compiler::codegen_mlir() {
   resPtr->Module = std::move(llvmModule);
 }
 
+// Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff modes.
 void Compiler::optimize() {
   if (this->error) {
     std::exit(1);
@@ -688,6 +704,7 @@ void Compiler::optimize() {
   }
 }
 
+// Stage 10: Emit .o object file via LLVM TargetMachine.
 void Compiler::emit_object() {
   if (this->error) {
     return;
@@ -725,6 +742,7 @@ void Compiler::emit_object() {
 }
 
 
+// Create a static archive (.a) by collecting this module's .o + transitive deps.
 void Compiler::emit_archive_impl() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -777,6 +795,7 @@ void Compiler::emit_archive_impl() {
   std::filesystem::remove_all(tmp_dir);
 }
 
+// Create a shared library (.so) via clang++ -shared.
 void Compiler::emit_shared_impl() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -845,6 +864,7 @@ void Compiler::emit_library() {
   std::filesystem::remove(obj_file);
 }
 
+// Stage 12: Link .o files into executable via clang++ (fallback: g++). Executables only.
 void Compiler::link() {
   if (this->error || this->from_string) {
     return;
@@ -896,6 +916,7 @@ void Compiler::print_timing_table(
   fmt::print(stderr, "{:<18} {:>10.2f}  {:>5.1f}%\n", "total", total, 100.0);
 }
 
+// Main entry point: runs all pipeline stages sequentially with optional timing.
 void Compiler::start() {
   if (this->error) return;
   struct Stage {

@@ -26,6 +26,14 @@
 namespace sammine_lang {
 
 // ===--- generate() ---===
+// Entry point for MLIR code generation. Uses direct recursive dispatch
+// (emitExpr → dynamic_cast chain) rather than the visitor pattern, because
+// codegen needs to return mlir::Value from each node.
+//
+// Three pre-passes before emitting definitions:
+// 1) Declare runtime functions (malloc, free, exit)
+// 2) Register all struct/enum LLVM types (so forward refs work)
+// 3) Forward-declare all function signatures (needed for function-as-value refs)
 
 mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
@@ -165,6 +173,9 @@ void MLIRGenImpl::declareRuntimeFunctions() {
 }
 
 // ===--- Type conversion ---===
+// Maps sammine Types to MLIR types. Scalars → builtin integer/float types.
+// Pointers → !llvm.ptr (opaque). Arrays → LLVMArrayType. Structs/enums → named
+// LLVMStructType. Functions → closure fat pointer struct { code_ptr, env_ptr }.
 
 mlir::Type MLIRGenImpl::convertType(const Type &type) {
   switch (type.type_kind) {
@@ -330,6 +341,8 @@ MLIRGenImpl::mangleName(const sammine_util::QualifiedName &qn) const {
 }
 
 // ===--- Expression dispatcher ---===
+// Central dispatch for all expressions. Uses dynamic_cast chain (not visitor)
+// because each emit* method returns an mlir::Value.
 
 mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
   if (auto *num = llvm::dyn_cast<AST::NumberExprAST>(ast))

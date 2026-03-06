@@ -14,6 +14,9 @@
 //! \brief Defined the AST Node classes (ProgramAST, StructDefAST, FuncDefAST)
 //! and a visitor interface for traversing the AST
 
+/// Generates boilerplate for each AST node: getTreeName (debug printing),
+/// classof (LLVM RTTI), accept_vis/walk_with_preorder/postorder (visitor dispatch),
+/// and accept_synthesis (type checker dispatch).
 // clang-format off
 #define AST_NODE_METHODS(tree_name, kind_val)                                  \
   std::string getTreeName() const override { return tree_name; }               \
@@ -38,15 +41,19 @@ namespace AST {
 
 class Printable {};
 
+/// Discriminator for the TypeExprAST hierarchy.
+/// NOTE: TypeExprAST is NOT part of the visitor pattern — resolved via dynamic_cast
+/// in the type checker (BiTypeChecker::resolve_type_expr).
 enum class ParseKind {
-  Simple,
-  Pointer,
-  Array,
-  Function,
-  Generic,
-  Tuple,
+  Simple,    // e.g. i32, bool, MyStruct
+  Pointer,   // ptr<T> or 'ptr<T>
+  Array,     // [T; N]
+  Function,  // (T, U) -> V
+  Generic,   // Box<T>, Option<i32>
+  Tuple,     // (T, U)
 };
 
+/// Base class for parsed type annotations. Produces a Type during type checking.
 class TypeExprAST {
   ParseKind kind;
 public:
@@ -239,8 +246,8 @@ public:
   sammine_util::QualifiedName functionName;
   std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
-  std::vector<std::string> type_params;
-  bool is_var_arg = false;
+  std::vector<std::string> type_params; // populated during parsing, not type checking
+  bool is_var_arg = false;              // true for C vararg externs (e.g. printf)
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(
@@ -288,10 +295,11 @@ public:
 
 //! \brief A Function Definition that has the prototype and definition in terms
 //! of a block
+/// C FFI declaration: `extern name(params) -> type;`
 class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
-  bool is_exposed = false;
+  bool is_exposed = false; // true when declared with `reuse` (re-exported to importers)
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype)
       : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype)) {
@@ -299,9 +307,11 @@ public:
   }
   AST_NODE_METHODS("ExternAST", NodeKind::ExternAST)
 };
+/// Base class for all expression AST nodes. Expressions can appear as
+/// statements (is_statement=true, value discarded) or as values.
 class ExprAST : public AstBase, public Printable {
 public:
-  bool is_statement = true;
+  bool is_statement = true; // false when used as value (e.g. last expr in block)
   ExprAST(NodeKind kind) : AstBase(kind) {}
   ~ExprAST() = default;
   static bool classof(const AstBase *node) {
@@ -522,7 +532,7 @@ public:
 class ReturnExprAST : public ExprAST {
 
 public:
-  bool is_implicit;
+  bool is_implicit; // true when generated from last expression in a block (no `return` keyword)
   std::unique_ptr<ExprAST> return_expr;
   ReturnExprAST(std::shared_ptr<Token> return_tok,
                 std::unique_ptr<ExprAST> return_expr)
@@ -783,15 +793,17 @@ public:
   AST_NODE_METHODS("FieldAccessExprAST", NodeKind::FieldAccessExprAST)
 };
 
+/// Pattern in a case arm: `Enum::Variant(x, y)` or `_` (wildcard).
 struct CasePattern {
   sammine_util::QualifiedName variant_name =
       sammine_util::QualifiedName::local("");
-  std::vector<std::string> bindings;
-  bool is_wildcard = false;
+  std::vector<std::string> bindings; // bound variables from payload destructuring
+  bool is_wildcard = false;          // true for `_` catch-all pattern
   sammine_util::Location location;
-  size_t variant_index = 0;
+  size_t variant_index = 0;          // resolved during type checking
 };
 
+/// A single arm in a case expression: pattern => body block.
 struct CaseArm {
   CasePattern pattern;
   std::unique_ptr<BlockAST> body;
@@ -847,6 +859,7 @@ public:
   AST_NODE_METHODS("TupleLiteralExprAST", NodeKind::TupleLiteralExprAST)
 };
 
+/// Typeclass declaration: `typeclass Name<T> { method signatures }`.
 class TypeClassDeclAST : public DefinitionAST {
 public:
   std::string class_name;
@@ -863,6 +876,7 @@ public:
   AST_NODE_METHODS("TypeClassDeclAST", NodeKind::TypeClassDeclAST)
 };
 
+/// Typeclass instance: `instance Name<ConcreteType> { method implementations }`.
 class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;

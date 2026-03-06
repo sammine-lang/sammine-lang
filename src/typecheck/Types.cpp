@@ -280,6 +280,8 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
   return to == from;
 }
 
+// Full assignment compatibility: structural match + qualifier checks (mutability, linearity).
+// Used for variable initialization, function arguments, and return type validation.
 bool TypeMapOrdering::compatible_to_from(const Type &to,
                                           const Type &from) const {
   if (!qualifier_compatible(to, from))

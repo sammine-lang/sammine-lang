@@ -12,28 +12,31 @@
 
 namespace sammine_lang {
 using namespace AST;
-//! \brief Holds the precedence of a binary operation
+// Operator precedence table for precedence-climbing binary expression parsing.
+// Lower number = lower precedence (binds less tightly).
+// Pipe (|>) is lowest so `x |> f |> g` chains left-to-right.
+// Assignment is just above pipe. Logical < comparison < shift < additive < multiplicative.
 static std::map<TokenType, int> binopPrecedence = {
-    {TokenType::TokPipe, 1},
-    {TokenType::TokASSIGN, 2},
-    {TokenType::TokOR, 3},
-    {TokenType::TokORLogical, 4},
-    {TokenType::TokAND, 5},
-    {TokenType::TokXOR, 6},
-    {TokenType::TokAndLogical, 7},
-    {TokenType::TokLESS, 10},
-    {TokenType::TokLessEqual, 10},
-    {TokenType::TokGreaterEqual, 10},
-    {TokenType::TokGREATER, 10},
-    {TokenType::TokEQUAL, 10},
-    {TokenType::TokNOTEqual, 10},
-    {TokenType::TokSHL, 15},
-    {TokenType::TokSHR, 15},
-    {TokenType::TokADD, 20},
-    {TokenType::TokSUB, 20},
-    {TokenType::TokMUL, 40},
-    {TokenType::TokDIV, 40},
-    {TokenType::TokMOD, 40},
+    {TokenType::TokPipe, 1},         // |>  pipe
+    {TokenType::TokASSIGN, 2},       // =   assignment
+    {TokenType::TokOR, 3},           // |   bitwise OR
+    {TokenType::TokORLogical, 4},    // ||  logical OR
+    {TokenType::TokAND, 5},          // &   bitwise AND
+    {TokenType::TokXOR, 6},          // ^   bitwise XOR
+    {TokenType::TokAndLogical, 7},   // &&  logical AND
+    {TokenType::TokLESS, 10},        // <   comparison
+    {TokenType::TokLessEqual, 10},   // <=
+    {TokenType::TokGreaterEqual, 10},// >=
+    {TokenType::TokGREATER, 10},     // >
+    {TokenType::TokEQUAL, 10},       // ==
+    {TokenType::TokNOTEqual, 10},    // !=
+    {TokenType::TokSHL, 15},         // <<  shift
+    {TokenType::TokSHR, 15},         // >>
+    {TokenType::TokADD, 20},         // +   additive
+    {TokenType::TokSUB, 20},         // -
+    {TokenType::TokMUL, 40},         // *   multiplicative
+    {TokenType::TokDIV, 40},         // /
+    {TokenType::TokMOD, 40},         // %
 };
 
 int GetTokPrecedence(TokenType tokType) {
@@ -102,6 +105,8 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
   return programAST;
 }
 
+// Try each definition parser in order. Each returns NONCOMMITTED if the leading
+// token doesn't match (e.g. no 'struct' keyword), allowing fallthrough to next.
 auto Parser::ParseDefinition() -> p<DefinitionAST> {
   auto result = tryParsers<DefinitionAST>(
       &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
@@ -586,6 +591,8 @@ auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
   return ParseTypeExpr();
 }
 
+// Parse a type annotation. Builds a TypeExprAST tree (NOT in the visitor pattern).
+// Handles: ptr<T>, 'ptr<T>, [T;N], (T,U)->V, (T,U), Name<T>, and simple names.
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
   if (auto tick = expect(TokenType::TokTick)) {
     if (auto ptr_tok = expect(TokenType::TokPtr)) {
@@ -970,6 +977,7 @@ auto Parser::parsePostfixOps(u<ExprAST> expr) -> p<ExprAST> {
   return {std::move(expr), SUCCESS};
 }
 
+// Parse a full expression: primary + optional binary operators (precedence climbing).
 auto Parser::ParseExpr() -> p<ExprAST> {
   auto [LHS, left_result] = ParsePrimaryExpr();
   if (left_result == NONCOMMITTED)
@@ -984,6 +992,8 @@ auto Parser::ParseExpr() -> p<ExprAST> {
   return {std::move(next), FAILED};
 }
 
+// Precedence-climbing parser for binary expressions.
+// Pipe (|>) is desugared here: `x |> f(y)` becomes `f(x, y)`.
 auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
   while (!tokStream->isEnd()) {
     auto tok = tokStream->peek()->tok_type;
@@ -1881,6 +1891,8 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
           SUCCESS};
 }
 
+// Parse `::id` tail after an initial ID. Resolves module aliases (e.g. `m::add`
+// where `m` was aliased via `import math as m`). Used for calls and struct literals.
 auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
                                     bool resolve_alias) -> ParsedQualifiedName {
   std::vector<std::string> parts = {first_tok->lexeme};
@@ -1918,6 +1930,9 @@ auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
           loc};
 }
 
+// Speculatively parse `<Type, ...>` after a name. Uses rollback if the `<` turns
+// out to be a comparison rather than generic type args. Disambiguated by what follows
+// the closing `>`: `(` = call, `{` = struct literal, `::` = qualified member.
 auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
                                        sammine_util::Location &qn_loc)
     -> std::vector<std::unique_ptr<TypeExprAST>> {
@@ -1983,6 +1998,9 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
   return {};
 }
 
+// Try to consume a token of the given type. On failure: report error (if message
+// given) and optionally exhaust tokens until `until` (error recovery — skips to
+// the next semicolon or closing brace to resync the parser).
 auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,
                     const std::string &message) -> std::shared_ptr<Token> {
   auto currentToken = tokStream->peek();
