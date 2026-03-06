@@ -107,6 +107,14 @@ class LinearTypeChecker : public sammine_util::Reportee {
 
   const ASTProperties *props_ = nullptr;
 
+  // Maps closure variable names to the types of their captured (bound) args.
+  // Used at return time: if any captured type containsNonLinearPtr(), the closure
+  // cannot escape because it holds a reference to stack-local data.
+  std::unordered_map<std::string, std::vector<Type>> closure_captures_;
+
+  // Record the bound arg types of a partial application into closure_captures_.
+  void record_closure_captures(CallExprAST *ast, const std::string &dest_var);
+
 public:
   void check(ProgramAST *program, const ASTProperties &props);
 };

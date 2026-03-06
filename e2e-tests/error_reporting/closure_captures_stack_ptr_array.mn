@@ -1,0 +1,33 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_captures_stack_ptr_array.mn:17:2
+# CHECK-NEXT:   15|  let p : ptr<i32> = &x;
+# CHECK-NEXT:   16|  let f : (i32) -> i32 = deref_and_add(p);
+# CHECK-NEXT:   17|  return f;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   18|}
+# CHECK-NEXT:   19|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: returning a closure that captured a ptr to a stack-allocated i32
+# must be rejected — the variable lives on the callee's stack frame.
+
+
+import std;
+
+let deref_and_add(p: ptr<i32>, offset: i32) -> i32 {
+  return *p + offset;
+}
+
+let make_getter() -> (i32) -> i32 {
+  let x : i32 = 10;
+  let p : ptr<i32> = &x;
+  let f : (i32) -> i32 = deref_and_add(p);
+  return f;
+}
+
+let main() -> i32 {
+  return 0;
+}

@@ -362,12 +362,24 @@ struct Type {
   }
 
   /// Recursively checks if this type or any nested type has linear ownership.
-  bool containsLinear() const {
+  bool containsLinearTypes() const {
     if (linearity == Linearity::Linear)
       return true;
     bool found = false;
     forEachInnerType([&](const Type &inner) {
-      if (inner.containsLinear())
+      if (inner.containsLinearTypes())
+        found = true;
+    });
+    return found;
+  }
+
+  /// Recursively checks if this type or any nested type contains a non-linear pointer.
+  bool containsNonLinearPtr() const {
+    if (type_kind == TypeKind::Pointer && linearity != Linearity::Linear)
+      return true;
+    bool found = false;
+    forEachInnerType([&](const Type &inner) {
+      if (inner.containsNonLinearPtr())
         found = true;
     });
     return found;

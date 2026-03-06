@@ -1,0 +1,55 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_captures_stack_ptr_struct.mn:23:2
+# CHECK-NEXT:   21|  let p : ptr<Pair> = &s;
+# CHECK-NEXT:   22|  let f : (i32) -> i32 = read_a(p);
+# CHECK-NEXT:   23|  return f;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   24|}
+# CHECK-NEXT:   25|
+# CHECK-NEXT: --------------------------------------------------------------------------
+# CHECK-NEXT:     |closure_captures_stack_ptr_struct.mn:30:2
+# CHECK-NEXT:   28|  let p : ptr<Pair> = &s;
+# CHECK-NEXT:   29|  let f : (i32) -> i32 = read_b(p);
+# CHECK-NEXT:   30|  return f;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   31|}
+# CHECK-NEXT:   32|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: returning a closure that captured a ptr to a stack-allocated struct
+# must be rejected — the struct lives on the callee's stack frame.
+
+
+import std;
+
+struct Pair { a: i32, b: i32, };
+
+let read_a(p: ptr<Pair>, dummy: i32) -> i32 {
+  return (*p).a;
+}
+
+let read_b(p: ptr<Pair>, dummy: i32) -> i32 {
+  return (*p).b;
+}
+
+let make_reader_a() -> (i32) -> i32 {
+  let s : Pair = Pair { a: 99, b: 7 };
+  let p : ptr<Pair> = &s;
+  let f : (i32) -> i32 = read_a(p);
+  return f;
+}
+
+let make_reader_b() -> (i32) -> i32 {
+  let s : Pair = Pair { a: 99, b: 7 };
+  let p : ptr<Pair> = &s;
+  let f : (i32) -> i32 = read_b(p);
+  return f;
+}
+
+let main() -> i32 {
+  return 0;
+}

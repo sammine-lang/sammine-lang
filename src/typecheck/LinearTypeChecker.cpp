@@ -221,7 +221,7 @@ void LinearTypeChecker::check_block(BlockAST *ast) {
                       "Linear pointer from alloc is discarded"
                       " (must be stored in a variable)");
     } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt.get())) {
-      if (call->get_type().containsLinear()) {
+      if (call->get_type().containsLinearTypes()) {
         this->add_error(
             call->get_location(),
             fmt::format(
@@ -301,6 +301,10 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
       return;
     }
+    // Propagate closure captures through variable-to-variable assignment
+    auto it = closure_captures_.find(var->variableName);
+    if (it != closure_captures_.end())
+      closure_captures_[ast->TypedVar->name] = it->second;
   }
 
   // Check if RHS is a field access extracting a linear field (e.g. let q = b.data)
@@ -314,6 +318,32 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       }
     }
   }
+
+  // Record captured types if RHS is a partial application
+  if (auto *call = llvm::dyn_cast<CallExprAST>(ast->Expression.get()))
+    record_closure_captures(call, ast->TypedVar->name);
+
+  // Propagate closure captures through compound literals (struct/tuple/array).
+  // If any element is a closure that captured a non-linear pointer,
+  // the enclosing variable inherits that taint.
+  auto propagate_from_elements =
+      [&](const std::vector<std::unique_ptr<ExprAST>> &elements) {
+        for (auto &elem : elements) {
+          if (auto *v = llvm::dyn_cast<VariableExprAST>(elem.get())) {
+            auto it = closure_captures_.find(v->variableName);
+            if (it != closure_captures_.end()) {
+              closure_captures_[ast->TypedVar->name] = it->second;
+              return;
+            }
+          }
+        }
+      };
+  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(ast->Expression.get()))
+    propagate_from_elements(sl->field_values);
+  else if (auto *tl = llvm::dyn_cast<TupleLiteralExprAST>(ast->Expression.get()))
+    propagate_from_elements(tl->elements);
+  else if (auto *al = llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get()))
+    propagate_from_elements(al->elements);
 
   // Walk into RHS (may contain calls that consume things)
   check_stmt(ast->Expression.get());
@@ -375,7 +405,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
       if (auto *var =
               llvm::dyn_cast<VariableExprAST>(ast->arguments[i].get())) {
         auto *info = find_linear(var->variableName);
-        if (info && params[i].containsLinear()) {
+        if (info && params[i].containsLinearTypes()) {
           consume(info, ast->get_location(), "passed to function");
           continue;
         }
@@ -386,7 +416,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
         if (auto *obj =
                 llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
           auto *child = find_child(obj->variableName, fa->field_name);
-          if (child && params[i].containsLinear()) {
+          if (child && params[i].containsLinearTypes()) {
             consume(child, ast->get_location(), "passed to function");
             continue;
           }
@@ -477,6 +507,26 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
   }
   // Walk operand for nested linear ops
   check_stmt(ast->operand.get());
+}
+
+// ── Closure capture tracking ─────────────────────────────────────────
+
+void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
+                                                 const std::string &dest_var) {
+  auto *cp = props_ ? props_->call(ast->id()) : nullptr;
+  if (!cp || !cp->is_partial || !cp->callee_func_type)
+    return;
+
+  auto &func_type = std::get<FunctionType>(cp->callee_func_type->type_data);
+  auto params = func_type.get_params_types();
+
+  // The bound args are the first N arguments (N < total params → partial app).
+  std::vector<Type> captured;
+  for (size_t i = 0; i < ast->arguments.size() && i < params.size(); i++)
+    captured.push_back(params[i]);
+
+  if (!captured.empty())
+    closure_captures_[dest_var] = std::move(captured);
 }
 
 // ── check_return ────────────────────────────────────────────────────
@@ -582,6 +632,21 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
                       var->variableName, var->get_type().to_string(), *path));
       return;
     }
+    // Returning a closure — check if any captured arg contains a pointer
+    auto it = closure_captures_.find(var->variableName);
+    if (it != closure_captures_.end()) {
+      for (auto &captured : it->second) {
+        if (captured.containsNonLinearPtr()) {
+          this->add_error(
+              ast->get_location(),
+              fmt::format(
+                  "Cannot return '{}' — it is a closure that captured a "
+                  "non-linear pointer (may dangle after return)",
+                  var->variableName));
+          return;
+        }
+      }
+    }
   }
 
   // Handle return b.data — field access returning a linear field
@@ -591,6 +656,67 @@ void LinearTypeChecker::check_return(ReturnExprAST *ast) {
       if (child) {
         consume(child, ast->get_location(), "returned");
         return;
+      }
+    }
+  }
+
+  // Returning a compound literal (struct/tuple/array) that wraps a tainted closure
+  auto check_elements_for_tainted_closure =
+      [&](const std::vector<std::unique_ptr<ExprAST>> &elements) -> bool {
+    for (auto &elem : elements) {
+      if (auto *v = llvm::dyn_cast<VariableExprAST>(elem.get())) {
+        auto it = closure_captures_.find(v->variableName);
+        if (it != closure_captures_.end()) {
+          for (auto &captured : it->second) {
+            if (captured.containsNonLinearPtr()) {
+              this->add_error(
+                  ast->get_location(),
+                  fmt::format("Cannot return a value containing '{}' — it is "
+                              "a closure that captured a non-linear pointer "
+                              "(may dangle after return)",
+                              v->variableName));
+              check_stmt(ast->return_expr.get());
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(ast->return_expr.get())) {
+    if (check_elements_for_tainted_closure(sl->field_values))
+      return;
+  } else if (auto *tl =
+                 llvm::dyn_cast<TupleLiteralExprAST>(ast->return_expr.get())) {
+    if (check_elements_for_tainted_closure(tl->elements))
+      return;
+  } else if (auto *al =
+                 llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
+    if (check_elements_for_tainted_closure(al->elements))
+      return;
+  }
+
+  // Returning a partial application directly (e.g. return some_func(&x))
+  if (auto *call = llvm::dyn_cast<CallExprAST>(ast->return_expr.get())) {
+    auto *cp = props_ ? props_->call(call->id()) : nullptr;
+    if (cp && cp->is_partial && cp->callee_func_type) {
+      auto &func_type =
+          std::get<FunctionType>(cp->callee_func_type->type_data);
+      auto params = func_type.get_params_types();
+      for (size_t i = 0; i < call->arguments.size() && i < params.size();
+           i++) {
+        if (params[i].containsNonLinearPtr()) {
+          this->add_error(
+              ast->get_location(),
+              fmt::format("Cannot return partial application of '{}' — it "
+                          "captures a non-linear pointer "
+                          "(may dangle after return)",
+                          call->functionName.mangled()));
+          // Still walk args for other linear checks
+          check_stmt(ast->return_expr.get());
+          return;
+        }
       }
     }
   }
@@ -708,7 +834,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     auto &names = st.get_field_names();
     auto &types = st.get_field_types();
     for (size_t i = 0; i < names.size(); i++) {
-      if (types[i].containsLinear()) {
+      if (types[i].containsLinearTypes()) {
         auto &child =
             parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
                                                  parent.name + "." + names[i], {}, {}};
@@ -721,7 +847,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   case TypeKind::Tuple: {
     auto &tt = std::get<TupleType>(t.type_data);
     for (size_t i = 0; i < tt.size(); i++) {
-      if (tt.get_element(i).containsLinear()) {
+      if (tt.get_element(i).containsLinearTypes()) {
         auto key = std::to_string(i);
         auto &child =
             parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
@@ -736,7 +862,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     auto &et = std::get<EnumType>(t.type_data);
     for (auto &variant : et.get_variants()) {
       for (size_t i = 0; i < variant.payload_types.size(); i++) {
-        if (variant.payload_types[i].containsLinear()) {
+        if (variant.payload_types[i].containsLinearTypes()) {
           auto key = variant.name + "." + std::to_string(i);
           auto &child =
               parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
@@ -750,7 +876,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   }
   case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
-    if (at.get_element().containsLinear()) {
+    if (at.get_element().containsLinearTypes()) {
       auto &child =
           parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
                                           parent.name + "[*]", {}, {}};
@@ -814,7 +940,7 @@ VarInfo *LinearTypeChecker::find_child(const std::string &var_name,
 void LinearTypeChecker::register_if_linear(const std::string &name,
                                             const Type &type,
                                             sammine_util::Location loc) {
-  if (!type.containsLinear())
+  if (!type.containsLinearTypes())
     return;
   register_linear(name, loc);
   if (type.linearity != Linearity::Linear) {

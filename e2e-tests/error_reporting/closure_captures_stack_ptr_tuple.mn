@@ -1,0 +1,59 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_captures_stack_ptr_tuple.mn:27:2
+# CHECK-NEXT:   25|  let p : ptr<(i32, bool)> = &t;
+# CHECK-NEXT:   26|  let f : (i32) -> i32 = get_fst(p);
+# CHECK-NEXT:   27|  return f;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   28|}
+# CHECK-NEXT:   29|
+# CHECK-NEXT: --------------------------------------------------------------------------
+# CHECK-NEXT:     |closure_captures_stack_ptr_tuple.mn:34:2
+# CHECK-NEXT:   32|  let p : ptr<(i32, bool)> = &t;
+# CHECK-NEXT:   33|  let f : (i32) -> i32 = get_snd_as_int(p);
+# CHECK-NEXT:   34|  return f;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   35|}
+# CHECK-NEXT:   36|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: returning a closure that captured a ptr to a stack-allocated tuple
+# must be rejected — the tuple lives on the callee's stack frame.
+
+
+import std;
+
+let get_fst(p: ptr<(i32, bool)>, dummy: i32) -> i32 {
+  let (a, b) = *p;
+  return a;
+}
+
+let get_snd_as_int(p: ptr<(i32, bool)>, dummy: i32) -> i32 {
+  let (a, b) = *p;
+  if b {
+    return 1;
+  } else {
+    return 0;
+  };
+}
+
+let make_fst() -> (i32) -> i32 {
+  let t = (42, true);
+  let p : ptr<(i32, bool)> = &t;
+  let f : (i32) -> i32 = get_fst(p);
+  return f;
+}
+
+let make_snd() -> (i32) -> i32 {
+  let t = (42, true);
+  let p : ptr<(i32, bool)> = &t;
+  let f : (i32) -> i32 = get_snd_as_int(p);
+  return f;
+}
+
+let main() -> i32 {
+  return 0;
+}

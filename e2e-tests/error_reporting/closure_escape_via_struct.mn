@@ -1,0 +1,49 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_escape_via_struct.mn:18:2
+# CHECK-NEXT:   16|  let f : (i32) -> i32 = deref_add(&x);
+# CHECK-NEXT:   17|  let w : Wrapper = Wrapper { cb: f };
+# CHECK-NEXT:   18|  return w;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 'w' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   19|}
+# CHECK-NEXT:   20|
+# CHECK-NEXT: --------------------------------------------------------------------------
+# CHECK-NEXT:     |closure_escape_via_struct.mn:24:2
+# CHECK-NEXT:   22|  let x : i32 = 42;
+# CHECK-NEXT:   23|  let f : (i32) -> i32 = deref_add(&x);
+# CHECK-NEXT:   24|  return Wrapper { cb: f };
+# CHECK-NEXT:     |  ─────────────────────┬
+# CHECK-NEXT:     |                       ╰─ Cannot return a value containing 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   25|}
+# CHECK-NEXT:   26|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: closure capturing a stack ptr escapes via struct field.
+# Both inline and variable returns must be rejected.
+
+import std;
+
+struct Wrapper { cb: (i32) -> i32, };
+
+let deref_add(p: ptr<i32>, offset: i32) -> i32 {
+  return *p + offset;
+}
+
+let make_var() -> Wrapper {
+  let x : i32 = 42;
+  let f : (i32) -> i32 = deref_add(&x);
+  let w : Wrapper = Wrapper { cb: f };
+  return w;
+}
+
+let make_inline() -> Wrapper {
+  let x : i32 = 42;
+  let f : (i32) -> i32 = deref_add(&x);
+  return Wrapper { cb: f };
+}
+
+let main() -> i32 {
+  return 0;
+}

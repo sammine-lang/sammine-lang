@@ -1,0 +1,47 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_escape_via_tuple.mn:16:2
+# CHECK-NEXT:   14|  let f : (i32) -> i32 = deref_add(&x);
+# CHECK-NEXT:   15|  let t = (f, 0);
+# CHECK-NEXT:   16|  return t;
+# CHECK-NEXT:     |  ───────┬
+# CHECK-NEXT:     |         ╰─ Cannot return 't' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   17|}
+# CHECK-NEXT:   18|
+# CHECK-NEXT: --------------------------------------------------------------------------
+# CHECK-NEXT:     |closure_escape_via_tuple.mn:22:2
+# CHECK-NEXT:   20|  let x : i32 = 42;
+# CHECK-NEXT:   21|  let f : (i32) -> i32 = deref_add(&x);
+# CHECK-NEXT:   22|  return (f, 0);
+# CHECK-NEXT:     |  ────────────┬
+# CHECK-NEXT:     |              ╰─ Cannot return a value containing 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   23|}
+# CHECK-NEXT:   24|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: closure capturing a stack ptr escapes via tuple element.
+# Both inline and variable returns must be rejected.
+
+import std;
+
+let deref_add(p: ptr<i32>, offset: i32) -> i32 {
+  return *p + offset;
+}
+
+let make_var() -> ((i32) -> i32, i32) {
+  let x : i32 = 42;
+  let f : (i32) -> i32 = deref_add(&x);
+  let t = (f, 0);
+  return t;
+}
+
+let make_inline() -> ((i32) -> i32, i32) {
+  let x : i32 = 42;
+  let f : (i32) -> i32 = deref_add(&x);
+  return (f, 0);
+}
+
+let main() -> i32 {
+  return 0;
+}

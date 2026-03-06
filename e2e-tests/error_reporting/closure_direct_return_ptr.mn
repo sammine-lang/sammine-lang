@@ -1,0 +1,30 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_direct_return_ptr.mn:14:2
+# CHECK-NEXT:   12|let make() -> (i32) -> i32 {
+# CHECK-NEXT:   13|  let x : i32 = 42;
+# CHECK-NEXT:   14|  return deref_and_add(&x);
+# CHECK-NEXT:     |  ──────────────────────┬
+# CHECK-NEXT:     |                        ╰─ Cannot return partial application of 'deref_and_add' — it captures a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   15|}
+# CHECK-NEXT:   16|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: returning a partial application directly (no intermediate variable)
+# that captures a ptr to a stack-allocated i32.
+
+import std;
+
+let deref_and_add(p: ptr<i32>, offset: i32) -> i32 {
+  return *p + offset;
+}
+
+let make() -> (i32) -> i32 {
+  let x : i32 = 42;
+  return deref_and_add(&x);
+}
+
+let main() -> i32 {
+  return 0;
+}

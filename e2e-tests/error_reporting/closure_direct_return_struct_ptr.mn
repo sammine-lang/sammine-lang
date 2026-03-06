@@ -1,0 +1,32 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK:          |closure_direct_return_struct_ptr.mn:16:2
+# CHECK-NEXT:   14|let make() -> (i32) -> i32 {
+# CHECK-NEXT:   15|  let s : Pair = Pair { a: 99, b: 7 };
+# CHECK-NEXT:   16|  return read_a(&s);
+# CHECK-NEXT:     |  ───────────────┬
+# CHECK-NEXT:     |                 ╰─ Cannot return partial application of 'read_a' — it captures a non-linear pointer (may dangle after return)
+# CHECK-NEXT:   17|}
+# CHECK-NEXT:   18|
+# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+# CHECK-NEXT: --------------------------------------------------------------------------
+
+# Test: returning a partial application directly that captures
+# a ptr to a stack-allocated struct.
+
+import std;
+
+struct Pair { a: i32, b: i32, };
+
+let read_a(p: ptr<Pair>, dummy: i32) -> i32 {
+  return (*p).a;
+}
+
+let make() -> (i32) -> i32 {
+  let s : Pair = Pair { a: 99, b: 7 };
+  return read_a(&s);
+}
+
+let main() -> i32 {
+  return 0;
+}
