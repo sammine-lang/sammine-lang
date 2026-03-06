@@ -133,17 +133,18 @@ let main() -> i32 {
 
 ### MacOS Configurations
 
-Install llvm (includes MLIR)
+We need [LLVM & MLIR](https://llvm.org/) and [lit](https://pypi.org/project/lit/).
+
+Point `LLVM_DIR` and `MLIR_DIR` to your local LLVM build:
 
 ```bash
-brew install llvm
+cmake -S . -B build \
+  -DLLVM_DIR=/path/to/llvm-project/build/lib/cmake/llvm \
+  -DMLIR_DIR=/path/to/llvm-project/build/lib/cmake/mlir \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -DCMAKE_BUILD_TYPE=Debug \
+  [-DSAMMINE_TEST=ON/OFF] [-DCMAKE_LINKER_TYPE=MOLD]
 ```
-Run
-```bash
-cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCMAKE_BUILD_TYPE=Debug [-DSAMMINE_TEST=ON/OFF] [-DCMAKE_LINKER_TYPE=MOLD]
-```
-
-for configuration. We need [LLVM & MLIR](https://llvm.org/) and [lit](https://pypi.org/project/lit/).
 
 Run
 
