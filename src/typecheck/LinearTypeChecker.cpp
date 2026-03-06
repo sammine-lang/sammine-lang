@@ -485,10 +485,12 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
 // e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
 // NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
 static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
-  if (t.type_kind == TypeKind::Pointer && t.linearity != Linearity::Linear)
-    return fmt::format("non-linear {}", t.to_string());
-
-  if (t.type_kind == TypeKind::Struct) {
+  switch (t.type_kind) {
+  case TypeKind::Pointer:
+    if (t.linearity != Linearity::Linear)
+      return fmt::format("non-linear {}", t.to_string());
+    return std::nullopt;
+  case TypeKind::Struct: {
     auto &st = std::get<StructType>(t.type_data);
     auto &names = st.get_field_names();
     auto &types = st.get_field_types();
@@ -497,8 +499,9 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
       if (path)
         return fmt::format("{} in field '{}'", *path, names[i]);
     }
+    return std::nullopt;
   }
-  if (t.type_kind == TypeKind::Enum) {
+  case TypeKind::Enum: {
     auto &et = std::get<EnumType>(t.type_data);
     for (auto &variant : et.get_variants()) {
       for (auto &pt : variant.payload_types) {
@@ -507,14 +510,25 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
           return fmt::format("{} in variant '{}'", *path, variant.name);
       }
     }
+    return std::nullopt;
   }
-  if (t.type_kind == TypeKind::Array) {
+  case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
     auto path = find_nonlinear_pointer_path(at.get_element());
     if (path)
       return fmt::format("{} in element", *path);
+    return std::nullopt;
   }
-  if (t.type_kind == TypeKind::Function) {
+  case TypeKind::Tuple: {
+    auto &tt = std::get<TupleType>(t.type_data);
+    for (size_t i = 0; i < tt.size(); i++) {
+      auto path = find_nonlinear_pointer_path(tt.get_element(i));
+      if (path)
+        return fmt::format("{} in tuple element {}", *path, i);
+    }
+    return std::nullopt;
+  }
+  case TypeKind::Function: {
     auto &fn = std::get<FunctionType>(t.type_data);
     for (auto &p : fn.get_params_types()) {
       auto path = find_nonlinear_pointer_path(p);
@@ -524,8 +538,27 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
     auto path = find_nonlinear_pointer_path(fn.get_return_type());
     if (path)
       return fmt::format("{} in return type", *path);
+    return std::nullopt;
   }
-  return std::nullopt;
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+  case TypeKind::Unit:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::String:
+  case TypeKind::Never:
+  case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+  case TypeKind::TypeParam:
+  case TypeKind::Generic:
+    return std::nullopt;
+  }
 }
 
 void LinearTypeChecker::check_return(ReturnExprAST *ast) {
@@ -669,7 +702,8 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
 
 void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
                                                sammine_util::Location loc) {
-  if (t.type_kind == TypeKind::Struct) {
+  switch (t.type_kind) {
+  case TypeKind::Struct: {
     auto &st = std::get<StructType>(t.type_data);
     auto &names = st.get_field_names();
     auto &types = st.get_field_types();
@@ -678,12 +712,13 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
         auto &child =
             parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
                                                  parent.name + "." + names[i], {}, {}};
-        // Recurse: field itself may be a struct/array/tuple with linear innards
         if (types[i].linearity != Linearity::Linear)
           register_inner_linear(child, types[i], loc);
       }
     }
-  } else if (t.type_kind == TypeKind::Tuple) {
+    break;
+  }
+  case TypeKind::Tuple: {
     auto &tt = std::get<TupleType>(t.type_data);
     for (size_t i = 0; i < tt.size(); i++) {
       if (tt.get_element(i).containsLinear()) {
@@ -695,7 +730,25 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
           register_inner_linear(child, tt.get_element(i), loc);
       }
     }
-  } else if (t.type_kind == TypeKind::Array) {
+    break;
+  }
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(t.type_data);
+    for (auto &variant : et.get_variants()) {
+      for (size_t i = 0; i < variant.payload_types.size(); i++) {
+        if (variant.payload_types[i].containsLinear()) {
+          auto key = variant.name + "." + std::to_string(i);
+          auto &child =
+              parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
+                                              parent.name + "." + key, {}, {}};
+          if (variant.payload_types[i].linearity != Linearity::Linear)
+            register_inner_linear(child, variant.payload_types[i], loc);
+        }
+      }
+    }
+    break;
+  }
+  case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
     if (at.get_element().containsLinear()) {
       auto &child =
@@ -704,6 +757,28 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
       if (at.get_element().linearity != Linearity::Linear)
         register_inner_linear(child, at.get_element(), loc);
     }
+    break;
+  }
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+  case TypeKind::Unit:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::String:
+  case TypeKind::Function:
+  case TypeKind::Pointer:
+  case TypeKind::Never:
+  case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+  case TypeKind::TypeParam:
+  case TypeKind::Generic:
+    break;
   }
 }
 

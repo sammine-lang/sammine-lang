@@ -21,38 +21,46 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   if (!expr)
     return nullptr;
 
-  if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(expr)) {
+  switch (expr->getKind()) {
+  case ParseKind::Simple: {
+    auto *simple = llvm::cast<SimpleTypeExprAST>(expr);
     auto resolved = resolve_type_name(simple->name.mangled());
     return std::make_unique<SimpleTypeExprAST>(make_tok(resolved));
   }
-
-  if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(expr)) {
+  case ParseKind::Pointer: {
+    auto *ptr = llvm::cast<PointerTypeExprAST>(expr);
     return std::make_unique<PointerTypeExprAST>(
         clone_type_expr(ptr->pointee.get()), ptr->is_linear);
   }
-
-  if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(expr)) {
+  case ParseKind::Array: {
+    auto *arr = llvm::cast<ArrayTypeExprAST>(expr);
     return std::make_unique<ArrayTypeExprAST>(
         clone_type_expr(arr->element.get()), arr->size);
   }
-
-  if (auto *fn = llvm::dyn_cast<FunctionTypeExprAST>(expr)) {
+  case ParseKind::Function: {
+    auto *fn = llvm::cast<FunctionTypeExprAST>(expr);
     std::vector<std::unique_ptr<TypeExprAST>> params;
     for (auto &p : fn->paramTypes)
       params.push_back(clone_type_expr(p.get()));
     return std::make_unique<FunctionTypeExprAST>(
         std::move(params), clone_type_expr(fn->returnType.get()));
   }
-
-  if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(expr)) {
+  case ParseKind::Generic: {
+    auto *gen = llvm::cast<GenericTypeExprAST>(expr);
     std::vector<std::unique_ptr<TypeExprAST>> cloned_args;
     for (auto &arg : gen->type_args)
       cloned_args.push_back(clone_type_expr(arg.get()));
     return std::make_unique<GenericTypeExprAST>(
         gen->base_name, std::move(cloned_args), gen->location);
   }
-
-  sammine_util::abort("Unknown TypeExprAST subclass in Monomorphizer");
+  case ParseKind::Tuple: {
+    auto *tup = llvm::cast<TupleTypeExprAST>(expr);
+    std::vector<std::unique_ptr<TypeExprAST>> cloned_elements;
+    for (auto &elem : tup->element_types)
+      cloned_elements.push_back(clone_type_expr(elem.get()));
+    return std::make_unique<TupleTypeExprAST>(std::move(cloned_elements));
+  }
+  }
 }
 
 std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
