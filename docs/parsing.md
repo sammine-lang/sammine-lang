@@ -5,15 +5,13 @@ Hi there :) enjoy your stay
 
 Parsing expression, and binary expression.
 
-Since by our definition, binary expression can have a 
-
 ## Error recovery
 
 In principle, we say that if a Parse*() result is nullptr, then we haven't
 committed to calling that Parse*() function yet. 
 
-If a Parse*() result is non-null, then it can either parse successfully, or failed since its
-commitment to parsing via that Parse*(). The error message is sent directly to a vector of error messages in parser.
+If a Parse*() commits (returns SUCCESS or FAILED status), then it either parsed successfully or
+failed after commitment. Error messages are reported immediately to an external Reporter via `imm_error()`.
 
 If a Parse*() commits and at a certain time cannot match against a TokenType,
 it will suppose that it has matched successfully against that token but reports an error.
@@ -42,16 +40,19 @@ If at first we can't even match them against the first token in each rule, we re
 all of them, and then since ParseProgram fails at this point, we stop computation with exhaust_until_EOF.
 Since a statement can be a simple statement which ends in a semicolon or an if
 - Definition parsing
-  - ClassDef: 
-  - VarDef
-  - FuncDef
+  - StructDef
+  - EnumDef / TypeAliasDef
+  - FuncDef / ExternDef
+  - TypeClassDecl
+  - TypeClassInstance
 
-TLDR: unless the current parse is at simple_stmt or return_stmt or if_stmt or one of the ParseDef, if we errors on a match, immediately 
+TLDR: unless the current parse is at simple_stmt or return_stmt or if_stmt or one of the ParseDef, if we errors on a match, immediately
 exhausts until EOF with an error message.
 
 - If we error at simple_stmt or return_stmt, exhausts until semicolon.
-- If we error at if_stmt, exhausts until right curly.
+- If we error at if_stmt, exhausts until right curly (via ParseBlock).
 - If we error at VarDef, exhausts until semicolon.
-- If we error at FuncDef or ClassDef, exhausts until right curly.
+- If we error at FuncDef or StructDef, exhausts until right curly.
+- If we error at EnumDef or TypeAliasDef, exhausts until semicolon.
 
 Error means we have committed at that level of Parse() but failed to match against a token.
