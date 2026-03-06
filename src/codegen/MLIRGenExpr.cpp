@@ -646,6 +646,10 @@ mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
   // Bounds check
   emitBoundsCheck(indexVal, arrType.get_size(), location);
 
+  // If arr is an aggregate value (e.g. from struct field access) rather than
+  // a pointer, spill it to a temp alloca so GEP can operate on it.
+  arr = ensurePointer(arr, location);
+
   // All arrays are !llvm.ptr — use LLVM GEP + load
   return emitPtrArrayLoad(arr, idx, arrType, location);
 }
@@ -793,12 +797,7 @@ MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   for (size_t i = 0; i < ast->field_values.size(); i++) {
     auto fieldIdx = st.get_field_index(ast->field_names[i]);
     auto val = emitExpr(ast->field_values[i].get());
-    // Array expressions return !llvm.ptr; InsertValueOp needs LLVMArrayType
-    if (ast->field_values[i]->get_type().type_kind == TypeKind::Array &&
-        mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
-      val = mlir::LLVM::LoadOp::create(
-          builder, location, convertType(ast->field_values[i]->get_type()), val);
-    }
+    val = ensureLoaded(val, ast->field_values[i]->get_type(), location);
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
                                              fieldIdx.value());
   }
@@ -856,12 +855,7 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
     int64_t byte_offset = 0;
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto argVal = emitExpr(ast->arguments[i].get());
-      // Array expressions return !llvm.ptr; StoreOp needs LLVMArrayType
-      if (ast->arguments[i]->get_type().type_kind == TypeKind::Array &&
-          mlir::isa<mlir::LLVM::LLVMPointerType>(argVal.getType())) {
-        argVal = mlir::LLVM::LoadOp::create(
-            builder, location, convertType(ast->arguments[i]->get_type()), argVal);
-      }
+      argVal = ensureLoaded(argVal, ast->arguments[i]->get_type(), location);
       int64_t field_offset = advancePayloadOffset(byte_offset, vi.payload_types[i]);
       mlir::Value dest;
       if (field_offset == 0) {
@@ -1026,12 +1020,7 @@ mlir::Value MLIRGenImpl::emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast) {
   // Insert each element at its index
   for (size_t i = 0; i < ast->elements.size(); i++) {
     auto val = emitExpr(ast->elements[i].get());
-    // Array elements return !llvm.ptr; InsertValueOp needs LLVMArrayType
-    if (ast->elements[i]->get_type().type_kind == TypeKind::Array &&
-        mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
-      val = mlir::LLVM::LoadOp::create(
-          builder, location, convertType(ast->elements[i]->get_type()), val);
-    }
+    val = ensureLoaded(val, ast->elements[i]->get_type(), location);
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
                                              llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
   }

@@ -435,8 +435,41 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
     return initVal;
   }
 
-  // Arrays: the literal already returns an !llvm.ptr, register it directly
+  // Arrays: initVal is an !llvm.ptr to the source array data.
   if (ast->get_type().type_kind == TypeKind::Array) {
+    // For immutable arrays with all-constant elements, emit as global constant
+    if (!ast->is_mutable) {
+      if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(
+              ast->Expression.get())) {
+        bool allConst = std::all_of(
+            arrLit->elements.begin(), arrLit->elements.end(),
+            [](const auto &e) {
+              return llvm::isa<AST::NumberExprAST>(e.get()) ||
+                     llvm::isa<AST::BoolExprAST>(e.get()) ||
+                     llvm::isa<AST::CharExprAST>(e.get());
+            });
+        if (allConst) {
+          auto globalPtr =
+              emitGlobalConstArray(arrLit, ast->get_type(), location);
+          symbolTable.registerNameT(ast->TypedVar->name, globalPtr);
+          return globalPtr;
+        }
+      }
+    }
+
+    // Mutable arrays need their own copy (alloca + load/store) so writes
+    // don't alias the source (which may be a global constant or another var).
+    if (ast->is_mutable) {
+      auto llvmArrayType = mlir::cast<mlir::LLVM::LLVMArrayType>(
+          convertType(ast->get_type()));
+      auto alloca = emitAllocaOne(llvmArrayType, location);
+      auto loaded =
+          mlir::LLVM::LoadOp::create(builder, location, llvmArrayType, initVal);
+      mlir::LLVM::StoreOp::create(builder, location, loaded, alloca);
+      symbolTable.registerNameT(ast->TypedVar->name, alloca);
+      return alloca;
+    }
+
     symbolTable.registerNameT(ast->TypedVar->name, initVal);
     return initVal;
   }
@@ -456,6 +489,23 @@ mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
                                                   builder.getI64Type(), 1);
   return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
                                         elemType, one);
+}
+
+mlir::Value MLIRGenImpl::ensureLoaded(mlir::Value val, const Type &type,
+                                       mlir::Location loc) {
+  if (mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()) &&
+      !mlir::isa<mlir::LLVM::LLVMPointerType>(convertType(type)))
+    return mlir::LLVM::LoadOp::create(builder, loc, convertType(type), val);
+  return val;
+}
+
+mlir::Value MLIRGenImpl::ensurePointer(mlir::Value val, mlir::Location loc) {
+  if (!mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
+    auto alloca = emitAllocaOne(val.getType(), loc);
+    mlir::LLVM::StoreOp::create(builder, loc, val, alloca);
+    return alloca;
+  }
+  return val;
 }
 
 int64_t MLIRGenImpl::getTypeSize(const Type &type) {
@@ -573,6 +623,72 @@ int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset, const Type &fiel
   int64_t offset = byte_offset;
   byte_offset += fieldSize;
   return offset;
+}
+
+mlir::Value
+MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
+                                  const Type &type, mlir::Location location) {
+  auto arrType = std::get<ArrayType>(type.type_data);
+  auto elemType = convertType(arrType.get_element());
+  auto llvmArrayType =
+      mlir::LLVM::LLVMArrayType::get(elemType, arrType.get_size());
+
+  auto name =
+      fmt::format("{}{}", kConstArrayPrefix.str(), constArrayCounter++);
+
+  // Build the global constant in the module scope, then return to caller scope
+  {
+    mlir::OpBuilder::InsertionGuard guard(builder);
+    builder.setInsertionPointToStart(theModule.getBody());
+
+    auto globalOp = mlir::LLVM::GlobalOp::create(
+        builder, location, llvmArrayType, /*isConstant=*/true,
+        mlir::LLVM::Linkage::Internal, name, mlir::Attribute{});
+
+    // Create an initializer region: undef + insertvalue for each element
+    auto &region = globalOp.getInitializerRegion();
+    auto *block = builder.createBlock(&region);
+    builder.setInsertionPointToStart(block);
+
+    auto undef =
+        mlir::LLVM::UndefOp::create(builder, location, llvmArrayType);
+    mlir::Value current = undef;
+    for (size_t i = 0; i < arrLit->elements.size(); ++i) {
+      auto *elem = arrLit->elements[i].get();
+      mlir::Value elemVal;
+      if (auto *num = llvm::dyn_cast<AST::NumberExprAST>(elem)) {
+        auto elemSammineType = num->get_type();
+        if (isFloatType(elemSammineType)) {
+          auto mlirFloatType = mlir::cast<mlir::FloatType>(elemType);
+          double val = std::stod(num->number);
+          llvm::APFloat apVal(val);
+          if (elemSammineType.type_kind == TypeKind::F32_t) {
+            bool losesInfo = false;
+            apVal.convert(llvm::APFloat::IEEEsingle(),
+                          llvm::APFloat::rmNearestTiesToEven, &losesInfo);
+          }
+          elemVal = mlir::arith::ConstantFloatOp::create(
+              builder, location, mlirFloatType, apVal);
+        } else {
+          int64_t val = std::stoll(num->number);
+          elemVal = mlir::arith::ConstantIntOp::create(builder, location,
+                                                       elemType, val);
+        }
+      } else if (auto *b = llvm::dyn_cast<AST::BoolExprAST>(elem)) {
+        elemVal = mlir::arith::ConstantIntOp::create(builder, location,
+                                                     b->b ? 1 : 0, 1);
+      } else if (auto *c = llvm::dyn_cast<AST::CharExprAST>(elem)) {
+        elemVal = mlir::arith::ConstantIntOp::create(
+            builder, location, static_cast<uint8_t>(c->value), 8);
+      }
+      current = mlir::LLVM::InsertValueOp::create(
+          builder, location, current, elemVal,
+          llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+    }
+    mlir::LLVM::ReturnOp::create(builder, location, current);
+  } // guard restores insertion point here
+
+  return mlir::LLVM::AddressOfOp::create(builder, location, llvmPtrTy(), name);
 }
 
 mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,

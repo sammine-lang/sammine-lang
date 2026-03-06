@@ -22,6 +22,7 @@ static constexpr llvm::StringLiteral kStructTypePrefix = "sammine.struct.";
 static constexpr llvm::StringLiteral kWrapperPrefix = "__wrap_";
 static constexpr llvm::StringLiteral kPartialPrefix = "__partial_";
 static constexpr llvm::StringLiteral kStringPrefix = ".str.";
+static constexpr llvm::StringLiteral kConstArrayPrefix = ".const_arr.";
 static constexpr llvm::StringLiteral kMallocFunc = "malloc";
 static constexpr llvm::StringLiteral kFreeFunc = "free";
 static constexpr llvm::StringLiteral kExitFunc = "exit";
@@ -63,6 +64,7 @@ public:
   AST::LexicalStack<mlir::Value, std::monostate> symbolTable;
 
   int strCounter = 0;
+  int constArrayCounter = 0;
 
   std::map<std::string, mlir::LLVM::LLVMStructType> structTypes;
   std::map<std::string, mlir::LLVM::LLVMStructType> enumTypes;
@@ -171,12 +173,18 @@ public:
 
   // --- Helpers (MLIRGen.cpp) ---
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
+  /// If val is !llvm.ptr but the semantic type is not a pointer, load it.
+  mlir::Value ensureLoaded(mlir::Value val, const Type &type, mlir::Location loc);
+  /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
+  mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);
   int64_t getTypeSize(const Type &type);
   int64_t getVariantPayloadSize(const std::vector<Type> &payload_types);
   int64_t advancePayloadOffset(int64_t &byte_offset, const Type &field_type);
   mlir::Value getOrCreateGlobalString(llvm::StringRef name,
                                       llvm::StringRef value,
                                       mlir::Location location);
+  mlir::Value emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
+                                   const Type &type, mlir::Location location);
 };
 
 } // namespace sammine_lang

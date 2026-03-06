@@ -397,10 +397,7 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   for (auto &arg : ast->arguments) {
     auto val = emitExpr(arg.get());
     if (val) {
-      if (arg->get_type().type_kind == TypeKind::Array &&
-          mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()))
-        val = mlir::LLVM::LoadOp::create(builder, location,
-                                          convertType(arg->get_type()), val);
+      val = ensureLoaded(val, arg->get_type(), location);
       operands.push_back(val);
     }
   }
