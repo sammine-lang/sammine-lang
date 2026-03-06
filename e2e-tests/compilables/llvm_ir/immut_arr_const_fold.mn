@@ -1,0 +1,20 @@
+# RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+# Immutable array with constant elements should be fully constant-folded.
+# main should have no alloca — LLVM folds the array + sum into a single constant.
+
+import std;
+
+let sum3(arr: [i32; 3]) -> i32 {
+  arr[0] + arr[1] + arr[2]
+}
+
+let main() -> i32 {
+  let a: [i32; 3] = [10, 20, 30];
+  std::printf("%d\n", sum3(a));
+  return 0;
+}
+
+# CHECK:      define noundef i32 @main() local_unnamed_addr
+# CHECK-NOT:  alloca
+# CHECK:      @"std::printf"(ptr nonnull @.str.0, i32 60)
+# CHECK:      ret i32 0

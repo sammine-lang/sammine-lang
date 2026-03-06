@@ -1,0 +1,24 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      10
+# CHECK-NEXT: 20
+# CHECK-NEXT: 30
+# CHECK-NEXT: 42
+# CHECK-NEXT: 10
+
+import std;
+
+struct Foo { data: [i32; 3], x: i32, };
+
+let get_first(f: Foo) -> i32 {
+  f.data[0]
+}
+
+let main() -> i32 {
+  let f = Foo { data: [10, 20, 30], x: 42 };
+  std::printf("%d\n", f.data[0]);
+  std::printf("%d\n", f.data[1]);
+  std::printf("%d\n", f.data[2]);
+  std::printf("%d\n", f.x);
+  std::printf("%d\n", get_first(f));
+  return 0;
+}

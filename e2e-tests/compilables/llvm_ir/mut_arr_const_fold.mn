@@ -1,0 +1,21 @@
+# RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+# Mutable array with all-constant operations should still constant-fold.
+# a = [10, 20, 30], a[1] = 99 => sum = 10 + 99 + 30 = 139
+
+import std;
+
+let sum3(arr: [i32; 3]) -> i32 {
+  arr[0] + arr[1] + arr[2]
+}
+
+let main() -> i32 {
+  let mut a: [i32; 3] = [10, 20, 30];
+  a[1] = 99;
+  std::printf("%d\n", sum3(a));
+  return 0;
+}
+
+# CHECK:      define noundef i32 @main() local_unnamed_addr
+# CHECK-NOT:  alloca
+# CHECK:      @"std::printf"(ptr nonnull @.str.0, i32 139)
+# CHECK:      ret i32 0

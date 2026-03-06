@@ -1,0 +1,16 @@
+# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+# Immutable array with constant elements should be emitted as a global constant,
+# not as alloca + element-by-element store.
+
+let sum3(arr: [i32; 3]) -> i32 {
+  arr[0] + arr[1] + arr[2]
+}
+
+let main() -> i32 {
+  let a: [i32; 3] = [10, 20, 30];
+  return sum3(a);
+}
+
+# CHECK: @.const_arr.0 = internal constant [3 x i32] [i32 10, i32 20, i32 30]
+# CHECK: define i32 @main()
+# CHECK: load [3 x i32], ptr @.const_arr.0
