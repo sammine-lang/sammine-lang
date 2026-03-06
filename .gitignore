@@ -55,7 +55,7 @@ e2e-tests/Output
 
 # Docs
 generated_docs/
-docs
+# docs
 html/
 latex/
 *.bak
