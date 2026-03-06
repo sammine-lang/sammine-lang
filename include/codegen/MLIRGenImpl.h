@@ -172,6 +172,8 @@ public:
   // --- Helpers (MLIRGen.cpp) ---
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
   int64_t getTypeSize(const Type &type);
+  int64_t getVariantPayloadSize(const std::vector<Type> &payload_types);
+  int64_t advancePayloadOffset(int64_t &byte_offset, const Type &field_type);
   mlir::Value getOrCreateGlobalString(llvm::StringRef name,
                                       llvm::StringRef value,
                                       mlir::Location location);

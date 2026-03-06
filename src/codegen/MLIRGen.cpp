@@ -71,12 +71,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         auto name = et.get_name().mangled();
         // Compute max payload size across all variants
         int64_t max_payload_size = 0;
-        for (auto &vi : et.get_variants()) {
-          int64_t variant_size = 0;
-          for (auto &pt : vi.payload_types)
-            variant_size += getTypeSize(pt);
-          max_payload_size = std::max(max_payload_size, variant_size);
-        }
+        for (auto &vi : et.get_variants())
+          max_payload_size = std::max(max_payload_size,
+                                       getVariantPayloadSize(vi.payload_types));
         // Enum layout: { i32 tag, [N x i8] payload }
         llvm::SmallVector<mlir::Type> fields;
         fields.push_back(builder.getI32Type());
@@ -514,12 +511,8 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
       return (bt == TypeKind::I64_t || bt == TypeKind::U64_t) ? 8 : 4;
     }
     int64_t max_payload = 0;
-    for (auto &vi : et.get_variants()) {
-      int64_t variant_size = 0;
-      for (auto &pt : vi.payload_types)
-        variant_size += getTypeSize(pt);
-      max_payload = std::max(max_payload, variant_size);
-    }
+    for (auto &vi : et.get_variants())
+      max_payload = std::max(max_payload, getVariantPayloadSize(vi.payload_types));
     return 4 + max_payload; // i32 tag + payload
   }
   case TypeKind::Tuple: {
@@ -562,6 +555,24 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
               "this is a compiler bug: a diverging expression's "
               "type was not handled before codegen");
   }
+}
+
+int64_t MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_types) {
+  int64_t size = 0;
+  for (auto &pt : payload_types) {
+    int64_t fieldSize = getTypeSize(pt);
+    size = llvm::alignTo(size, fieldSize);
+    size += fieldSize;
+  }
+  return size;
+}
+
+int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset, const Type &field_type) {
+  int64_t fieldSize = getTypeSize(field_type);
+  byte_offset = llvm::alignTo(byte_offset, fieldSize);
+  int64_t offset = byte_offset;
+  byte_offset += fieldSize;
+  return offset;
 }
 
 mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,

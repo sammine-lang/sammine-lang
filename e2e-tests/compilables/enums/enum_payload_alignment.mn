@@ -1,0 +1,21 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      mixed i32=42, i64=1234567890123
+# CHECK-NEXT: reverse i64=9876543210987, i32=99
+
+import std;
+
+type Mixed = A(i32, i64) | B(i64, i32);
+
+let main() -> i32 {
+  let a: Mixed = Mixed::A(42, 1234567890123i64);
+  let b: Mixed = Mixed::B(9876543210987i64, 99);
+  case a {
+    Mixed::A(x, y) => std::printf("mixed i32=%d, i64=%ld\n", x, y),
+    Mixed::B(x, y) => std::printf("unreachable\n"),
+  };
+  case b {
+    Mixed::A(x, y) => std::printf("unreachable\n"),
+    Mixed::B(x, y) => std::printf("reverse i64=%ld, i32=%d\n", x, y),
+  };
+  return 0;
+}

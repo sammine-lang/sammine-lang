@@ -862,17 +862,17 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
         argVal = mlir::LLVM::LoadOp::create(
             builder, location, convertType(ast->arguments[i]->get_type()), argVal);
       }
+      int64_t field_offset = advancePayloadOffset(byte_offset, vi.payload_types[i]);
       mlir::Value dest;
-      if (byte_offset == 0) {
+      if (field_offset == 0) {
         dest = payloadPtr;
       } else {
         dest = mlir::LLVM::GEPOp::create(
             builder, location, llvmPtrTy(), builder.getI8Type(), payloadPtr,
             llvm::ArrayRef<mlir::LLVM::GEPArg>{
-                static_cast<int32_t>(byte_offset)});
+                static_cast<int32_t>(field_offset)});
       }
       mlir::LLVM::StoreOp::create(builder, location, argVal, dest);
-      byte_offset += getTypeSize(vi.payload_types[i]);
     }
   }
 
@@ -1163,14 +1163,15 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
       int64_t byte_offset = 0;
       for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
         auto fieldMlirTy = convertType(vi.payload_types[j]);
+        int64_t field_offset = advancePayloadOffset(byte_offset, vi.payload_types[j]);
         mlir::Value fieldPtr;
-        if (byte_offset == 0) {
+        if (field_offset == 0) {
           fieldPtr = payloadPtr;
         } else {
           fieldPtr = mlir::LLVM::GEPOp::create(
               builder, location, llvmPtrTy(), builder.getI8Type(), payloadPtr,
               llvm::ArrayRef<mlir::LLVM::GEPArg>{
-                  static_cast<int32_t>(byte_offset)});
+                  static_cast<int32_t>(field_offset)});
         }
         auto fieldVal = mlir::LLVM::LoadOp::create(
             builder, location, fieldMlirTy, fieldPtr);
@@ -1180,8 +1181,6 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
         auto alloca = emitAllocaOne(fieldMlirTy, location);
         mlir::LLVM::StoreOp::create(builder, location, fieldVal, alloca);
         symbolTable.registerNameT(arm.pattern.bindings[j], alloca);
-
-        byte_offset += getTypeSize(vi.payload_types[j]);
       }
     }
 
