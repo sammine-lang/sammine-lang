@@ -1,0 +1,17 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Linear variable 'p.*.data' must be consumed before scope exit
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+};
+
+let main() -> i32 {
+  let inner: 'ptr<i32> = alloc<i32>(1);
+  let p: 'ptr<Box> = alloc<Box>(1);
+  *inner = 42;
+  *p = Box { data: inner };
+  free(p);
+  return 0;
+}
