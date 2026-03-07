@@ -1,0 +1,23 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      red
+# CHECK-NEXT: green
+
+import std;
+
+type Color = Red | Green | Blue;
+
+let show(c: Color) -> unit {
+  case c {
+    Color::Red => std::printf("red\n"),
+    Color::Green => std::printf("green\n"),
+    Color::Blue => std::printf("blue\n"),
+  };
+}
+
+let main() -> i32 {
+  let mut c: Color = Color::Red;
+  show(c);
+  c = Color::Green;
+  show(c);
+  return 0;
+}

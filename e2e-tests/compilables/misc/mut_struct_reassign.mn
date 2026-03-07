@@ -1,0 +1,22 @@
+# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+# CHECK:      1
+# CHECK-NEXT: 2
+# CHECK-NEXT: 10
+# CHECK-NEXT: 20
+
+import std;
+
+struct Point {
+  x: i32,
+  y: i32,
+};
+
+let main() -> i32 {
+  let mut p: Point = Point { x: 1, y: 2 };
+  std::printf("%d\n", p.x);
+  std::printf("%d\n", p.y);
+  p = Point { x: 10, y: 20 };
+  std::printf("%d\n", p.x);
+  std::printf("%d\n", p.y);
+  return 0;
+}

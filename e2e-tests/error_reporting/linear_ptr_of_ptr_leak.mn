@@ -1,0 +1,14 @@
+# RUN: ! %sammine --file %full %O 2>&1 | %check %full
+# CHECK: Linear variable 'pp.*' must be consumed before scope exit
+
+import std;
+
+let main() -> i32 {
+  let x: 'ptr<i32> = alloc<i32>(1);
+  let pp: 'ptr<'ptr<i32>> = alloc<'ptr<i32>>(1);
+  *x = 0;
+  *pp = x;
+  **pp = 42;
+  free(pp);
+  return 0;
+}
