@@ -19,6 +19,8 @@
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
@@ -48,6 +50,14 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
   auto llvmModule = mlir::translateModuleToLLVMIR(module, llvmCtx);
   if (!llvmModule)
     return nullptr;
+
+  // Annotate all functions with nounwind (sammine has no exceptions).
+  // Mark malloc's return as noalias.
+  for (auto &F : *llvmModule) {
+    F.addFnAttr(llvm::Attribute::NoUnwind);
+    if (F.getName() == "malloc")
+      F.addRetAttr(llvm::Attribute::NoAlias);
+  }
 
   return llvmModule;
 }

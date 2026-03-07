@@ -485,6 +485,12 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
 
 mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
                                         mlir::Location location) {
+  // Hoist alloca to the entry block so Mem2Reg/SROA can eliminate it.
+  mlir::OpBuilder::InsertionGuard guard(builder);
+  auto *currentBlock = builder.getInsertionBlock();
+  auto &entryBlock = currentBlock->getParent()->front();
+  builder.setInsertionPointToStart(&entryBlock);
+
   auto one = mlir::arith::ConstantIntOp::create(builder, location,
                                                   builder.getI64Type(), 1);
   return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
@@ -645,14 +651,14 @@ MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
         builder, location, llvmArrayType, /*isConstant=*/true,
         mlir::LLVM::Linkage::Internal, name, mlir::Attribute{});
 
-    // Create an initializer region: undef + insertvalue for each element
+    // Create an initializer region: poison + insertvalue for each element
     auto &region = globalOp.getInitializerRegion();
     auto *block = builder.createBlock(&region);
     builder.setInsertionPointToStart(block);
 
-    auto undef =
-        mlir::LLVM::UndefOp::create(builder, location, llvmArrayType);
-    mlir::Value current = undef;
+    auto poison =
+        mlir::LLVM::PoisonOp::create(builder, location, llvmArrayType);
+    mlir::Value current = poison;
     for (size_t i = 0; i < arrLit->elements.size(); ++i) {
       auto *elem = arrLit->elements[i].get();
       mlir::Value elemVal;

@@ -32,7 +32,7 @@ void MLIRGenImpl::forwardDeclareFunc(AST::PrototypeAST *proto) {
 mlir::Value MLIRGenImpl::buildClosure(mlir::Value codePtr, mlir::Value envPtr,
                                       mlir::Location loc) {
   mlir::Value closure =
-      mlir::LLVM::UndefOp::create(builder, loc, closureType);
+      mlir::LLVM::PoisonOp::create(builder, loc, closureType);
   closure = mlir::LLVM::InsertValueOp::create(
       builder, loc, closure, codePtr, llvm::ArrayRef<int64_t>{0});
   closure = mlir::LLVM::InsertValueOp::create(
@@ -274,7 +274,8 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
   for (size_t i = 0; i < boundCount; i++) {
     auto gep = mlir::LLVM::GEPOp::create(
         builder, location, ptrTy, envStructTy, envAlloca,
-        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)});
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
     mlir::LLVM::StoreOp::create(builder, location, boundArgs[i], gep);
   }
 
@@ -312,7 +313,8 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
     for (size_t i = 0; i < boundCount; i++) {
       auto gep = mlir::LLVM::GEPOp::create(
           builder, location, ptrTy, envStructTy, envArg,
-          llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)});
+          llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
+          mlir::LLVM::GEPNoWrapFlags::inbounds);
       auto loaded = mlir::LLVM::LoadOp::create(builder, location,
                                                  envFields[i], gep);
       fullArgs.push_back(loaded);
