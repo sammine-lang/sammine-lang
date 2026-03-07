@@ -5,7 +5,7 @@
 
 import std;
 
-let tri() -> [i32;120] {
+let tri() -> [120]i32 {
   return [
     75,
     95, 64,
@@ -25,7 +25,7 @@ let tri() -> [i32;120] {
   ];
 }
 
-let at(t: ptr<[i32;120]>, row: i32, col: i32) -> i32 {
+let at(t: ptr<[120]i32>, row: i32, col: i32) -> i32 {
   return (*t)[row * (row + 1) / 2 + col];
 }
 
@@ -33,7 +33,7 @@ let max2(a: i32, b: i32) -> i32 {
   if a > b { a } else { b }
 }
 
-let max_path(t: ptr<[i32;120]>, row: i32, col: i32) -> i32 {
+let max_path(t: ptr<[120]i32>, row: i32, col: i32) -> i32 {
   if row == 14 {
     at(t, row, col)
   } else {
@@ -42,7 +42,7 @@ let max_path(t: ptr<[i32;120]>, row: i32, col: i32) -> i32 {
 }
 
 let main() -> i32 {
-  let data: [i32;120] = tri();
+  let data: [120]i32 = tri();
   std::printf("%d\n", max_path(&data, 0, 0));
   return 0;
 }

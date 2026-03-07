@@ -111,7 +111,7 @@ public:
     return node->getKind() == ParseKind::Array;
   }
   std::string to_string() const override {
-    return "[" + element->to_string() + ";" + std::to_string(size) + "]";
+    return "[" + std::to_string(size) + "]" + element->to_string();
   }
 };
 

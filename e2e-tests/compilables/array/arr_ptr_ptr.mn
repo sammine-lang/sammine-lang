@@ -12,7 +12,7 @@ let main() -> i32 {
   let p : ptr<i32> = &x;
   let q : ptr<i32> = &y;
   let r : ptr<i32> = &z;
-  let a : [ptr<ptr<i32>>; 3] = [&p, &q, &r];
+  let a : [3]ptr<ptr<i32>> = [&p, &q, &r];
   std::printf("%d\n", **a[0]);
   std::printf("%d\n", **a[1]);
   std::printf("%d\n", **a[2]);

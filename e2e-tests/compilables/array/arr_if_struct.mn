@@ -10,12 +10,12 @@ struct Point { x: i32, y: i32, };
 
 let main() -> i32 {
   let flag : i32 = 1;
-  let a : [Point; 2] = if flag == 1 {
+  let a : [2]Point = if flag == 1 {
     [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
   } else {
     [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }]
   };
-  let b : [Point; 2] = if flag == 0 {
+  let b : [2]Point = if flag == 0 {
     [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }]
   } else {
     [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }]

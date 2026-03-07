@@ -8,7 +8,7 @@
 
 import std;
 
-let nums() -> [i64;100] {
+let nums() -> [100]i64 {
   return [
     371072875339021, 463769376774900, 743249861995247, 919422133635741,
     230675882075393, 892616706966236, 281128798128499, 442742289174325,
@@ -38,7 +38,7 @@ let nums() -> [i64;100] {
   ];
 }
 
-let sum_arr(d: ptr<[i64;100]>, i: i32, acc: i64) -> i64 {
+let sum_arr(d: ptr<[100]i64>, i: i32, acc: i64) -> i64 {
   if i >= 100 { acc }
   else { sum_arr(d, i + 1, acc + (*d)[i]) }
 }
@@ -49,7 +49,7 @@ let first10(n: i64) -> i64 {
 }
 
 let main() -> i32 {
-  let data: [i64;100] = nums();
+  let data: [100]i64 = nums();
   let s: i64 = sum_arr(&data, 0, 0);
   std::printf("%lld\n", first10(s));
   return 0;

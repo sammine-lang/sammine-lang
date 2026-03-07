@@ -75,7 +75,7 @@ public:
   Type get_pointee() const;
   PointerType(Type pointee);
 };
-/// Fixed-size array type: [T; N]. Bounds-checked at runtime.
+/// Fixed-size array type: [N]T. Bounds-checked at runtime.
 class ArrayType {
   TypePtr element;
   size_t size;
@@ -267,9 +267,8 @@ struct Type {
       return (linearity == Linearity::Linear ? "'" : "") + std::string("ptr<") +
              std::get<PointerType>(type_data).get_pointee().to_string() + ">";
     case TypeKind::Array:
-      return "[" + std::get<ArrayType>(type_data).get_element().to_string() +
-             ";" + std::to_string(std::get<ArrayType>(type_data).get_size()) +
-             "]";
+      return "[" + std::to_string(std::get<ArrayType>(type_data).get_size()) +
+             "]" + std::get<ArrayType>(type_data).get_element().to_string();
     case TypeKind::Function: {
       std::string res = "(";
       auto fn_type = std::get<FunctionType>(type_data);

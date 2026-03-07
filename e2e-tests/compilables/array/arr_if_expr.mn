@@ -6,8 +6,8 @@ import std;
 
 let main() -> i32 {
   let x : i32 = 1;
-  let a : [i32; 2] = if x == 1 { [10, 20] } else { [30, 40] };
-  let b : [i32; 2] = if x == 0 { [10, 20] } else { [30, 40] };
+  let a : [2]i32 = if x == 1 { [10, 20] } else { [30, 40] };
+  let b : [2]i32 = if x == 0 { [10, 20] } else { [30, 40] };
   std::printf("%d\n", a[0]);
   std::printf("%d\n", b[0]);
   return 0;

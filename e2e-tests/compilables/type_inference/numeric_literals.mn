@@ -60,7 +60,7 @@ let main() -> i32 {
   std::printf("%ld\n", c);
 
   # Array annotation resolves elements
-  let arr: [i64; 3] = [10, 20, 30];
+  let arr: [3]i64 = [10, 20, 30];
   std::printf("%ld\n", arr[1]);
 
   # Default: unsuffixed integer is i32

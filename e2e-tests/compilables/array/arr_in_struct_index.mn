@@ -7,7 +7,7 @@
 
 import std;
 
-struct Foo { data: [i32; 3], x: i32, };
+struct Foo { data: [3]i32, x: i32, };
 
 let get_first(f: Foo) -> i32 {
   f.data[0]

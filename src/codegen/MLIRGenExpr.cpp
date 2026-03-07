@@ -610,6 +610,9 @@ MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
     auto elemVal = emitExpr(ast->elements[i].get());
     if (!elemVal)
       return nullptr;
+    // If element is an aggregate (e.g. nested array), emitExpr returns a
+    // pointer (alloca); load the value before storing into the outer array.
+    elemVal = ensureLoaded(elemVal, arrType.get_element(), location);
     auto idx = mlir::arith::ConstantIntOp::create(
         builder, location, builder.getI32Type(), static_cast<int64_t>(i));
     emitPtrArrayStore(alloca, idx, elemVal, arrType, location);

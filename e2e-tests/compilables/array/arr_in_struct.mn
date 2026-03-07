@@ -5,7 +5,7 @@
 
 import std;
 
-struct Pair { vals: [i32; 2], tag: i32, };
+struct Pair { vals: [2]i32, tag: i32, };
 
 let get_tag(p: Pair) -> i32 {
   return p.tag;

@@ -7,8 +7,8 @@
 import std;
 
 let main() -> i32 {
-  let a : [i32;3] = [10, 20, 30];
-  let b : [i32;3] = [100, 200, 300];
+  let a : [3]i32 = [10, 20, 30];
+  let b : [3]i32 = [100, 200, 300];
   std::printf("%d\n", (*&a)[0]);
   std::printf("%d\n", (*&b)[0]);
   if &a == &b {

@@ -3,7 +3,7 @@
 
 import std;
 
-let sum_array(a: [i32; 3]) -> i32 {
+let sum_array(a: [3]i32) -> i32 {
   return a[0] + a[1] + a[2];
 }
 

@@ -2,7 +2,7 @@
 # Array passed to a function should use extractvalue (register decomposition),
 # not alloca + GEP (struct-like memory access).
 
-let sum3(arr: [i32; 3]) -> i32 {
+let sum3(arr: [3]i32) -> i32 {
   arr[0] + arr[1] + arr[2]
 }
 

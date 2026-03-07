@@ -6,7 +6,7 @@
 import std;
 
 let main() -> i32 {
-  let a : [f64; 3] = [1.1, 2.2, 3.3];
+  let a : [3]f64 = [1.1, 2.2, 3.3];
   std::printf("%f\n", a[0]);
   std::printf("%f\n", a[1]);
   std::printf("%f\n", a[2]);

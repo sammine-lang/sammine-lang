@@ -8,15 +8,15 @@
 import std;
 
 # units[i] = letter count of "one","two",...,"nine" (0-indexed, units[0] unused)
-let units() -> [i32; 10] { [0, 3, 3, 5, 4, 4, 3, 5, 5, 4] }
+let units() -> [10]i32 { [0, 3, 3, 5, 4, 4, 3, 5, 5, 4] }
 
 # teens[i] = letter count of "ten","eleven",...,"nineteen" (teens[0]="ten")
-let teens() -> [i32; 10] { [3, 6, 6, 8, 8, 7, 7, 9, 8, 8] }
+let teens() -> [10]i32 { [3, 6, 6, 8, 8, 7, 7, 9, 8, 8] }
 
 # tens[i] = letter count of "twenty","thirty",...,"ninety"
-let tens() -> [i32; 10]  { [0, 0, 6, 6, 5, 5, 5, 7, 6, 6] }
+let tens() -> [10]i32  { [0, 0, 6, 6, 5, 5, 5, 7, 6, 6] }
 
-let letter_count(n: i32, u: ptr<[i32;10]>, te: ptr<[i32;10]>, tn: ptr<[i32;10]>) -> i32 {
+let letter_count(n: i32, u: ptr<[10]i32>, te: ptr<[10]i32>, tn: ptr<[10]i32>) -> i32 {
   if n == 1000 { 11 }
   else if n >= 100 && n % 100 == 0 { (*u)[n / 100] + 7 }
   else if n >= 100 { (*u)[n / 100] + 7 + 3 + letter_count(n % 100, u, te, tn) }
@@ -25,15 +25,15 @@ let letter_count(n: i32, u: ptr<[i32;10]>, te: ptr<[i32;10]>, tn: ptr<[i32;10]>)
   else { (*u)[n] }
 }
 
-let sum_letters(n: i32, acc: i32, u: ptr<[i32;10]>, te: ptr<[i32;10]>, tn: ptr<[i32;10]>) -> i32 {
+let sum_letters(n: i32, acc: i32, u: ptr<[10]i32>, te: ptr<[10]i32>, tn: ptr<[10]i32>) -> i32 {
   if n > 1000 { acc }
   else { sum_letters(n + 1, acc + letter_count(n, u, te, tn), u, te, tn) }
 }
 
 let main() -> i32 {
-  let u: [i32; 10] = units();
-  let te: [i32; 10] = teens();
-  let tn: [i32; 10] = tens();
+  let u: [10]i32 = units();
+  let te: [10]i32 = teens();
+  let tn: [10]i32 = tens();
   let result: i32 = sum_letters(1, 0, &u, &te, &tn);
   std::printf("%d\n", result);
   return 0;

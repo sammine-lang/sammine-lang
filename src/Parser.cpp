@@ -639,20 +639,17 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     return result;
   }
   if (auto lbracket = expect(TokenType::TokLeftBracket)) {
+    REQUIRE(size_tok, TokNum, "Expected integer size in '[SIZE]TYPE'",
+            lbracket->get_location(), nullptr);
+    size_t arr_size = std::stoul(size_tok->lexeme);
+    REQUIRE(_rb, TokRightBracket, "Expected ']' after size in '[SIZE]TYPE'",
+            lbracket->get_location(), nullptr);
     auto elem = ParseTypeExpr();
     if (!elem) {
-      this->imm_error("Expected element type in '[TYPE;SIZE]'",
+      this->imm_error("Expected element type after '[SIZE]'",
                       lbracket->get_location());
       return nullptr;
     }
-    REQUIRE(_semi, TokSemiColon,
-            "Expected ';' after element type in '[TYPE;SIZE]'",
-            lbracket->get_location(), nullptr);
-    REQUIRE(size_tok, TokNum, "Expected integer size in '[TYPE;SIZE]'",
-            lbracket->get_location(), nullptr);
-    size_t arr_size = std::stoul(size_tok->lexeme);
-    REQUIRE(_rb, TokRightBracket, "Expected ']' to close '[TYPE;SIZE]'",
-            lbracket->get_location(), nullptr);
     auto result = std::make_unique<ArrayTypeExprAST>(std::move(elem), arr_size);
     result->location = lbracket->get_location();
     return result;

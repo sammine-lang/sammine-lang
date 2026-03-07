@@ -12,7 +12,7 @@ struct Inner { a: i32, b: i32, };
 struct Outer { inner: Inner, c: i32, };
 
 let main() -> i32 {
-  let a : [Outer; 2] = [Outer { inner: Inner { a: 1, b: 2 }, c: 3 }, Outer { inner: Inner { a: 4, b: 5 }, c: 6 }];
+  let a : [2]Outer = [Outer { inner: Inner { a: 1, b: 2 }, c: 3 }, Outer { inner: Inner { a: 4, b: 5 }, c: 6 }];
   std::printf("%d\n", a[0].inner.a);
   std::printf("%d\n", a[0].inner.b);
   std::printf("%d\n", a[0].c);

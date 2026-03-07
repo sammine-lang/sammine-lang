@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK:          |immutable_array_write.mn:6:7
 # CHECK-NEXT:    4|let main() -> i32 {
-# CHECK-NEXT:    5|  let a: [i32; 3] = [1, 2, 3];
+# CHECK-NEXT:    5|  let a: [3]i32 = [1, 2, 3];
 # CHECK-NEXT:    6|  a[0] = 99;
 # CHECK-NEXT:     |       ┬
 # CHECK-NEXT:     |       ╰─ Cannot write to index of immutable array 'a'. Use 'let mut' to declare it as mutable
@@ -12,7 +12,7 @@
 # CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
-  let a: [i32; 3] = [1, 2, 3];
+  let a: [3]i32 = [1, 2, 3];
   a[0] = 99;
   return 0;
 }

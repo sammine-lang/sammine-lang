@@ -56,7 +56,7 @@ let main() -> i32 {
              else { -1 };                    # unary negation
 
   # --- Arrays ---
-  let a: [i32; 3] = [10, 20, 30];           # fixed-size array literal
+  let a: [3]i32 = [10, 20, 30];           # fixed-size array literal
   let first = a[0];                          # indexing
   let size = len(a);                         # array length
 

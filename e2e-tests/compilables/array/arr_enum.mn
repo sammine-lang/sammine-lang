@@ -17,7 +17,7 @@ let describe(s: Shape) -> i32 {
 }
 
 let main() -> i32 {
-  let a : [Shape; 3] = [Circle(5), Rect(3, 4), Empty];
+  let a : [3]Shape = [Circle(5), Rect(3, 4), Empty];
   describe(a[0]);
   describe(a[1]);
   describe(a[2]);

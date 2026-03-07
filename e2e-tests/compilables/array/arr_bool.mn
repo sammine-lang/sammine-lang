@@ -6,7 +6,7 @@
 import std;
 
 let main() -> i32 {
-  let a : [bool; 3] = [true, false, true];
+  let a : [3]bool = [true, false, true];
   std::printf("%d\n", a[0]);
   std::printf("%d\n", a[1]);
   std::printf("%d\n", a[2]);

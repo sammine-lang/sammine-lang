@@ -7,8 +7,8 @@
 import std;
 
 let main() -> i32 {
-  let a : [i32;3] = [1, 2, 3];
-  let b : [i32;3] = [1, 2, 3];
+  let a : [3]i32 = [1, 2, 3];
+  let b : [3]i32 = [1, 2, 3];
 
   if a == b {
     std::printf("same arrays equal: 1\n");
@@ -22,7 +22,7 @@ let main() -> i32 {
     std::printf("same arrays not-equal: 0\n");
   };
 
-  let c : [i32;3] = [1, 2, 99];
+  let c : [3]i32 = [1, 2, 99];
 
   if a == c {
     std::printf("diff arrays equal: 1\n");

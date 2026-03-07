@@ -13,7 +13,7 @@ let main() -> i32 {
   let b : i32 = 99;
   let s0 : Node = Node { id: 7, val: &a };
   let s1 : Node = Node { id: 13, val: &b };
-  let arr : [Node; 2] = [s0, s1];
+  let arr : [2]Node = [s0, s1];
   std::printf("%d\n", arr[0].id);
   std::printf("%d\n", *arr[0].val);
   std::printf("%d\n", arr[1].id);

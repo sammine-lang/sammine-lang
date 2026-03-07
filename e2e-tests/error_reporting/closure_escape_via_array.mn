@@ -1,7 +1,7 @@
 # RUN: ! %sammine --file %full %O 2>&1 | %check %full
 # CHECK:          |closure_escape_via_array.mn:16:2
 # CHECK-NEXT:   14|  let f : (i32) -> i32 = deref_add(&x);
-# CHECK-NEXT:   15|  let a : [(i32) -> i32; 1] = [f];
+# CHECK-NEXT:   15|  let a : [1](i32) -> i32 = [f];
 # CHECK-NEXT:   16|  return a;
 # CHECK-NEXT:     |  ───────┬
 # CHECK-NEXT:     |         ╰─ Cannot return 'a' — it is a closure that captured a non-linear pointer (may dangle after return)
@@ -29,14 +29,14 @@ let deref_add(p: ptr<i32>, offset: i32) -> i32 {
   return *p + offset;
 }
 
-let make_var() -> [(i32) -> i32; 1] {
+let make_var() -> [1](i32) -> i32 {
   let x : i32 = 42;
   let f : (i32) -> i32 = deref_add(&x);
-  let a : [(i32) -> i32; 1] = [f];
+  let a : [1](i32) -> i32 = [f];
   return a;
 }
 
-let make_inline() -> [(i32) -> i32; 1] {
+let make_inline() -> [1](i32) -> i32 {
   let x : i32 = 42;
   let f : (i32) -> i32 = deref_add(&x);
   return [f];

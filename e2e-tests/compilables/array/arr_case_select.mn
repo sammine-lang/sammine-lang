@@ -11,17 +11,17 @@ let main() -> i32 {
   let s : Selector = Selector::Small;
   let m : Selector = Selector::Medium;
   let l : Selector = Selector::Large;
-  let a : [i32; 3] = case s {
+  let a : [3]i32 = case s {
     Selector::Small  => [10, 11, 12],
     Selector::Medium => [100, 101, 102],
     Selector::Large  => [1000, 1001, 1002],
   };
-  let b : [i32; 3] = case m {
+  let b : [3]i32 = case m {
     Selector::Small  => [10, 11, 12],
     Selector::Medium => [200, 201, 202],
     Selector::Large  => [2000, 2001, 2002],
   };
-  let c : [i32; 3] = case l {
+  let c : [3]i32 = case l {
     Selector::Small  => [10, 11, 12],
     Selector::Medium => [300, 301, 302],
     Selector::Large  => [3000, 3001, 3002],

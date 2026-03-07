@@ -9,7 +9,7 @@ let main() -> i32 {
   let x : i32 = 100;
   let y : i32 = 200;
   let z : i32 = 300;
-  let mut a : [ptr<i32>; 3] = [&x, &y, &z];
+  let mut a : [3]ptr<i32> = [&x, &y, &z];
   std::printf("%d\n", *a[0]);
   std::printf("%d\n", *a[1]);
   # Write a new pointer into the array

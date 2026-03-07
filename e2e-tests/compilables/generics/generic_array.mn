@@ -3,10 +3,10 @@
 
 import std;
 
-let first<T>(arr: [T; 3]) -> T { arr[0] }
+let first<T>(arr: [3]T) -> T { arr[0] }
 
 let main() -> i32 {
-  let a : [i32; 3] = [10, 20, 30];
+  let a : [3]i32 = [10, 20, 30];
   let x = first(a);
   std::printf("%d", x);
   return 0;

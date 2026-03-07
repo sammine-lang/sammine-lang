@@ -4,12 +4,12 @@
 
 import std;
 
-let sum3(arr: [i32; 3]) -> i32 {
+let sum3(arr: [3]i32) -> i32 {
   arr[0] + arr[1] + arr[2]
 }
 
 let main() -> i32 {
-  let a: [i32; 3] = [10, 20, 30];
+  let a: [3]i32 = [10, 20, 30];
   std::printf("%d\n", sum3(a));
   return 0;
 }
