@@ -351,12 +351,123 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
 }
 
+// ── Non-linear pointer path detection ───────────────────────────────
+
+// Returns a human-readable path to the first non-linear pointer found,
+// e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
+// NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
+static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
+  switch (t.type_kind) {
+  case TypeKind::Pointer:
+    if (t.linearity != Linearity::Linear)
+      return fmt::format("non-linear {}", t.to_string());
+    return std::nullopt;
+  case TypeKind::Struct: {
+    auto &st = std::get<StructType>(t.type_data);
+    auto &names = st.get_field_names();
+    auto &types = st.get_field_types();
+    for (size_t i = 0; i < types.size(); i++) {
+      auto path = find_nonlinear_pointer_path(types[i]);
+      if (path)
+        return fmt::format("{} in field '{}'", *path, names[i]);
+    }
+    return std::nullopt;
+  }
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(t.type_data);
+    for (auto &variant : et.get_variants()) {
+      for (auto &pt : variant.payload_types) {
+        auto path = find_nonlinear_pointer_path(pt);
+        if (path)
+          return fmt::format("{} in variant '{}'", *path, variant.name);
+      }
+    }
+    return std::nullopt;
+  }
+  case TypeKind::Array: {
+    auto &at = std::get<ArrayType>(t.type_data);
+    auto path = find_nonlinear_pointer_path(at.get_element());
+    if (path)
+      return fmt::format("{} in element", *path);
+    return std::nullopt;
+  }
+  case TypeKind::Tuple: {
+    auto &tt = std::get<TupleType>(t.type_data);
+    for (size_t i = 0; i < tt.size(); i++) {
+      auto path = find_nonlinear_pointer_path(tt.get_element(i));
+      if (path)
+        return fmt::format("{} in tuple element {}", *path, i);
+    }
+    return std::nullopt;
+  }
+  case TypeKind::Function: {
+    auto &fn = std::get<FunctionType>(t.type_data);
+    for (auto &p : fn.get_params_types()) {
+      auto path = find_nonlinear_pointer_path(p);
+      if (path)
+        return fmt::format("{} in parameter", *path);
+    }
+    auto path = find_nonlinear_pointer_path(fn.get_return_type());
+    if (path)
+      return fmt::format("{} in return type", *path);
+    return std::nullopt;
+  }
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+  case TypeKind::Unit:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::String:
+  case TypeKind::Never:
+  case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+  case TypeKind::TypeParam:
+  case TypeKind::Generic:
+    return std::nullopt;
+  }
+}
+
+// ── Lateral escape detection ────────────────────────────────────────
+
+// Returns true if the expression involves a pointer dereference in its
+// access chain.  Used to detect assignments like (*p).field = &local
+// where a non-linear pointer could escape through indirection.
+static bool involves_deref(ExprAST *expr) {
+  if (llvm::isa<DerefExprAST>(expr))
+    return true;
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr))
+    return involves_deref(fa->object_expr.get());
+  if (auto *idx = llvm::dyn_cast<IndexExprAST>(expr))
+    return involves_deref(idx->array_expr.get());
+  return false;
+}
+
 // ── check_binary ────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
   if (ast->Op->is_assign()) {
     // Check LHS for deref-after-consume (e.g. free(p); *p = 7)
     check_stmt(ast->LHS.get());
+
+    // Lateral escape: storing a non-linear pointer through a pointer
+    // dereference allows it to outlive the current scope.
+    if (involves_deref(ast->LHS.get())) {
+      auto path = find_nonlinear_pointer_path(ast->RHS->get_type());
+      if (path) {
+        this->add_error(
+            ast->get_location(),
+            fmt::format("Cannot store {} through pointer dereference"
+                        " — may dangle after scope exit",
+                        *path));
+        return;
+      }
+    }
 
     // RHS: linear variable → consume (move), otherwise walk for nested ops
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
@@ -530,86 +641,6 @@ void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
 }
 
 // ── check_return ────────────────────────────────────────────────────
-
-// Returns a human-readable path to the first non-linear pointer found,
-// e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
-// NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
-static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
-  switch (t.type_kind) {
-  case TypeKind::Pointer:
-    if (t.linearity != Linearity::Linear)
-      return fmt::format("non-linear {}", t.to_string());
-    return std::nullopt;
-  case TypeKind::Struct: {
-    auto &st = std::get<StructType>(t.type_data);
-    auto &names = st.get_field_names();
-    auto &types = st.get_field_types();
-    for (size_t i = 0; i < types.size(); i++) {
-      auto path = find_nonlinear_pointer_path(types[i]);
-      if (path)
-        return fmt::format("{} in field '{}'", *path, names[i]);
-    }
-    return std::nullopt;
-  }
-  case TypeKind::Enum: {
-    auto &et = std::get<EnumType>(t.type_data);
-    for (auto &variant : et.get_variants()) {
-      for (auto &pt : variant.payload_types) {
-        auto path = find_nonlinear_pointer_path(pt);
-        if (path)
-          return fmt::format("{} in variant '{}'", *path, variant.name);
-      }
-    }
-    return std::nullopt;
-  }
-  case TypeKind::Array: {
-    auto &at = std::get<ArrayType>(t.type_data);
-    auto path = find_nonlinear_pointer_path(at.get_element());
-    if (path)
-      return fmt::format("{} in element", *path);
-    return std::nullopt;
-  }
-  case TypeKind::Tuple: {
-    auto &tt = std::get<TupleType>(t.type_data);
-    for (size_t i = 0; i < tt.size(); i++) {
-      auto path = find_nonlinear_pointer_path(tt.get_element(i));
-      if (path)
-        return fmt::format("{} in tuple element {}", *path, i);
-    }
-    return std::nullopt;
-  }
-  case TypeKind::Function: {
-    auto &fn = std::get<FunctionType>(t.type_data);
-    for (auto &p : fn.get_params_types()) {
-      auto path = find_nonlinear_pointer_path(p);
-      if (path)
-        return fmt::format("{} in parameter", *path);
-    }
-    auto path = find_nonlinear_pointer_path(fn.get_return_type());
-    if (path)
-      return fmt::format("{} in return type", *path);
-    return std::nullopt;
-  }
-  case TypeKind::I32_t:
-  case TypeKind::I64_t:
-  case TypeKind::U32_t:
-  case TypeKind::U64_t:
-  case TypeKind::F64_t:
-  case TypeKind::F32_t:
-  case TypeKind::Unit:
-  case TypeKind::Bool:
-  case TypeKind::Char:
-  case TypeKind::String:
-  case TypeKind::Never:
-  case TypeKind::NonExistent:
-  case TypeKind::Poisoned:
-  case TypeKind::Integer:
-  case TypeKind::Flt:
-  case TypeKind::TypeParam:
-  case TypeKind::Generic:
-    return std::nullopt;
-  }
-}
 
 void LinearTypeChecker::check_return(ReturnExprAST *ast) {
   if (!ast->return_expr)
