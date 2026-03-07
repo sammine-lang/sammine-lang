@@ -77,6 +77,14 @@ public:
 
   const AST::ASTProperties &props_;
 
+  // --- Block helper ---
+  /// Create a new block and immediately insert it into the given region.
+  mlir::Block *addBlock(mlir::Region *region) {
+    auto *block = new mlir::Block();
+    region->push_back(block);
+    return block;
+  }
+
   // --- Inline type helpers ---
   mlir::LLVM::LLVMPointerType llvmPtrTy() {
     return mlir::LLVM::LLVMPointerType::get(builder.getContext());

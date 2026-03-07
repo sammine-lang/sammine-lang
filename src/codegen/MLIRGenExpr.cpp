@@ -480,9 +480,8 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
 
   auto *parentRegion = builder.getInsertionBlock()->getParent();
 
-  // Create blocks: then, else, merge
-  auto *thenBlock = new mlir::Block();
-  auto *elseBlock = new mlir::Block();
+  auto *thenBlock = addBlock(parentRegion);
+  auto *elseBlock = addBlock(parentRegion);
   auto *mergeBlock = new mlir::Block();
   if (hasResult) {
     // Array expressions produce !llvm.ptr (alloca pointers), not LLVMArrayType
@@ -496,9 +495,8 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
   mlir::cf::CondBranchOp::create(builder, location, cond, thenBlock,
                                  /*trueArgs=*/{}, elseBlock, /*falseArgs=*/{});
 
-  auto conf_helper = [this, parentRegion, hasResult, location,
+  auto conf_helper = [this, hasResult, location,
                       mergeBlock](mlir::Block *b, AST::BlockAST *ba) {
-    parentRegion->push_back(b);
     builder.setInsertionPointToStart(b);
     auto Val = emitBlock(ba);
 
@@ -533,12 +531,8 @@ mlir::Value MLIRGenImpl::emitWhileExpr(AST::WhileExprAST *ast) {
   auto location = loc(ast);
   auto *parentRegion = builder.getInsertionBlock()->getParent();
 
-  // Create blocks: header (condition), body, exit
+  // Branch to header block
   auto *headerBlock = new mlir::Block();
-  auto *bodyBlock = new mlir::Block();
-  auto *exitBlock = new mlir::Block();
-
-  // Branch from current block to header
   mlir::cf::BranchOp::create(builder, location, headerBlock);
 
   // --- Header block: evaluate condition ---
@@ -547,6 +541,8 @@ mlir::Value MLIRGenImpl::emitWhileExpr(AST::WhileExprAST *ast) {
   auto cond = emitExpr(ast->condition.get());
   if (!cond)
     return nullptr;
+  auto *bodyBlock = new mlir::Block();
+  auto *exitBlock = new mlir::Block();
   mlir::cf::CondBranchOp::create(builder, location, cond, bodyBlock,
                                  /*trueArgs=*/{}, exitBlock,
                                  /*falseArgs=*/{});
@@ -908,15 +904,12 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
 
   auto *parentRegion = builder.getInsertionBlock()->getParent();
 
-  // Create loop blocks: header, body, mismatch, exit
-  auto *headerBlock = new mlir::Block();
-  auto *bodyBlock = new mlir::Block();
-  auto *mismatchBlock = new mlir::Block();
-  auto *exitBlock = new mlir::Block();
-
   // header takes a loop counter (index type)
+  auto *headerBlock = new mlir::Block();
   headerBlock->addArgument(indexTy, location);
+
   // exit takes the result (i1)
+  auto *exitBlock = new mlir::Block();
   exitBlock->addArgument(i1Ty, location);
 
   // Branch from current block to header with counter = 0
@@ -933,6 +926,7 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
       builder, location, mlir::arith::CmpIPredicate::slt, counter, sizeVal);
   // If i < size → body, else → exit(true = all matched)
   auto trueVal = mlir::arith::ConstantIntOp::create(builder, location, i1Ty, 1);
+  auto *bodyBlock = new mlir::Block();
   mlir::cf::CondBranchOp::create(builder, location, cond, bodyBlock, {},
                                  exitBlock, mlir::ValueRange{trueVal});
 
@@ -967,6 +961,7 @@ mlir::Value MLIRGenImpl::emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
   // If equal → increment and loop back to header; else → mismatch
   auto one = mlir::arith::ConstantIndexOp::create(builder, location, 1);
   auto next = mlir::arith::AddIOp::create(builder, location, counter, one);
+  auto *mismatchBlock = new mlir::Block();
   mlir::cf::CondBranchOp::create(builder, location, elemEq, headerBlock,
                                  mlir::ValueRange{next.getResult()},
                                  mismatchBlock, {});
@@ -1047,10 +1042,9 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   mlir::Block *defaultBlock = nullptr;
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
-    auto *bb = new mlir::Block();
-    armBlocks.push_back(bb);
+    armBlocks.push_back(addBlock(parentRegion));
     if (ast->arms[i].pattern.is_wildcard)
-      defaultBlock = bb;
+      defaultBlock = armBlocks.back();
   }
 
   auto *mergeBlock = new mlir::Block();
@@ -1064,8 +1058,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 
   // If no wildcard, create an unreachable default
   if (!defaultBlock) {
-    defaultBlock = new mlir::Block();
-    parentRegion->push_back(defaultBlock);
+    defaultBlock = addBlock(parentRegion);
     builder.setInsertionPointToStart(defaultBlock);
     mlir::LLVM::UnreachableOp::create(builder, location);
   }
@@ -1095,10 +1088,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
     // If this is the last non-wildcard, the false branch goes to default
     mlir::Block *falseTarget;
     if (ci + 1 < nonWildcardIndices.size()) {
-      // Create a new comparison block for the next arm
-      auto *nextCmpBlock = new mlir::Block();
-      parentRegion->push_back(nextCmpBlock);
-      falseTarget = nextCmpBlock;
+      falseTarget = addBlock(parentRegion);
     } else {
       falseTarget = defaultBlock;
     }
@@ -1121,9 +1111,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
     auto &arm = ast->arms[i];
-    auto *armBlock = armBlocks[i];
-    parentRegion->push_back(armBlock);
-    builder.setInsertionPointToStart(armBlock);
+    builder.setInsertionPointToStart(armBlocks[i]);
 
     // Extract payload bindings
     if (!arm.pattern.is_wildcard && !arm.pattern.bindings.empty()) {
@@ -1202,10 +1190,9 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
   mlir::Block *defaultBlock = nullptr;
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
-    auto *bb = new mlir::Block();
-    armBlocks.push_back(bb);
+    armBlocks.push_back(addBlock(parentRegion));
     if (ast->arms[i].pattern.is_wildcard)
-      defaultBlock = bb;
+      defaultBlock = armBlocks.back();
   }
 
   auto *mergeBlock = new mlir::Block();
@@ -1217,8 +1204,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
   }
 
   if (!defaultBlock) {
-    defaultBlock = new mlir::Block();
-    parentRegion->push_back(defaultBlock);
+    defaultBlock = addBlock(parentRegion);
     builder.setInsertionPointToStart(defaultBlock);
     mlir::LLVM::UnreachableOp::create(builder, location);
   }
@@ -1250,9 +1236,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
 
     mlir::Block *falseTarget;
     if (ci + 1 < nonWildcardIndices.size()) {
-      auto *nextCmpBlock = new mlir::Block();
-      parentRegion->push_back(nextCmpBlock);
-      falseTarget = nextCmpBlock;
+      falseTarget = addBlock(parentRegion);
     } else {
       falseTarget = defaultBlock;
     }
@@ -1274,9 +1258,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
     auto &arm = ast->arms[i];
-    auto *armBlock = armBlocks[i];
-    parentRegion->push_back(armBlock);
-    builder.setInsertionPointToStart(armBlock);
+    builder.setInsertionPointToStart(armBlocks[i]);
 
     auto armVal = emitBlock(arm.body.get());
 
