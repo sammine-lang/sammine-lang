@@ -602,8 +602,20 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
     auto *info = find_linear(var->variableName);
     if (info) {
+      check_children_consumed(*info);
       consume(info, ast->get_location(), "freed");
       return;
+    }
+  }
+  // Handle free(*pp) — deref operand: consume the "*" child
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->operand.get())) {
+    if (auto *var = llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
+      auto *child = find_child(var->variableName, "*");
+      if (child) {
+        check_children_consumed(*child);
+        consume(child, ast->get_location(), "freed");
+        return;
+      }
     }
   }
   // Handle free(b.data) — field access operand
@@ -611,6 +623,7 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
     if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
       auto *child = find_child(obj->variableName, fa->field_name);
       if (child) {
+        check_children_consumed(*child);
         consume(child, ast->get_location(), "freed");
         return;
       }
@@ -916,6 +929,18 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     }
     break;
   }
+  case TypeKind::Pointer: {
+    auto &pt = std::get<PointerType>(t.type_data);
+    auto pointee = pt.get_pointee();
+    if (pointee.containsLinearTypes()) {
+      auto &child =
+          parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
+                                          parent.name + ".*", {}, {}};
+      if (pointee.linearity != Linearity::Linear)
+        register_inner_linear(child, pointee, loc);
+    }
+    break;
+  }
   case TypeKind::I32_t:
   case TypeKind::I64_t:
   case TypeKind::U32_t:
@@ -927,7 +952,6 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   case TypeKind::Char:
   case TypeKind::String:
   case TypeKind::Function:
-  case TypeKind::Pointer:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -974,10 +998,8 @@ void LinearTypeChecker::register_if_linear(const std::string &name,
   if (!type.containsLinearTypes())
     return;
   register_linear(name, loc);
-  if (type.linearity != Linearity::Linear) {
-    auto *info = find_linear(name);
-    register_inner_linear(*info, type, loc);
-  }
+  auto *info = find_linear(name);
+  register_inner_linear(*info, type, loc);
 }
 
 void LinearTypeChecker::consume_elements(
