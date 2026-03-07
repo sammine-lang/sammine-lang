@@ -44,7 +44,7 @@
 #define DEBUG_TYPE "stages"
 
 // Compiler: orchestrates the full compilation pipeline.
-// Each stage method short-circuits if `this->error` is set.
+// Each stage method short-circuits if has_error() is true.
 namespace sammine_lang {
 class Compiler {
   std::shared_ptr<TokenStream> tokStream;
@@ -62,9 +62,11 @@ class Compiler {
   std::vector<std::string> extra_link_objs_;
 
   AST::ASTProperties props_;
+  enum class State { Running, Finished, Error };
+
   sammine_util::Reporter reporter;
   size_t context_radius = 2;
-  bool error;
+  State state_ = State::Running;
   bool has_main = false;
   bool from_string = false;
 
@@ -92,7 +94,9 @@ class Compiler {
   }
   void print_timing_table(
       const std::vector<std::pair<const char *, double>> &timings);
-  void set_error() { error = true; }
+  bool has_error() const { return state_ == State::Error; }
+  bool should_stop() const { return state_ != State::Running; }
+  void set_error() { state_ = State::Error; }
   std::string output_path(const std::string &filename) const {
     if (output_dir.empty())
       return filename;
@@ -101,23 +105,23 @@ class Compiler {
 
 public:
   Compiler(std::map<compiler_option_enum, std::string> &compiler_options);
-  void start();
+  int start();
 };
 
 } // namespace sammine_lang
   //
 
 namespace sammine_lang {
-void CompilerRunner::run(
+int CompilerRunner::run(
     std::map<compiler_option_enum, std::string> &compiler_options) {
   auto compiler = Compiler(compiler_options);
-  compiler.start();
+  return compiler.start();
 }
 
 Compiler::Compiler(
     std::map<compiler_option_enum, std::string> &compiler_options)
     : compiler_options(compiler_options) {
-  this->error = false;
+  this->state_ = State::Running;
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
 
@@ -132,7 +136,7 @@ Compiler::Compiler(
                "[Error during compiler initial phase]\n");
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "[Both the file name and the string input is empty]\n");
-    this->error = true;
+    set_error();
     return;
   }
   this->resPtr = std::make_shared<LLVMRes>();
@@ -196,7 +200,7 @@ void Compiler::parse() {
   auto result = psr.Parse();
   programAST = std::move(result);
 
-  this->error = psr.has_errors();
+  if (psr.has_errors()) set_error();
   reporter.report(*lexer);
   reporter.report(psr);
 
@@ -212,7 +216,7 @@ void Compiler::parse() {
 // Recursively handles transitive imports. Deduplicates via canonical module name.
 // Exported defs become ExternASTs; generic defs are inlined for monomorphization.
 void Compiler::resolve_imports() {
-  if (this->error || programAST->imports.empty())
+  if (has_error() || programAST->imports.empty())
     return;
 
   LOG({
@@ -269,7 +273,7 @@ void Compiler::resolve_imports() {
       if (!is_transitive) {
         reporter.immediate_error(
             fmt::format("Cannot find module '{}.mn'", mod_name), loc);
-        this->error = true;
+        set_error();
       }
       return false;
     }
@@ -288,7 +292,7 @@ void Compiler::resolve_imports() {
       if (!is_transitive) {
         reporter.immediate_error(
             fmt::format("Failed to parse module '{}'", mn_path.string()), loc);
-        this->error = true;
+        set_error();
       }
       return false;
     }
@@ -397,14 +401,14 @@ void Compiler::resolve_imports() {
 
   for (auto &import : programAST->imports) {
     import_module(import.module_name, source_dir, import.location, false);
-    if (this->error)
+    if (has_error())
       return;
   }
 }
 
 // Stage 4: Load stdlib/definitions.mn (builtin type defs). Executables only.
 void Compiler::load_definitions() {
-  if (this->error || !has_main)
+  if (has_error() || !has_main)
     return;
 
   // Find definitions.mn in stdlib_dir
@@ -444,7 +448,7 @@ void Compiler::load_definitions() {
 // 2) GeneralSemantics: general validation checks
 void Compiler::semantics() {
   {
-    if (this->error) {
+    if (has_error()) {
       return;
     }
     LOG({
@@ -456,12 +460,12 @@ void Compiler::semantics() {
 
     programAST->accept_vis(&vs);
     reporter.report(vs);
-    this->error = vs.has_errors();
+    if (vs.has_errors()) set_error();
   }
 
   // INFO: GeneralSemanticsVisitor
   {
-    if (this->error)
+    if (has_error())
       return;
     LOG({
       fmt::print(stderr,
@@ -472,7 +476,7 @@ void Compiler::semantics() {
 
     programAST->accept_vis(&vs);
     reporter.report(vs);
-    this->error = vs.has_errors();
+    if (vs.has_errors()) set_error();
   }
 }
 
@@ -480,7 +484,7 @@ void Compiler::semantics() {
 // Infers types bottom-up, checks assignments/calls, instantiates generics.
 // Monomorphized defs are injected at the front of DefinitionVec for codegen.
 void Compiler::typecheck() {
-  if (this->error) {
+  if (has_error()) {
     return;
   }
   LOG({
@@ -514,12 +518,12 @@ void Compiler::typecheck() {
   }
 
   reporter.report(vs);
-  this->error = vs.has_errors();
+  if (vs.has_errors()) set_error();
 }
 
 // Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly once.
 void Compiler::linear_check() {
-  if (this->error)
+  if (has_error())
     return;
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -528,7 +532,7 @@ void Compiler::linear_check() {
   auto lc = sammine_lang::AST::LinearTypeChecker();
   lc.check(programAST.get(), props_);
   reporter.report(lc);
-  this->error = lc.has_errors();
+  if (lc.has_errors()) set_error();
 }
 
 void Compiler::dump_ast() {
@@ -540,18 +544,18 @@ void Compiler::dump_ast() {
     });
     AST::ASTPrinter::print(programAST.get(), props_);
   }
-  if (this->error) {
+  if (has_error()) {
     LOG({
       fmt::print(stderr,
                  sammine_util::styled(fmt::terminal_color::green),
                  "There were errors in previous stages. Aborting now\n");
     });
-    std::exit(1);
+    return;
   }
 }
 void Compiler::codegen() {
-  if (this->error) {
-    std::exit(1);
+  if (has_error()) {
+    return;
   }
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
     LOG({
@@ -560,7 +564,8 @@ void Compiler::codegen() {
                  "Finished checking. Stopping at codegen stage with compiler's "
                  "--check flag. \n");
     });
-    std::exit(0);
+    state_ = State::Finished;
+    return;
   }
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -589,7 +594,7 @@ void Compiler::codegen_mlir() {
   if (!mlirModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
-    this->error = true;
+    set_error();
     return;
   }
 
@@ -598,14 +603,15 @@ void Compiler::codegen_mlir() {
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
     mlirModule->print(llvm::outs(), flags);
     llvm::outs() << "\n";
-    std::exit(0);
+    state_ = State::Finished;
+    return;
   }
 
   auto llvmModule = lowerMLIRToLLVMIR(*mlirModule, *resPtr->Context);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
-    this->error = true;
+    set_error();
     return;
   }
 
@@ -644,8 +650,8 @@ void Compiler::codegen_mlir() {
 
 // Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff modes.
 void Compiler::optimize() {
-  if (this->error) {
-    std::exit(1);
+  if (has_error()) {
+    return;
   }
 
   LOG({
@@ -709,7 +715,7 @@ void Compiler::optimize() {
 
 // Stage 10: Emit .o object file via LLVM TargetMachine.
 void Compiler::emit_object() {
-  if (this->error) {
+  if (has_error()) {
     return;
   }
 
@@ -822,7 +828,7 @@ void Compiler::emit_shared_impl() {
 }
 
 void Compiler::emit_library() {
-  if (this->error || has_main || this->from_string)
+  if (has_error() || has_main || this->from_string)
     return;
 
   // Default to shared library when no --lib flag is given
@@ -869,7 +875,7 @@ void Compiler::emit_library() {
 
 // Stage 12: Link .o files into executable via clang++ (fallback: g++). Executables only.
 void Compiler::link() {
-  if (this->error || this->from_string) {
+  if (has_error() || this->from_string) {
     return;
   }
 
@@ -920,8 +926,9 @@ void Compiler::print_timing_table(
 }
 
 // Main entry point: runs all pipeline stages sequentially with optional timing.
-void Compiler::start() {
-  if (this->error) return;
+// Returns 0 on success, 1 on error.
+int Compiler::start() {
+  if (has_error()) return 1;
   struct Stage {
     const char *name;
     std::function<void(Compiler *)> fn;
@@ -957,6 +964,8 @@ void Compiler::start() {
       double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
       timings.push_back({name, ms});
     }
+    if (should_stop())
+      break;
   }
 
   if (timing) {
@@ -971,6 +980,8 @@ void Compiler::start() {
         llvm::TimerGroup::printAll(llvm::errs());
     }
   }
+
+  return has_error() ? 1 : 0;
 }
 
 } // namespace sammine_lang

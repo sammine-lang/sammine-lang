@@ -31,7 +31,7 @@ enum class LibFormat {
 
 class CompilerRunner {
 public:
-  static void
+  static int
   run(std::map<compiler_option_enum, std::string> &compiler_options);
 };
 } // namespace sammine_lang

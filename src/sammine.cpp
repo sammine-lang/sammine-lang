@@ -146,6 +146,5 @@ int main(int argc, char *argv[]) {
     }
     compiler_options[LIB_FORMAT] = lib_val;
   }
-  CompilerRunner::run(compiler_options);
-  return 0;
+  return CompilerRunner::run(compiler_options);
 }
