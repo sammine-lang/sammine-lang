@@ -138,54 +138,14 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   auto location = loc(ast);
 
-  // Assignment: store RHS into LHS's alloca
+  // Assignment: store RHS into LHS's address
   if (ast->Op->is_assign()) {
-    // *p = val
-    if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast->LHS.get())) {
-      auto ptr = emitExpr(deref->operand.get());
-      auto rhs = emitExpr(ast->RHS.get());
-      if (!ptr || !rhs)
-        return nullptr;
-      mlir::LLVM::StoreOp::create(builder, location, rhs, ptr);
-      return rhs;
-    }
-
-    // arr[i] = val  or  ptr[i] = val
-    if (auto *idxExpr = llvm::dyn_cast<AST::IndexExprAST>(ast->LHS.get())) {
-      auto arr = emitExpr(idxExpr->array_expr.get());
-      auto idx = emitExpr(idxExpr->index_expr.get());
-      auto rhs = emitExpr(ast->RHS.get());
-      if (!arr || !idx || !rhs)
-        return nullptr;
-
-      auto baseType = idxExpr->array_expr->get_type();
-
-      // Pointer index assignment: ptr<T>[i] = val -> GEP + store
-      if (baseType.type_kind == TypeKind::Pointer) {
-        auto &ptrData = std::get<PointerType>(baseType.type_data);
-        auto gep = emitPtrElementGEP(arr, idx, ptrData.get_pointee(), location);
-        mlir::LLVM::StoreOp::create(builder, location, rhs, gep);
-        return rhs;
-      }
-
-      // Array index assignment (existing path)
-      auto arrType = std::get<ArrayType>(baseType.type_data);
-      emitPtrArrayStore(arr, idx, rhs, arrType, location);
-      return rhs;
-    }
-
-    // x = val (mutable scalar)
-    mlir::Value rhs = emitExpr(ast->RHS.get());
-    if (!rhs)
+    auto ptr = emitLValue(ast->LHS.get());
+    auto rhs = emitRValue(ast->RHS.get());
+    if (!ptr || !rhs)
       return nullptr;
-
-    if (auto *lhsVar = llvm::dyn_cast<AST::VariableExprAST>(ast->LHS.get())) {
-      auto varPtr = symbolTable.get_from_name(lhsVar->variableName);
-      mlir::LLVM::StoreOp::create(builder, location, rhs, varPtr);
-      return rhs;
-    }
-
-    imm_error("unsupported assignment LHS", ast->get_location());
+    mlir::LLVM::StoreOp::create(builder, location, rhs, ptr);
+    return rhs;
   }
 
   mlir::Value lhs = emitExpr(ast->LHS.get());
@@ -585,12 +545,9 @@ mlir::Value MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
 
   // Store each element via GEP + store
   for (size_t i = 0; i < ast->elements.size(); ++i) {
-    auto elemVal = emitExpr(ast->elements[i].get());
+    auto elemVal = emitRValue(ast->elements[i].get());
     if (!elemVal)
       return nullptr;
-    // If element is an aggregate (e.g. nested array), emitExpr returns a
-    // pointer (alloca); load the value before storing into the outer array.
-    elemVal = ensureLoaded(elemVal, arrType.get_element(), location);
     auto idx = mlir::arith::ConstantIntOp::create(
         builder, location, builder.getI32Type(), static_cast<int64_t>(i));
     emitPtrArrayStore(alloca, idx, elemVal, arrType, location);
@@ -709,13 +666,7 @@ mlir::Value MLIRGenImpl::emitDerefExpr(AST::DerefExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
-  auto *varExpr = llvm::dyn_cast<AST::VariableExprAST>(ast->operand.get());
-  if (!varExpr)
-    imm_error("address-of (&) requires a variable operand",
-              ast->get_location());
-
-  // All variables (including arrays) are in llvm.alloca — return the pointer
-  return symbolTable.get_from_name(varExpr->variableName);
+  return emitLValue(ast->operand.get());
 }
 
 mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
@@ -776,8 +727,7 @@ mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   // Insert each field value at its index
   for (size_t i = 0; i < ast->field_values.size(); i++) {
     auto fieldIdx = st.get_field_index(ast->field_names[i]);
-    auto val = emitExpr(ast->field_values[i].get());
-    val = ensureLoaded(val, ast->field_values[i]->get_type(), location);
+    auto val = emitRValue(ast->field_values[i].get());
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
                                             fieldIdx.value());
   }
@@ -832,8 +782,7 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     int64_t byte_offset = 0;
     for (size_t i = 0; i < ast->arguments.size(); i++) {
-      auto argVal = emitExpr(ast->arguments[i].get());
-      argVal = ensureLoaded(argVal, ast->arguments[i]->get_type(), location);
+      auto argVal = emitRValue(ast->arguments[i].get());
       int64_t field_offset =
           advancePayloadOffset(byte_offset, vi.payload_types[i]);
       mlir::Value dest;
@@ -998,8 +947,7 @@ mlir::Value MLIRGenImpl::emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast) {
 
   // Insert each element at its index
   for (size_t i = 0; i < ast->elements.size(); i++) {
-    auto val = emitExpr(ast->elements[i].get());
-    val = ensureLoaded(val, ast->elements[i]->get_type(), location);
+    auto val = emitRValue(ast->elements[i].get());
     agg = mlir::LLVM::InsertValueOp::create(
         builder, location, agg, val,
         llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});

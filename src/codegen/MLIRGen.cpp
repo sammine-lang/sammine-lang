@@ -497,12 +497,51 @@ mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
                                         elemType, one);
 }
 
-mlir::Value MLIRGenImpl::ensureLoaded(mlir::Value val, const Type &type,
-                                       mlir::Location loc) {
+mlir::Value MLIRGenImpl::emitRValue(AST::ExprAST *ast) {
+  auto val = emitExpr(ast);
+  if (!val)
+    return nullptr;
+  auto semTy = convertType(ast->get_type());
   if (mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()) &&
-      !mlir::isa<mlir::LLVM::LLVMPointerType>(convertType(type)))
-    return mlir::LLVM::LoadOp::create(builder, loc, convertType(type), val);
+      !mlir::isa<mlir::LLVM::LLVMPointerType>(semTy))
+    return mlir::LLVM::LoadOp::create(builder, loc(ast), semTy, val);
   return val;
+}
+
+mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
+  auto location = loc(ast);
+
+  // Variable: return its alloca
+  if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
+    return symbolTable.get_from_name(var->variableName);
+
+  // Dereference: lvalue of *p is the value of p
+  if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))
+    return emitRValue(deref->operand.get());
+
+  // Index: return GEP pointer to element
+  if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(ast)) {
+    auto arr = emitExpr(idx->array_expr.get());
+    auto idxVal = emitExpr(idx->index_expr.get());
+    if (!arr || !idxVal)
+      return nullptr;
+
+    auto baseType = idx->array_expr->get_type();
+
+    if (baseType.type_kind == TypeKind::Pointer) {
+      auto &ptrData = std::get<PointerType>(baseType.type_data);
+      return emitPtrElementGEP(arr, idxVal, ptrData.get_pointee(), location);
+    }
+
+    auto arrType = std::get<ArrayType>(baseType.type_data);
+    auto indexVal = mlir::arith::IndexCastOp::create(
+        builder, location, builder.getIndexType(), idxVal);
+    emitBoundsCheck(indexVal, arrType.get_size(), location);
+    arr = ensurePointer(arr, location);
+    return emitPtrArrayGEP(arr, idxVal, arrType, location);
+  }
+
+  imm_error("expression is not assignable", ast->get_location());
 }
 
 mlir::Value MLIRGenImpl::ensurePointer(mlir::Value val, mlir::Location loc) {

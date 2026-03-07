@@ -114,6 +114,10 @@ public:
 
   // --- Expression dispatcher + block/vardef (MLIRGen.cpp) ---
   mlir::Value emitExpr(AST::ExprAST *ast);
+  /// emitExpr + load if the result is a pointer but the semantic type is not.
+  mlir::Value emitRValue(AST::ExprAST *ast);
+  /// Returns the address of the expression (for assignment LHS, &expr).
+  mlir::Value emitLValue(AST::ExprAST *ast);
   mlir::Value emitBlock(AST::BlockAST *ast);
   mlir::Value emitVarDef(AST::VarDefAST *ast);
 
@@ -181,8 +185,6 @@ public:
 
   // --- Helpers (MLIRGen.cpp) ---
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
-  /// If val is !llvm.ptr but the semantic type is not a pointer, load it.
-  mlir::Value ensureLoaded(mlir::Value val, const Type &type, mlir::Location loc);
   /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
   mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);
   int64_t getTypeSize(const Type &type);

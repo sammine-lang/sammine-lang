@@ -397,9 +397,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // Emit arguments — array args arrive as !llvm.ptr (alloca), load to get value
   llvm::SmallVector<mlir::Value, 4> operands;
   for (auto &arg : ast->arguments) {
-    auto val = emitExpr(arg.get());
+    auto val = emitRValue(arg.get());
     if (val) {
-      val = ensureLoaded(val, arg->get_type(), location);
       operands.push_back(val);
     }
   }
