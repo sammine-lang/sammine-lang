@@ -480,6 +480,25 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
       check_stmt(ast->RHS.get());
     }
 
+    // LHS deref: *pp = x updates the "*" child's location
+    if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
+      if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
+        auto *child = find_child(lhs_var->variableName, "*");
+        if (child) {
+          if (child->state == VarState::Unconsumed && ast->RHS->get_type().linearity == Linearity::Linear) {
+            this->add_error(
+                ast->get_location(),
+                fmt::format("Reassigning linear variable '{}' without "
+                            "consuming its previous value",
+                            child->name));
+            return;
+          }
+          child->state = VarState::Unconsumed;
+          child->def_location = ast->get_location();
+        }
+      }
+    }
+
     // LHS: check for overwrite without consuming, or re-register
     if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
       auto *lhs_info = find_linear(lhs_var->variableName);
@@ -934,8 +953,8 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     auto pointee = pt.get_pointee();
     if (pointee.containsLinearTypes()) {
       auto &child =
-          parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
-                                          parent.name + ".*", {}, {}};
+          parent.children["*"] = VarInfo{VarState::Consumed, loc, {},
+                                          "*" + parent.name, {}, {}};
       if (pointee.linearity != Linearity::Linear)
         register_inner_linear(child, pointee, loc);
     }
