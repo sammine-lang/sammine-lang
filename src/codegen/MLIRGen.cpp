@@ -97,6 +97,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
                    llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
       for (auto &method : tci->methods)
         forwardDeclareFunc(method->Prototype.get());
+    } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
+      if (!kd->Prototype->is_generic())
+        forwardDeclareFunc(kd->Prototype.get());
     }
   }
 
@@ -305,11 +308,36 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     // Emit each instance method as a regular function
     for (auto &method : tci->methods)
       emitFunction(method.get());
-  } else if (llvm::isa<AST::KernelBlockAST>(def)) {
-    ; // Kernel blocks: codegen not yet implemented
+  } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
+    emitKernelDef(kd);
   } else {
     imm_error(fmt::format("unknown definition type '{}'", def->getTreeName()),
               def->get_location());
+  }
+}
+
+void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
+  auto funcName = mangleName(kd->Prototype->functionName);
+  auto funcType = buildFuncType(kd->Prototype.get());
+  auto location = loc(kd);
+
+  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(funcName);
+
+  auto &entryBlock = *funcOp.addEntryBlock();
+  builder.setInsertionPointToStart(&entryBlock);
+
+  // TODO: ad-hoc returning — currently hardcodes return of the first expression.
+  // Should properly handle multiple expressions and explicit return statements.
+  if (!kd->Body->expressions.empty()) {
+    if (auto *numExpr = dynamic_cast<AST::KernelNumberExprAST *>(
+            kd->Body->expressions[0].get())) {
+      auto retType = funcType.getResults()[0];
+      int64_t val = std::stoll(numExpr->number);
+      auto constVal =
+          mlir::arith::ConstantIntOp::create(builder, location, retType, val);
+      mlir::func::ReturnOp::create(builder, location,
+                                   mlir::ValueRange{constVal});
+    }
   }
 }
 

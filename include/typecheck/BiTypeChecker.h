@@ -153,7 +153,7 @@ public:
   virtual void visit(TupleLiteralExprAST *ast) override;
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
-  virtual void visit(KernelBlockAST *ast) override;
+  virtual void visit(KernelDefAST *ast) override;
 
   // Type class data structures
   struct TypeClassInfo {
@@ -236,7 +236,7 @@ public:
   virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void preorder_walk(KernelBlockAST *ast) override;
+  virtual void preorder_walk(KernelDefAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -275,7 +275,7 @@ public:
   virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void postorder_walk(KernelBlockAST *ast) override;
+  virtual void postorder_walk(KernelDefAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -313,7 +313,7 @@ public:
   virtual Type synthesize(TupleLiteralExprAST *ast) override;
   virtual Type synthesize(TypeClassDeclAST *ast) override;
   virtual Type synthesize(TypeClassInstanceAST *ast) override;
-  virtual Type synthesize(KernelBlockAST *ast) override;
+  virtual Type synthesize(KernelDefAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)

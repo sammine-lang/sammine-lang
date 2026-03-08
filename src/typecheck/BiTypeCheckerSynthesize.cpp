@@ -1299,7 +1299,7 @@ Type BiTypeCheckerVisitor::synthesize(TypeClassDeclAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(TypeClassInstanceAST *ast) {
   return Type::NonExistent();
 }
-Type BiTypeCheckerVisitor::synthesize(KernelBlockAST *ast) {
+Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
   return Type::NonExistent();
 }
 

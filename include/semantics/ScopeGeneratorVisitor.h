@@ -106,7 +106,7 @@ public:
   virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void preorder_walk(KernelBlockAST *ast) override;
+  virtual void preorder_walk(KernelDefAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -146,7 +146,7 @@ public:
   virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void postorder_walk(KernelBlockAST *ast) override;
+  virtual void postorder_walk(KernelDefAST *ast) override;
 };
 
 } // namespace sammine_lang::AST

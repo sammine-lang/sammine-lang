@@ -907,19 +907,62 @@ public:
   AST_NODE_METHODS("TypeClassInstanceAST", NodeKind::TypeClassInstanceAST)
 };
 
-/// Kernel block: `kernel { fn_defs... }` — groups functions for parallel/GPU execution.
-class KernelBlockAST : public DefinitionAST {
+/// Base class for kernel-only expressions (parallel to ExprAST for CPU code).
+/// Kernel expressions don't participate in the CPU visitor pattern — stubs provided here.
+class KernelExprAST : public AstBase, public Printable {
 public:
-  std::vector<std::unique_ptr<DefinitionAST>> definitions;
-  explicit KernelBlockAST(std::shared_ptr<Token> kernel_tok,
-                          std::vector<std::unique_ptr<DefinitionAST>> definitions)
-      : DefinitionAST(NodeKind::KernelBlockAST),
-        definitions(std::move(definitions)) {
-    this->join_location(kernel_tok);
-    for (auto &d : this->definitions)
-      this->join_location(d.get());
+  KernelExprAST(NodeKind kind) : AstBase(kind) {}
+  ~KernelExprAST() = default;
+  static bool classof(const AstBase *node) {
+    return node->getKind() >= NodeKind::FirstKernelExpr &&
+           node->getKind() <= NodeKind::LastKernelExpr;
   }
-  AST_NODE_METHODS("KernelBlockAST", NodeKind::KernelBlockAST)
+  // Kernel exprs are not visited by CPU visitors — stubs only.
+  std::string getTreeName() const override { return "KernelExprAST"; }
+  void accept_vis(ASTVisitor *) override {}
+  void walk_with_preorder(ASTVisitor *) override {}
+  void walk_with_postorder(ASTVisitor *) override {}
+  Type accept_synthesis(TypeCheckerVisitor *) override { return Type::NonExistent(); }
+};
+
+/// Kernel integer literal expression.
+class KernelNumberExprAST : public KernelExprAST {
+public:
+  std::string number;
+
+  explicit KernelNumberExprAST(std::shared_ptr<Token> t)
+      : KernelExprAST(NodeKind::KernelNumberExprAST) {
+    assert(t);
+    join_location(t);
+    number = t->lexeme;
+  }
+  std::string getTreeName() const override { return "KernelNumberExprAST"; }
+  static bool classof(const AstBase *node) {
+    return node->getKind() == NodeKind::KernelNumberExprAST;
+  }
+};
+
+/// Kernel block: holds a vector of kernel-only expressions.
+class KernelBlockAST {
+public:
+  std::vector<std::unique_ptr<KernelExprAST>> expressions;
+  explicit KernelBlockAST(std::vector<std::unique_ptr<KernelExprAST>> exprs)
+      : expressions(std::move(exprs)) {}
+};
+
+/// Kernel function definition: `kernel name(params) -> T { kernel_exprs }`.
+class KernelDefAST : public DefinitionAST {
+public:
+  std::unique_ptr<PrototypeAST> Prototype;
+  std::unique_ptr<KernelBlockAST> Body;
+
+  KernelDefAST(std::unique_ptr<PrototypeAST> proto,
+               std::unique_ptr<KernelBlockAST> body)
+      : DefinitionAST(NodeKind::KernelDefAST),
+        Prototype(std::move(proto)), Body(std::move(body)) {
+    join_location(Prototype.get());
+  }
+  AST_NODE_METHODS("KernelDefAST", NodeKind::KernelDefAST)
 };
 
 } // namespace AST

@@ -243,10 +243,8 @@ void ASTVisitor::visit(TypeClassInstanceAST *ast) {
   ast->walk_with_postorder(this);
 }
 
-void ASTVisitor::visit(KernelBlockAST *ast) {
+void ASTVisitor::visit(KernelDefAST *ast) {
   ast->walk_with_preorder(this);
-  for (auto &def : ast->definitions)
-    def->accept_vis(this);
   ast->walk_with_postorder(this);
 }
 

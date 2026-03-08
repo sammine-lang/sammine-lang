@@ -109,6 +109,7 @@ public:
 
   // --- Definition emission (MLIRGen.cpp) ---
   void emitDefinition(AST::DefinitionAST *def);
+  void emitKernelDef(AST::KernelDefAST *kd);
   mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 

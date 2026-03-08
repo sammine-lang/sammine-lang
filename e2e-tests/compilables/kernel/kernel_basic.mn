@@ -1,13 +1,12 @@
-// RUN: %sammine -f %full 2>&1 | %check %s
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 0
+
 import io;
 
-kernel {
-  fn add(a: i32, b: i32) -> i32 = a + b
-}
+kernel x() -> i32 { 0 }
 
-fn main() -> i32 {
-  let x = add(3, 4)
-  io::print_int(x)
+let main() -> i32 {
+  io::print_i32(x());
+  io::printf("\n");
   0
 }
-// CHECK: 7

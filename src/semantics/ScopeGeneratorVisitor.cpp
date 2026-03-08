@@ -46,9 +46,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
                llvm::isa<TypeClassInstanceAST>(def.get())) {
       // Type class decls/instances don't register top-level names in scope
       continue;
-    } else if (llvm::isa<KernelBlockAST>(def.get())) {
-      // Kernel block contents registered via default visit traversal
-      continue;
+    } else if (auto kd = llvm::dyn_cast<KernelDefAST>(def.get())) {
+      fn_name = kd->Prototype->functionName.mangled();
+      loc = kd->Prototype->get_location();
     } else
       this->abort("Should not be any other def");
 
@@ -242,7 +242,7 @@ void ScopeGeneratorVisitor::preorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(KernelBlockAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(KernelDefAST *ast) {}
 
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
@@ -404,5 +404,5 @@ void ScopeGeneratorVisitor::postorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(KernelBlockAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(KernelDefAST *ast) {}
 } // namespace sammine_lang::AST

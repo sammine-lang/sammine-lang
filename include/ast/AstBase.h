@@ -72,8 +72,13 @@ enum class NodeKind {
   TypeAliasDefAST,
   TypeClassDeclAST,
   TypeClassInstanceAST,
-  KernelBlockAST,
-  LastDef = KernelBlockAST,
+  KernelDefAST,
+  LastDef = KernelDefAST,
+
+  // KernelExprAST subclasses [FirstKernelExpr..LastKernelExpr]
+  FirstKernelExpr,
+  KernelNumberExprAST = FirstKernelExpr,
+  LastKernelExpr = KernelNumberExprAST,
 };
 
 class Visitable;
@@ -244,9 +249,9 @@ public:
   virtual void preorder_walk(TypeClassInstanceAST *ast) = 0;
   virtual void postorder_walk(TypeClassInstanceAST *ast) = 0;
 
-  virtual void visit(KernelBlockAST *ast);
-  virtual void preorder_walk(KernelBlockAST *ast) = 0;
-  virtual void postorder_walk(KernelBlockAST *ast) = 0;
+  virtual void visit(KernelDefAST *ast);
+  virtual void preorder_walk(KernelDefAST *ast) = 0;
+  virtual void postorder_walk(KernelDefAST *ast) = 0;
 
   virtual ~ASTVisitor() = 0;
 };
@@ -359,7 +364,7 @@ public:
   virtual Type synthesize(TupleLiteralExprAST *ast) = 0;
   virtual Type synthesize(TypeClassDeclAST *ast) = 0;
   virtual Type synthesize(TypeClassInstanceAST *ast) = 0;
-  virtual Type synthesize(KernelBlockAST *ast) = 0;
+  virtual Type synthesize(KernelDefAST *ast) = 0;
 
   virtual ~TypeCheckerVisitor() = 0;
 };

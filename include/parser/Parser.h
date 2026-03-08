@@ -118,7 +118,7 @@ public:
   [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassDecl() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassInstance() -> p<DefinitionAST>;
-  [[nodiscard]] auto ParseKernelBlock() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseKernelDef() -> p<DefinitionAST>;
 
   // Parse type
   [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;

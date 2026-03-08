@@ -115,7 +115,7 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
 
   auto result = tryParsers<DefinitionAST>(
       &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
-      &Parser::ParseKernelBlock,
+      &Parser::ParseKernelDef,
       &Parser::ParseStructDef, &Parser::ParseEnumDef, &Parser::ParseReuseDef,
       &Parser::ParseFuncDef);
 
@@ -1846,33 +1846,43 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
           SUCCESS};
 }
 
-auto Parser::ParseKernelBlock() -> p<DefinitionAST> {
+auto Parser::ParseKernelDef() -> p<DefinitionAST> {
   auto kernel_tok = expect(TokKernel);
   if (!kernel_tok)
     return {nullptr, NONCOMMITTED};
 
-  REQUIRE(lbrace, TokLeftCurly, "Expected '{' after 'kernel'",
+  auto [proto, proto_status] = ParsePrototype();
+  if (proto_status != SUCCESS)
+    return {nullptr, FAILED};
+
+  // TODO: support generics for kernel functions
+  if (proto->is_generic()) {
+    imm_error("Generic kernel functions are not yet supported",
+              proto->get_location());
+    return {nullptr, FAILED};
+  }
+
+  REQUIRE(lbrace, TokLeftCurly, "Expected '{' after kernel prototype",
           kernel_tok->get_location(), {nullptr, FAILED});
 
-  std::vector<std::unique_ptr<DefinitionAST>> defs;
+  std::vector<std::unique_ptr<KernelExprAST>> exprs;
   while (!tokStream->isEnd() && tokStream->peek()->tok_type != TokRightCurly) {
-    auto [def, status] = ParseFuncDef();
-    if (status == NONCOMMITTED) {
-      imm_error("Expected function definition inside 'kernel' block",
+    if (tokStream->peek()->tok_type == TokNum) {
+      auto num_tok = tokStream->consume();
+      exprs.push_back(std::make_unique<KernelNumberExprAST>(num_tok));
+    } else {
+      imm_error("Expected expression inside kernel body",
                 tokStream->currentLocation());
       tokStream->exhaust_until(TokRightCurly);
       break;
     }
-    if (def)
-      defs.push_back(std::move(def));
-    if (status == FAILED)
-      break;
   }
 
-  REQUIRE(rbrace, TokRightCurly, "Expected '}' to close 'kernel' block",
+  REQUIRE(rbrace, TokRightCurly, "Expected '}' to close kernel definition",
           kernel_tok->get_location(), {nullptr, FAILED});
 
-  return {std::make_unique<KernelBlockAST>(kernel_tok, std::move(defs)), SUCCESS};
+  auto body = std::make_unique<KernelBlockAST>(std::move(exprs));
+  return {std::make_unique<KernelDefAST>(std::move(proto), std::move(body)), SUCCESS};
 }
 
 // Parse `::id` tail after an initial ID. Resolves module aliases (e.g. `m::add`

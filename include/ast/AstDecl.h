@@ -48,7 +48,10 @@ class EnumDefAST;
 class TypeAliasDefAST;
 class TypeClassDeclAST;
 class TypeClassInstanceAST;
+class KernelExprAST;
+class KernelNumberExprAST;
 class KernelBlockAST;
+class KernelDefAST;
 
 } // namespace AST
 } // namespace sammine_lang

@@ -76,12 +76,9 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
       for (auto &method : tci->methods)
         if (!method->Prototype->is_generic())
           pre_register_function(method->Prototype.get());
-    } else if (auto *kb = llvm::dyn_cast<KernelBlockAST>(def.get())) {
-      for (auto &inner_def : kb->definitions) {
-        if (auto *fn = llvm::dyn_cast<FuncDefAST>(inner_def.get()))
-          if (!fn->Prototype->is_generic())
-            pre_register_function(fn->Prototype.get());
-      }
+    } else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get())) {
+      if (!kd->Prototype->is_generic())
+        pre_register_function(kd->Prototype.get());
     }
   }
 
@@ -840,9 +837,12 @@ void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
     method->accept_vis(this);
 }
 
-void BiTypeCheckerVisitor::visit(KernelBlockAST *ast) {
-  for (auto &def : ast->definitions)
-    def->accept_vis(this);
+void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {
+  // Kernel defs: CPU visitors see the prototype but don't recurse into kernel body
+  enter_new_scope();
+  ast->Prototype->accept_vis(this);
+  ast->accept_synthesis(this);
+  exit_new_scope();
 }
 
 // pre order — all empty, logic moved to visit() overrides
@@ -882,7 +882,7 @@ void BiTypeCheckerVisitor::preorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
-void BiTypeCheckerVisitor::preorder_walk(KernelBlockAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(KernelDefAST *ast) {}
 
 // post order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -921,6 +921,6 @@ void BiTypeCheckerVisitor::postorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
-void BiTypeCheckerVisitor::postorder_walk(KernelBlockAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(KernelDefAST *ast) {}
 
 } // namespace sammine_lang::AST

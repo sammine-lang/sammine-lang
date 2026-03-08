@@ -121,7 +121,7 @@ public:
   virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void preorder_walk(KernelBlockAST *ast) override;
+  virtual void preorder_walk(KernelDefAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -160,11 +160,11 @@ public:
   virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void postorder_walk(KernelBlockAST *ast) override;
+  virtual void postorder_walk(KernelDefAST *ast) override;
 
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
-  virtual void visit(KernelBlockAST *ast) override;
+  virtual void visit(KernelDefAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -717,17 +717,16 @@ void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
 void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 
-void AstPrinterVisitor::visit(KernelBlockAST *ast) {
+void AstPrinterVisitor::visit(KernelDefAST *ast) {
   generic_preprintln(ast);
   ast->walk_with_preorder(this);
-  for (auto &def : ast->definitions)
-    def->accept_vis(this);
+  safeguard_visit(ast->Prototype.get(), "!!nullptr!! PrototypeAST\n");
   ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(KernelBlockAST *ast) {
-  add_to_rep(fmt::format("{}kernel\n", tabs()));
+void AstPrinterVisitor::preorder_walk(KernelDefAST *ast) {
+  add_to_rep(fmt::format("{}kernel {}\n", tabs(), ast->Prototype->functionName.mangled()));
 }
-void AstPrinterVisitor::postorder_walk(KernelBlockAST *ast) {}
+void AstPrinterVisitor::postorder_walk(KernelDefAST *ast) {}
 
 } // namespace sammine_lang::AST
