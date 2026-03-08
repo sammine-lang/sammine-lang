@@ -17,7 +17,7 @@ update_test() {
 
   # Extract the RUN line
   local run_line
-  run_line=$(grep -m1 '# RUN:' "$test_file" | sed 's/^# RUN: //')
+  run_line=$(grep -m1 '// RUN:' "$test_file" | sed 's|^// RUN: ||')
   if [ -z "$run_line" ]; then
     echo "SKIP (no RUN): $test_file"
     return

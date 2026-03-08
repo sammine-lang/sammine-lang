@@ -268,7 +268,7 @@ public:
             if (is_check_directive(file_lines[i])) {
                 continue; // Strip existing CHECK lines
             }
-            if (file_lines[i].find("# RUN:") != std::string::npos) {
+            if (file_lines[i].find("// RUN:") != std::string::npos) {
                 last_run_idx = static_cast<int>(filtered_lines.size());
             }
             filtered_lines.push_back(file_lines[i]);
@@ -292,9 +292,9 @@ public:
             // Sanitize: strip directory prefixes from paths
             std::string escaped = sanitize_output_line(output_lines[i]);
             if (first || after_blank) {
-                check_lines.push_back("# " + plain_directive + padding + " " + escaped);
+                check_lines.push_back("// " + plain_directive + padding + " " + escaped);
             } else {
-                check_lines.push_back("# " + next_directive + " " + escaped);
+                check_lines.push_back("// " + next_directive + " " + escaped);
             }
             first = false;
             after_blank = false;
