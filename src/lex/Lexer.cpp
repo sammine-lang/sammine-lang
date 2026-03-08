@@ -318,6 +318,14 @@ static const OpRule operatorRules[] = {
 // clang-format on
 
 size_t Lexer::handleOperators(size_t i, const std::string &input) {
+  // Handle // single-line comments
+  if (input[i] == '/' && i + 1 < input.length() && input[i + 1] == '/') {
+    while (i < input.length() && input[i] != '\n') {
+      i = advance(i);
+    }
+    return i;
+  }
+
   for (const auto &rule : operatorRules) {
     if (input[i] != rule.lead)
       continue;
@@ -396,6 +404,7 @@ size_t Lexer::handleUtilityCURLY(size_t i, const std::string &input) {
 
 size_t Lexer::handleUtilityCOMMENT(size_t i, const std::string &input) {
   if (input[i] == '#') {
+    add_error(location, "Comments use '//', not '#'");
     while (i < input.length() && input[i] != '\n') {
       i = advance(i);
     }

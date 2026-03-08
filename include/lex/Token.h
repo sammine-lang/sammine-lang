@@ -193,7 +193,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokWhile, "while"},
 
     // TokCOMMENTS
-    {TokSingleComment, "#"},
+    {TokSingleComment, "//"},
     {TokEOF, "EOF"},
     {TokINVALID, "UNRECOGNIZED"},
 };

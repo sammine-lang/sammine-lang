@@ -225,6 +225,10 @@ std::string LenExprAST::to_string() const {
   return "len(" + operand->to_string() + ")";
 }
 
+std::string DimExprAST::to_string() const {
+  return "dim(" + operand->to_string() + ")";
+}
+
 std::string UnaryNegExprAST::to_string() const {
   return "-" + operand->to_string();
 }

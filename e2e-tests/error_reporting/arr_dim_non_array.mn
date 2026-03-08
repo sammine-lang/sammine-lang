@@ -1,0 +1,9 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK: dim() requires array type
+import std;
+
+let main() -> i32 {
+  let x : i32 = 42;
+  let (d) = dim(x);
+  return 0;
+}

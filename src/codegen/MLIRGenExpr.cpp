@@ -640,6 +640,32 @@ mlir::Value MLIRGenImpl::emitLenExpr(AST::LenExprAST *ast) {
       .getResult();
 }
 
+mlir::Value MLIRGenImpl::emitDimExpr(AST::DimExprAST *ast) {
+  auto location = loc(ast);
+  auto tupleTy = convertType(ast->get_type());
+
+  // Walk nested ArrayType to collect dimension sizes
+  std::vector<int64_t> dims;
+  Type current = ast->operand->get_type();
+  while (current.type_kind == TypeKind::Array) {
+    auto &arr = std::get<ArrayType>(current.type_data);
+    dims.push_back(static_cast<int64_t>(arr.get_size()));
+    current = arr.get_element();
+  }
+
+  // Build a tuple of i32 constants
+  mlir::Value agg = mlir::LLVM::PoisonOp::create(builder, location, tupleTy);
+  for (size_t i = 0; i < dims.size(); i++) {
+    auto val = mlir::arith::ConstantIntOp::create(builder, location,
+                                                   builder.getI32Type(),
+                                                   dims[i]).getResult();
+    agg = mlir::LLVM::InsertValueOp::create(
+        builder, location, agg, val,
+        llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+  }
+  return agg;
+}
+
 // ===--- Pointer emission ---===
 
 mlir::Value MLIRGenImpl::emitDerefExpr(AST::DerefExprAST *ast) {

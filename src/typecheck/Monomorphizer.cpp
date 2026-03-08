@@ -192,6 +192,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   } else if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
     result = std::make_unique<LenExprAST>(make_tok("len"),
                                           clone_expr(len->operand.get()));
+  } else if (auto *dim = llvm::dyn_cast<DimExprAST>(expr)) {
+    result = std::make_unique<DimExprAST>(make_tok("dim"),
+                                          clone_expr(dim->operand.get()));
   } else if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     result = std::make_unique<UnaryNegExprAST>(make_tok("-"),
                                                clone_expr(neg->operand.get()));

@@ -165,6 +165,7 @@ public:
                                  const Type &pointeeType,
                                  mlir::Location location);
   mlir::Value emitLenExpr(AST::LenExprAST *ast);
+  mlir::Value emitDimExpr(AST::DimExprAST *ast);
   mlir::Value emitDerefExpr(AST::DerefExprAST *ast);
   mlir::Value emitAddrOfExpr(AST::AddrOfExprAST *ast);
   mlir::Value emitAllocExpr(AST::AllocExprAST *ast);

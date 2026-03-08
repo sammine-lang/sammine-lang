@@ -1,0 +1,18 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+import std;
+
+let main() -> i32 {
+  let a : [3]i32 = [1, 2, 3];
+  let (d) = dim(a);
+  // CHECK: 3
+  std::printf("%d\n", d);
+
+  let b : [2][3]i32 = [[1, 2, 3], [4, 5, 6]];
+  let (rows, cols) = dim(b);
+  // CHECK: 2
+  std::printf("%d\n", rows);
+  // CHECK: 3
+  std::printf("%d\n", cols);
+
+  return 0;
+}
