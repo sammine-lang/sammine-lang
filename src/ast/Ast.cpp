@@ -180,6 +180,12 @@ void ASTVisitor::visit(LenExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(DimExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->operand->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
 void ASTVisitor::visit(UnaryNegExprAST *ast) {
   ast->walk_with_preorder(this);
   ast->operand->accept_vis(this);
@@ -234,6 +240,13 @@ void ASTVisitor::visit(TypeClassInstanceAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &method : ast->methods)
     method->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
+void ASTVisitor::visit(KernelBlockAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &def : ast->definitions)
+    def->accept_vis(this);
   ast->walk_with_postorder(this);
 }
 

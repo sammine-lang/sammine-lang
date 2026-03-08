@@ -727,6 +727,18 @@ public:
   AST_NODE_METHODS("LenExprAST", NodeKind::LenExprAST)
 };
 
+class DimExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> operand;
+  explicit DimExprAST(std::shared_ptr<Token> tok,
+                      std::unique_ptr<ExprAST> operand)
+      : ExprAST(NodeKind::DimExprAST), operand(std::move(operand)) {
+    this->join_location(tok)->join_location(this->operand.get());
+  }
+  std::string to_string() const override;
+  AST_NODE_METHODS("DimExprAST", NodeKind::DimExprAST)
+};
+
 class UnaryNegExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
@@ -893,6 +905,21 @@ public:
     this->join_location(tok);
   }
   AST_NODE_METHODS("TypeClassInstanceAST", NodeKind::TypeClassInstanceAST)
+};
+
+/// Kernel block: `kernel { fn_defs... }` — groups functions for parallel/GPU execution.
+class KernelBlockAST : public DefinitionAST {
+public:
+  std::vector<std::unique_ptr<DefinitionAST>> definitions;
+  explicit KernelBlockAST(std::shared_ptr<Token> kernel_tok,
+                          std::vector<std::unique_ptr<DefinitionAST>> definitions)
+      : DefinitionAST(NodeKind::KernelBlockAST),
+        definitions(std::move(definitions)) {
+    this->join_location(kernel_tok);
+    for (auto &d : this->definitions)
+      this->join_location(d.get());
+  }
+  AST_NODE_METHODS("KernelBlockAST", NodeKind::KernelBlockAST)
 };
 
 } // namespace AST

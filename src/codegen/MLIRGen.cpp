@@ -305,6 +305,8 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     // Emit each instance method as a regular function
     for (auto &method : tci->methods)
       emitFunction(method.get());
+  } else if (llvm::isa<AST::KernelBlockAST>(def)) {
+    ; // Kernel blocks: codegen not yet implemented
   } else {
     imm_error(fmt::format("unknown definition type '{}'", def->getTreeName()),
               def->get_location());
@@ -374,6 +376,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitIndexExpr(idx);
   if (auto *len = llvm::dyn_cast<AST::LenExprAST>(ast))
     return emitLenExpr(len);
+  if (auto *dim = llvm::dyn_cast<AST::DimExprAST>(ast))
+    return emitDimExpr(dim);
   if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))
     return emitDerefExpr(deref);
   if (auto *addrOf = llvm::dyn_cast<AST::AddrOfExprAST>(ast))

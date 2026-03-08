@@ -46,6 +46,9 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
                llvm::isa<TypeClassInstanceAST>(def.get())) {
       // Type class decls/instances don't register top-level names in scope
       continue;
+    } else if (llvm::isa<KernelBlockAST>(def.get())) {
+      // Kernel block contents registered via default visit traversal
+      continue;
     } else
       this->abort("Should not be any other def");
 
@@ -230,6 +233,7 @@ void ScopeGeneratorVisitor::preorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(DimExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
@@ -238,6 +242,7 @@ void ScopeGeneratorVisitor::preorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(KernelBlockAST *ast) {}
 
 // post order
 void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
@@ -381,6 +386,7 @@ void ScopeGeneratorVisitor::postorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(DimExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
   // Qualify struct names in imported generic function bodies
@@ -398,4 +404,5 @@ void ScopeGeneratorVisitor::postorder_walk(WhileExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(KernelBlockAST *ast) {}
 } // namespace sammine_lang::AST

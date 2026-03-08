@@ -1072,6 +1072,30 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   return ast->set_type(Type::I32_t());
 }
 
+Type BiTypeCheckerVisitor::synthesize(DimExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  auto operand_type = ast->operand->accept_synthesis(this);
+  if (operand_type.type_kind != TypeKind::Array) {
+    this->add_error(ast->get_location(),
+                    fmt::format("dim() requires array type, got '{}'",
+                                operand_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  // Walk nested array types to collect all dimensions
+  std::vector<Type> dim_types;
+  Type current = operand_type;
+  while (current.type_kind == TypeKind::Array) {
+    auto &arr = std::get<ArrayType>(current.type_data);
+    dim_types.push_back(Type::I32_t());
+    current = arr.get_element();
+  }
+
+  return ast->set_type(Type::Tuple(std::move(dim_types)));
+}
+
 Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
@@ -1273,6 +1297,9 @@ Type BiTypeCheckerVisitor::synthesize(TypeClassDeclAST *ast) {
   return Type::NonExistent();
 }
 Type BiTypeCheckerVisitor::synthesize(TypeClassInstanceAST *ast) {
+  return Type::NonExistent();
+}
+Type BiTypeCheckerVisitor::synthesize(KernelBlockAST *ast) {
   return Type::NonExistent();
 }
 

@@ -76,6 +76,12 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
       for (auto &method : tci->methods)
         if (!method->Prototype->is_generic())
           pre_register_function(method->Prototype.get());
+    } else if (auto *kb = llvm::dyn_cast<KernelBlockAST>(def.get())) {
+      for (auto &inner_def : kb->definitions) {
+        if (auto *fn = llvm::dyn_cast<FuncDefAST>(inner_def.get()))
+          if (!fn->Prototype->is_generic())
+            pre_register_function(fn->Prototype.get());
+      }
     }
   }
 
@@ -663,6 +669,11 @@ void BiTypeCheckerVisitor::visit(LenExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(DimExprAST *ast) {
+  ast->operand->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 void BiTypeCheckerVisitor::visit(UnaryNegExprAST *ast) {
   ast->operand->accept_vis(this);
   ast->accept_synthesis(this);
@@ -829,6 +840,11 @@ void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
     method->accept_vis(this);
 }
 
+void BiTypeCheckerVisitor::visit(KernelBlockAST *ast) {
+  for (auto &def : ast->definitions)
+    def->accept_vis(this);
+}
+
 // pre order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::preorder_walk(ProgramAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(VarDefAST *ast) {}
@@ -857,6 +873,7 @@ void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(DimExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FieldAccessExprAST *ast) {}
@@ -865,6 +882,7 @@ void BiTypeCheckerVisitor::preorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(KernelBlockAST *ast) {}
 
 // post order — all empty, logic moved to visit() overrides
 void BiTypeCheckerVisitor::postorder_walk(ProgramAST *ast) {}
@@ -894,6 +912,7 @@ void BiTypeCheckerVisitor::postorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(DimExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FieldAccessExprAST *ast) {}
@@ -902,5 +921,6 @@ void BiTypeCheckerVisitor::postorder_walk(WhileExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(KernelBlockAST *ast) {}
 
 } // namespace sammine_lang::AST

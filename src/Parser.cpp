@@ -115,6 +115,7 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
 
   auto result = tryParsers<DefinitionAST>(
       &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
+      &Parser::ParseKernelBlock,
       &Parser::ParseStructDef, &Parser::ParseEnumDef, &Parser::ParseReuseDef,
       &Parser::ParseFuncDef);
 
@@ -906,11 +907,15 @@ auto Parser::ParseLenExpr() -> p<ExprAST> {
   return ParseBuiltinCallExpr<LenExprAST>(TokLen, "len");
 }
 
+auto Parser::ParseDimExpr() -> p<ExprAST> {
+  return ParseBuiltinCallExpr<DimExprAST>(TokDim, "dim");
+}
+
 auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   auto result = tryParsers<ExprAST>(
       &Parser::ParseUnaryNegExpr, &Parser::ParseDerefExpr,
       &Parser::ParseAddrOfExpr, &Parser::ParseAllocExpr, &Parser::ParseFreeExpr,
-      &Parser::ParseLenExpr,
+      &Parser::ParseLenExpr, &Parser::ParseDimExpr,
       &Parser::ParseArrayLiteralExpr, &Parser::ParseIdentifierExpr,
       &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
       &Parser::ParseWhileExpr,
@@ -1839,6 +1844,35 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   return {std::make_unique<TypeClassInstanceAST>(
               kw, name_tok->lexeme, std::move(type_exprs), std::move(methods)),
           SUCCESS};
+}
+
+auto Parser::ParseKernelBlock() -> p<DefinitionAST> {
+  auto kernel_tok = expect(TokKernel);
+  if (!kernel_tok)
+    return {nullptr, NONCOMMITTED};
+
+  REQUIRE(lbrace, TokLeftCurly, "Expected '{' after 'kernel'",
+          kernel_tok->get_location(), {nullptr, FAILED});
+
+  std::vector<std::unique_ptr<DefinitionAST>> defs;
+  while (!tokStream->isEnd() && tokStream->peek()->tok_type != TokRightCurly) {
+    auto [def, status] = ParseFuncDef();
+    if (status == NONCOMMITTED) {
+      imm_error("Expected function definition inside 'kernel' block",
+                tokStream->currentLocation());
+      tokStream->exhaust_until(TokRightCurly);
+      break;
+    }
+    if (def)
+      defs.push_back(std::move(def));
+    if (status == FAILED)
+      break;
+  }
+
+  REQUIRE(rbrace, TokRightCurly, "Expected '}' to close 'kernel' block",
+          kernel_tok->get_location(), {nullptr, FAILED});
+
+  return {std::make_unique<KernelBlockAST>(kernel_tok, std::move(defs)), SUCCESS};
 }
 
 // Parse `::id` tail after an initial ID. Resolves module aliases (e.g. `m::add`

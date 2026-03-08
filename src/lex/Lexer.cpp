@@ -187,10 +187,12 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
         {"false", TokFalse},   {"reuse", TokReuse},   {"export", TokExport},
         {"ptr", TokPtr},
         {"alloc", TokAlloc},   {"free", TokFree},     {"len", TokLen},
+        {"dim", TokDim},
         {"import", TokImport}, {"as", TokAs},
         {"typeclass", TokTypeclass}, {"instance", TokInstance},
         {"while", TokWhile},
         {"case", TokCase},
+        {"kernel", TokKernel},
     };
     auto it = keywords.find(IdentifierStr);
     tokStream->push_back(Token(it != keywords.end() ? it->second : TokID,

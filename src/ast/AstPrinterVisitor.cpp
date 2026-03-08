@@ -77,6 +77,7 @@ public:
   virtual void visit(ArrayLiteralExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
+  virtual void visit(DimExprAST *ast) override;
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
@@ -111,6 +112,7 @@ public:
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
+  virtual void preorder_walk(DimExprAST *ast) override;
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
@@ -119,6 +121,7 @@ public:
   virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
+  virtual void preorder_walk(KernelBlockAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -148,6 +151,7 @@ public:
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
+  virtual void postorder_walk(DimExprAST *ast) override;
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
@@ -156,9 +160,11 @@ public:
   virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
+  virtual void postorder_walk(KernelBlockAST *ast) override;
 
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
+  virtual void visit(KernelBlockAST *ast) override;
 
   void safeguard_visit(AstBase *ast, const std::string &msg) {
     if (ast)
@@ -569,9 +575,19 @@ void AstPrinterVisitor::visit(LenExprAST *ast) {
 void AstPrinterVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(IndexExprAST *ast) {}
 void AstPrinterVisitor::preorder_walk(LenExprAST *ast) {}
+void AstPrinterVisitor::preorder_walk(DimExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(IndexExprAST *ast) {}
 void AstPrinterVisitor::postorder_walk(LenExprAST *ast) {}
+void AstPrinterVisitor::postorder_walk(DimExprAST *ast) {}
+
+void AstPrinterVisitor::visit(DimExprAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
 
 void AstPrinterVisitor::visit(UnaryNegExprAST *ast) {
   generic_preprintln(ast);
@@ -700,5 +716,18 @@ void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
 }
 void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
 void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
+
+void AstPrinterVisitor::visit(KernelBlockAST *ast) {
+  generic_preprintln(ast);
+  ast->walk_with_preorder(this);
+  for (auto &def : ast->definitions)
+    def->accept_vis(this);
+  ast->walk_with_postorder(this);
+  generic_postprint();
+}
+void AstPrinterVisitor::preorder_walk(KernelBlockAST *ast) {
+  add_to_rep(fmt::format("{}kernel\n", tabs()));
+}
+void AstPrinterVisitor::postorder_walk(KernelBlockAST *ast) {}
 
 } // namespace sammine_lang::AST

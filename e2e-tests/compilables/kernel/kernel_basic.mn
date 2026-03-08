@@ -1,0 +1,13 @@
+// RUN: %sammine -f %full 2>&1 | %check %s
+import io;
+
+kernel {
+  fn add(a: i32, b: i32) -> i32 = a + b
+}
+
+fn main() -> i32 {
+  let x = add(3, 4)
+  io::print_int(x)
+  0
+}
+// CHECK: 7

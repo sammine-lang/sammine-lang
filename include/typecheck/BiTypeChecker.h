@@ -144,6 +144,7 @@ public:
   virtual void visit(ArrayLiteralExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
+  virtual void visit(DimExprAST *ast) override;
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
@@ -152,6 +153,7 @@ public:
   virtual void visit(TupleLiteralExprAST *ast) override;
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
+  virtual void visit(KernelBlockAST *ast) override;
 
   // Type class data structures
   struct TypeClassInfo {
@@ -225,6 +227,7 @@ public:
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
+  virtual void preorder_walk(DimExprAST *ast) override;
   virtual void preorder_walk(UnaryNegExprAST *ast) override;
   virtual void preorder_walk(StructLiteralExprAST *ast) override;
   virtual void preorder_walk(FieldAccessExprAST *ast) override;
@@ -233,6 +236,7 @@ public:
   virtual void preorder_walk(TupleLiteralExprAST *ast) override;
   virtual void preorder_walk(TypeClassDeclAST *ast) override;
   virtual void preorder_walk(TypeClassInstanceAST *ast) override;
+  virtual void preorder_walk(KernelBlockAST *ast) override;
 
   // post order
   virtual void postorder_walk(ProgramAST *ast) override;
@@ -262,6 +266,7 @@ public:
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
+  virtual void postorder_walk(DimExprAST *ast) override;
   virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
   virtual void postorder_walk(FieldAccessExprAST *ast) override;
@@ -270,6 +275,7 @@ public:
   virtual void postorder_walk(TupleLiteralExprAST *ast) override;
   virtual void postorder_walk(TypeClassDeclAST *ast) override;
   virtual void postorder_walk(TypeClassInstanceAST *ast) override;
+  virtual void postorder_walk(KernelBlockAST *ast) override;
 
   virtual Type synthesize(ProgramAST *ast) override;
   virtual Type synthesize(VarDefAST *ast) override;
@@ -298,6 +304,7 @@ public:
   virtual Type synthesize(ArrayLiteralExprAST *ast) override;
   virtual Type synthesize(IndexExprAST *ast) override;
   virtual Type synthesize(LenExprAST *ast) override;
+  virtual Type synthesize(DimExprAST *ast) override;
   virtual Type synthesize(UnaryNegExprAST *ast) override;
   virtual Type synthesize(StructLiteralExprAST *ast) override;
   virtual Type synthesize(FieldAccessExprAST *ast) override;
@@ -306,6 +313,7 @@ public:
   virtual Type synthesize(TupleLiteralExprAST *ast) override;
   virtual Type synthesize(TypeClassDeclAST *ast) override;
   virtual Type synthesize(TypeClassInstanceAST *ast) override;
+  virtual Type synthesize(KernelBlockAST *ast) override;
 
   Type resolve_type_expr(TypeExprAST *type_expr) {
     if (!type_expr)

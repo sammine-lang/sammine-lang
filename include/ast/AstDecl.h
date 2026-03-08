@@ -37,6 +37,7 @@ class FreeExprAST;
 class ArrayLiteralExprAST;
 class IndexExprAST;
 class LenExprAST;
+class DimExprAST;
 class UnaryNegExprAST;
 class StructLiteralExprAST;
 class FieldAccessExprAST;
@@ -47,6 +48,7 @@ class EnumDefAST;
 class TypeAliasDefAST;
 class TypeClassDeclAST;
 class TypeClassInstanceAST;
+class KernelBlockAST;
 
 } // namespace AST
 } // namespace sammine_lang

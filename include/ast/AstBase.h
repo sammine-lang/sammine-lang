@@ -54,6 +54,7 @@ enum class NodeKind {
   ArrayLiteralExprAST,
   IndexExprAST,
   LenExprAST,
+  DimExprAST,
   UnaryNegExprAST,
   StructLiteralExprAST,
   FieldAccessExprAST,
@@ -71,7 +72,8 @@ enum class NodeKind {
   TypeAliasDefAST,
   TypeClassDeclAST,
   TypeClassInstanceAST,
-  LastDef = TypeClassInstanceAST,
+  KernelBlockAST,
+  LastDef = KernelBlockAST,
 };
 
 class Visitable;
@@ -206,6 +208,10 @@ public:
   virtual void preorder_walk(LenExprAST *ast) = 0;
   virtual void postorder_walk(LenExprAST *ast) = 0;
 
+  virtual void visit(DimExprAST *ast);
+  virtual void preorder_walk(DimExprAST *ast) = 0;
+  virtual void postorder_walk(DimExprAST *ast) = 0;
+
   virtual void visit(UnaryNegExprAST *ast);
   virtual void preorder_walk(UnaryNegExprAST *ast) = 0;
   virtual void postorder_walk(UnaryNegExprAST *ast) = 0;
@@ -237,6 +243,10 @@ public:
   virtual void visit(TypeClassInstanceAST *ast);
   virtual void preorder_walk(TypeClassInstanceAST *ast) = 0;
   virtual void postorder_walk(TypeClassInstanceAST *ast) = 0;
+
+  virtual void visit(KernelBlockAST *ast);
+  virtual void preorder_walk(KernelBlockAST *ast) = 0;
+  virtual void postorder_walk(KernelBlockAST *ast) = 0;
 
   virtual ~ASTVisitor() = 0;
 };
@@ -340,6 +350,7 @@ public:
   virtual Type synthesize(ArrayLiteralExprAST *ast) = 0;
   virtual Type synthesize(IndexExprAST *ast) = 0;
   virtual Type synthesize(LenExprAST *ast) = 0;
+  virtual Type synthesize(DimExprAST *ast) = 0;
   virtual Type synthesize(UnaryNegExprAST *ast) = 0;
   virtual Type synthesize(StructLiteralExprAST *ast) = 0;
   virtual Type synthesize(FieldAccessExprAST *ast) = 0;
@@ -348,6 +359,7 @@ public:
   virtual Type synthesize(TupleLiteralExprAST *ast) = 0;
   virtual Type synthesize(TypeClassDeclAST *ast) = 0;
   virtual Type synthesize(TypeClassInstanceAST *ast) = 0;
+  virtual Type synthesize(KernelBlockAST *ast) = 0;
 
   virtual ~TypeCheckerVisitor() = 0;
 };

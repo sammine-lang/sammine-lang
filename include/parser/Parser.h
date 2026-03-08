@@ -118,6 +118,7 @@ public:
   [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassDecl() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseTypeClassInstance() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseKernelBlock() -> p<DefinitionAST>;
 
   // Parse type
   [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;
@@ -139,6 +140,7 @@ public:
   [[nodiscard]] auto ParseAllocExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseFreeExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseLenExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseDimExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIdentifierExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,

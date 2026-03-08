@@ -73,6 +73,7 @@ enum TokenType {
   TokAlloc,  // alloc
   TokFree,   // free
   TokLen,    // len
+  TokDim,    // dim
   TokArrow,  // ->
   TokLet,    // let
   TokMUT,    // mut
@@ -83,6 +84,7 @@ enum TokenType {
   TokEllipsis,  // ...
   TokTypeclass, // typeclass
   TokInstance,  // instance
+  TokKernel,    // kernel
   TokCase,      // case
   TokFatArrow,  // =>
   // TokID
@@ -167,6 +169,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokAlloc, "alloc"},
     {TokFree, "free"},
     {TokLen, "len"},
+    {TokDim, "dim"},
     {TokReuse, "reuse"},
     {TokExport, "export"},
     {TokImport, "import"},
@@ -174,6 +177,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokEllipsis, "..."},
     {TokTypeclass, "typeclass"},
     {TokInstance, "instance"},
+    {TokKernel, "kernel"},
     {TokCase, "case"},
     {TokFatArrow, "=>"},
     {TokID, "identifier"},
