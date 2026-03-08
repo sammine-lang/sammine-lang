@@ -63,9 +63,9 @@ public:
   IndexPair get_lines_indices_with_radius() const {
     auto [line_start, line_end] = get_lines_indices();
     line_start = line_start > context_radius ? line_start - context_radius : 0;
-    line_end = line_end + context_radius <= int64_t(data.size()) - 1
+    line_end = line_end + context_radius <= static_cast<int64_t>(data.size()) - 1
                    ? line_end + context_radius
-                   : data.size() - 1;
+                   : static_cast<int64_t>(data.size()) - 1;
 
     return {line_start, line_end};
   }
@@ -74,14 +74,14 @@ public:
   get_start_end_of_singular_line_token() const {
     auto [start, end] = source_start_end;
     auto num_row = source_index_to_line(start) - 1;
-    auto num_col = start - data[num_row].first;
+    auto num_col = start - data[static_cast<size_t>(num_row)].first;
     return {num_row, num_col, num_col + end - start};
   }
 
   IndexPair get_row_col() const {
     auto [start, end] = source_start_end;
     auto num_row = source_index_to_line(start) - 1;
-    auto num_col = start - data[num_row].first;
+    auto num_col = start - data[static_cast<size_t>(num_row)].first;
     return {num_row, num_col};
   }
 
@@ -229,15 +229,15 @@ void Reporter::report_singular_line(ReportKind report_kind,
 void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
                                         int64_t col_end) {
 
-  for (int64_t j = 0; j < col_start; j++)
+  for (size_t j = 0; j < static_cast<size_t>(col_start); j++)
     fmt::print(stderr, "{}", msg[j]);
-  for (int64_t j = col_start; j < col_end; j++) {
+  for (size_t j = static_cast<size_t>(col_start); j < static_cast<size_t>(col_end); j++) {
     if (sammine_util::stderr_is_tty())
       fmt::print(stderr, fmt::emphasis::bold, "{}", msg[j]);
     else
       fmt::print(stderr, "{}", msg[j]);
   }
-  for (size_t j = col_end; j < msg.size(); j++)
+  for (size_t j = static_cast<size_t>(col_end); j < msg.size(); j++)
     fmt::print(stderr, "{}", msg[j]);
 
   fmt::print(stderr, "\n");
@@ -270,7 +270,7 @@ void Reporter::report_single_msg(const Location &loc,
   }
   for (auto i = new_start; i <= new_end; i++) {
     print_fmt(LINE_COLOR, "{:>4}|", i + 1);
-    std::string_view str = diag_data[i].second;
+    std::string_view str = diag_data[static_cast<size_t>(i)].second;
 
     if (locator.is_on_singular_line(i)) {
       print_data_singular_line(str, col_start, col_end);
@@ -325,7 +325,7 @@ static void render_clusters(
         auto [r, c] = locator.get_row_col();
         row = r;
         cs = c;
-        ce = static_cast<int64_t>(diag_data[r].second.size());
+        ce = static_cast<int64_t>(diag_data[static_cast<size_t>(r)].second.size());
       }
       auto msgs = g.msgs;
       if (dev_mode) {
@@ -351,7 +351,7 @@ static void render_clusters(
 
     for (int64_t i = cluster.line_start; i <= cluster.line_end; i++) {
       Reporter::print_fmt(Reporter::LINE_COLOR, "{:>4}|", i + 1);
-      std::string_view str = diag_data[i].second;
+      std::string_view str = diag_data[static_cast<size_t>(i)].second;
       auto it = line_anns.find(i);
       if (it == line_anns.end() || it->second.empty()) {
         fmt::print(stderr, "{}\n", str);

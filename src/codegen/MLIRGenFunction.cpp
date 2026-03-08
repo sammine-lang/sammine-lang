@@ -79,7 +79,7 @@ MLIRGenImpl::getOrCreateClosureWrapper(const std::string &funcName,
 
   // Forward all args except env (arg 0) to the original func.func
   llvm::SmallVector<mlir::Value> forwardArgs;
-  for (size_t i = 1; i < entryBlock.getNumArguments(); i++)
+  for (unsigned i = 1; i < entryBlock.getNumArguments(); i++)
     forwardArgs.push_back(entryBlock.getArgument(i));
 
   emitFuncCallAndLLVMReturn(funcName, ft.get_return_type(), forwardArgs,
@@ -152,7 +152,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   // All params get llvm.alloca + llvm.store (uniform model)
   for (size_t i = 0; i < ast->Prototype->parameterVectors.size(); ++i) {
     auto &param = ast->Prototype->parameterVectors[i];
-    auto argVal = entryBlock.getArgument(i);
+    auto argVal = entryBlock.getArgument(static_cast<unsigned>(i));
     auto alloca = emitAllocaOne(argVal.getType(), location);
     mlir::LLVM::StoreOp::create(builder, location, argVal, alloca);
     symbolTable.registerNameT(param->name, alloca);
@@ -320,7 +320,7 @@ mlir::Value MLIRGenImpl::emitPartialApplication(
       fullArgs.push_back(loaded);
     }
     // Forward remaining args
-    for (size_t i = 1; i < entryBlock.getNumArguments(); i++)
+    for (unsigned i = 1; i < entryBlock.getNumArguments(); i++)
       fullArgs.push_back(entryBlock.getArgument(i));
 
     // Call original function and return

@@ -64,7 +64,7 @@ class Compiler {
   enum class State { Running, Finished, Error };
 
   sammine_util::Reporter reporter;
-  size_t context_radius = 2;
+  int64_t context_radius = 2;
   State state_ = State::Running;
   bool has_main = false;
   bool from_string = false;
@@ -231,22 +231,22 @@ void Compiler::resolve_imports() {
   std::set<std::string> imported_modules;
 
   // Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
-  auto find_mn = [&](const std::string &mod_name,
+  auto find_mn = [&](const std::string &name,
                      const std::filesystem::path &src_dir)
       -> std::filesystem::path {
-    std::filesystem::path p = mod_name + ".mn";
+    std::filesystem::path p = name + ".mn";
     if (std::filesystem::exists(p))
       return p;
     for (auto &ipath : import_paths) {
-      auto c = std::filesystem::path(ipath) / (mod_name + ".mn");
+      auto c = std::filesystem::path(ipath) / (name + ".mn");
       if (std::filesystem::exists(c))
         return c;
     }
-    p = src_dir / (mod_name + ".mn");
+    p = src_dir / (name + ".mn");
     if (std::filesystem::exists(p))
       return p;
     if (!stdlib_dir.empty()) {
-      p = stdlib_dir / (mod_name + ".mn");
+      p = stdlib_dir / (name + ".mn");
       if (std::filesystem::exists(p))
         return p;
     }
@@ -259,19 +259,19 @@ void Compiler::resolve_imports() {
   //   defs and type defs needed by the monomorphizer — no link artifact.
   std::function<bool(const std::string &, const std::filesystem::path &,
                      const sammine_util::Location &, bool)>
-      import_module = [&](const std::string &mod_name,
+      import_module = [&](const std::string &name,
                           const std::filesystem::path &src_dir,
                           const sammine_util::Location &loc,
                           bool is_transitive) -> bool {
-    if (imported_modules.count(mod_name))
+    if (imported_modules.count(name))
       return true;
-    imported_modules.insert(mod_name);
+    imported_modules.insert(name);
 
-    auto mn_path = find_mn(mod_name, src_dir);
+    auto mn_path = find_mn(name, src_dir);
     if (mn_path.empty()) {
       if (!is_transitive) {
         reporter.immediate_error(
-            fmt::format("Cannot find module '{}.mn'", mod_name), loc);
+            fmt::format("Cannot find module '{}.mn'", name), loc);
         set_error();
       }
       return false;
@@ -284,7 +284,7 @@ void Compiler::resolve_imports() {
     Lexer mn_lexer(mn_input, si);
     auto mn_tok_stream = mn_lexer.getTokenStream();
     Parser mn_parser(mn_tok_stream);
-    mn_parser.alias_to_module[mod_name] = mod_name;
+    mn_parser.alias_to_module[name] = name;
     auto mn_program = mn_parser.Parse();
 
     if (mn_parser.has_errors()) {
@@ -314,7 +314,7 @@ void Compiler::resolve_imports() {
         if (!is_transitive && !fd->is_exported && !is_generic)
           continue; // direct: skip non-exported non-generic
         fd->Prototype->functionName =
-            fd->Prototype->functionName.with_module(mod_name);
+            fd->Prototype->functionName.with_module(name);
 
         if (is_generic) {
           programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
@@ -331,19 +331,19 @@ void Compiler::resolve_imports() {
         if (is_transitive || !ext->is_exposed)
           continue;
         ext->Prototype->functionName =
-            ext->Prototype->functionName.with_module(mod_name);
+            ext->Prototype->functionName.with_module(name);
         programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                          std::move(def));
       } else if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
         if (!sd->is_exported)
           continue;
-        sd->struct_name = sd->struct_name.with_module(mod_name);
+        sd->struct_name = sd->struct_name.with_module(name);
         programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                          std::move(def));
       } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
         if (!ed->is_exported)
           continue;
-        ed->enum_name = ed->enum_name.with_module(mod_name);
+        ed->enum_name = ed->enum_name.with_module(name);
         programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                          std::move(def));
       } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {
@@ -373,7 +373,7 @@ void Compiler::resolve_imports() {
       std::filesystem::path obj_path;
       auto find_lib = [&](const std::filesystem::path &dir) -> bool {
         for (auto &ext : lib_exts) {
-          auto candidate = dir / (mod_name + ext);
+          auto candidate = dir / (name + ext);
           if (std::filesystem::exists(candidate)) {
             obj_path = candidate;
             return true;

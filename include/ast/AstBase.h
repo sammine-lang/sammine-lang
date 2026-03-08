@@ -446,11 +446,11 @@ public:
     return this;
   }
 
-  AstBase *join_location(sammine_util::Location location) {
-    if (location.source_start <= 0 && location.source_end <= 0)
+  AstBase *join_location(sammine_util::Location loc) {
+    if (loc.source_start <= 0 && loc.source_end <= 0)
       return this;
 
-    change_location(location);
+    change_location(loc);
     return this;
   }
   sammine_util::Location get_location() const { return this->location; }

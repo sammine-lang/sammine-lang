@@ -755,7 +755,7 @@ mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
     auto fieldIdx = st.get_field_index(ast->field_names[i]);
     auto val = emitRValue(ast->field_values[i].get());
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
-                                            fieldIdx.value());
+                                            static_cast<int64_t>(fieldIdx.value()));
   }
   return agg;
 }
@@ -766,7 +766,7 @@ mlir::Value MLIRGenImpl::emitFieldAccessExpr(AST::FieldAccessExprAST *ast) {
   auto fieldIdx = st.get_field_index(ast->field_name);
   auto fieldType = convertType(st.get_field_type(fieldIdx.value()));
   return mlir::LLVM::ExtractValueOp::create(builder, loc(ast), fieldType,
-                                            objVal, fieldIdx.value());
+                                            objVal, static_cast<int64_t>(fieldIdx.value()));
 }
 
 mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {

@@ -105,7 +105,7 @@ public:
             if (chk.type == Check::NEXT) {
                 // Must match the very next line
                 if (last_match_line + 1 < static_cast<int>(input_lines.size())) {
-                    size_t next_line = last_match_line + 1;
+                    size_t next_line = static_cast<size_t>(last_match_line + 1);
                     if (match_pattern(input_lines[next_line], chk.pattern)) {
                         // Check pending NOT patterns
                         bool not_failed = false;
@@ -124,7 +124,7 @@ public:
 
                         found = true;
                         input_idx = next_line + 1;
-                        last_match_line = next_line;
+                        last_match_line = static_cast<int>(next_line);
                         if (verbose_) {
                             std::cerr << chk.prefix << "-NEXT: matched at line " << (next_line + 1) << "\n";
                         }
@@ -136,7 +136,7 @@ public:
                     std::cerr << "  From check file line " << chk.line_number << "\n";
                     if (last_match_line + 1 < static_cast<int>(input_lines.size())) {
                         std::cerr << "  Actual next line (line " << (last_match_line + 2) << "): "
-                                  << input_lines[last_match_line + 1] << "\n";
+                                  << input_lines[static_cast<size_t>(last_match_line + 1)] << "\n";
                     } else {
                         std::cerr << "  No more input lines (expected more output)\n";
                     }
@@ -145,7 +145,7 @@ public:
             } else if (chk.type == Check::SAME) {
                 // Must match on the same line as previous match
                 if (last_match_line >= 0 && last_match_line < static_cast<int>(input_lines.size())) {
-                    if (match_pattern(input_lines[last_match_line], chk.pattern)) {
+                    if (match_pattern(input_lines[static_cast<size_t>(last_match_line)], chk.pattern)) {
                         found = true;
                         if (verbose_) {
                             std::cerr << chk.prefix << "-SAME: matched at line " << (last_match_line + 1) << "\n";
@@ -158,7 +158,7 @@ public:
                     std::cerr << "  From check file line " << chk.line_number << "\n";
                     if (last_match_line >= 0) {
                         std::cerr << "  Actual line (line " << (last_match_line + 1) << "): "
-                                  << input_lines[last_match_line] << "\n";
+                                  << input_lines[static_cast<size_t>(last_match_line)] << "\n";
                     }
                     return false;
                 }
@@ -184,7 +184,7 @@ public:
 
                         found = true;
                         input_idx = i + 1;
-                        last_match_line = i;
+                        last_match_line = static_cast<int>(i);
                         if (verbose_) {
                             std::cerr << chk.prefix << ": matched at line " << (i + 1) << "\n";
                         }
@@ -308,13 +308,13 @@ public:
         std::vector<std::string> result;
         if (last_run_idx >= 0) {
             // Insert after the last RUN line
-            for (int i = 0; i <= last_run_idx; i++) {
+            for (size_t i = 0; i <= static_cast<size_t>(last_run_idx); i++) {
                 result.push_back(filtered_lines[i]);
             }
             for (const auto &cl : check_lines) {
                 result.push_back(cl);
             }
-            for (size_t i = last_run_idx + 1; i < filtered_lines.size(); i++) {
+            for (size_t i = static_cast<size_t>(last_run_idx) + 1; i < filtered_lines.size(); i++) {
                 result.push_back(filtered_lines[i]);
             }
         } else {

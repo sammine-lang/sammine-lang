@@ -79,7 +79,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         fields.push_back(builder.getI32Type());
         if (max_payload_size > 0)
           fields.push_back(mlir::LLVM::LLVMArrayType::get(
-              builder.getI8Type(), max_payload_size));
+              builder.getI8Type(), static_cast<uint64_t>(max_payload_size)));
         auto enumTy = mlir::LLVM::LLVMStructType::getIdentified(
             builder.getContext(), "sammine.enum." + name);
         (void)enumTy.setBody(fields, /*isPacked=*/false);
@@ -134,7 +134,7 @@ mlir::Location MLIRGenImpl::loc(AST::AstBase *ast) {
       std::make_pair(srcLoc.source_start, std::string_view("")), cmp);
   int64_t lineIdx =
       std::max(int64_t(it - diagnosticData.begin()), int64_t(1)) - 1;
-  int64_t col = srcLoc.source_start - diagnosticData[lineIdx].first;
+  int64_t col = srcLoc.source_start - diagnosticData[static_cast<size_t>(lineIdx)].first;
 
   // FileLineColLoc uses 1-based line and 0-based column
   return mlir::FileLineColLoc::get(builder.getContext(), fileName,
@@ -640,8 +640,7 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     int64_t size = 0;
     for (auto &ft : st.get_field_types()) {
       int64_t fieldSize = getTypeSize(ft);
-      int64_t align = fieldSize; // natural alignment
-      size = llvm::alignTo(size, align);
+      size = static_cast<int64_t>(llvm::alignTo(size, fieldSize));
       size += fieldSize;
     }
     // Align total to largest field alignment
@@ -649,7 +648,7 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
       int64_t maxAlign = 0;
       for (auto &ft : st.get_field_types())
         maxAlign = std::max(maxAlign, getTypeSize(ft));
-      size = llvm::alignTo(size, maxAlign);
+      size = static_cast<int64_t>(llvm::alignTo(size, maxAlign));
     }
     return size;
   }
@@ -669,15 +668,14 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     int64_t size = 0;
     for (auto &et : tt.get_element_types()) {
       int64_t fieldSize = getTypeSize(et);
-      int64_t align = fieldSize;
-      size = llvm::alignTo(size, align);
+      size = static_cast<int64_t>(llvm::alignTo(size, fieldSize));
       size += fieldSize;
     }
     if (!tt.get_element_types().empty()) {
       int64_t maxAlign = 0;
       for (auto &et : tt.get_element_types())
         maxAlign = std::max(maxAlign, getTypeSize(et));
-      size = llvm::alignTo(size, maxAlign);
+      size = static_cast<int64_t>(llvm::alignTo(size, maxAlign));
     }
     return size;
   }
@@ -710,7 +708,7 @@ int64_t MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_type
   int64_t size = 0;
   for (auto &pt : payload_types) {
     int64_t fieldSize = getTypeSize(pt);
-    size = llvm::alignTo(size, fieldSize);
+    size = static_cast<int64_t>(llvm::alignTo(size, fieldSize));
     size += fieldSize;
   }
   return size;
@@ -718,7 +716,7 @@ int64_t MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_type
 
 int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset, const Type &field_type) {
   int64_t fieldSize = getTypeSize(field_type);
-  byte_offset = llvm::alignTo(byte_offset, fieldSize);
+  byte_offset = static_cast<int64_t>(llvm::alignTo(byte_offset, fieldSize));
   int64_t offset = byte_offset;
   byte_offset += fieldSize;
   return offset;
