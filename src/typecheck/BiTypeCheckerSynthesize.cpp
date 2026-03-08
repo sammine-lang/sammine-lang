@@ -1554,8 +1554,8 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   auto &et = std::get<EnumType>(scrutinee_type.type_data);
 
   // 2. Process each arm: validate pattern, type-check body with bindings in scope
-  // Capture the enclosing function scope so return statements work inside arms
-  auto enclosing_scope = id_to_type.top().s;
+  // ASTContext is inherited on enter_new_scope(), so enclosing_function
+  // is automatically available inside arm scopes — no manual capture needed.
 
   Type result_type = Type::Never();
   bool had_error = false;
@@ -1564,8 +1564,6 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     if (arm.pattern.is_wildcard) {
       // Wildcard: no bindings, just type-check the body
       enter_new_scope();
-      if (enclosing_scope.has_value())
-        id_to_type.top().setScope(enclosing_scope.value());
       arm.body->accept_vis(this);
       auto arm_type = arm.body->accept_synthesis(this);
       exit_new_scope();
@@ -1621,8 +1619,6 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
 
     // Enter a new scope and register bindings with their payload types
     enter_new_scope();
-    if (enclosing_scope.has_value())
-      id_to_type.top().setScope(enclosing_scope.value());
     for (size_t i = 0; i < arm.pattern.bindings.size(); i++) {
       id_to_type.registerNameT(arm.pattern.bindings[i], vi.payload_types[i]);
     }

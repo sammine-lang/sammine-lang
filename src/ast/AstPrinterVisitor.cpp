@@ -32,10 +32,14 @@ class AstPrinterVisitor : public ScopedASTVisitor {
   void trim_rep();
 
 public:
-  virtual void enter_new_scope() override { current_tabs += tab; }
+  virtual void enter_new_scope() override {
+    push_ast_context();
+    current_tabs += tab;
+  }
   virtual void exit_new_scope() override {
     current_tabs.pop_back();
     current_tabs.pop_back();
+    pop_ast_context();
   }
 
   virtual void visit(ProgramAST *ast) override;

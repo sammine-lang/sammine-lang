@@ -11,8 +11,9 @@ Both passes run in `Compiler::semantics()` (`src/compiler/Compiler.cpp`). Each c
 First semantic pass — builds lexical symbol table, validates all referenced names exist.
 
 ### Core Data
-- **Scope stack**: `LexicalStack<Location, FuncDefAST*>` — registers names + source locations
-- **`variant_to_enum`**: `std::map<std::string, std::string>` — maps variant name → enum name (e.g. `"Red"` → `"Color"`). Populated in `preorder_walk(ProgramAST*)` so unqualified variants can be rewritten to qualified form.
+- **Scope stack**: `LexicalStack<Location>` — registers names + source locations
+- **ASTContext** (via `ScopedASTVisitor::ctx()`) — tracks `in_imported_def`, `import_module`, `generic_type_params` for imported definition qualification. Pushed/popped automatically with `enter_new_scope()`/`exit_new_scope()`.
+- **`variant_to_enum`**: `std::map<std::string, std::vector<QualifiedName>>` — maps variant name → owning enum names. Populated in `preorder_walk(ProgramAST*)` so unqualified variants can be rewritten to qualified form.
 
 ### Key Methods
 
@@ -22,7 +23,7 @@ First semantic pass — builds lexical symbol table, validates all referenced na
 
 **`preorder_walk(PrototypeAST*)`** — Registers function name in **parent** scope (via `register_name_parent()`/`can_see_parent()`) so it's visible at call-site level, not inside its own body. Registers each parameter in current scope; errors on duplicate params.
 
-**`visit(ExternAST*)`** — Custom override: pushes scope, walks extern, visits prototype, pops scope.
+**`visit(ExternAST*)`** — Custom override: uses `enter_new_scope()`/`exit_new_scope()` (pushes ASTContext + scope stack), walks extern, visits prototype.
 
 **`postorder_walk(CallExprAST*)`** — Skips calls with `explicit_type_args` (typeclass calls like `sizeof<i32>()` — resolved by type checker). Unresolved qualified names (e.g. `mod::func`): checks if module prefix (`get_module()`) is in scope, else emits "Module 'X' is not imported". **Unqualified enum variant rewrite**: looks up `functionName.get_name()` in `variant_to_enum`; if found, rewrites to qualified form (e.g. `Red(1)` → `Color::Red(1)`). Normal lookup via `can_see()` (recursive, includes current scope) — finds both top-level functions and function-typed params. Qualified names with known qualifier prefix (`get_qualifier()`) are allowed through (deferred to type checker). For 3-part names like `module::enum::variant`, `get_qualifier()` returns `"module::enum"` which is the registered enum name in scope.
 
@@ -45,7 +46,7 @@ Second semantic pass — enforces reserved identifier rules, inserts implicit re
 ### Core Data
 - **`func_blocks`**: `std::map<BlockAST*, bool>` — maps function body blocks → whether they return unit. Populated via `ast->returnsUnit()`.
 - **`returned`**: `bool` — tracks explicit `return` in current function body. Reset on non-function block entry and after processing each function block.
-- **`scope_stack`**: `LexicalStack<Location, FuncDefAST*>` — only used for scope push/pop infrastructure, not lookups.
+- **`scope_stack`**: `LexicalStack<Location>` — only used for scope push/pop infrastructure, not lookups.
 
 ### Reserved Identifier Checking
 

@@ -17,7 +17,6 @@ namespace sammine_lang {
 
 namespace AST {
 
-class TypingContext : public LexicalContext<Type, AST::FuncDefAST *> {};
 class BiTypeCheckerVisitor : public ScopedASTVisitor,
                              public TypeCheckerVisitor {
   /// INFO: Ok let's talk about error propagation in this checker.
@@ -29,10 +28,10 @@ class BiTypeCheckerVisitor : public ScopedASTVisitor,
 public:
   ASTProperties &props_;
   // INFO: x, y, z
-  LexicalStack<Type, AST::FuncDefAST *> id_to_type;
+  LexicalStack<Type> id_to_type;
 
   // INFO: i64, f64 bla bla bla
-  LexicalStack<Type, AST::FuncDefAST *> typename_to_type;
+  LexicalStack<Type> typename_to_type;
   TypeMapOrdering type_map_ordering;
 
   // Generic function support
@@ -58,6 +57,7 @@ public:
   bool contains_type_param(const Type &type, const std::string &param_name);
 
   virtual void enter_new_scope() override {
+    push_ast_context();
     id_to_type.push_context();
     typename_to_type.push_context();
 
@@ -74,6 +74,7 @@ public:
   virtual void exit_new_scope() override {
     id_to_type.pop();
     typename_to_type.pop();
+    pop_ast_context();
   }
   BiTypeCheckerVisitor(ASTProperties &props) : props_(props) {
     this->enter_new_scope();
@@ -81,7 +82,6 @@ public:
   }
 
   std::optional<Type> get_type_from_id(const std::string &str) const {
-
     const auto &id_name_top = id_to_type.top();
     if (id_name_top.queryName(str) == nameNotFound) {
       sammine_util::abort(
@@ -91,7 +91,6 @@ public:
   }
 
   std::optional<Type> get_type_from_id_parent(const std::string &str) const {
-
     const auto &id_name_top = *id_to_type.top().parent_scope;
     if (id_name_top.queryName(str) == nameNotFound) {
       sammine_util::abort(

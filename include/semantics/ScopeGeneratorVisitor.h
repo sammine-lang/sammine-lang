@@ -13,15 +13,10 @@ public:
   using ScopedASTVisitor::visit;
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
-  LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
+  LexicalStack<sammine_util::Location> scope_stack;
   // variant_name → list of owning enum QualifiedNames
   std::map<std::string, std::vector<sammine_util::QualifiedName>> variant_to_enum;
-  // Track when we're inside an imported definition whose type expressions
-  // need module-qualifying (imported generic functions and imported externs)
-  bool insideImportedDef_ = false;
-  std::string currentImportModule_;
-  // Type params of the current imported generic function (skip qualification)
-  std::vector<std::string> currentGenericTypeParams_;
+
   ScopeGeneratorVisitor() {
     scope_stack.push_context();
   }
@@ -30,8 +25,14 @@ public:
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
 
-  virtual void enter_new_scope() override { this->scope_stack.push_context(); }
-  virtual void exit_new_scope() override { this->scope_stack.pop_context(); }
+  virtual void enter_new_scope() override {
+    push_ast_context();
+    this->scope_stack.push_context();
+  }
+  virtual void exit_new_scope() override {
+    this->scope_stack.pop_context();
+    pop_ast_context();
+  }
   NameQueryResult can_see(const std::string &symbol) const {
     return this->scope_stack.recursiveQueryName(symbol);
   }
@@ -64,7 +65,7 @@ public:
   virtual void visit(TypeClassDeclAST *ast) override {}
   virtual void visit(TypeClassInstanceAST *ast) override {}
 
-  // INFO: CheckAndReg extern name
+  // INFO: CheckAndReg extern name — uses enter/exit_new_scope for ASTContext
   virtual void visit(ExternAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
   // INFO: CheckAndReg function name, enter new block

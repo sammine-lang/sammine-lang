@@ -89,8 +89,7 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
 
 void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   enter_new_scope();
-  id_to_type.top().setScope(ast);
-  typename_to_type.top().setScope(ast);
+  ctx().enclosing_function = ast;
 
   if (ast->Prototype->is_var_arg) {
     this->add_error(
@@ -517,7 +516,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
   // into array elements before they default to i32.
   if (auto *arr_lit =
           llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
-    auto scope_fn = this->id_to_type.top().s.value();
+    auto scope_fn = this->ctx().enclosing_function;
     auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type.type_kind == TypeKind::Array) {
@@ -568,7 +567,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
     ast->return_expr->accept_vis(this);
   ast->accept_synthesis(this);
   auto t = ast->return_expr->accept_synthesis(this);
-  auto scope_fn = this->id_to_type.top().s.value();
+  auto scope_fn = this->ctx().enclosing_function;
   auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
@@ -840,6 +839,7 @@ void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
 void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {
   // Kernel defs: CPU visitors see the prototype but don't recurse into kernel body
   enter_new_scope();
+  ctx().enclosing_kernel = ast;
   ast->Prototype->accept_vis(this);
   ast->accept_synthesis(this);
   exit_new_scope();

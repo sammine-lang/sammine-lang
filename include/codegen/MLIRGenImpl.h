@@ -61,7 +61,7 @@ public:
     sammine_util::abort(msg);
   }
 
-  AST::LexicalStack<mlir::Value, std::monostate> symbolTable;
+  AST::LexicalStack<mlir::Value> symbolTable;
 
   int strCounter = 0;
   int constArrayCounter = 0;

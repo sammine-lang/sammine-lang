@@ -154,7 +154,7 @@ Plus add `emitXxxExpr()` to `MLIRGenExpr.cpp` and `dynamic_cast` dispatch in `em
 
 ### Key Patterns
 - `proto->get_type()` is full `FunctionType` — extract return via `std::get<FunctionType>(proto->get_type().type_data).get_return_type()`
-- Uses `LexicalStack<mlir::Value, std::monostate>` for scoped variables
+- Uses `LexicalStack<mlir::Value>` for scoped variables
 - Generic functions skipped (same as CgVisitor). Externs → `func.func` with `Private` visibility.
 
 ### Extracted Helpers

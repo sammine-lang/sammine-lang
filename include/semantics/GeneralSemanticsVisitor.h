@@ -20,7 +20,7 @@ class GeneralSemanticsVisitor : public ScopedASTVisitor {
 public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
-  LexicalStack<sammine_util::Location, AST::FuncDefAST *> scope_stack;
+  LexicalStack<sammine_util::Location> scope_stack;
   GeneralSemanticsVisitor() { scope_stack.push_context(); }
 
   // Check if name contains "__" (reserved for C mangling)
@@ -30,8 +30,14 @@ public:
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
 
-  virtual void enter_new_scope() override { this->scope_stack.push_context(); }
-  virtual void exit_new_scope() override { this->scope_stack.pop_context(); }
+  virtual void enter_new_scope() override {
+    push_ast_context();
+    this->scope_stack.push_context();
+  }
+  virtual void exit_new_scope() override {
+    this->scope_stack.pop_context();
+    pop_ast_context();
+  }
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void postorder_walk(BlockAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;

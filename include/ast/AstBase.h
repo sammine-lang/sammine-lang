@@ -3,6 +3,7 @@
 //
 
 #pragma once
+#include "ast/ASTContext.h"
 #include "ast/AstDecl.h"
 #include "ast/ASTProperties.h"
 #include "lex/Lexer.h"
@@ -260,15 +261,15 @@ public:
 
 /// Stack of scoped symbol tables with parent-chain lookup.
 /// Each context can see names from its parent scope via recursive queries.
-/// T = value type (e.g. mlir::Value, Type), S = secondary data (often monostate).
-template <class T, class S>
-class LexicalStack : public std::stack<LexicalContext<T, S>> {
+/// T = value type (e.g. mlir::Value, Type).
+template <class T>
+class LexicalStack : public std::stack<LexicalContext<T>> {
 public:
   void push_context() {
     if (this->empty())
-      this->push(LexicalContext<T, S>());
+      this->push(LexicalContext<T>());
     else
-      this->push(LexicalContext<T, S>(&this->top()));
+      this->push(LexicalContext<T>(&this->top()));
   }
   void pop_context() {
     if (this->empty())
@@ -306,21 +307,33 @@ public:
     return this->top().recursive_get_from_name(name);
   }
 
-  const LexicalContext<T, S> *parent_scope() const {
+  const LexicalContext<T> *parent_scope() const {
     return this->top().parent_scope;
   }
-  LexicalContext<T, S> *parent_scope() { return this->top().parent_scope; }
+  LexicalContext<T> *parent_scope() { return this->top().parent_scope; }
 };
 
 /// Visitor that manages scope enter/exit around function bodies.
+/// Maintains a stack of ASTContext that tracks enclosing AST nodes.
+/// Each scope push copies the parent context, so inner scopes
+/// automatically inherit outer context (e.g. enclosing_function).
 class ScopedASTVisitor : public ASTVisitor {
+  std::vector<ASTContext> ast_ctx_stack_{1}; // start with one empty context
+
 public:
   virtual void enter_new_scope() = 0;
   virtual void exit_new_scope() = 0;
 
-  /// Only visiting the FuncDefAST requires the use of scoping for now.
-  ///
-  /// In the future we might have to support BlockAST
+  /// Push a copy of the current ASTContext (called by enter_new_scope impls).
+  void push_ast_context() { ast_ctx_stack_.push_back(ast_ctx_stack_.back()); }
+
+  /// Pop the current ASTContext (called by exit_new_scope impls).
+  void pop_ast_context() { ast_ctx_stack_.pop_back(); }
+
+  /// Access the current ASTContext.
+  ASTContext &ctx() { return ast_ctx_stack_.back(); }
+  const ASTContext &ctx() const { return ast_ctx_stack_.back(); }
+
   virtual void visit(FuncDefAST *ast);
 
   virtual ~ScopedASTVisitor() = 0;
