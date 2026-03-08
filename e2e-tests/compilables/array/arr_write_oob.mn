@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && ! %T/%base.exe
-# Verifies that writing to an out-of-bounds array index
-# triggers the runtime bounds check and exits with non-zero.
+// RUN: %sammine --file %full %O && ! %T/%base.exe
+// Verifies that writing to an out-of-bounds array index
+// triggers the runtime bounds check and exits with non-zero.
 
 import std;
 

@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |break_reassign_alloc_discard.mn:10:2
-# CHECK-NEXT:    8|
-# CHECK-NEXT:    9|let main() -> i32 {
-# CHECK-NEXT:   10|  alloc<i32>(1);
-# CHECK-NEXT:     |  ───────────┬
-# CHECK-NEXT:     |             ╰─ Linear pointer from alloc is discarded (must be stored in a variable)
-# CHECK-NEXT:   11|  std::printf("done\n");
-# CHECK-NEXT:   12|  return 0;
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |break_reassign_alloc_discard.mn:10:2
+// CHECK-NEXT:    8|
+// CHECK-NEXT:    9|let main() -> i32 {
+// CHECK-NEXT:   10|  alloc<i32>(1);
+// CHECK-NEXT:     |  ───────────┬
+// CHECK-NEXT:     |             ╰─ Linear pointer from alloc is discarded (must be stored in a variable)
+// CHECK-NEXT:   11|  std::printf("done\n");
+// CHECK-NEXT:   12|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# CORRECT: Bare alloc<i32>(1) as a statement discards a linear pointer.
-# The checker must reject this — it's a memory leak.
+// CORRECT: Bare alloc<i32>(1) as a statement discards a linear pointer.
+// The checker must reject this — it's a memory leak.
 
 import std;
 

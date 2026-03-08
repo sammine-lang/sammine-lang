@@ -1,5 +1,5 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      70600674
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      70600674
 
 import std;
 
@@ -15,7 +15,7 @@ let at(grid: ptr<[400]i32>, r: i32, c: i32) -> i32 {
   return (*grid)[r * 20 + c];
 }
 
-# Generic product — dr/dc are the row/col step offsets
+// Generic product — dr/dc are the row/col step offsets
 let prod(dr: i32, dc: i32, grid: ptr<[400]i32>, r: i32, c: i32) -> i32 {
   return at(grid, r, c)
        * at(grid, r + dr, c + dc)
@@ -23,7 +23,7 @@ let prod(dr: i32, dc: i32, grid: ptr<[400]i32>, r: i32, c: i32) -> i32 {
        * at(grid, r + dr * 3, c + dc * 3);
 }
 
-# Generic guard — checks that all 4 cells in direction (dr,dc) are in bounds
+// Generic guard — checks that all 4 cells in direction (dr,dc) are in bounds
 let in_bounds(v: i32) -> i32 {
   if v >= 0 { if v < 20 { 1 } else { 0 } } else { 0 }
 }
@@ -34,7 +34,7 @@ let guard(dr: i32, dc: i32, r: i32, c: i32) -> i32 {
   } else { 0 }
 }
 
-# Generic grid max — two (i32, i32) -> i32 callbacks, grid captured in closure
+// Generic grid max — two (i32, i32) -> i32 callbacks, grid captured in closure
 let grid_max(acc: i32,
              f: (i32, i32) -> i32,
              gd: (i32, i32) -> i32,

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      hello world
-# CHECK-NEXT: goodbye
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      hello world
+// CHECK-NEXT: goodbye
 
 import io;
 

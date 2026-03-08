@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      4
-# CHECK-NEXT: 8
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      4
+// CHECK-NEXT: 8
 
-# Qualified typeclass call syntax: ClassName<Type>::method()
+// Qualified typeclass call syntax: ClassName<Type>::method()
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 

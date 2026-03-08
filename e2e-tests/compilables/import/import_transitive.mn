@@ -1,5 +1,5 @@
-# RUN: %sammine --file %dir/Inputs/math.mn %O --lib=static && %sammine --file %dir/Inputs/middle.mn %O %I -I %dir/Inputs --lib=static && %sammine --file %full %O %I -I %dir/Inputs && %T/import_transitive.exe | %check %full
-# CHECK: 42
+// RUN: %sammine --file %dir/Inputs/math.mn %O --lib=static && %sammine --file %dir/Inputs/middle.mn %O %I -I %dir/Inputs --lib=static && %sammine --file %full %O %I -I %dir/Inputs && %T/import_transitive.exe | %check %full
+// CHECK: 42
 
 import middle;
 

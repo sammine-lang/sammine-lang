@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      4
-# CHECK-NEXT: 8
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      4
+// CHECK-NEXT: 8
 
-# A generic function that calls a typeclass method with its type parameter.
+// A generic function that calls a typeclass method with its type parameter.
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 

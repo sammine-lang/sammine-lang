@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      104743
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      104743
 
-# Project Euler Problem 7: 10001st prime number
+// Project Euler Problem 7: 10001st prime number
 
 import std;
 
@@ -18,7 +18,7 @@ let is_prime(n: i32) -> i32 {
   else { is_prime_check(n, 3) }
 }
 
-# Count primes starting from odd candidates (2 already counted)
+// Count primes starting from odd candidates (2 already counted)
 let nth_prime(candidate: i32, count: i32) -> i32 {
   if is_prime(candidate) == 1 {
     if count == 10001 { candidate }

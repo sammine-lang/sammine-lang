@@ -1,10 +1,10 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      5537376230
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      5537376230
 
-# Project Euler Problem 13: First 10 digits of the sum of 100 fifty-digit numbers
-# Store the first 15 digits of each number (fits i64), sum them,
-# then extract first 10 digits. Carry error from truncated digits
-# is negligible (~100 on a ~10^16 sum).
+// Project Euler Problem 13: First 10 digits of the sum of 100 fifty-digit numbers
+// Store the first 15 digits of each number (fits i64), sum them,
+// then extract first 10 digits. Carry error from truncated digits
+// is negligible (~100 on a ~10^16 sum).
 
 import std;
 

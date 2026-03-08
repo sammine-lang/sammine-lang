@@ -1,17 +1,17 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |signed_unsigned_mix.mn
-# CHECK-NEXT:   17|  let x: i32 = 10;
-# CHECK-NEXT:   18|  let y: u32 = 20u32;
-# CHECK-NEXT:   19|  let z: i32 = x + y;
-# CHECK-NEXT:     |                 ┬
-# CHECK-NEXT:     |                 ╰─ Incompatible types for operator '+': i32 and u32
-# CHECK-NEXT:     |                 ┬
-# CHECK-NEXT:     |                 ╰─ note: signed and unsigned integer types cannot be mixed
-# CHECK-NEXT:   20|  return 0;
-# CHECK-NEXT:   21|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |signed_unsigned_mix.mn
+// CHECK-NEXT:   17|  let x: i32 = 10;
+// CHECK-NEXT:   18|  let y: u32 = 20u32;
+// CHECK-NEXT:   19|  let z: i32 = x + y;
+// CHECK-NEXT:     |                 ┬
+// CHECK-NEXT:     |                 ╰─ Incompatible types for operator '+': i32 and u32
+// CHECK-NEXT:     |                 ┬
+// CHECK-NEXT:     |                 ╰─ note: signed and unsigned integer types cannot be mixed
+// CHECK-NEXT:   20|  return 0;
+// CHECK-NEXT:   21|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let x: i32 = 10;

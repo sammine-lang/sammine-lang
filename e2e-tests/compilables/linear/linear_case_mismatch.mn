@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_case_mismatch.mn:9:2
-# CHECK-NEXT:    7|  let p = alloc<i32>(1);
-# CHECK-NEXT:    8|  let c : Color = Red;
-# CHECK-NEXT:    9|  case c {
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Linear variable 'p' is consumed in some branches but not others
-# CHECK-NEXT:   10|    Color::Red => free(p),
-# CHECK-NEXT:   11|    Color::Green => *p = 1,
-# CHECK-NEXT:   12|    Color::Blue => free(p),
-# CHECK-NEXT:   13|  };
-# CHECK-NEXT:   14|  return 0;
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_case_mismatch.mn:9:2
+// CHECK-NEXT:    7|  let p = alloc<i32>(1);
+// CHECK-NEXT:    8|  let c : Color = Red;
+// CHECK-NEXT:    9|  case c {
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Linear variable 'p' is consumed in some branches but not others
+// CHECK-NEXT:   10|    Color::Red => free(p),
+// CHECK-NEXT:   11|    Color::Green => *p = 1,
+// CHECK-NEXT:   12|    Color::Blue => free(p),
+// CHECK-NEXT:   13|  };
+// CHECK-NEXT:   14|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 type Color = Red | Green | Blue;
 

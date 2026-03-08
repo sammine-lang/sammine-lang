@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      31875000
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      31875000
 
-# Project Euler Problem 9: Special Pythagorean triplet
-# Find a*b*c where a+b+c=1000 and a^2+b^2=c^2
+// Project Euler Problem 9: Special Pythagorean triplet
+// Find a*b*c where a+b+c=1000 and a^2+b^2=c^2
 
 import std;
 

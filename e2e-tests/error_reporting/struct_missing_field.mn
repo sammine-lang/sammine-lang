@@ -1,15 +1,15 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |struct_missing_field.mn:10:28
-# CHECK-NEXT:    8|
-# CHECK-NEXT:    9|let main() -> i32 {
-# CHECK-NEXT:   10|  let p: Point = Point { x: 1 };
-# CHECK-NEXT:     |                            ┬
-# CHECK-NEXT:     |                            ╰─ Struct 'Point' expects 2 fields, got 1
-# CHECK-NEXT:   11|  return 0;
-# CHECK-NEXT:   12|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |struct_missing_field.mn:10:28
+// CHECK-NEXT:    8|
+// CHECK-NEXT:    9|let main() -> i32 {
+// CHECK-NEXT:   10|  let p: Point = Point { x: 1 };
+// CHECK-NEXT:     |                            ┬
+// CHECK-NEXT:     |                            ╰─ Struct 'Point' expects 2 fields, got 1
+// CHECK-NEXT:   11|  return 0;
+// CHECK-NEXT:   12|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 struct Point {
   x: i32,

@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      25164150
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      25164150
 
-# Project Euler Problem 6: Sum square difference for 1..100
+// Project Euler Problem 6: Sum square difference for 1..100
 
 import std;
 

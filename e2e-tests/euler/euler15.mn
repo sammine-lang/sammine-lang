@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      137846528820
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      137846528820
 
-# Project Euler Problem 15: Lattice paths in a 20x20 grid
-# C(40, 20) computed iteratively to avoid overflow
+// Project Euler Problem 15: Lattice paths in a 20x20 grid
+// C(40, 20) computed iteratively to avoid overflow
 
 import std;
 

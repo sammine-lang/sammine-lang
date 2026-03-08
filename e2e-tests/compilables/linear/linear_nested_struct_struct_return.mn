@@ -1,17 +1,17 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_nested_struct_struct_return.mn:19:2
-# CHECK-NEXT:   17|  let i : Inner = Inner { p: q };
-# CHECK-NEXT:   18|  let o : Outer = Outer { inner: i, tag: 1 };
-# CHECK-NEXT:   19|  return o;
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Cannot return 'o' of type 'Outer': non-linear ptr<i32> in field 'p' in field 'inner' (may reference a local variable)
-# CHECK-NEXT:   20|}
-# CHECK-NEXT:   21|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_nested_struct_struct_return.mn:19:2
+// CHECK-NEXT:   17|  let i : Inner = Inner { p: q };
+// CHECK-NEXT:   18|  let o : Outer = Outer { inner: i, tag: 1 };
+// CHECK-NEXT:   19|  return o;
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Cannot return 'o' of type 'Outer': non-linear ptr<i32> in field 'p' in field 'inner' (may reference a local variable)
+// CHECK-NEXT:   20|}
+// CHECK-NEXT:   21|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# Test: struct wrapping struct wrapping ptr<T> — 2 levels deep
+// Test: struct wrapping struct wrapping ptr<T> — 2 levels deep
 struct Inner {
   p: ptr<i32>,
 };

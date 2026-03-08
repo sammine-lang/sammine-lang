@@ -1,15 +1,15 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |case_multi_missing.mn:8:20
-# CHECK-NEXT:    6|let main() -> i32 {
-# CHECK-NEXT:    7|  let d: Direction = Direction::North;
-# CHECK-NEXT:    8|  let r: i32 = case d {
-# CHECK-NEXT:     |                    ┬
-# CHECK-NEXT:     |                    ╰─ Non-exhaustive case expression: missing variant(s) South, East, West
-# CHECK-NEXT:    9|    Direction::North => 0,
-# CHECK-NEXT:   10|  };
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |case_multi_missing.mn:8:20
+// CHECK-NEXT:    6|let main() -> i32 {
+// CHECK-NEXT:    7|  let d: Direction = Direction::North;
+// CHECK-NEXT:    8|  let r: i32 = case d {
+// CHECK-NEXT:     |                    ┬
+// CHECK-NEXT:     |                    ╰─ Non-exhaustive case expression: missing variant(s) South, East, West
+// CHECK-NEXT:    9|    Direction::North => 0,
+// CHECK-NEXT:   10|  };
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 type Direction = North | South | East | West;
 

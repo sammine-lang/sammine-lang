@@ -1,19 +1,19 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |same_name_func.mn
-# CHECK:         3|let f() -> i32 {
-# CHECK-NEXT:     |    ─────────┬
-# CHECK-NEXT:     |             ╰─ [SCOPE]: Most recently defined `f` is here
-# CHECK-NEXT:    4|  return 0;
-# CHECK-NEXT:    5|}
-# CHECK-NEXT:    6|
-# CHECK-NEXT:    7|let f() -> i32 {
-# CHECK-NEXT:     |    ─────────┬
-# CHECK-NEXT:     |             ╰─ [SCOPE]: The name `f` has been introduced before
-# CHECK-NEXT:    8|  return 1;
-# CHECK-NEXT:    9|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |same_name_func.mn
+// CHECK:         3|let f() -> i32 {
+// CHECK-NEXT:     |    ─────────┬
+// CHECK-NEXT:     |             ╰─ [SCOPE]: Most recently defined `f` is here
+// CHECK-NEXT:    4|  return 0;
+// CHECK-NEXT:    5|}
+// CHECK-NEXT:    6|
+// CHECK-NEXT:    7|let f() -> i32 {
+// CHECK-NEXT:     |    ─────────┬
+// CHECK-NEXT:     |             ╰─ [SCOPE]: The name `f` has been introduced before
+// CHECK-NEXT:    8|  return 1;
+// CHECK-NEXT:    9|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let f() -> i32 {
   return 0;
 }

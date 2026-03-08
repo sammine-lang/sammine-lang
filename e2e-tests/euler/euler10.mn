@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      142913828922
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      142913828922
 
-# Project Euler Problem 10: Sum of all primes below 2,000,000
+// Project Euler Problem 10: Sum of all primes below 2,000,000
 
 import std;
 

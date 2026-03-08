@@ -1,21 +1,21 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |break_call_pass_linear_nonlinear_param.mn
-# CHECK-NEXT:   14|  let p = alloc<i32>(1);
-# CHECK-NEXT:   15|  *p = 42;
-# CHECK-NEXT:   16|  let v : i32 = read_val(p);
-# CHECK-NEXT:     |                         ┬
-# CHECK-NEXT:     |                         ╰─ Argument 1 to 'read_val': expected ptr<i32>, got 'ptr<i32>
-# CHECK-NEXT:     |                         ┬
-# CHECK-NEXT:     |                         ╰─ note: 'ptr<i32>' is a linear (owned) pointer, 'ptr<i32>' is non-linear — these are incompatible
-# CHECK-NEXT:     |                            note: 'read_val' has signature: (ptr<i32>) -> i32
-# CHECK-NEXT:   17|  free(p);
-# CHECK-NEXT:   18|  std::printf("%d\n", v);
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |break_call_pass_linear_nonlinear_param.mn
+// CHECK-NEXT:   14|  let p = alloc<i32>(1);
+// CHECK-NEXT:   15|  *p = 42;
+// CHECK-NEXT:   16|  let v : i32 = read_val(p);
+// CHECK-NEXT:     |                         ┬
+// CHECK-NEXT:     |                         ╰─ Argument 1 to 'read_val': expected ptr<i32>, got 'ptr<i32>
+// CHECK-NEXT:     |                         ┬
+// CHECK-NEXT:     |                         ╰─ note: 'ptr<i32>' is a linear (owned) pointer, 'ptr<i32>' is non-linear — these are incompatible
+// CHECK-NEXT:     |                            note: 'read_val' has signature: (ptr<i32>) -> i32
+// CHECK-NEXT:   17|  free(p);
+// CHECK-NEXT:   18|  std::printf("%d\n", v);
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# CORRECT: BiTypeChecker rejects passing 'ptr<i32> (linear) to a function
-# taking ptr<i32> (non-linear). This prevents linearity from being dropped.
+// CORRECT: BiTypeChecker rejects passing 'ptr<i32> (linear) to a function
+// taking ptr<i32> (non-linear). This prevents linearity from being dropped.
 
 import std;
 

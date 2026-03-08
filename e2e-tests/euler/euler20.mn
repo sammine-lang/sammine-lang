@@ -1,9 +1,9 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      648
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      648
 
-# Project Euler Problem 20: Factorial digit sum
-# Find the sum of the digits in 100!
-# Uses base-10^9 bignum arithmetic with array of i64 chunks.
+// Project Euler Problem 20: Factorial digit sum
+// Find the sum of the digits in 100!
+// Uses base-10^9 bignum arithmetic with array of i64 chunks.
 
 import std;
 

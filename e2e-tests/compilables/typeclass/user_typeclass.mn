@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      4
-# CHECK-NEXT: 8
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      4
+// CHECK-NEXT: 8
 
-# User-defined typeclass with custom method name (not just sizeof)
+// User-defined typeclass with custom method name (not just sizeof)
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 

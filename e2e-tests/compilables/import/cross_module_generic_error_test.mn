@@ -1,21 +1,21 @@
-# RUN: ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
-# CHECK:          |cross_module_generic_error_test.mn
-# CHECK-NEXT:    7|
-# CHECK-NEXT:    8|let main() -> i32 {
-# CHECK-NEXT:    9|  std::printf("%d %d\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
-# CHECK-NEXT:     |                                          ───┬
-# CHECK-NEXT:     |                                             ╰─ Argument 1 to 'g::identity<i32>': expected i32, got float literal
-# CHECK-NEXT:     |                                          ───┬
-# CHECK-NEXT:     |                                             ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
-# CHECK-NEXT:     |                                                                  ──────┬
-# CHECK-NEXT:     |                                                                        ╰─ Argument 1 to 'g::identity<i32>': expected i32, got ptr<char>
-# CHECK-NEXT:     |                                                                  ──────┬
-# CHECK-NEXT:     |                                                                        ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
-# CHECK-NEXT:   10|  return 0;
-# CHECK-NEXT:   11|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
+// CHECK:          |cross_module_generic_error_test.mn
+// CHECK-NEXT:    7|
+// CHECK-NEXT:    8|let main() -> i32 {
+// CHECK-NEXT:    9|  std::printf("%d %d\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
+// CHECK-NEXT:     |                                          ───┬
+// CHECK-NEXT:     |                                             ╰─ Argument 1 to 'g::identity<i32>': expected i32, got float literal
+// CHECK-NEXT:     |                                          ───┬
+// CHECK-NEXT:     |                                             ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
+// CHECK-NEXT:     |                                                                  ──────┬
+// CHECK-NEXT:     |                                                                        ╰─ Argument 1 to 'g::identity<i32>': expected i32, got ptr<char>
+// CHECK-NEXT:     |                                                                  ──────┬
+// CHECK-NEXT:     |                                                                        ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
+// CHECK-NEXT:   10|  return 0;
+// CHECK-NEXT:   11|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import has_generic as g;
 import std;

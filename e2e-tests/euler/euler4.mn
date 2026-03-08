@@ -1,11 +1,11 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      906609
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      906609
 
-# Project Euler Problem 4: Largest palindrome from product of two 3-digit numbers
-# Strategy: generate palindromes from largest to smallest, check factorability
+// Project Euler Problem 4: Largest palindrome from product of two 3-digit numbers
+// Strategy: generate palindromes from largest to smallest, check factorability
 
-# Mirror a 3-digit number into a 6-digit palindrome
-# e.g., 906 -> 906609
+// Mirror a 3-digit number into a 6-digit palindrome
+// e.g., 906 -> 906609
 
 import std;
 
@@ -16,7 +16,7 @@ let make_palindrome(n: i32) -> i32 {
   n * 1000 + d3 * 100 + d2 * 10 + d1
 }
 
-# Try divisors from d down to 100, return p if both factors are 3-digit
+// Try divisors from d down to 100, return p if both factors are 3-digit
 let check_divisor(p: i32, d: i32) -> i32 {
   if d < 100 {
     0
@@ -27,7 +27,7 @@ let check_divisor(p: i32, d: i32) -> i32 {
   }
 }
 
-# Search palindromes from largest (half=999) to smallest (half=100)
+// Search palindromes from largest (half=999) to smallest (half=100)
 let search(half: i32) -> i32 {
   if half < 100 {
     0

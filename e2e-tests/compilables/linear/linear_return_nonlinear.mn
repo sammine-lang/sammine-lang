@@ -1,17 +1,17 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_return_nonlinear.mn:8:2
-# CHECK-NEXT:    6|  let mut x : i32 = 42;
-# CHECK-NEXT:    7|  let p : ptr<i32> = &x;
-# CHECK-NEXT:    8|  return p;
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Cannot return 'p' of type 'ptr<i32>': non-linear ptr<i32> (may reference a local variable)
-# CHECK-NEXT:    9|}
-# CHECK-NEXT:   10|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_return_nonlinear.mn:8:2
+// CHECK-NEXT:    6|  let mut x : i32 = 42;
+// CHECK-NEXT:    7|  let p : ptr<i32> = &x;
+// CHECK-NEXT:    8|  return p;
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Cannot return 'p' of type 'ptr<i32>': non-linear ptr<i32> (may reference a local variable)
+// CHECK-NEXT:    9|}
+// CHECK-NEXT:   10|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# Test: returning a stack pointer (non-linear) is an error — may dangle
+// Test: returning a stack pointer (non-linear) is an error — may dangle
 let bad() -> ptr<i32> {
   let mut x : i32 = 42;
   let p : ptr<i32> = &x;

@@ -1,19 +1,19 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      21124
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      21124
 
-# Project Euler Problem 17: Number letter counts
-# If all numbers from 1 to 1000 inclusive were written out in words,
-# how many letters would be used?
+// Project Euler Problem 17: Number letter counts
+// If all numbers from 1 to 1000 inclusive were written out in words,
+// how many letters would be used?
 
 import std;
 
-# units[i] = letter count of "one","two",...,"nine" (0-indexed, units[0] unused)
+// units[i] = letter count of "one","two",...,"nine" (0-indexed, units[0] unused)
 let units() -> [10]i32 { [0, 3, 3, 5, 4, 4, 3, 5, 5, 4] }
 
-# teens[i] = letter count of "ten","eleven",...,"nineteen" (teens[0]="ten")
+// teens[i] = letter count of "ten","eleven",...,"nineteen" (teens[0]="ten")
 let teens() -> [10]i32 { [3, 6, 6, 8, 8, 7, 7, 9, 8, 8] }
 
-# tens[i] = letter count of "twenty","thirty",...,"ninety"
+// tens[i] = letter count of "twenty","thirty",...,"ninety"
 let tens() -> [10]i32  { [0, 0, 6, 6, 5, 5, 5, 7, 6, 6] }
 
 let letter_count(n: i32, u: ptr<[10]i32>, te: ptr<[10]i32>, tn: ptr<[10]i32>) -> i32 {

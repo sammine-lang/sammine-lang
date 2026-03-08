@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      99
 
-# Test: struct with non-linear pointer used locally (no return) is fine
+// Test: struct with non-linear pointer used locally (no return) is fine
 import std;
 
 struct Wrapper {

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      inside
-# CHECK-NEXT: ok
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      inside
+// CHECK-NEXT: ok
 
 import std;
 

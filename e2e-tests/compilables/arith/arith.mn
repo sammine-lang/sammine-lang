@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full %O  --diagnostics
+// RUN: ! %sammine --file %full %O  --diagnostics
 fn f() {
     let x : f64 = 1 + 1 ;
     let y : f64 = x;

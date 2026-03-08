@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      has value: 42
-# CHECK-NEXT: no value
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      has value: 42
+// CHECK-NEXT: no value
 
 import std;
 

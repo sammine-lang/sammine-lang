@@ -1,10 +1,10 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      8
-# CHECK-NEXT: 12
-# CHECK-NEXT: 5
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      8
+// CHECK-NEXT: 12
+// CHECK-NEXT: 5
 
-# Test using a partially applied function multiple times with
-# different arguments, verifying the captured value is stable.
+// Test using a partially applied function multiple times with
+// different arguments, verifying the captured value is stable.
 
 import std;
 

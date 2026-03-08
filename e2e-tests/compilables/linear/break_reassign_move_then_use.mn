@@ -1,21 +1,21 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |break_reassign_move_then_use.mn
-# CHECK-NEXT:   10|  let p = alloc<i32>(1);
-# CHECK-NEXT:   11|  *p = 42;
-# CHECK-NEXT:   12|  let q = p;
-# CHECK-NEXT:     |  ────────┬
-# CHECK-NEXT:     |          ╰─ 'p' was moved here
-# CHECK-NEXT:   13|  free(p);
-# CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved previously
-# CHECK-NEXT:   14|  free(q);
-# CHECK-NEXT:   15|  return 0;
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |break_reassign_move_then_use.mn
+// CHECK-NEXT:   10|  let p = alloc<i32>(1);
+// CHECK-NEXT:   11|  *p = 42;
+// CHECK-NEXT:   12|  let q = p;
+// CHECK-NEXT:     |  ────────┬
+// CHECK-NEXT:     |          ╰─ 'p' was moved here
+// CHECK-NEXT:   13|  free(p);
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved previously
+// CHECK-NEXT:   14|  free(q);
+// CHECK-NEXT:   15|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# CORRECT: Move then free original should be caught.
-# After let q = p, p is consumed. Freeing p should error.
+// CORRECT: Move then free original should be caught.
+// After let q = p, p is consumed. Freeing p should error.
 
 import std;
 

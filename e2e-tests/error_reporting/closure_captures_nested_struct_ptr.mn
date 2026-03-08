@@ -1,19 +1,19 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |closure_captures_nested_struct_ptr.mn:20:2
-# CHECK-NEXT:   18|  let o : Outer = Outer { inner: Inner { p: &x } };
-# CHECK-NEXT:   19|  let f : (i32) -> i32 = use_outer(o);
-# CHECK-NEXT:   20|  return f;
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
-# CHECK-NEXT:   21|}
-# CHECK-NEXT:   22|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |closure_captures_nested_struct_ptr.mn:20:2
+// CHECK-NEXT:   18|  let o : Outer = Outer { inner: Inner { p: &x } };
+// CHECK-NEXT:   19|  let f : (i32) -> i32 = use_outer(o);
+// CHECK-NEXT:   20|  return f;
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:   21|}
+// CHECK-NEXT:   22|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# Test: returning a closure that captured a struct wrapping a struct
-# wrapping a non-linear ptr must be rejected — containsPointer()
-# must recurse through nested structs.
+// Test: returning a closure that captured a struct wrapping a struct
+// wrapping a non-linear ptr must be rejected — containsPointer()
+// must recurse through nested structs.
 
 import std;
 

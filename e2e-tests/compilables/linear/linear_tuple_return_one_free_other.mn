@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      42
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      42
 
-# Tuple with two linear pointers: destructure, return one, free the other.
+// Tuple with two linear pointers: destructure, return one, free the other.
 
 import std;
 

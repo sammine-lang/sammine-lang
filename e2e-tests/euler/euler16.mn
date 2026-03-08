@@ -1,9 +1,9 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      1366
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      1366
 
-# Project Euler Problem 16: Power digit sum
-# What is the sum of the digits of the number 2^1000?
-# Uses base-10^9 bignum arithmetic with array of i64 chunks.
+// Project Euler Problem 16: Power digit sum
+// What is the sum of the digits of the number 2^1000?
+// Uses base-10^9 bignum arithmetic with array of i64 chunks.
 
 import std;
 

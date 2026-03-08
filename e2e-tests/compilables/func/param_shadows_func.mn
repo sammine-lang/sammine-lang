@@ -1,20 +1,20 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |param_shadows_func.mn
-# CHECK:         3|
-# CHECK-NEXT:    4|let g() -> i32 {
-# CHECK-NEXT:     |    ─────────┬
-# CHECK-NEXT:     |             ╰─ [SCOPE]: The firstly defined `g` is here
-# CHECK-NEXT:    5|  return 42;
-# CHECK-NEXT:    6|}
-# CHECK-NEXT:    7|
-# CHECK-NEXT:    8|let foo(g: i32) -> i32 {
-# CHECK-NEXT:     |        ─────┬
-# CHECK-NEXT:     |             ╰─ [SCOPE]: The name `g` has been introduced before
-# CHECK-NEXT:    9|  return g;
-# CHECK-NEXT:   10|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |param_shadows_func.mn
+// CHECK:         3|
+// CHECK-NEXT:    4|let g() -> i32 {
+// CHECK-NEXT:     |    ─────────┬
+// CHECK-NEXT:     |             ╰─ [SCOPE]: The firstly defined `g` is here
+// CHECK-NEXT:    5|  return 42;
+// CHECK-NEXT:    6|}
+// CHECK-NEXT:    7|
+// CHECK-NEXT:    8|let foo(g: i32) -> i32 {
+// CHECK-NEXT:     |        ─────┬
+// CHECK-NEXT:     |             ╰─ [SCOPE]: The name `g` has been introduced before
+// CHECK-NEXT:    9|  return g;
+// CHECK-NEXT:   10|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let g() -> i32 {
   return 42;

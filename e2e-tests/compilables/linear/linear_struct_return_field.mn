@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      42
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      42
 
-# Struct with two linear fields: return one, free the other.
+// Struct with two linear fields: return one, free the other.
 
 import std;
 

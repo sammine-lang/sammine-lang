@@ -1,14 +1,14 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |call_nonexist.mn:4:2
-# CHECK:         3|let main() -> i32 {
-# CHECK-NEXT:    4|  a();
-# CHECK-NEXT:     |  ┬
-# CHECK-NEXT:     |  ╰─ [SCOPE]: The called name a for the call expression is not found before
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |call_nonexist.mn:4:2
+// CHECK:         3|let main() -> i32 {
+// CHECK-NEXT:    4|  a();
+// CHECK-NEXT:     |  ┬
+// CHECK-NEXT:     |  ╰─ [SCOPE]: The called name a for the call expression is not found before
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   a();
   return 0;

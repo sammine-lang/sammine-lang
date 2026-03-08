@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O -I %dir/Inputs && %T/%base.exe | %check %full
-# CHECK:      32
-# CHECK-NEXT: 64
+// RUN: %sammine --file %full %O -I %dir/Inputs && %T/%base.exe | %check %full
+// CHECK:      32
+// CHECK-NEXT: 64
 
 import has_instance;
 import std;

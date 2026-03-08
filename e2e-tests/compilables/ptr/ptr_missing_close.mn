@@ -1,25 +1,25 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |ptr_missing_close.mn:4:10
-# CHECK:         3|let main() -> i32 {
-# CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
-# CHECK-NEXT:     |          ^^^
-# CHECK-NEXT:     |          Expected '>' to close 'ptr<...>'
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
-# CHECK-NEXT:     |ptr_missing_close.mn:4:8
-# CHECK:         3|let main() -> i32 {
-# CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
-# CHECK-NEXT:     |        ^
-# CHECK-NEXT:     |        Expected type name after token `:`
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
-# CHECK-NEXT:     |ptr_missing_close.mn:4:18
-# CHECK:         3|let main() -> i32 {
-# CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
-# CHECK-NEXT:     |                  ^
-# CHECK-NEXT:     |                  Expected '}' to close statement block
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |ptr_missing_close.mn:4:10
+// CHECK:         3|let main() -> i32 {
+// CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
+// CHECK-NEXT:     |          ^^^
+// CHECK-NEXT:     |          Expected '>' to close 'ptr<...>'
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
+// CHECK-NEXT:     |ptr_missing_close.mn:4:8
+// CHECK:         3|let main() -> i32 {
+// CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
+// CHECK-NEXT:     |        ^
+// CHECK-NEXT:     |        Expected type name after token `:`
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
+// CHECK-NEXT:     |ptr_missing_close.mn:4:18
+// CHECK:         3|let main() -> i32 {
+// CHECK-NEXT:    4|  let p : ptr<i32 = alloc<i32>(1);
+// CHECK-NEXT:     |                  ^
+// CHECK-NEXT:     |                  Expected '}' to close statement block
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
 let main() -> i32 {
   let p : ptr<i32 = alloc<i32>(1);
   return 0;

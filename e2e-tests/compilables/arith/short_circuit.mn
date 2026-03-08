@@ -1,19 +1,19 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      no_short
-# CHECK-NEXT: yes_short
-# CHECK-NEXT: and_both_true
-# CHECK-NEXT: or_both_false
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      no_short
+// CHECK-NEXT: yes_short
+// CHECK-NEXT: and_both_true
+// CHECK-NEXT: or_both_false
 
 import std;
 
 let main() -> i32 {
-  # false && true => false (right side may or may not be evaluated)
+  // false && true => false (right side may or may not be evaluated)
   if false && true { std::printf("fail\n"); } else { std::printf("no_short\n"); };
-  # true || false => true (right side may or may not be evaluated)
+  // true || false => true (right side may or may not be evaluated)
   if true || false { std::printf("yes_short\n"); } else { std::printf("fail\n"); };
-  # true && true => true
+  // true && true => true
   if true && true { std::printf("and_both_true\n"); } else { std::printf("fail\n"); };
-  # false || false => false
+  // false || false => false
   if false || false { std::printf("fail\n"); } else { std::printf("or_both_false\n"); };
   return 0;
 }

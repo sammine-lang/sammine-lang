@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/sizeof_basic.exe | %check %full
-# CHECK:      4
-# CHECK-NEXT: 8
-# CHECK-NEXT: 8
-# CHECK-NEXT: 1
+// RUN: %sammine --file %full %O && %T/sizeof_basic.exe | %check %full
+// CHECK:      4
+// CHECK-NEXT: 8
+// CHECK-NEXT: 8
+// CHECK-NEXT: 1
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 let main() -> i32 {

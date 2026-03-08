@@ -1,9 +1,9 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      99
 
 import std;
 
-# Function returning a linear pointer — caller must free.
+// Function returning a linear pointer — caller must free.
 let make_ptr() -> 'ptr<i32> {
   let p = alloc<i32>(1);
   *p = 99;

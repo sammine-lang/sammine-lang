@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      84
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      84
 
-# Passing *a to a function should NOT consume the linear pointer a.
-# a must still be freed afterward.
+// Passing *a to a function should NOT consume the linear pointer a.
+// a must still be freed afterward.
 
 import std;
 

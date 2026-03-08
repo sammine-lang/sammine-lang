@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |linear_write_after_free.mn
-# CHECK-NEXT:    6|let main() -> i32 {
-# CHECK-NEXT:    7|  let p = alloc<i32>(1);
-# CHECK-NEXT:    8|  free(p);
-# CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ 'p' was freed here
-# CHECK-NEXT:    9|  *p = 7;
-# CHECK-NEXT:     |  ─┬
-# CHECK-NEXT:     |   ╰─ Cannot dereference 'p' — it was already freed previously
-# CHECK-NEXT:   10|  std::printf("%d\n", 7);
-# CHECK-NEXT:   11|  return 0;
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |linear_write_after_free.mn
+// CHECK-NEXT:    6|let main() -> i32 {
+// CHECK-NEXT:    7|  let p = alloc<i32>(1);
+// CHECK-NEXT:    8|  free(p);
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ 'p' was freed here
+// CHECK-NEXT:    9|  *p = 7;
+// CHECK-NEXT:     |  ─┬
+// CHECK-NEXT:     |   ╰─ Cannot dereference 'p' — it was already freed previously
+// CHECK-NEXT:   10|  std::printf("%d\n", 7);
+// CHECK-NEXT:   11|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import std;
 

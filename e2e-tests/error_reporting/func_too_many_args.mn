@@ -1,16 +1,16 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |func_too_many_args.mn
-# CHECK-NEXT:    7|
-# CHECK-NEXT:    8|let main() -> i32 {
-# CHECK-NEXT:    9|  return add(1, 2, 3);
-# CHECK-NEXT:     |             ──────┬
-# CHECK-NEXT:     |                   ╰─ Function 'add' expects 2 arguments, got 3
-# CHECK-NEXT:     |  ─────────────────┬
-# CHECK-NEXT:     |                   ╰─ Wrong return type for function main, expected i32 but got Poisoned
-# CHECK-NEXT:   10|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |func_too_many_args.mn
+// CHECK-NEXT:    7|
+// CHECK-NEXT:    8|let main() -> i32 {
+// CHECK-NEXT:    9|  return add(1, 2, 3);
+// CHECK-NEXT:     |             ──────┬
+// CHECK-NEXT:     |                   ╰─ Function 'add' expects 2 arguments, got 3
+// CHECK-NEXT:     |  ─────────────────┬
+// CHECK-NEXT:     |                   ╰─ Wrong return type for function main, expected i32 but got Poisoned
+// CHECK-NEXT:   10|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let add(a: i32, b: i32) -> i32 {
   return a + b;

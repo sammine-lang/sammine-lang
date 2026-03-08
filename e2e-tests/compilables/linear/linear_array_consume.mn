@@ -1,20 +1,20 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_array_consume.mn
-# CHECK-NEXT:    4|let main() -> i32 {
-# CHECK-NEXT:    5|  let p = alloc<i32>(1);
-# CHECK-NEXT:    6|  let a : [1]'ptr<i32> = [p];
-# CHECK-NEXT:     |                           ┬
-# CHECK-NEXT:     |                           ╰─ 'p' was moved into array here
-# CHECK-NEXT:     |  ─────────────────────────┬
-# CHECK-NEXT:     |                           ╰─ Linear variable 'a[*]' must be consumed before scope exit (use free() to deallocate)
-# CHECK-NEXT:    7|  free(p);
-# CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into array previously
-# CHECK-NEXT:    8|  return 0;
-# CHECK-NEXT:    9|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_array_consume.mn
+// CHECK-NEXT:    4|let main() -> i32 {
+// CHECK-NEXT:    5|  let p = alloc<i32>(1);
+// CHECK-NEXT:    6|  let a : [1]'ptr<i32> = [p];
+// CHECK-NEXT:     |                           ┬
+// CHECK-NEXT:     |                           ╰─ 'p' was moved into array here
+// CHECK-NEXT:     |  ─────────────────────────┬
+// CHECK-NEXT:     |                           ╰─ Linear variable 'a[*]' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:    7|  free(p);
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into array previously
+// CHECK-NEXT:    8|  return 0;
+// CHECK-NEXT:    9|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);

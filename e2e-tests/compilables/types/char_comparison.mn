@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      equal: 1
-# CHECK-NEXT: not_equal: 1
-# CHECK-NEXT: less: 1
-# CHECK-NEXT: greater: 1
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      equal: 1
+// CHECK-NEXT: not_equal: 1
+// CHECK-NEXT: less: 1
+// CHECK-NEXT: greater: 1
 
 import std;
 

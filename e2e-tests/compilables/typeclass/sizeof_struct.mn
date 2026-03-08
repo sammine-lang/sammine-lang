@@ -1,9 +1,9 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      4
-# CHECK-NEXT: 99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      4
+// CHECK-NEXT: 99
 
-# Test: struct named 'T' — same name as the typeclass type parameter in Sized<T>.
-# Verifies that sizeof<T>() resolves T to our struct, not the abstract param.
+// Test: struct named 'T' — same name as the typeclass type parameter in Sized<T>.
+// Verifies that sizeof<T>() resolves T to our struct, not the abstract param.
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 

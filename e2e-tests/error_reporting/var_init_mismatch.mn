@@ -1,15 +1,15 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |var_init_mismatch.mn:9:15
-# CHECK-NEXT:    7|
-# CHECK-NEXT:    8|let main() -> i32 {
-# CHECK-NEXT:    9|  let x: i32 = get_pi();
-# CHECK-NEXT:     |               ─────┬
-# CHECK-NEXT:     |                    ╰─ Type mismatch: expression has type f64, but variable declared as i32
-# CHECK-NEXT:   10|  return 0;
-# CHECK-NEXT:   11|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |var_init_mismatch.mn:9:15
+// CHECK-NEXT:    7|
+// CHECK-NEXT:    8|let main() -> i32 {
+// CHECK-NEXT:    9|  let x: i32 = get_pi();
+// CHECK-NEXT:     |               ─────┬
+// CHECK-NEXT:     |                    ╰─ Type mismatch: expression has type f64, but variable declared as i32
+// CHECK-NEXT:   10|  return 0;
+// CHECK-NEXT:   11|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let get_pi() -> f64 {
   return 3.14;

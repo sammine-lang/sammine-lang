@@ -1,23 +1,23 @@
-# RUN: ! %sammine --file %full %O --llvm-ir invalid 2>&1 | %check %full
-# CHECK:      Error: --llvm-ir requires a value: pre, post, or diff
-# CHECK-NEXT: Usage: sammine [--help] [--version] [[--file VAR]|[--str VAR]] [--check] [--llvm-ir VAR] [--mlir-ir] [--ast-ir] [--diagnostics VAR] [--time VAR] [-O VAR] [-I VAR]... [--lib VAR]
-# CHECK:      Optional arguments:
-# CHECK-NEXT:   -h, --help      shows help message and exits 
-# CHECK-NEXT:   -v, --version   prints version information and exits 
-# CHECK-NEXT:   -f, --file      An input file for compiler to scan over. 
-# CHECK-NEXT:   -s, --str       An input string for compiler to scan over. 
-# CHECK-NEXT:   --check         Performs compiler check only, no codegen 
-# CHECK:      Diagnostics related options (detailed usage):
-# CHECK-NEXT:    --llvm-ir      Emit LLVM IR. Required value: pre, post, or diff [default: "false"]
-# CHECK-NEXT:    --mlir-ir      Dump MLIR before lowering to LLVM IR 
-# CHECK-NEXT:    --ast-ir       sammine compiler spits out the internal AST to stdout 
-# CHECK-NEXT:    --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers. Use with value for logging: --diagnostics=stages;lexer;parser. Use 'dev' to show compiler source locations in error messages. Default value is none [nargs=0..1] [default: "none"]
-# CHECK-NEXT:    --time         Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes) [nargs=0..1] [default: "false"]
-# CHECK-NEXT:   -O              Output directory for build artifacts (.so, .a, .exe). Defaults to current directory. [nargs=0..1] [default: ""]
-# CHECK-NEXT:   -I              Add directory to import search path (repeatable). [nargs=0..1] [default: {}] [may be repeated]
-# CHECK-NEXT:   --lib           Emit library output instead of executable. Use --lib=static for a .a archive, or --lib (no value) for a .so shared library. [nargs=0..1] [default: ""]
+// RUN: ! %sammine --file %full %O --llvm-ir invalid 2>&1 | %check %full
+// CHECK:      Error: --llvm-ir requires a value: pre, post, or diff
+// CHECK-NEXT: Usage: sammine [--help] [--version] [[--file VAR]|[--str VAR]] [--check] [--llvm-ir VAR] [--mlir-ir] [--ast-ir] [--diagnostics VAR] [--time VAR] [-O VAR] [-I VAR]... [--lib VAR]
+// CHECK:      Optional arguments:
+// CHECK-NEXT:   -h, --help      shows help message and exits 
+// CHECK-NEXT:   -v, --version   prints version information and exits 
+// CHECK-NEXT:   -f, --file      An input file for compiler to scan over. 
+// CHECK-NEXT:   -s, --str       An input string for compiler to scan over. 
+// CHECK-NEXT:   --check         Performs compiler check only, no codegen 
+// CHECK:      Diagnostics related options (detailed usage):
+// CHECK-NEXT:    --llvm-ir      Emit LLVM IR. Required value: pre, post, or diff [default: "false"]
+// CHECK-NEXT:    --mlir-ir      Dump MLIR before lowering to LLVM IR 
+// CHECK-NEXT:    --ast-ir       sammine compiler spits out the internal AST to stdout 
+// CHECK-NEXT:    --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers. Use with value for logging: --diagnostics=stages;lexer;parser. Use 'dev' to show compiler source locations in error messages. Default value is none [nargs=0..1] [default: "none"]
+// CHECK-NEXT:    --time         Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes) [nargs=0..1] [default: "false"]
+// CHECK-NEXT:   -O              Output directory for build artifacts (.so, .a, .exe). Defaults to current directory. [nargs=0..1] [default: ""]
+// CHECK-NEXT:   -I              Add directory to import search path (repeatable). [nargs=0..1] [default: {}] [may be repeated]
+// CHECK-NEXT:   --lib           Emit library output instead of executable. Use --lib=static for a .a archive, or --lib (no value) for a .so shared library. [nargs=0..1] [default: ""]
 
-# Invalid --llvm-ir value should produce an error
+// Invalid --llvm-ir value should produce an error
 
 let main() -> i32 {
   return 0;

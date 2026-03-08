@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      ok
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      ok
 
-# CORRECT: Nested if-else where all branches consistently consume p.
-# This valid program should compile and run.
+// CORRECT: Nested if-else where all branches consistently consume p.
+// This valid program should compile and run.
 
 import std;
 

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      x = 42
-# CHECK-NEXT: y = 3.140000
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      x = 42
+// CHECK-NEXT: y = 3.140000
 
 import std;
 

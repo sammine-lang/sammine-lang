@@ -1,7 +1,7 @@
-# RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe| %check %full
-# CHECK:      got A
-# CHECK-NEXT: got B
-# CHECK-NEXT: got C
+// RUN: %sammine --file %dir/Inputs/dummy_enum.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe| %check %full
+// CHECK:      got A
+// CHECK-NEXT: got B
+// CHECK-NEXT: got C
 import dummy_enum;
 import std;
 

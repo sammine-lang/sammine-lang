@@ -1,20 +1,20 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      7
-# CHECK-NEXT: 3
-# CHECK-NEXT: 9
-# CHECK-NEXT: -7
-# CHECK-NEXT: 30
-# CHECK-NEXT: 10
-# CHECK-NEXT: 42
-# CHECK-NEXT: 101
-# CHECK-NEXT: 42
-# CHECK-NEXT: 20
-# CHECK-NEXT: 42
-# CHECK-NEXT: 3.140000
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      7
+// CHECK-NEXT: 3
+// CHECK-NEXT: 9
+// CHECK-NEXT: -7
+// CHECK-NEXT: 30
+// CHECK-NEXT: 10
+// CHECK-NEXT: 42
+// CHECK-NEXT: 101
+// CHECK-NEXT: 42
+// CHECK-NEXT: 20
+// CHECK-NEXT: 42
+// CHECK-NEXT: 3.140000
 
 import std;
 
-# --- i64 annotation resolves unsuffixed literals ---
+// --- i64 annotation resolves unsuffixed literals ---
 let add_i64(a: i64, b: i64) -> i64 { a + b }
 
 let returns_i64() -> i64 {
@@ -22,52 +22,52 @@ let returns_i64() -> i64 {
 }
 
 let main() -> i32 {
-  # Variable annotation resolves literal
+  // Variable annotation resolves literal
   let x: i64 = 7;
   std::printf("%ld\n", x);
 
-  # Variable annotation resolves binary expr of literals
+  // Variable annotation resolves binary expr of literals
   let y: i64 = 1 + 2;
   std::printf("%ld\n", y);
 
-  # Variable annotation resolves nested binary exprs
+  // Variable annotation resolves nested binary exprs
   let z: i64 = (1 + 2) * 3;
   std::printf("%ld\n", z);
 
-  # Variable annotation resolves unary neg
+  // Variable annotation resolves unary neg
   let neg: i64 = -7;
   std::printf("%ld\n", neg);
 
-  # Function argument resolves literal
+  // Function argument resolves literal
   let sum: i64 = add_i64(10, 20);
   std::printf("%ld\n", sum);
 
-  # Function argument resolves binary expr
+  // Function argument resolves binary expr
   let sum2: i64 = add_i64(1 + 2, 3 + 4);
   std::printf("%ld\n", sum2);
 
-  # Return resolves literal
+  // Return resolves literal
   let r: i64 = returns_i64();
   std::printf("%ld\n", r);
 
-  # Literal adapts to concrete operand in binary expr
+  // Literal adapts to concrete operand in binary expr
   let a: i64 = 100;
   let b: i64 = a + 1;
   std::printf("%ld\n", b);
 
-  # If branches resolve
+  // If branches resolve
   let c: i64 = if 1i32 > 0i32 { 42 } else { 0 };
   std::printf("%ld\n", c);
 
-  # Array annotation resolves elements
+  // Array annotation resolves elements
   let arr: [3]i64 = [10, 20, 30];
   std::printf("%ld\n", arr[1]);
 
-  # Default: unsuffixed integer is i32
+  // Default: unsuffixed integer is i32
   let d = 42;
   std::printf("%d\n", d);
 
-  # Default: unsuffixed float is f64
+  // Default: unsuffixed float is f64
   let e = 3.14;
   std::printf("%f\n", e);
 

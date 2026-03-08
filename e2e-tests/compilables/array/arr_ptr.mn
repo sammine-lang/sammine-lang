@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      100
-# CHECK-NEXT: 200
-# CHECK-NEXT: 999
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      100
+// CHECK-NEXT: 200
+// CHECK-NEXT: 999
 
 import std;
 
@@ -12,7 +12,7 @@ let main() -> i32 {
   let mut a : [3]ptr<i32> = [&x, &y, &z];
   std::printf("%d\n", *a[0]);
   std::printf("%d\n", *a[1]);
-  # Write a new pointer into the array
+  // Write a new pointer into the array
   let w : i32 = 999;
   a[2] = &w;
   std::printf("%d\n", *a[2]);

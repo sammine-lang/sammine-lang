@@ -1,5 +1,5 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      15 24
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      15 24
 
 import std;
 

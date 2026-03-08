@@ -1,14 +1,14 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      42 99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      42 99
 
 import std;
 
 struct T { x: i32, };
 
-# <T> shadows the struct T — inside identity, T is a type parameter
+// <T> shadows the struct T — inside identity, T is a type parameter
 let identity<T>(x: T) -> T { x }
 
-# Use the struct T normally (no <T> declared)
+// Use the struct T normally (no <T> declared)
 let get_x(t: T) -> i32 { t.x }
 
 let main() -> i32 {

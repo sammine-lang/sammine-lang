@@ -1,16 +1,16 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |case_wrong_bindings.mn:9:4
-# CHECK-NEXT:    7|  let s: Shape = Shape::Circle(3.14);
-# CHECK-NEXT:    8|  case s {
-# CHECK-NEXT:    9|    Shape::Circle(a, b) => 0,
-# CHECK-NEXT:     |    ──────────────────┬
-# CHECK-NEXT:     |                      ╰─ Pattern 'Shape::Circle' expects 1 bindings, got 2
-# CHECK-NEXT:   10|    _ => 0,
-# CHECK-NEXT:   11|  };
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
-# CHECK-ERR: expects 1 bindings, got 2
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |case_wrong_bindings.mn:9:4
+// CHECK-NEXT:    7|  let s: Shape = Shape::Circle(3.14);
+// CHECK-NEXT:    8|  case s {
+// CHECK-NEXT:    9|    Shape::Circle(a, b) => 0,
+// CHECK-NEXT:     |    ──────────────────┬
+// CHECK-NEXT:     |                      ╰─ Pattern 'Shape::Circle' expects 1 bindings, got 2
+// CHECK-NEXT:   10|    _ => 0,
+// CHECK-NEXT:   11|  };
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+// CHECK-ERR: expects 1 bindings, got 2
 
 type Shape = Circle(f64) | Rect(f64, f64) | Point;
 

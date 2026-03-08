@@ -1,5 +1,5 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:      Linear variable 'v.data' must be consumed before scope exit
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:      Linear variable 'v.data' must be consumed before scope exit
 
 import vec;
 

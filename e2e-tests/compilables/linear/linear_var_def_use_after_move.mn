@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_var_def_use_after_move.mn
-# CHECK-NEXT:    4|let main() -> i32 {
-# CHECK-NEXT:    5|  let p = alloc<i32>(1);
-# CHECK-NEXT:    6|  let q = p;
-# CHECK-NEXT:     |  ────────┬
-# CHECK-NEXT:     |          ╰─ 'p' was moved here
-# CHECK-NEXT:    7|  free(p);
-# CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved previously
-# CHECK-NEXT:    8|  free(q);
-# CHECK-NEXT:    9|  return 0;
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_var_def_use_after_move.mn
+// CHECK-NEXT:    4|let main() -> i32 {
+// CHECK-NEXT:    5|  let p = alloc<i32>(1);
+// CHECK-NEXT:    6|  let q = p;
+// CHECK-NEXT:     |  ────────┬
+// CHECK-NEXT:     |          ╰─ 'p' was moved here
+// CHECK-NEXT:    7|  free(p);
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved previously
+// CHECK-NEXT:    8|  free(q);
+// CHECK-NEXT:    9|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);

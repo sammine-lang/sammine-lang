@@ -1,16 +1,16 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |func_arg_type_mismatch.mn
-# CHECK-NEXT:   18|
-# CHECK-NEXT:   19|let main() -> i32 {
-# CHECK-NEXT:   20|  return add(1, 3.14);
-# CHECK-NEXT:     |                ───┬
-# CHECK-NEXT:     |                   ╰─ Argument 2 to 'add': expected i32, got float literal
-# CHECK-NEXT:     |                ───┬
-# CHECK-NEXT:     |                   ╰─ note: 'add' has signature: (i32, i32) -> i32
-# CHECK-NEXT:   21|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |func_arg_type_mismatch.mn
+// CHECK-NEXT:   18|
+// CHECK-NEXT:   19|let main() -> i32 {
+// CHECK-NEXT:   20|  return add(1, 3.14);
+// CHECK-NEXT:     |                ───┬
+// CHECK-NEXT:     |                   ╰─ Argument 2 to 'add': expected i32, got float literal
+// CHECK-NEXT:     |                ───┬
+// CHECK-NEXT:     |                   ╰─ note: 'add' has signature: (i32, i32) -> i32
+// CHECK-NEXT:   21|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let add(a: i32, b: i32) -> i32 {
   return a + b;

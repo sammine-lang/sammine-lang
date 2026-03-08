@@ -1,17 +1,17 @@
-# RUN: ! %sammine --file %full --check --diagnostics 2>&1 | %check %full
-# CHECK:          |linear_array_nonlinear_return.mn:9:2
-# CHECK-NEXT:    7|  let p : ptr<i32> = &x;
-# CHECK-NEXT:    8|  let a : [1]ptr<i32> = [p];
-# CHECK-NEXT:    9|  return a;
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Cannot return 'a' of type '[1]ptr<i32>': non-linear ptr<i32> in element (may reference a local variable)
-# CHECK-NEXT:   10|}
-# CHECK-NEXT:   11|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full --check --diagnostics 2>&1 | %check %full
+// CHECK:          |linear_array_nonlinear_return.mn:9:2
+// CHECK-NEXT:    7|  let p : ptr<i32> = &x;
+// CHECK-NEXT:    8|  let a : [1]ptr<i32> = [p];
+// CHECK-NEXT:    9|  return a;
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Cannot return 'a' of type '[1]ptr<i32>': non-linear ptr<i32> in element (may reference a local variable)
+// CHECK-NEXT:   10|}
+// CHECK-NEXT:   11|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# Test: returning an array with non-linear pointer elements is an error
+// Test: returning an array with non-linear pointer elements is an error
 let make_arr() -> [1]ptr<i32> {
   let x : i32 = 42;
   let p : ptr<i32> = &x;

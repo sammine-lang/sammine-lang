@@ -1,5 +1,5 @@
-# RUN: %sammine --file %full %O %I && %T/import_std_printf.exe | %check %full
-# CHECK:      hello from std 42
+// RUN: %sammine --file %full %O %I && %T/import_std_printf.exe | %check %full
+// CHECK:      hello from std 42
 
 import std;
 

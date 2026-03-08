@@ -1,11 +1,11 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |if_branch_mismatch.mn:1:0
-# CHECK:          |┬
-# CHECK-NEXT:     |╰─ If branches have incompatible types: then has numeric literal, else has float literal
-# CHECK:         3|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |if_branch_mismatch.mn:1:0
+// CHECK:          |┬
+// CHECK-NEXT:     |╰─ If branches have incompatible types: then has numeric literal, else has float literal
+// CHECK:         3|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let x: i32 = if true { 42 } else { 3.14 };

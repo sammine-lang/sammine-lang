@@ -1,15 +1,15 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |arr_type_mismatch.mn:4:21
-# CHECK:         3|let main() -> i32 {
-# CHECK-NEXT:    4|  let a : [3]i32 = [1.0, 2.0, 3];
-# CHECK-NEXT:     |                     ──┬
-# CHECK-NEXT:     |                       ╰─ Array element type mismatch: expected i32, got float literal
-# CHECK-NEXT:     |                          1 more type mismatch error in this array
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |arr_type_mismatch.mn:4:21
+// CHECK:         3|let main() -> i32 {
+// CHECK-NEXT:    4|  let a : [3]i32 = [1.0, 2.0, 3];
+// CHECK-NEXT:     |                     ──┬
+// CHECK-NEXT:     |                       ╰─ Array element type mismatch: expected i32, got float literal
+// CHECK-NEXT:     |                          1 more type mismatch error in this array
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   let a : [3]i32 = [1.0, 2.0, 3];
   return 0;

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
-# Array passed to a function should use extractvalue (register decomposition),
-# not alloca + GEP (struct-like memory access).
+// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// Array passed to a function should use extractvalue (register decomposition),
+// not alloca + GEP (struct-like memory access).
 
 let sum3(arr: [3]i32) -> i32 {
   arr[0] + arr[1] + arr[2]
@@ -10,9 +10,9 @@ let main() -> i32 {
   return 0;
 }
 
-# CHECK:      define i32 @sum3([3 x i32] %0)
-# CHECK-NEXT:   %.fca.0.extract = extractvalue [3 x i32] %0, 0
-# CHECK-NEXT:   %.fca.1.extract = extractvalue [3 x i32] %0, 1
-# CHECK-NEXT:   %.fca.2.extract = extractvalue [3 x i32] %0, 2
-# CHECK:        add i32
-# CHECK:        ret i32
+// CHECK:      define i32 @sum3([3 x i32] %0)
+// CHECK-NEXT:   %.fca.0.extract = extractvalue [3 x i32] %0, 0
+// CHECK-NEXT:   %.fca.1.extract = extractvalue [3 x i32] %0, 1
+// CHECK-NEXT:   %.fca.2.extract = extractvalue [3 x i32] %0, 2
+// CHECK:        add i32
+// CHECK:        ret i32

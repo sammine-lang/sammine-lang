@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |linear_deref_after_free.mn
-# CHECK-NEXT:    5|  let p = alloc<i32>(1);
-# CHECK-NEXT:    6|  *p = 42;
-# CHECK-NEXT:    7|  free(p);
-# CHECK-NEXT:     |  ─────┬
-# CHECK-NEXT:     |       ╰─ 'p' was freed here
-# CHECK-NEXT:    8|  let v : i32 = *p;
-# CHECK-NEXT:     |                ─┬
-# CHECK-NEXT:     |                 ╰─ Cannot dereference 'p' — it was already freed previously
-# CHECK-NEXT:    9|  return 0;
-# CHECK-NEXT:   10|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |linear_deref_after_free.mn
+// CHECK-NEXT:    5|  let p = alloc<i32>(1);
+// CHECK-NEXT:    6|  *p = 42;
+// CHECK-NEXT:    7|  free(p);
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ 'p' was freed here
+// CHECK-NEXT:    8|  let v : i32 = *p;
+// CHECK-NEXT:     |                ─┬
+// CHECK-NEXT:     |                 ╰─ Cannot dereference 'p' — it was already freed previously
+// CHECK-NEXT:    9|  return 0;
+// CHECK-NEXT:   10|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);

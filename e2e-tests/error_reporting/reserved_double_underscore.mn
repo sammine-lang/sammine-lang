@@ -1,14 +1,14 @@
-# RUN: ! %sammine --file %full %O --check 2>&1 | %check %full
-# CHECK:          |reserved_double_underscore.mn:4:4
-# CHECK:         4|let my__func() -> i32 {
-# CHECK-NEXT:     |    ────────────────┬
-# CHECK-NEXT:     |                    ╰─ Identifier 'my__func' contains '__', which is reserved for C interop name mangling
-# CHECK-NEXT:     |                       Please use single underscore '_'
-# CHECK-NEXT:    5|  return 0;
-# CHECK-NEXT:    6|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --check 2>&1 | %check %full
+// CHECK:          |reserved_double_underscore.mn:4:4
+// CHECK:         4|let my__func() -> i32 {
+// CHECK-NEXT:     |    ────────────────┬
+// CHECK-NEXT:     |                    ╰─ Identifier 'my__func' contains '__', which is reserved for C interop name mangling
+// CHECK-NEXT:     |                       Please use single underscore '_'
+// CHECK-NEXT:    5|  return 0;
+// CHECK-NEXT:    6|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let my__func() -> i32 {
   return 0;
 }

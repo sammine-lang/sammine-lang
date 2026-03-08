@@ -1,9 +1,9 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      8
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      8
 
-# DoubleSized instance is defined BEFORE Doubled instance,
-# but DoubleSized<i32>::double_size calls doubled<i32>().
-# Tests that forward declarations handle cross-typeclass dependencies.
+// DoubleSized instance is defined BEFORE Doubled instance,
+// but DoubleSized<i32>::double_size calls doubled<i32>().
+// Tests that forward declarations handle cross-typeclass dependencies.
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 

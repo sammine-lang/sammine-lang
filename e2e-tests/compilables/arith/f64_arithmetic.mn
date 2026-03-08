@@ -1,8 +1,8 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      14.000000
-# CHECK-NEXT: 7.000000
-# CHECK-NEXT: 36.750000
-# CHECK-NEXT: 3.000000
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      14.000000
+// CHECK-NEXT: 7.000000
+// CHECK-NEXT: 36.750000
+// CHECK-NEXT: 3.000000
 
 import std;
 

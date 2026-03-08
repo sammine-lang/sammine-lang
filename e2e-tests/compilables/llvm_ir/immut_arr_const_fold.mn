@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
-# Immutable array with constant elements should be fully constant-folded.
-# main should have no alloca — LLVM folds the array + sum into a single constant.
+// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// Immutable array with constant elements should be fully constant-folded.
+// main should have no alloca — LLVM folds the array + sum into a single constant.
 
 import std;
 
@@ -14,7 +14,7 @@ let main() -> i32 {
   return 0;
 }
 
-# CHECK:      define noundef i32 @main() local_unnamed_addr
-# CHECK-NOT:  alloca
-# CHECK:      @"std::printf"(ptr nonnull @.str.0, i32 60)
-# CHECK:      ret i32 0
+// CHECK:      define noundef i32 @main() local_unnamed_addr
+// CHECK-NOT:  alloca
+// CHECK:      @"std::printf"(ptr nonnull @.str.0, i32 60)
+// CHECK:      ret i32 0

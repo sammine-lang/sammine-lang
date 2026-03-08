@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      233168
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      233168
 
-# Test implicit return - no explicit 'return' keyword needed
+// Test implicit return - no explicit 'return' keyword needed
 
 import std;
 

@@ -1,17 +1,17 @@
-# RUN: %sammine --file %dir/Inputs/typed_helper.mn %O && ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
-# CHECK:          |cross_module_error_test.mn
-# CHECK-NEXT:    7|let main() -> i32 {
-# CHECK-NEXT:    8|  let x: f64 = 3.14;
-# CHECK-NEXT:    9|  std::printf("%d\n", h::double_it(x));
-# CHECK-NEXT:     |                                   ┬
-# CHECK-NEXT:     |                                   ╰─ Argument 1 to 'h::double_it': expected i32, got f64
-# CHECK-NEXT:     |                                   ┬
-# CHECK-NEXT:     |                                   ╰─ note: 'h::double_it' has signature: (i32) -> i32
-# CHECK-NEXT:   10|  return 0;
-# CHECK-NEXT:   11|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: %sammine --file %dir/Inputs/typed_helper.mn %O && ! %sammine --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
+// CHECK:          |cross_module_error_test.mn
+// CHECK-NEXT:    7|let main() -> i32 {
+// CHECK-NEXT:    8|  let x: f64 = 3.14;
+// CHECK-NEXT:    9|  std::printf("%d\n", h::double_it(x));
+// CHECK-NEXT:     |                                   ┬
+// CHECK-NEXT:     |                                   ╰─ Argument 1 to 'h::double_it': expected i32, got f64
+// CHECK-NEXT:     |                                   ┬
+// CHECK-NEXT:     |                                   ╰─ note: 'h::double_it' has signature: (i32) -> i32
+// CHECK-NEXT:   10|  return 0;
+// CHECK-NEXT:   11|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import typed_helper as h;
 import std;

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %dir/Inputs/has_generic_multi.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_multi_type.exe | %check %full
-# CHECK:      10
-# CHECK-NEXT: 20
+// RUN: %sammine --file %dir/Inputs/has_generic_multi.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_generic_multi_type.exe | %check %full
+// CHECK:      10
+// CHECK-NEXT: 20
 
 import has_generic_multi as lib;
 import std;

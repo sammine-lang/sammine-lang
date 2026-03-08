@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      mixed i32=42, i64=1234567890123
-# CHECK-NEXT: reverse i64=9876543210987, i32=99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      mixed i32=42, i64=1234567890123
+// CHECK-NEXT: reverse i64=9876543210987, i32=99
 
 import std;
 

@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      read
-# CHECK-NEXT: write
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      read
+// CHECK-NEXT: write
 
 import std;
 

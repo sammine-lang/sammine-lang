@@ -1,27 +1,27 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |closure_escape_via_array.mn:16:2
-# CHECK-NEXT:   14|  let f : (i32) -> i32 = deref_add(&x);
-# CHECK-NEXT:   15|  let a : [1](i32) -> i32 = [f];
-# CHECK-NEXT:   16|  return a;
-# CHECK-NEXT:     |  ───────┬
-# CHECK-NEXT:     |         ╰─ Cannot return 'a' — it is a closure that captured a non-linear pointer (may dangle after return)
-# CHECK-NEXT:   17|}
-# CHECK-NEXT:   18|
-# CHECK-NEXT: --------------------------------------------------------------------------
-# CHECK-NEXT:     |closure_escape_via_array.mn:22:2
-# CHECK-NEXT:   20|  let x : i32 = 42;
-# CHECK-NEXT:   21|  let f : (i32) -> i32 = deref_add(&x);
-# CHECK-NEXT:   22|  return [f];
-# CHECK-NEXT:     |  ────────┬
-# CHECK-NEXT:     |          ╰─ Cannot return a value containing 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
-# CHECK-NEXT:   23|}
-# CHECK-NEXT:   24|
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |closure_escape_via_array.mn:16:2
+// CHECK-NEXT:   14|  let f : (i32) -> i32 = deref_add(&x);
+// CHECK-NEXT:   15|  let a : [1](i32) -> i32 = [f];
+// CHECK-NEXT:   16|  return a;
+// CHECK-NEXT:     |  ───────┬
+// CHECK-NEXT:     |         ╰─ Cannot return 'a' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:   17|}
+// CHECK-NEXT:   18|
+// CHECK-NEXT: --------------------------------------------------------------------------
+// CHECK-NEXT:     |closure_escape_via_array.mn:22:2
+// CHECK-NEXT:   20|  let x : i32 = 42;
+// CHECK-NEXT:   21|  let f : (i32) -> i32 = deref_add(&x);
+// CHECK-NEXT:   22|  return [f];
+// CHECK-NEXT:     |  ────────┬
+// CHECK-NEXT:     |          ╰─ Cannot return a value containing 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:   23|}
+// CHECK-NEXT:   24|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# Test: closure capturing a stack ptr escapes via array element.
-# Both inline and variable returns must be rejected.
+// Test: closure capturing a stack ptr escapes via array element.
+// Both inline and variable returns must be rejected.
 
 import std;
 

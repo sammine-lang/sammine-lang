@@ -1,5 +1,5 @@
-# RUN: %sammine --file %dir/Inputs/has_extern_c.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_extern_c_printf.exe | %check %full
-# CHECK:      99
+// RUN: %sammine --file %dir/Inputs/has_extern_c.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/import_extern_c_printf.exe | %check %full
+// CHECK:      99
 
 import has_extern_c as he;
 

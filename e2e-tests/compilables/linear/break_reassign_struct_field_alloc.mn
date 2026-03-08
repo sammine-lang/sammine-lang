@@ -1,18 +1,18 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |break_reassign_struct_field_alloc.mn:17:2
-# CHECK-NEXT:   15|  let p = alloc<i32>(1);
-# CHECK-NEXT:   16|  *p = 42;
-# CHECK-NEXT:   17|  let b : Box = Box { data: p, tag: 1 };
-# CHECK-NEXT:     |  ──────────────────────────────────┬
-# CHECK-NEXT:     |                                    ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
-# CHECK-NEXT:   18|  let v : i32 = *(b.data);
-# CHECK-NEXT:   19|  std::printf("%d
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |break_reassign_struct_field_alloc.mn:17:2
+// CHECK-NEXT:   15|  let p = alloc<i32>(1);
+// CHECK-NEXT:   16|  *p = 42;
+// CHECK-NEXT:   17|  let b : Box = Box { data: p, tag: 1 };
+// CHECK-NEXT:     |  ──────────────────────────────────┬
+// CHECK-NEXT:     |                                    ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:   18|  let v : i32 = *(b.data);
+// CHECK-NEXT:   19|  std::printf("%d
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
-# CORRECT: p is consumed into Box{data: p}, but b.data is never freed.
-# The checker now tracks inner linear fields and rejects this.
+// CORRECT: p is consumed into Box{data: p}, but b.data is never freed.
+// The checker now tracks inner linear fields and rejects this.
 
 import std;
 

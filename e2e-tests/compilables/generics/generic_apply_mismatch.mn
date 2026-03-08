@@ -1,4 +1,4 @@
-# RUN: ! %sammine --file %full %O --diagnostics
+// RUN: ! %sammine --file %full %O --diagnostics
 let double(x: i32) -> i32 { x + x }
 
 let apply<T>(f: (T) -> f64, x: T) -> f64 { f(x) }

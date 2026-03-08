@@ -1,6 +1,6 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      matched WRONLY
-# CHECK-NEXT: matched CREAT
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      matched WRONLY
+// CHECK-NEXT: matched CREAT
 
 import std;
 

@@ -1,17 +1,17 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |hint_signed_unsigned.mn
-# CHECK-NEXT:   16|let main() -> i32 {
-# CHECK-NEXT:   17|  let x: u32 = 42u32;
-# CHECK-NEXT:   18|  let y: i32 = x;
-# CHECK-NEXT:     |               ┬
-# CHECK-NEXT:     |               ╰─ Type mismatch: expression has type u32, but variable declared as i32
-# CHECK-NEXT:     |               ┬
-# CHECK-NEXT:     |               ╰─ note: signed and unsigned integer types cannot be mixed
-# CHECK-NEXT:   19|  return 0;
-# CHECK-NEXT:   20|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |hint_signed_unsigned.mn
+// CHECK-NEXT:   16|let main() -> i32 {
+// CHECK-NEXT:   17|  let x: u32 = 42u32;
+// CHECK-NEXT:   18|  let y: i32 = x;
+// CHECK-NEXT:     |               ┬
+// CHECK-NEXT:     |               ╰─ Type mismatch: expression has type u32, but variable declared as i32
+// CHECK-NEXT:     |               ┬
+// CHECK-NEXT:     |               ╰─ note: signed and unsigned integer types cannot be mixed
+// CHECK-NEXT:   19|  return 0;
+// CHECK-NEXT:   20|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let x: u32 = 42u32;

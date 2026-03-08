@@ -1,16 +1,16 @@
-# RUN: %sammine --file %dir/Inputs/enum_overlap1.mn %O && %sammine --file %dir/Inputs/enum_overlap2.mn %O && ! %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
-# CHECK:          |enum_ambiguous_variant_call.mn:9:15
-# CHECK-NEXT:    7|
-# CHECK-NEXT:    8|let main() -> i32 {
-# CHECK-NEXT:    9|  let x = Wrap(42);
-# CHECK-NEXT:     |               ─┬
-# CHECK-NEXT:     |                ╰─ [SCOPE]: Variant name 'Wrap' is ambiguous — multiple enums define this variant. Use qualified syntax (e.g., EnumName::Wrap) to disambiguate
-# CHECK-NEXT:     |                   [Error-borne `dev` location: ScopeGeneratorVisitor.cpp:293]
-# CHECK-NEXT:   10|  return 0;
-# CHECK-NEXT:   11|}
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: %sammine --file %dir/Inputs/enum_overlap1.mn %O && %sammine --file %dir/Inputs/enum_overlap2.mn %O && ! %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs 2>&1 | %check %full
+// CHECK:          |enum_ambiguous_variant_call.mn:9:15
+// CHECK-NEXT:    7|
+// CHECK-NEXT:    8|let main() -> i32 {
+// CHECK-NEXT:    9|  let x = Wrap(42);
+// CHECK-NEXT:     |               ─┬
+// CHECK-NEXT:     |                ╰─ [SCOPE]: Variant name 'Wrap' is ambiguous — multiple enums define this variant. Use qualified syntax (e.g., EnumName::Wrap) to disambiguate
+// CHECK-NEXT:     |                   [Error-borne `dev` location: ScopeGeneratorVisitor.cpp:293]
+// CHECK-NEXT:   10|  return 0;
+// CHECK-NEXT:   11|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import enum_overlap1;
 import enum_overlap2;

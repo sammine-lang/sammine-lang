@@ -1,12 +1,12 @@
-# RUN: %sammine --file %full %O && %T/readme_demo.exe | %check %full
-# CHECK:      34
-# CHECK-NEXT: (30, 40)
-# CHECK-NEXT: sizeof i32 = 4
-# CHECK-NEXT: sizeof i32 = 4
-# CHECK-NEXT: A
+// RUN: %sammine --file %full %O && %T/readme_demo.exe | %check %full
+// CHECK:      34
+// CHECK-NEXT: (30, 40)
+// CHECK-NEXT: sizeof i32 = 4
+// CHECK-NEXT: sizeof i32 = 4
+// CHECK-NEXT: A
 
-# Line comments start with #
-# Types: i32, i64, f64, bool, char, unit, etc
+// Line comments start with #
+// Types: i32, i64, f64, bool, char, unit, etc
 
 import std;                                   # import standard library (provides printf)
 
@@ -30,13 +30,13 @@ let apply<T, U>(f: (T) -> U, x: T) -> U {   # higher-order + generic
   f(x)                                       # (T) -> U is a function type
 }
 
-# --- Type aliases ---
+// --- Type aliases ---
 type Int = i32;                                   # transparent alias for i32
 
-# --- Structs ---
+// --- Structs ---
 struct Vec2 { x: i32, y: i32, };
 
-# --- Operator overloading via typeclasses ---
+// --- Operator overloading via typeclasses ---
 instance Add<Vec2> {
   let Add(a: Vec2, b: Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
@@ -44,27 +44,27 @@ instance Add<Vec2> {
 }
 
 let main() -> i32 {
-  # --- Variables ---
+  // --- Variables ---
   let x: Int = 5;                            # using type alias
   let y = 10;                                # type inference
   let mut counter: i32 = 0;                  # mutable binding
   counter = counter + 1;                     # assignment (mut only)
 
-  # --- Control flow ---
+  // --- Control flow ---
   let sign = if x > 0 { 1 }                 # if/else is an expression
              else if x == 0 { 0 }           # comparison: < <= > >= == !=
              else { -1 };                    # unary negation
 
-  # --- Arrays ---
+  // --- Arrays ---
   let a: [3]i32 = [10, 20, 30];           # fixed-size array literal
   let first = a[0];                          # indexing
   let size = len(a);                         # array length
 
-  # --- Tuples ---
+  // --- Tuples ---
   let t = (100, true);                        # tuple literal (i32, bool)
   let (tx, ty) = t;                           # destructuring let
 
-  # --- Pointers & memory ---
+  // --- Pointers & memory ---
   let p: 'ptr<i32> = alloc<i32>(1);         # heap allocation (count, linear)
   *p = 42;                                   # write through pointer
   let val = *p;                              # dereference
@@ -73,32 +73,32 @@ let main() -> i32 {
   let q: ptr<i32> = &x;                     # address-of (stack pointer)
   let pp: ptr<ptr<i32>> = &q;               # nested pointers
 
-  # --- Pipe operator ---
+  // --- Pipe operator ---
   let r1 = 5 |> add(3);                     # x |> f(y) becomes f(x, y)
   let r2 = 5 |> identity |> add(3);         # chained pipes
 
-  # --- Partial function application ---
+  // --- Partial function application ---
   let add5 = add(5);                         # fewer args -> closure
   let eight = add5(3);                       # call the partially applied fn
 
-  # --- Higher-order functions ---
+  // --- Higher-order functions ---
   let f: (i32) -> i32 = add5;               # function as value
   let res = apply(f, 42);                   # pass function as argument
 
-  # --- Generics (monomorphized) ---
+  // --- Generics (monomorphized) ---
   let a_i32 = identity(42);                 # inferred: identity.i32
   let a_f64 = identity<f64>(3.14);          # explicit type arg: identity.f64
 
-  # --- Structs + operator overloading ---
+  // --- Structs + operator overloading ---
   let v1: Vec2 = Vec2 { x: 10, y: 15 };    # struct literal
   let v2: Vec2 = Vec2 { x: 20, y: 25 };
   let v3: Vec2 = v1 + v2;                   # uses Add<Vec2> instance
 
-  # --- Sizeof (built-in typeclass) ---
+  // --- Sizeof (built-in typeclass) ---
   let sz = Sized<i32>();                     # compile-time size info
   let sz2 = Sized<i32>::Sized();             # qualified typeclass call syntax
 
-  # --- Chars ---
+  // --- Chars ---
   let ch: char = 'A';
 
   std::printf("%d\n", fib(9));              # 34

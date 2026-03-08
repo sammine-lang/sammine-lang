@@ -1,11 +1,11 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |enum_discriminant_payload.mn:4:16
-# CHECK:         3|
-# CHECK-NEXT:    4|type Bad: i32 = Foo(1, i32);
-# CHECK-NEXT:     |                ^^^
-# CHECK-NEXT:     |                Expected ')' to close payload of variant 'Foo'
-# CHECK-NEXT:    5|
-# CHECK-NEXT:    6|let main() -> i32 {
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |enum_discriminant_payload.mn:4:16
+// CHECK:         3|
+// CHECK-NEXT:    4|type Bad: i32 = Foo(1, i32);
+// CHECK-NEXT:     |                ^^^
+// CHECK-NEXT:     |                Expected ')' to close payload of variant 'Foo'
+// CHECK-NEXT:    5|
+// CHECK-NEXT:    6|let main() -> i32 {
 
 type Bad: i32 = Foo(1, i32);
 

@@ -1,7 +1,7 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      got val: 99
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      got val: 99
 
-# Test: enum wrapping a non-linear pointer used locally (no return) is fine
+// Test: enum wrapping a non-linear pointer used locally (no return) is fine
 import std;
 
 type MaybePtr = Some(ptr<i32>) | None;

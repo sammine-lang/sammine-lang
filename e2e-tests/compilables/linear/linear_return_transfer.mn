@@ -1,10 +1,10 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      123
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      123
 
 import std;
 
-# Tests that `return p` consumes the linear var inside the callee,
-# and the caller receives a 'ptr<i32> (linear) which must be freed.
+// Tests that `return p` consumes the linear var inside the callee,
+// and the caller receives a 'ptr<i32> (linear) which must be freed.
 let make_ptr() -> 'ptr<i32> {
   let p = alloc<i32>(1);
   *p = 123;

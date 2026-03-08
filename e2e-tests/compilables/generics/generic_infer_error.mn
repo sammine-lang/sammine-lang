@@ -1,16 +1,16 @@
-# RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-# CHECK:          |generic_infer_error.mn
-# CHECK:         3|
-# CHECK-NEXT:    4|let use_t(x: i32) -> T { x }
-# CHECK-NEXT:     |                     ┬
-# CHECK-NEXT:     |                     ╰─ Type 'T' not found in the current scope.
-# CHECK-NEXT:     |                         ┬
-# CHECK-NEXT:     |                         ╰─ Wrong return type for function use_t, expected Poisoned but got i32
-# CHECK-NEXT:    5|
-# CHECK-NEXT:    6|let main() -> i32 {
-# CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-# CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-# CHECK-NEXT: --------------------------------------------------------------------------
+// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
+// CHECK:          |generic_infer_error.mn
+// CHECK:         3|
+// CHECK-NEXT:    4|let use_t(x: i32) -> T { x }
+// CHECK-NEXT:     |                     ┬
+// CHECK-NEXT:     |                     ╰─ Type 'T' not found in the current scope.
+// CHECK-NEXT:     |                         ┬
+// CHECK-NEXT:     |                         ╰─ Wrong return type for function use_t, expected Poisoned but got i32
+// CHECK-NEXT:    5|
+// CHECK-NEXT:    6|let main() -> i32 {
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let use_t(x: i32) -> T { x }
 

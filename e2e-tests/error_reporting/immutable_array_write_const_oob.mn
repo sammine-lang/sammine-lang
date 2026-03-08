@@ -1,5 +1,5 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Array index out of bounds: index 5 on array of size 3
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK: Array index out of bounds: index 5 on array of size 3
 
 import std;
 

@@ -1,83 +1,83 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:      [Internal Compiler Error] : MLIRGen: unsupported binary operator '<'
-# CHECK-NEXT: [Generating stack traces]...
-# CHECK-NEXT: [Please wait]...
-# CHECK-NEXT: Stack trace (most recent call first):
-# CHECK-NEXT: #0  0x000000010068b99b in sammine_util::abort(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) at /Users/jjasmine/Developer/github/sammine-lang/build/src/util/../../../src/util/Utilities.cpp:30:16
-# CHECK-NEXT:       28:   fmt::print(stderr, style, "[Generating stack traces]...\n");
-# CHECK-NEXT:       29:   fmt::print(stderr, style, "[Please wait]...\n");
-# CHECK-NEXT:       30:   auto trace = cpptrace::generate_trace();
-# CHECK-NEXT:       31:   trace.print_with_snippets();
-# CHECK-NEXT:       32:   std::abort();
-# CHECK-NEXT: #1  0x0000000100886bef in sammine_lang::MLIRGenImpl::emitBinaryExpr(sammine_lang::AST::BinaryExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #2  0x000000010086731f in sammine_lang::MLIRGenImpl::emitExpr(sammine_lang::AST::ExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #3  0x00000001008678bb in sammine_lang::MLIRGenImpl::emitVarDef(sammine_lang::AST::VarDefAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #4  0x00000001008673d3 in sammine_lang::MLIRGenImpl::emitExpr(sammine_lang::AST::ExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #5  0x0000000100867ddf in sammine_lang::MLIRGenImpl::emitBlock(sammine_lang::AST::BlockAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #6  0x0000000100876d37 in sammine_lang::MLIRGenImpl::emitFunction(sammine_lang::AST::FuncDefAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #7  0x0000000100865e8b in sammine_lang::MLIRGenImpl::emitDefinition(sammine_lang::AST::DefinitionAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #8  0x0000000100864947 in sammine_lang::MLIRGenImpl::generate(sammine_lang::AST::ProgramAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #9  0x00000001008685f7 in sammine_lang::mlirGen(mlir::MLIRContext&, sammine_lang::AST::ProgramAST*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, sammine_lang::AST::ASTProperties const&) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
-# CHECK-NEXT: #10 0x000000010064220b in sammine_lang::Compiler::codegen_mlir() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:555:7
-# CHECK-NEXT:      554:   auto mlirModule =
-# CHECK-NEXT:      555:       mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input, props_);
-# CHECK-NEXT:      556:   if (!mlirModule) {
-# CHECK-NEXT:      557:     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
-# CHECK-NEXT: #11 0x00000001006420d3 in sammine_lang::Compiler::codegen() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:540:3
-# CHECK-NEXT:      538:   });
-# CHECK-NEXT:      539: 
-# CHECK-NEXT:      540:   codegen_mlir();
-# CHECK-NEXT:      541: }
-# CHECK-NEXT: #12 0x000000010068a64b in decltype(*std::declval<sammine_lang::Compiler*>().*std::declval<void (sammine_lang::Compiler::*&)()>()()) std::__1::__invoke[abi:ne190102]<void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*, void>(void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/invoke.h:117:25
-# CHECK-NEXT:      115: __invoke(_Fp&& __f, _A0&& __a0, _Args&&... __args)
-# CHECK-NEXT:      116:     _NOEXCEPT_(noexcept(((*static_cast<_A0&&>(__a0)).*__f)(static_cast<_Args&&>(__args)...)))
-# CHECK-NEXT:      117:                { return ((*static_cast<_A0&&>(__a0)).*__f)(static_cast<_Args&&>(__args)...); }
-# CHECK-NEXT:      118: 
-# CHECK-NEXT:      119: // bullets 4, 5 and 6
-# CHECK-NEXT: #13 0x000000010068a59f in void std::__1::__invoke_void_return_wrapper<void, true>::__call[abi:ne190102]<void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*>(void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/invoke.h:224:5
-# CHECK-NEXT:      222:   template <class... _Args>
-# CHECK-NEXT:      223:   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 static void __call(_Args&&... __args) {
-# CHECK-NEXT:      224:     std::__invoke(std::forward<_Args>(__args)...);
-# CHECK-NEXT:      225:   }
-# CHECK-NEXT:      226: };
-# CHECK-NEXT: #14 0x000000010068a573 in std::__1::__function::__alloc_func<void (sammine_lang::Compiler::*)(), std::__1::allocator<void (sammine_lang::Compiler::*)()>, void (sammine_lang::Compiler*)>::operator()[abi:ne190102](sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:171:12
-# CHECK-NEXT:      169:   _LIBCPP_HIDE_FROM_ABI _Rp operator()(_ArgTypes&&... __arg) {
-# CHECK-NEXT:      170:     typedef __invoke_void_return_wrapper<_Rp> _Invoker;
-# CHECK-NEXT:      171:     return _Invoker::__call(__f_.first(), std::forward<_ArgTypes>(__arg)...);
-# CHECK-NEXT:      172:   }
-# CHECK-NEXT: #15 0x00000001006893d3 in std::__1::__function::__func<void (sammine_lang::Compiler::*)(), std::__1::allocator<void (sammine_lang::Compiler::*)()>, void (sammine_lang::Compiler*)>::operator()(sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:313:10
-# CHECK-NEXT:      311: template <class _Fp, class _Alloc, class _Rp, class... _ArgTypes>
-# CHECK-NEXT:      312: _Rp __func<_Fp, _Alloc, _Rp(_ArgTypes...)>::operator()(_ArgTypes&&... __arg) {
-# CHECK-NEXT:      313:   return __f_(std::forward<_ArgTypes>(__arg)...);
-# CHECK-NEXT:      314: }
-# CHECK-NEXT: #16 0x000000010068a6af in std::__1::__function::__value_func<void (sammine_lang::Compiler*)>::operator()[abi:ne190102](sammine_lang::Compiler*&&) const at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:430:12
-# CHECK-NEXT:      428:     if (__f_ == nullptr)
-# CHECK-NEXT:      429:       __throw_bad_function_call();
-# CHECK-NEXT:      430:     return (*__f_)(std::forward<_ArgTypes>(__args)...);
-# CHECK-NEXT:      431:   }
-# CHECK-NEXT: #17 0x0000000100647343 in std::__1::function<void (sammine_lang::Compiler*)>::operator()(sammine_lang::Compiler*) const at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:989:10
-# CHECK-NEXT:      987: template <class _Rp, class... _ArgTypes>
-# CHECK-NEXT:      988: _Rp function<_Rp(_ArgTypes...)>::operator()(_ArgTypes... __arg) const {
-# CHECK-NEXT:      989:   return __f_(std::forward<_ArgTypes>(__arg)...);
-# CHECK-NEXT:      990: }
-# CHECK-NEXT: #18 0x000000010063e417 in sammine_lang::Compiler::start() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:915:5
-# CHECK-NEXT:      913:   for (auto &[name, fn] : stages) {
-# CHECK-NEXT:      914:     auto t0 = std::chrono::high_resolution_clock::now();
-# CHECK-NEXT:      915:     fn(this);
-# CHECK-NEXT:      916:     auto t1 = std::chrono::high_resolution_clock::now();
-# CHECK-NEXT:      917:     if (timing) {
-# CHECK-NEXT: #19 0x000000010063de0f in sammine_lang::CompilerRunner::run(std::__1::map<sammine_lang::compiler_option_enum, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, std::__1::less<sammine_lang::compiler_option_enum>, std::__1::allocator<std::__1::pair<sammine_lang::compiler_option_enum const, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>>&) at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:116:12
-# CHECK-NEXT:      114:     std::map<compiler_option_enum, std::string> &compiler_options) {
-# CHECK-NEXT:      115:   auto compiler = Compiler(compiler_options);
-# CHECK-NEXT:      116:   compiler.start();
-# CHECK-NEXT:      117: }
-# CHECK-NEXT: #20 0x000000010060718f in main at /Users/jjasmine/Developer/github/sammine-lang/build/src/../../src/sammine.cpp:150:3
-# CHECK-NEXT:      148:     compiler_options[LIB_FORMAT] = lib_val;
-# CHECK-NEXT:      149:   }
-# CHECK-NEXT:      150:   CompilerRunner::run(compiler_options);
-# CHECK-NEXT:      151:   return 0;
-# CHECK-NEXT:      152: }
-# CHECK-NEXT: #21 0x00000001838a2b97 in start + 6075 at /usr/lib/dyld
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:      [Internal Compiler Error] : MLIRGen: unsupported binary operator '<'
+// CHECK-NEXT: [Generating stack traces]...
+// CHECK-NEXT: [Please wait]...
+// CHECK-NEXT: Stack trace (most recent call first):
+// CHECK-NEXT: #0  0x000000010068b99b in sammine_util::abort(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&) at /Users/jjasmine/Developer/github/sammine-lang/build/src/util/../../../src/util/Utilities.cpp:30:16
+// CHECK-NEXT:       28:   fmt::print(stderr, style, "[Generating stack traces]...\n");
+// CHECK-NEXT:       29:   fmt::print(stderr, style, "[Please wait]...\n");
+// CHECK-NEXT:       30:   auto trace = cpptrace::generate_trace();
+// CHECK-NEXT:       31:   trace.print_with_snippets();
+// CHECK-NEXT:       32:   std::abort();
+// CHECK-NEXT: #1  0x0000000100886bef in sammine_lang::MLIRGenImpl::emitBinaryExpr(sammine_lang::AST::BinaryExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #2  0x000000010086731f in sammine_lang::MLIRGenImpl::emitExpr(sammine_lang::AST::ExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #3  0x00000001008678bb in sammine_lang::MLIRGenImpl::emitVarDef(sammine_lang::AST::VarDefAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #4  0x00000001008673d3 in sammine_lang::MLIRGenImpl::emitExpr(sammine_lang::AST::ExprAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #5  0x0000000100867ddf in sammine_lang::MLIRGenImpl::emitBlock(sammine_lang::AST::BlockAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #6  0x0000000100876d37 in sammine_lang::MLIRGenImpl::emitFunction(sammine_lang::AST::FuncDefAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #7  0x0000000100865e8b in sammine_lang::MLIRGenImpl::emitDefinition(sammine_lang::AST::DefinitionAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #8  0x0000000100864947 in sammine_lang::MLIRGenImpl::generate(sammine_lang::AST::ProgramAST*) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #9  0x00000001008685f7 in sammine_lang::mlirGen(mlir::MLIRContext&, sammine_lang::AST::ProgramAST*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, sammine_lang::AST::ASTProperties const&) at /Users/jjasmine/Developer/github/sammine-lang/build/bin/sammine
+// CHECK-NEXT: #10 0x000000010064220b in sammine_lang::Compiler::codegen_mlir() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:555:7
+// CHECK-NEXT:      554:   auto mlirModule =
+// CHECK-NEXT:      555:       mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input, props_);
+// CHECK-NEXT:      556:   if (!mlirModule) {
+// CHECK-NEXT:      557:     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+// CHECK-NEXT: #11 0x00000001006420d3 in sammine_lang::Compiler::codegen() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:540:3
+// CHECK-NEXT:      538:   });
+// CHECK-NEXT:      539: 
+// CHECK-NEXT:      540:   codegen_mlir();
+// CHECK-NEXT:      541: }
+// CHECK-NEXT: #12 0x000000010068a64b in decltype(*std::declval<sammine_lang::Compiler*>().*std::declval<void (sammine_lang::Compiler::*&)()>()()) std::__1::__invoke[abi:ne190102]<void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*, void>(void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/invoke.h:117:25
+// CHECK-NEXT:      115: __invoke(_Fp&& __f, _A0&& __a0, _Args&&... __args)
+// CHECK-NEXT:      116:     _NOEXCEPT_(noexcept(((*static_cast<_A0&&>(__a0)).*__f)(static_cast<_Args&&>(__args)...)))
+// CHECK-NEXT:      117:                { return ((*static_cast<_A0&&>(__a0)).*__f)(static_cast<_Args&&>(__args)...); }
+// CHECK-NEXT:      118: 
+// CHECK-NEXT:      119: // bullets 4, 5 and 6
+// CHECK-NEXT: #13 0x000000010068a59f in void std::__1::__invoke_void_return_wrapper<void, true>::__call[abi:ne190102]<void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*>(void (sammine_lang::Compiler::*&)(), sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__type_traits/invoke.h:224:5
+// CHECK-NEXT:      222:   template <class... _Args>
+// CHECK-NEXT:      223:   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 static void __call(_Args&&... __args) {
+// CHECK-NEXT:      224:     std::__invoke(std::forward<_Args>(__args)...);
+// CHECK-NEXT:      225:   }
+// CHECK-NEXT:      226: };
+// CHECK-NEXT: #14 0x000000010068a573 in std::__1::__function::__alloc_func<void (sammine_lang::Compiler::*)(), std::__1::allocator<void (sammine_lang::Compiler::*)()>, void (sammine_lang::Compiler*)>::operator()[abi:ne190102](sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:171:12
+// CHECK-NEXT:      169:   _LIBCPP_HIDE_FROM_ABI _Rp operator()(_ArgTypes&&... __arg) {
+// CHECK-NEXT:      170:     typedef __invoke_void_return_wrapper<_Rp> _Invoker;
+// CHECK-NEXT:      171:     return _Invoker::__call(__f_.first(), std::forward<_ArgTypes>(__arg)...);
+// CHECK-NEXT:      172:   }
+// CHECK-NEXT: #15 0x00000001006893d3 in std::__1::__function::__func<void (sammine_lang::Compiler::*)(), std::__1::allocator<void (sammine_lang::Compiler::*)()>, void (sammine_lang::Compiler*)>::operator()(sammine_lang::Compiler*&&) at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:313:10
+// CHECK-NEXT:      311: template <class _Fp, class _Alloc, class _Rp, class... _ArgTypes>
+// CHECK-NEXT:      312: _Rp __func<_Fp, _Alloc, _Rp(_ArgTypes...)>::operator()(_ArgTypes&&... __arg) {
+// CHECK-NEXT:      313:   return __f_(std::forward<_ArgTypes>(__arg)...);
+// CHECK-NEXT:      314: }
+// CHECK-NEXT: #16 0x000000010068a6af in std::__1::__function::__value_func<void (sammine_lang::Compiler*)>::operator()[abi:ne190102](sammine_lang::Compiler*&&) const at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:430:12
+// CHECK-NEXT:      428:     if (__f_ == nullptr)
+// CHECK-NEXT:      429:       __throw_bad_function_call();
+// CHECK-NEXT:      430:     return (*__f_)(std::forward<_ArgTypes>(__args)...);
+// CHECK-NEXT:      431:   }
+// CHECK-NEXT: #17 0x0000000100647343 in std::__1::function<void (sammine_lang::Compiler*)>::operator()(sammine_lang::Compiler*) const at /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__functional/function.h:989:10
+// CHECK-NEXT:      987: template <class _Rp, class... _ArgTypes>
+// CHECK-NEXT:      988: _Rp function<_Rp(_ArgTypes...)>::operator()(_ArgTypes... __arg) const {
+// CHECK-NEXT:      989:   return __f_(std::forward<_ArgTypes>(__arg)...);
+// CHECK-NEXT:      990: }
+// CHECK-NEXT: #18 0x000000010063e417 in sammine_lang::Compiler::start() at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:915:5
+// CHECK-NEXT:      913:   for (auto &[name, fn] : stages) {
+// CHECK-NEXT:      914:     auto t0 = std::chrono::high_resolution_clock::now();
+// CHECK-NEXT:      915:     fn(this);
+// CHECK-NEXT:      916:     auto t1 = std::chrono::high_resolution_clock::now();
+// CHECK-NEXT:      917:     if (timing) {
+// CHECK-NEXT: #19 0x000000010063de0f in sammine_lang::CompilerRunner::run(std::__1::map<sammine_lang::compiler_option_enum, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>, std::__1::less<sammine_lang::compiler_option_enum>, std::__1::allocator<std::__1::pair<sammine_lang::compiler_option_enum const, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>>>>>&) at /Users/jjasmine/Developer/github/sammine-lang/build/src/compiler/../../../src/compiler/Compiler.cpp:116:12
+// CHECK-NEXT:      114:     std::map<compiler_option_enum, std::string> &compiler_options) {
+// CHECK-NEXT:      115:   auto compiler = Compiler(compiler_options);
+// CHECK-NEXT:      116:   compiler.start();
+// CHECK-NEXT:      117: }
+// CHECK-NEXT: #20 0x000000010060718f in main at /Users/jjasmine/Developer/github/sammine-lang/build/src/../../src/sammine.cpp:150:3
+// CHECK-NEXT:      148:     compiler_options[LIB_FORMAT] = lib_val;
+// CHECK-NEXT:      149:   }
+// CHECK-NEXT:      150:   CompilerRunner::run(compiler_options);
+// CHECK-NEXT:      151:   return 0;
+// CHECK-NEXT:      152: }
+// CHECK-NEXT: #21 0x00000001838a2b97 in start + 6075 at /usr/lib/dyld
 
 struct Foo {
   x: i32,

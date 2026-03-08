@@ -1,11 +1,11 @@
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK:      3.140000
-# CHECK-NEXT: 7.000000
-# CHECK-NEXT: 2.000000
-# CHECK-NEXT: 6.000000
-# CHECK-NEXT: 1.666667
-# CHECK-NEXT: -3.140000
-# CHECK-NEXT: 1
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      3.140000
+// CHECK-NEXT: 7.000000
+// CHECK-NEXT: 2.000000
+// CHECK-NEXT: 6.000000
+// CHECK-NEXT: 1.666667
+// CHECK-NEXT: -3.140000
+// CHECK-NEXT: 1
 
 import std;
 
@@ -15,26 +15,26 @@ let mul_f32(a: f32, b: f32) -> f32 { a * b }
 let div_f32(a: f32, b: f32) -> f32 { a / b }
 
 let main() -> i32 {
-  # f32 suffix on literal
+  // f32 suffix on literal
   let x: f32 = 3.14f32;
   std::printf("%f\n", x);
 
-  # Polymorphic float literal flows into f32 annotation
+  // Polymorphic float literal flows into f32 annotation
   let y: f32 = 7.0;
   std::printf("%f\n", y);
 
-  # f32 arithmetic
+  // f32 arithmetic
   let a: f32 = 5.0f32;
   let b: f32 = 3.0f32;
   std::printf("%f\n", sub_f32(a, b));
   std::printf("%f\n", mul_f32(2.0f32, 3.0f32));
   std::printf("%f\n", div_f32(a, 2.0f32 + 1.0f32));
 
-  # Unary negation
+  // Unary negation
   let neg: f32 = -3.14f32;
   std::printf("%f\n", neg);
 
-  # f32 comparison
+  // f32 comparison
   let cmp = if 2.0f32 > 1.0f32 { 1 } else { 0 };
   std::printf("%d\n", cmp);
 

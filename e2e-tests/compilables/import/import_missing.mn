@@ -1,11 +1,11 @@
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK:          |import_missing.mn:4:0
-# CHECK:         3|
-# CHECK-NEXT:    4|import nonexistent as nx;
-# CHECK-NEXT:     |^^^^^^^^^^^^^^^^^^^^^^^^
-# CHECK-NEXT:     |Cannot find module 'nonexistent.mn'
-# CHECK-NEXT:    5|
-# CHECK-NEXT:    6|let main() -> i32 {
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK:          |import_missing.mn:4:0
+// CHECK:         3|
+// CHECK-NEXT:    4|import nonexistent as nx;
+// CHECK-NEXT:     |^^^^^^^^^^^^^^^^^^^^^^^^
+// CHECK-NEXT:     |Cannot find module 'nonexistent.mn'
+// CHECK-NEXT:    5|
+// CHECK-NEXT:    6|let main() -> i32 {
 
 import nonexistent as nx;
 
