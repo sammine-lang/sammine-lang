@@ -1,0 +1,22 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      1
+// CHECK-NEXT: -1
+// CHECK-NEXT: 0
+
+import std;
+
+let sign(x: i32) -> i32 {
+  case x {
+    0 => 0,
+    1 => 1,
+    -1 => -1,
+    _ => if x > 0 { 1 } else { -1 },
+  }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", sign(42));
+  std::printf("%d\n", sign(-5));
+  std::printf("%d\n", sign(0));
+  return 0;
+}

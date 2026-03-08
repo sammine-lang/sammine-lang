@@ -1,0 +1,21 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      vowel
+// CHECK-NEXT: other
+
+import std;
+
+let check_vowel(c: char) -> i32 {
+  case c {
+    'a' => std::printf("vowel\n"),
+    'e' => std::printf("vowel\n"),
+    'i' => std::printf("vowel\n"),
+    _ => std::printf("other\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  check_vowel('a');
+  check_vowel('x');
+  return 0;
+}

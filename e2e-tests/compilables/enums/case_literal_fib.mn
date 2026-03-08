@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 34
+
+import std;
+
+let fib(x: i32) -> i32 {
+  case x {
+    0 => 0,
+    1 => 1,
+    _ => fib(x - 1) + fib(x - 2),
+  }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", fib(9));
+  return 0;
+}

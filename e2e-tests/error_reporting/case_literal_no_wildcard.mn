@@ -1,0 +1,11 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK-ERR: Non-exhaustive case expression on i32
+
+let main() -> i32 {
+  let x: i32 = 42;
+  case x {
+    0 => 0,
+    1 => 1,
+  };
+  return 0;
+}
