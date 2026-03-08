@@ -1,0 +1,1069 @@
+# Plan: Kernel Linalg Codegen (Phase 7a)
+
+## Philosophy
+
+These principles guide ALL kernel codegen decisions. When in doubt, refer back here.
+
+1. **B2 wrapper pattern — same as closures.** Every kernel emits two functions:
+   a private internal function with tensor types, and a public wrapper with CPU ABI.
+   This is structurally identical to `getOrCreateClosureWrapper()` in MLIRGenFunction.cpp.
+   Closures unpack env → reconstruct args → call original.
+   Kernels unpack `!llvm.array` → build tensor → call internal.
+   When you're unsure how to structure the wrapper, look at the closure code first.
+
+2. **Tensors preserve fusion.** The internal kernel uses `tensor` types (value semantics)
+   so `linalg-fuse-elementwise-ops` can fuse consecutive map/reduce operations.
+   Bufferization (tensor→memref) is the optimization boundary — keep tensors as long
+   as possible. This is why we rejected B3 (memref-directly).
+
+3. **MLIR progressive lowering — each pass touches its own dialect.**
+   The existing codebase already mixes `func.func` with LLVM dialect ops throughout
+   ALL CPU functions (63+ LLVM op calls in MLIRGenExpr.cpp). This is the foundational
+   pattern, not an anti-pattern. Each lowering pass only converts ops from its own
+   dialect — LLVM ops pass through tensor/memref passes untouched, and vice versa.
+   After all passes complete, every function is pure LLVM dialect.
+
+4. **User writes the intent, compiler decides where it runs.**
+   No `device<T>` vs `host<T>` types. The kernel/CPU boundary is implicit:
+   CPU functions use `!llvm.array`/`llvm.alloca`, kernel internals use `tensor`/`linalg`.
+   Address spaces appear only during `convert-gpu-to-nvvm` (Phase 7c, not this phase).
+
+5. **Kernel lambdas must be pure scalar expressions.**
+   Inside `linalg.map`/`linalg.reduce` body regions, only `arith`/`math` ops are valid.
+   No `llvm.alloca`, no `malloc`, no side effects. The `in_kernel_lambda_body` flag
+   guards against accidentally emitting invalid ops.
+
+## Goal
+
+Replace the stub `emitKernelDef()` with real `linalg.map`/`linalg.reduce` emission on tensor types. Kernel functions operate on tensors (value semantics, no address spaces). MLIR passes handle bufferization and lowering to loops/LLVM automatically.
+
+## Current State
+
+- Kernel parsing works: `kernel name(params) -> RetType { map/reduce/literal }`
+- Type checking works: `synthesize_kernel_map()`, `synthesize_kernel_reduce()` fully resolve types
+- Codegen is a stub: `emitKernelDef()` in `src/codegen/MLIRGen.cpp:319-361` returns hardcoded zeros for map/reduce
+- MLIR dialects loaded: arith, func, llvm, scf, cf (registered in `src/compiler/Compiler.cpp:581-587`)
+- No tensor/linalg/bufferization/memref/affine dialects yet
+- The closure/partial-application wrapper pattern in `src/codegen/MLIRGenFunction.cpp` is the **structural template** for the kernel wrapper (B2)
+
+## Architecture: Two-Function Pattern (B2)
+
+Each `kernel` definition emits **two MLIR functions**, following the same wrapper pattern
+used for closures and partial application:
+
+```
+For:  kernel double_arr(a: [3]f64) -> [3]f64 { map(a, (x: f64) -> f64 { x * 2.0 }) }
+
+Emit:
+  1. func.func private @__kernel_double_arr(%a: tensor<3xf64>) -> tensor<3xf64>
+     → The real implementation using linalg.map on tensors
+     → Private visibility, tensor types, value semantics
+     → Fusion-eligible: linalg-fuse-elementwise-ops works on this
+
+  2. func.func @double_arr(%a: !llvm.array<3xf64>, %out_ptr: !llvm.ptr)
+     → Public CPU-ABI wrapper (same signature as current CPU functions)
+     → buildFuncType() produces !llvm.array<NxT> for array params (by value),
+       !llvm.ptr for sret output (array returns only)
+     → Extracts elements from !llvm.array → builds tensor → calls __kernel_* → stores result back
+     → CPU callers see this, unaware of tensors
+```
+
+### Why two functions (B2), not memref-directly (B3)
+
+Memref-directly kills `linalg-fuse-elementwise-ops` (tensor-only pass):
+- Consecutive `linalg.map` on tensors → fused into one loop, intermediate eliminated
+- Consecutive `linalg.map` on memrefs → two separate loops, intermediate buffer allocated
+- Bufferization IS the optimization boundary — by keeping tensors in internal functions,
+  the optimizer can fuse across inlined kernel calls before materializing any buffers
+
+### Structural parallel with closures
+
+| Component | Closure wrapper | Kernel wrapper (B2) |
+|---|---|---|
+| Pattern in codebase | `getOrCreateClosureWrapper()` | new: `emitKernelWrapper()` |
+| Internal function | original `func.func @add` | `func.func private @__kernel_<name>` (tensor types) |
+| Wrapper function | `llvm.func @__wrap_add(ptr %env, args...)` | `func.func @<name>(!llvm.array<NxT>, ..., !llvm.ptr)` |
+| Wrapper body | unpack env → reconstruct args → call original | extract elements from !llvm.array → build tensor → call internal → store result |
+| ABI bridge | closure ABI ↔ normal function ABI | CPU `!llvm.array` ABI ↔ tensor ABI |
+| Generated by | `getOrCreateClosureWrapper()` in MLIRGenFunction.cpp | `emitKernelWrapper()` in MLIRGen.cpp (new) |
+| Uses InsertionGuard | Yes (line 71) | Yes (same pattern) |
+| Helper for call+return | `emitFuncCallAndLLVMReturn()` | similar, but with tensor→LLVM array conversion |
+| Reuse `emitFuncCallAndLLVMReturn`? | Already uses it | **Cannot reuse directly** — kernel internal function uses `func.func` with tensor types, but the wrapper also uses `func.func` (not `llvm.func`). The return path needs tensor extraction. Write a new `emitKernelCallAndReturn()` helper. |
+
+### Lowering flow
+
+```
+CPU functions:     ArrayType → !llvm.array<N x T>  (existing, unchanged)
+Kernel internals:  ArrayType → tensor<NxT>         (new, via convertTypeForKernel)
+Kernel wrappers:   ArrayType → !llvm.array<NxT>      (same as CPU calling convention, by value)
+
+Pass pipeline:
+  tensor ops  →  one-shot-bufferize  →  memref ops     (only touches tensor/linalg ops)
+  linalg ops  →  convert-linalg-to-loops  →  scf.for   (only touches linalg ops)
+  (then existing pipeline: scf→cf→arith→memref→func → LLVM)
+
+CPU functions using !llvm.array/llvm.alloca are UNTOUCHED by the new passes.
+```
+
+---
+
+## Implementation Steps
+
+### Step 1: CMake + Dialect Registration
+
+**File: `src/codegen/CMakeLists.txt`**
+
+Add these MLIR libraries to the `MLIRBackend` object library's link targets.
+Currently (line ~11), the target links: `MLIRIR MLIRParser MLIRSupport MLIRPass
+MLIRArithDialect MLIRFuncDialect MLIRSCFDialect MLIRArithToLLVM MLIRFuncToLLVM
+MLIRSCFToControlFlow MLIRControlFlowToLLVM MLIRReconcileUnrealizedCasts
+MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
+MLIRLLVMDialect`.
+
+Add:
+```cmake
+# Dialects (needed for MLIR generation)
+MLIRLinalgDialect              # linalg.map, linalg.reduce, linalg.fill, linalg.yield
+MLIRTensorDialect              # tensor.empty, tensor.extract, tensor.from_elements
+MLIRBufferizationDialect       # bufferization ops (used by one-shot-bufferize)
+MLIRAffineDialect              # affine_map (used internally by linalg indexing maps)
+MLIRMemRefDialect              # memref ops (appear after bufferization)
+
+# Transforms (needed for lowering pipeline passes)
+MLIRLinalgTransforms           # createConvertLinalgToLoopsPass()
+MLIRBufferizationTransforms    # createOneShotBufferizePass()
+MLIRBufferizationPipelines     # buildBufferDeallocationPipeline()
+MLIRMemRefTransforms           # createExpandStridedMetadataPass()
+
+# Conversions (needed for lowering pipeline passes)
+MLIRMemRefToLLVM               # createFinalizeMemRefToLLVMConversionPass()
+MLIRAffineToStandard           # createLowerAffinePass()
+```
+
+**File: `src/compiler/Compiler.cpp`**
+
+In `codegen_mlir()` (line ~581-587), after the existing dialect registrations, add:
+
+```cpp
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+
+// Inside codegen_mlir():
+mlirCtx.getOrLoadDialect<mlir::linalg::LinalgDialect>();
+mlirCtx.getOrLoadDialect<mlir::tensor::TensorDialect>();
+mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
+mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
+mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
+```
+
+**Verification:** After this step, `cmake --build build -j` should compile.
+Run `cmake --build build -j --target e2e-tests` to verify no regressions.
+
+---
+
+### Step 2: Lowering Pipeline Update
+
+**File: `src/codegen/MLIRLowering.cpp`**
+
+Currently (lines 30-63), the pipeline is:
+```
+SCF→CF → Arith→LLVM → CF→LLVM → Func→LLVM → ReconcileUnrealizedCasts
+```
+
+Add new passes BEFORE the existing pipeline. The new passes are no-ops when
+no tensor/linalg ops exist in the module, so existing tests are unaffected.
+
+```cpp
+// NEW includes:
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
+#include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
+#include "mlir/Dialect/Linalg/Passes.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"  // for addNestedPass<func::FuncOp>
+
+// NEW pipeline (insert before existing passes):
+
+// Stage A: Bufferization (tensor → memref)
+// Only affects functions with tensor types (kernel internals).
+// CPU functions with !llvm.array are untouched.
+mlir::bufferization::OneShotBufferizationOptions bufOpts;
+bufOpts.bufferizeFunctionBoundaries = true;
+bufOpts.allowUnknownOps = true;  // Wrapper functions contain LLVM dialect ops alongside tensor ops
+pm.addPass(mlir::bufferization::createOneShotBufferizePass(bufOpts));
+
+// Stage B: Buffer deallocation (insert free() calls for bufferized allocations)
+// This is a composite pipeline that internally runs:
+//   ownership-based-buffer-deallocation, canonicalize,
+//   buffer-deallocation-simplification, lower-deallocations, cse, canonicalize
+mlir::bufferization::BufferDeallocationPipelineOptions deallocOpts;
+mlir::bufferization::buildBufferDeallocationPipeline(pm, deallocOpts);
+
+// Stage C: Linalg → loops + cleanup
+// addNestedPass runs the pass inside each func::FuncOp (not on the module)
+pm.addNestedPass<mlir::func::FuncOp>(mlir::createConvertLinalgToLoopsPass());
+// expand-strided-metadata: decompose complex memref ops for finalize-memref-to-llvm
+pm.addPass(mlir::memref::createExpandStridedMetadataPass());
+// lower-affine: convert affine.apply/affine.for to arith/scf ops
+pm.addPass(mlir::createLowerAffinePass());
+
+// EXISTING pipeline (unchanged order, but finalize-memref-to-llvm is NEW):
+pm.addPass(mlir::createSCFToControlFlowPass());           // existing
+pm.addPass(mlir::createArithToLLVMConversionPass());       // existing
+pm.addPass(mlir::createConvertControlFlowToLLVMPass());    // existing
+pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass()); // NEW — converts memref→llvm
+pm.addPass(mlir::createConvertFuncToLLVMPass());           // existing
+pm.addPass(mlir::createReconcileUnrealizedCastsPass());    // existing
+```
+
+**IMPORTANT pass ordering notes:**
+- `expand-strided-metadata` MUST come before `finalize-memref-to-llvm` — the latter
+  will assert/fail without it (enforced since ~2023, see LLVM discourse PSA).
+- `buildBufferDeallocationPipeline` MUST come after `one-shot-bufferize` — it handles
+  freeing the buffers that bufferization allocated.
+- `convert-linalg-to-loops` MUST come after bufferization — linalg on memrefs becomes
+  scf.for loops; linalg on tensors would fail.
+
+**Verification:** After this step, all existing e2e tests must still pass.
+The new passes are no-ops for modules without tensor/linalg ops.
+
+---
+
+### Step 3: Kernel Type Conversion
+
+**File: `include/codegen/MLIRGenImpl.h`**
+
+Add new named constant and method declarations:
+
+```cpp
+// Add near other constants (line ~23):
+static constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
+
+// Add near member variables (line ~78, after props_):
+/// Flag: true when emitting inside a linalg.map/linalg.reduce body builder.
+/// Guards against emitting LLVM ops (alloca, malloc, free) that are invalid
+/// inside linalg body regions. Only arith/math ops are valid there.
+bool in_kernel_lambda_body = false;
+
+// Add in the "Type conversion" section (after line 108):
+/// Convert a sammine Type to an MLIR type for kernel context.
+/// Arrays become RankedTensorType; scalars are the same as CPU.
+/// Pointers, strings, closures are rejected (invalid in kernel context).
+mlir::Type convertTypeForKernel(const Type &type);
+
+/// Build a func::FunctionType for a kernel's internal implementation.
+/// Uses tensor types for arrays, no sret transform (tensors are value types).
+mlir::FunctionType buildKernelFuncType(AST::PrototypeAST *proto);
+```
+
+**File: `src/codegen/MLIRGen.cpp`**
+
+Implement `convertTypeForKernel()`:
+
+```cpp
+mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
+  switch (type.type_kind) {
+  case TypeKind::Array: {
+    auto &arr = std::get<ArrayType>(type.type_data);
+    // Recursively convert element type (supports nested arrays in future)
+    auto elemType = convertTypeForKernel(arr.get_element());
+    return mlir::RankedTensorType::get(
+        {static_cast<int64_t>(arr.get_size())}, elemType);
+  }
+  // Scalar types: identical to convertType()
+  case TypeKind::I32_t:  return builder.getI32Type();
+  case TypeKind::I64_t:  return builder.getI64Type();
+  case TypeKind::F64_t:  return builder.getF64Type();
+  case TypeKind::F32_t:  return builder.getF32Type();
+  case TypeKind::U32_t:  return builder.getI32Type();
+  case TypeKind::U64_t:  return builder.getI64Type();
+  case TypeKind::Bool:   return builder.getI1Type();
+  case TypeKind::Char:   return builder.getI8Type();
+  case TypeKind::Unit:   return mlir::NoneType::get(builder.getContext());
+  // Types not valid in kernel context:
+  case TypeKind::Pointer:
+  case TypeKind::Function:
+  case TypeKind::String:
+  case TypeKind::Struct:
+  case TypeKind::Enum:
+  case TypeKind::Tuple:
+    imm_error(fmt::format("Type '{}' is not valid in kernel context",
+                          type.to_string()));
+  default:
+    imm_error(fmt::format("Unknown type kind in kernel context"));
+  }
+}
+```
+
+Implement `buildKernelFuncType()`:
+
+```cpp
+mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
+  // Convert parameter types to tensor types
+  llvm::SmallVector<mlir::Type, 4> argTypes;
+  for (auto &param : proto->parameterVectors)
+    argTypes.push_back(convertTypeForKernel(param->get_type()));
+
+  // Convert return type — NO sret transform (tensors are value types)
+  llvm::SmallVector<mlir::Type, 1> retTypes;
+  if (proto->get_type().type_kind == TypeKind::Function) {
+    auto ft = std::get<FunctionType>(proto->get_type().type_data);
+    auto retType = ft.get_return_type();
+    if (retType.type_kind != TypeKind::Unit)
+      retTypes.push_back(convertTypeForKernel(retType));
+  }
+
+  return builder.getFunctionType(argTypes, retTypes);
+}
+```
+
+**Key difference from `buildFuncType()`:** No sret transform. In `buildFuncType()`,
+array return types add a trailing `!llvm.ptr` parameter and make the function void.
+Here, `tensor<3xf64>` is returned directly because tensors are SSA values, not memory.
+
+---
+
+### Step 4: Kernel Forward Declaration (Two Functions)
+
+**File: `src/codegen/MLIRGen.cpp`**, in `generate()` (line ~100-103)
+
+Currently kernels forward-declare using `forwardDeclareFunc()` which calls `buildFuncType()`.
+Change to forward-declare BOTH the internal kernel function AND the public wrapper:
+
+```cpp
+} else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
+  if (!kd->Prototype->is_generic()) {
+    auto publicName = mangleName(kd->Prototype->functionName);
+    auto internalName = kKernelPrefix.str() + publicName;
+
+    builder.setInsertionPointToEnd(theModule.getBody());
+
+    // 1. Forward-declare internal kernel function (tensor types, private)
+    auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+    if (!theModule.lookupSymbol(internalName)) {
+      auto funcOp = mlir::func::FuncOp::create(
+          builder.getUnknownLoc(), internalName, kernelFuncType);
+      funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+      theModule.push_back(funcOp);
+    }
+
+    // 2. Forward-declare public wrapper (CPU ABI, same as buildFuncType)
+    //    This is what CPU callers will call.
+    auto wrapperFuncType = buildFuncType(kd->Prototype.get());
+    if (!theModule.lookupSymbol(publicName)) {
+      auto funcOp = mlir::func::FuncOp::create(
+          builder.getUnknownLoc(), publicName, wrapperFuncType);
+      funcOp.setVisibility(moduleName.empty()
+                               ? mlir::SymbolTable::Visibility::Private
+                               : mlir::SymbolTable::Visibility::Public);
+      theModule.push_back(funcOp);
+    }
+  }
+}
+```
+
+---
+
+### Step 5: Rewrite `emitKernelDef()` — Internal Function
+
+**File: `src/codegen/MLIRGen.cpp`**, replace `emitKernelDef()` (lines 319-361)
+
+Add new helper declarations to `include/codegen/MLIRGenImpl.h`:
+
+```cpp
+// Add in the "Definition emission" section (after line 112):
+void emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                       mlir::Block &entryBlock,
+                       AST::KernelDefAST *kd,
+                       mlir::Location location);
+void emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                          mlir::Block &entryBlock,
+                          AST::KernelDefAST *kd,
+                          mlir::Location location);
+void emitKernelWrapper(AST::KernelDefAST *kd,
+                       const std::string &internalName,
+                       const std::string &publicName,
+                       mlir::Location location);
+```
+
+The new `emitKernelDef()` implementation:
+
+```cpp
+void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
+  auto location = loc(kd);
+  auto publicName = mangleName(kd->Prototype->functionName);
+  auto internalName = kKernelPrefix.str() + publicName;
+
+  // === 1. Emit the internal kernel function (tensor types) ===
+  {
+    decltype(symbolTable)::Guard scope(symbolTable);
+
+    auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+    auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(internalName);
+    assert(funcOp && "Internal kernel function should be forward-declared");
+
+    auto &entryBlock = *funcOp.addEntryBlock();
+    builder.setInsertionPointToStart(&entryBlock);
+
+    // Bind parameters in symbol table.
+    // Unlike CPU functions, kernel params are tensor values (NOT alloca+store).
+    // They are SSA values used directly by linalg ops.
+    for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+      auto &param = kd->Prototype->parameterVectors[i];
+      auto argVal = entryBlock.getArgument(i);
+      // Register tensor value directly — no alloca wrapper.
+      // This is safe because linalg body builders receive scalar block args,
+      // and emitRValue() already handles non-pointer values correctly
+      // (it only does llvm.load if the stored type is LLVMPointerType).
+      symbolTable.registerNameT(param->name, argVal);
+    }
+
+    // Dispatch to the appropriate kernel expression handler
+    if (kd->Body->expressions.empty()) {
+      // Empty kernel body — return void
+      mlir::func::ReturnOp::create(builder, location);
+      // NOTE: Do NOT return here — wrapper must still be emitted below.
+    } else {
+      auto *firstExpr = kd->Body->expressions[0].get();
+
+      if (auto *numExpr = dynamic_cast<AST::KernelNumberExprAST *>(firstExpr)) {
+        // Trivial kernel returning a constant: kernel x() -> i32 { 0 }
+        auto retType = kernelFuncType.getResults()[0];
+        if (mlir::isa<mlir::FloatType>(retType)) {
+          double val = std::stod(numExpr->number);
+          auto constVal = mlir::arith::ConstantFloatOp::create(
+              builder, location, mlir::cast<mlir::FloatType>(retType),
+              llvm::APFloat(val)).getResult();
+          mlir::func::ReturnOp::create(builder, location,
+                                       mlir::ValueRange{constVal});
+        } else {
+          int64_t val = std::stoll(numExpr->number);
+          auto constVal = mlir::arith::ConstantIntOp::create(
+              builder, location, retType, val).getResult();
+          mlir::func::ReturnOp::create(builder, location,
+                                       mlir::ValueRange{constVal});
+        }
+      } else if (auto *mapExpr =
+                     dynamic_cast<AST::KernelMapExprAST *>(firstExpr)) {
+        emitKernelMapExpr(mapExpr, entryBlock, kd, location);
+      } else if (auto *reduceExpr =
+                     dynamic_cast<AST::KernelReduceExprAST *>(firstExpr)) {
+        emitKernelReduceExpr(reduceExpr, entryBlock, kd, location);
+      } else {
+        imm_error("Unknown kernel expression type", kd->get_location());
+      }
+    }
+  } // end symbol table scope
+
+  // === 2. Emit the public CPU-ABI wrapper ===
+  // This MUST always run — even for empty/trivial kernels — so the
+  // forward-declared wrapper gets a body. Same as how closure wrappers
+  // in getOrCreateClosureWrapper() always emit both the wrapper and the call.
+  emitKernelWrapper(kd, internalName, publicName, location);
+}
+```
+
+---
+
+### Step 6: Map Codegen — `emitKernelMapExpr()`
+
+For `kernel double_arr(a: [3]f64) -> [3]f64 { map(a, (x: f64) -> f64 { x * 2.0 }) }`:
+
+**Target internal MLIR:**
+```mlir
+func.func private @__kernel_double_arr(%a: tensor<3xf64>) -> tensor<3xf64> {
+    %empty = tensor.empty() : tensor<3xf64>
+    %result = linalg.map
+        ins(%a : tensor<3xf64>)
+        outs(%empty : tensor<3xf64>)
+        (%x: f64) {
+            %two = arith.constant 2.0 : f64
+            %doubled = arith.mulf %x, %two : f64
+            linalg.yield %doubled : f64
+        }
+    func.return %result : tensor<3xf64>
+}
+```
+
+**C++ implementation:**
+
+```cpp
+void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                                     mlir::Block &entryBlock,
+                                     AST::KernelDefAST *kd,
+                                     mlir::Location location) {
+  // 1. Look up the input tensor from the symbol table.
+  //    mapExpr->input_name is the parameter name (e.g., "a").
+  auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
+  // inputTensor is already a tensor<NxT> value (registered in emitKernelDef).
+
+  // 2. Extract type info from the sammine type system.
+  //    The type checker has already resolved: input is Array, element type is known,
+  //    lambda return type is known, and result is Array(lambdaRetType, arrSize).
+  auto inputSamType = kd->Prototype->parameterVectors[0]->get_type();
+  // ^ This assumes the input is the first param. More robustly, search by name:
+  //   Find the param whose name matches mapExpr->input_name
+  const Type *inputType = nullptr;
+  size_t paramIdx = 0;
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    if (kd->Prototype->parameterVectors[i]->name == mapExpr->input_name) {
+      inputType = &kd->Prototype->parameterVectors[i]->get_type();
+      paramIdx = i;
+      break;
+    }
+  }
+  assert(inputType && "Map input must be a kernel parameter");
+  auto &arrType = std::get<ArrayType>(inputType->type_data);
+  int64_t arrSize = arrType.get_size();
+  auto elemSamType = arrType.get_element();
+  auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+  // Get the lambda return type (for the output tensor element type)
+  auto &lambdaFT = std::get<FunctionType>(
+      mapExpr->lambda_proto->get_type().type_data);
+  auto lambdaRetSamType = lambdaFT.get_return_type();
+  auto lambdaRetMLIRType = convertTypeForKernel(lambdaRetSamType);
+
+  // 3. Create the output tensor type and tensor.empty().
+  auto outTensorType = mlir::RankedTensorType::get({arrSize}, lambdaRetMLIRType);
+  auto emptyTensor = mlir::tensor::EmptyOp::create(
+      builder, location, llvm::ArrayRef<int64_t>{arrSize}, lambdaRetMLIRType);
+
+  // 4. Create linalg.map with a body builder lambda.
+  //    The body builder receives scalar block arguments (element types, not tensors).
+  //    args[0] = input element (e.g., f64), args[1] would be second input if present.
+  //    The output block arg is NOT passed to MapOp's body (unlike linalg.generic).
+  auto mapOp = mlir::linalg::MapOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*init=*/emptyTensor.getResult(),
+      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
+                          mlir::ValueRange args) {
+        // args[0] is the scalar element from the input tensor.
+        // Bind the lambda parameter name to this block argument.
+        auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
+
+        // IMPORTANT: We temporarily set the builder insertion point inside
+        // the linalg body region. The body builder lambda is called with
+        // the builder already positioned inside the region block.
+
+        // Register the lambda parameter in the symbol table.
+        // Because this is a scalar (e.g., f64), NOT a pointer,
+        // emitRValue/emitVariableExpr will return it directly without
+        // doing an llvm.load. This is the same behavior as SSA variables
+        // in Phase 2 (immutable vars without alloca).
+        symbolTable.registerNameT(lambdaParamName, args[0]);
+
+        // Set kernel lambda guard — prevents emitVarDef/emitArrayLiteralExpr/etc.
+        // from emitting llvm.alloca or other LLVM ops inside the linalg body.
+        // Same save/restore pattern used throughout the codebase.
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
+
+        // Emit the lambda body. The lambda body is a standard BlockAST
+        // containing CPU ExprAST nodes (BinaryExprAST, NumberExprAST, etc.).
+        // Inside the linalg body, only arith ops are valid (no memory ops).
+        // The type checker guarantees kernel lambdas are pure scalar expressions.
+        // NOTE: BlockAST field is `Statements`, NOT `exprs`.
+        mlir::Value bodyResult = nullptr;
+        for (auto &expr : mapExpr->lambda_body->Statements) {
+          bodyResult = emitExpr(expr.get());
+        }
+
+        in_kernel_lambda_body = savedKernelCtx;
+
+        // Yield the result. linalg.map body must end with linalg.yield.
+        assert(bodyResult && "Lambda body must produce a value");
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{bodyResult});
+      });
+
+  // 5. Return the result tensor.
+  mlir::func::ReturnOp::create(builder, location, mapOp->getResults());
+}
+```
+
+**CRITICAL SUBTLETY — Lambda body emission inside linalg region:**
+
+The lambda body uses standard `ExprAST` nodes that normally emit LLVM dialect ops
+(alloca, load, store, GEP). Inside a linalg body region, ONLY arith/math ops are valid.
+This works because:
+
+1. `NumberExprAST` → emits `arith.constant` (valid in linalg body) ✓
+2. `BinaryExprAST` (arithmetic) → emits `arith.addf`/`arith.mulf`/etc. (valid) ✓
+3. `UnaryNegExprAST` → emits `arith.negf`/`arith.subi` (valid) ✓
+4. `VariableExprAST` → the lambda parameter is registered as a raw scalar value
+   (not an `!llvm.ptr`), so `emitRValue()` returns it directly without `llvm.load` ✓
+
+The `in_kernel_lambda_body` flag (set in the body builder lambda above) guards against
+ops that WOULD be invalid. Add guards in these functions:
+
+```cpp
+// In emitVarDef() (MLIRGen.cpp:472):
+if (in_kernel_lambda_body)
+  imm_error("Variable definitions (let bindings) not allowed in kernel lambdas", ...);
+
+// In emitAllocaOne() (MLIRGen.cpp:540) — belt-and-suspenders:
+if (in_kernel_lambda_body)
+  imm_error("Stack allocation not valid inside kernel lambdas", location);
+
+// In emitArrayLiteralExpr() (MLIRGenExpr.cpp:535):
+if (in_kernel_lambda_body)
+  imm_error("Array literals not allowed in kernel lambdas", ...);
+
+// In emitAllocExpr() (MLIRGenExpr.cpp:698):
+if (in_kernel_lambda_body)
+  imm_error("Dynamic allocation not allowed in kernel lambdas", ...);
+
+// In emitFreeExpr() (MLIRGenExpr.cpp:731):
+if (in_kernel_lambda_body)
+  imm_error("Memory deallocation not allowed in kernel lambdas", ...);
+```
+
+Single-expression pure scalar lambdas are the only valid pattern for Phase 7a.
+
+---
+
+### Step 7: Reduce Codegen — `emitKernelReduceExpr()`
+
+For `kernel sum_arr(a: [3]f64) -> f64 { reduce(a, +, 0.0) }`:
+
+**Target internal MLIR:**
+```mlir
+func.func private @__kernel_sum_arr(%a: tensor<3xf64>) -> f64 {
+    %identity = arith.constant 0.0 : f64
+    %init = tensor.empty() : tensor<f64>
+    %filled = linalg.fill ins(%identity : f64) outs(%init : tensor<f64>) -> tensor<f64>
+    %result = linalg.reduce
+        ins(%a : tensor<3xf64>)
+        outs(%filled : tensor<f64>)
+        dimensions = [0]
+        (%elem: f64, %acc: f64) {
+            %sum = arith.addf %elem, %acc : f64
+            linalg.yield %sum : f64
+        }
+    %scalar = tensor.extract %result[] : tensor<f64>
+    func.return %scalar : f64
+}
+```
+
+**C++ implementation:**
+
+```cpp
+void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                                        mlir::Block &entryBlock,
+                                        AST::KernelDefAST *kd,
+                                        mlir::Location location) {
+  // 1. Look up the input tensor
+  auto inputTensor = symbolTable.get_from_name(reduceExpr->input_name);
+
+  // 2. Extract type info
+  const Type *inputType = nullptr;
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    if (kd->Prototype->parameterVectors[i]->name == reduceExpr->input_name) {
+      inputType = &kd->Prototype->parameterVectors[i]->get_type();
+      break;
+    }
+  }
+  assert(inputType && "Reduce input must be a kernel parameter");
+  auto &arrType = std::get<ArrayType>(inputType->type_data);
+  auto elemSamType = arrType.get_element();
+  auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+  // 3. Emit the identity value.
+  //    reduceExpr->identity is a standard ExprAST (e.g., NumberExprAST for 0.0).
+  //    emitExpr will produce an arith.constant — valid at function level.
+  auto identityVal = emitExpr(reduceExpr->identity.get());
+  assert(identityVal && "Identity expression must produce a value");
+
+  // 4. Create a 0-d (scalar) output tensor, filled with the identity value.
+  //    linalg.reduce collapses dimension 0, producing a 0-d tensor.
+  //    We use linalg.fill to initialize it with the identity element.
+  auto scalarTensorType = mlir::RankedTensorType::get({}, elemMLIRType);
+  auto emptyScalar = mlir::tensor::EmptyOp::create(
+      builder, location, llvm::ArrayRef<int64_t>{}, elemMLIRType);
+
+  // linalg.fill: fills the output tensor with the identity value.
+  // FillOp::create(builder, loc, inputs: ValueRange, outputs: ValueRange)
+  //   inputs = the scalar value to fill with
+  //   outputs = the tensor to fill
+  auto fillOp = mlir::linalg::FillOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{identityVal},
+      /*outputs=*/mlir::ValueRange{emptyScalar.getResult()});
+  // fillOp returns the filled tensor as result[0]
+  auto filledInit = fillOp.getResultTensors()[0];
+
+  // 5. Create linalg.reduce
+  //    dimensions = [0] means reduce along the only dimension (1-d array → scalar).
+  //    Body receives args[0] = input element, args[1] = accumulator.
+  auto reduceOp = mlir::linalg::ReduceOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*inits=*/mlir::ValueRange{filledInit},
+      /*dimensions=*/llvm::ArrayRef<int64_t>{0},
+      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
+                          mlir::ValueRange args) {
+        // args[0] = current element from input tensor (e.g., f64)
+        // args[1] = accumulator (initialized to identity value)
+
+        // Set kernel lambda guard (same pattern as emitKernelMapExpr)
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
+
+        mlir::Value result;
+        auto opTok = reduceExpr->op_tok->tok_type;
+
+        if (isFloatType(elemSamType)) {
+          // Float operations — .getResult() needed: create() returns Op, not Value
+          switch (opTok) {
+          case TokenType::TokADD:
+            result = mlir::arith::AddFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokSUB:
+            result = mlir::arith::SubFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokMUL:
+            result = mlir::arith::MulFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokDIV:
+            result = mlir::arith::DivFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          default:
+            imm_error("Unsupported reduce operator");
+          }
+        } else {
+          // Integer operations — .getResult() needed on each
+          bool isUnsigned = isUnsignedIntegerType(elemSamType);
+          switch (opTok) {
+          case TokenType::TokADD:
+            result = mlir::arith::AddIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokSUB:
+            result = mlir::arith::SubIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokMUL:
+            result = mlir::arith::MulIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokDIV:
+            if (isUnsigned)
+              result = mlir::arith::DivUIOp::create(b, loc, args[0], args[1]).getResult();
+            else
+              result = mlir::arith::DivSIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          default:
+            imm_error("Unsupported reduce operator");
+          }
+        }
+
+        in_kernel_lambda_body = savedKernelCtx;
+
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{result});
+      });
+
+  // 6. Extract the scalar from the 0-d result tensor.
+  //    tensor.extract %result[] : tensor<f64>  (empty index list = 0-d extraction)
+  auto scalarResult = mlir::tensor::ExtractOp::create(
+      builder, location, reduceOp->getResult(0), mlir::ValueRange{});
+
+  // 7. Return the scalar.
+  mlir::func::ReturnOp::create(builder, location,
+                               mlir::ValueRange{scalarResult});
+}
+```
+
+---
+
+### Step 8: CPU-ABI Wrapper — `emitKernelWrapper()`
+
+This is the B2 wrapper function, following the same pattern as closure wrappers
+in `getOrCreateClosureWrapper()` (MLIRGenFunction.cpp:60-90).
+
+**Pattern from closure wrappers (`getOrCreateClosureWrapper()` at MLIRGenFunction.cpp:60-90):**
+```cpp
+// 1. InsertionGuard to save/restore builder position   (line 71)
+// 2. Set insertion point to module body end             (line 72)
+// 3. Create wrapper function                            (line 74-76)
+//    - Closures: LLVM::LLVMFuncOp with Linkage::Internal
+//    - Kernels: func::FuncOp (already forward-declared)
+// 4. Add entry block, set insertion point to block start (line 77-78)
+// 5. Marshal arguments                                   (line 81-83)
+//    - Closures: skip env (arg 0), forward rest
+//    - Kernels: extract elements from !llvm.array → build tensor
+// 6. Call the internal function                          (line 85-86)
+// 7. Marshal return value and emit return
+//    - Closures: emitFuncCallAndLLVMReturn() handles this
+//    - Kernels: tensor.extract loop → build !llvm.array → store to sret
+```
+
+**File: `src/codegen/MLIRGen.cpp`**
+
+```cpp
+void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
+                                     const std::string &internalName,
+                                     const std::string &publicName,
+                                     mlir::Location location) {
+  // The wrapper was already forward-declared with CPU ABI types (buildFuncType).
+  auto wrapperOp = theModule.lookupSymbol<mlir::func::FuncOp>(publicName);
+  assert(wrapperOp && "Wrapper function should be forward-declared");
+
+  // Use InsertionGuard (same pattern as closure wrappers, line 71 of MLIRGenFunction.cpp)
+  mlir::OpBuilder::InsertionGuard guard(builder);
+
+  auto &entryBlock = *wrapperOp.addEntryBlock();
+  builder.setInsertionPointToStart(&entryBlock);
+
+  auto &protoFT = std::get<FunctionType>(kd->Prototype->get_type().type_data);
+  auto retSamType = protoFT.get_return_type();
+  bool returnsArray = retSamType.type_kind == TypeKind::Array;
+
+  // === Marshal input arguments: !llvm.array<NxT> → tensor ===
+  // buildFuncType() passes arrays BY VALUE as !llvm.array<N x T>, not as pointers.
+  // For each array parameter, extract each element via llvm.extractvalue,
+  // then build a tensor via tensor.from_elements.
+  // For scalar parameters, pass through directly.
+  //
+  // This mirrors the closure wrapper pattern in getOrCreateClosureWrapper():
+  // closures unpack env → reconstruct args → call original.
+  // Kernels unpack !llvm.array → build tensor → call internal.
+
+  llvm::SmallVector<mlir::Value> kernelArgs;
+  size_t blockArgIdx = 0;
+
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    auto &paramType = kd->Prototype->parameterVectors[i]->get_type();
+    auto blockArg = entryBlock.getArgument(blockArgIdx++);
+
+    if (paramType.type_kind == TypeKind::Array) {
+      // Array parameter: blockArg IS the !llvm.array<N x T> value (by value).
+      // buildFuncType() → convertType(Array) → LLVMArrayType (not ptr).
+      // No load needed — blockArg is already the aggregate value.
+      auto &arrType = std::get<ArrayType>(paramType.type_data);
+      int64_t arrSize = arrType.get_size();
+      auto elemSamType = arrType.get_element();
+      auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+      // blockArg is already !llvm.array<N x T>, use directly (no LoadOp!)
+      auto arrVal = blockArg;
+
+      // Extract each element and collect them
+      llvm::SmallVector<mlir::Value> elements;
+      for (int64_t j = 0; j < arrSize; ++j) {
+        auto elem = mlir::LLVM::ExtractValueOp::create(
+            builder, location, elemMLIRType, arrVal,
+            llvm::ArrayRef<int64_t>{j});
+        elements.push_back(elem);
+      }
+
+      // Build tensor from elements
+      // tensor.from_elements %e0, %e1, ... : tensor<NxT>
+      auto tensorType = mlir::RankedTensorType::get({arrSize}, elemMLIRType);
+      auto tensorVal = mlir::tensor::FromElementsOp::create(
+          builder, location, tensorType, elements);
+      kernelArgs.push_back(tensorVal);
+    } else {
+      // Scalar parameter: pass through directly
+      kernelArgs.push_back(blockArg);
+    }
+  }
+
+  // === Call the internal kernel function ===
+  auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+  auto callOp = mlir::func::CallOp::create(
+      builder, location, internalName,
+      kernelFuncType.getResults(), kernelArgs);
+
+  // === Marshal return value: tensor → !llvm.array and store to sret buffer ===
+  if (returnsArray) {
+    // Array return: wrapper uses sret convention (last arg is output ptr).
+    // callOp returns a tensor<NxT>. We need to:
+    // 1. Extract each element from the tensor
+    // 2. Build an !llvm.array
+    // 3. Store to the sret output pointer
+
+    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
+    int64_t arrSize = retArrType.get_size();
+    auto elemSamType = retArrType.get_element();
+    auto elemMLIRType = convertTypeForKernel(elemSamType);
+    auto llvmArrType = convertType(retSamType); // !llvm.array<N x T>
+
+    auto resultTensor = callOp.getResult(0);
+    auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+
+    // Build !llvm.array from tensor elements
+    mlir::Value arrVal = mlir::LLVM::PoisonOp::create(
+        builder, location, llvmArrType);
+    for (int64_t j = 0; j < arrSize; ++j) {
+      // tensor.extract %tensor[%j] : tensor<NxT>
+      auto idx = mlir::arith::ConstantIndexOp::create(builder, location, j);
+      auto elem = mlir::tensor::ExtractOp::create(
+          builder, location, resultTensor, mlir::ValueRange{idx});
+      arrVal = mlir::LLVM::InsertValueOp::create(
+          builder, location, arrVal, elem,
+          llvm::ArrayRef<int64_t>{j});
+    }
+
+    // Store the !llvm.array to the sret output pointer
+    mlir::LLVM::StoreOp::create(builder, location, arrVal, sretPtr);
+    mlir::func::ReturnOp::create(builder, location);
+
+  } else if (retSamType.type_kind == TypeKind::Unit) {
+    // Unit return: no value
+    mlir::func::ReturnOp::create(builder, location);
+  } else {
+    // Scalar return: pass through directly
+    mlir::func::ReturnOp::create(builder, location, callOp.getResults());
+  }
+}
+```
+
+**Note on `tensor.from_elements` / `tensor.extract` scaling:**
+For small static arrays (like `[3]f64` in tests), extracting/inserting element-by-element
+is fine. For larger arrays (hundreds of elements), this generates excessive IR.
+A future optimization would use `bufferization.to_tensor` with a `memref.cast` from
+the `!llvm.ptr` to `memref<NxT>` — but that requires careful aliasing annotations.
+Element-by-element is correct and sufficient for Phase 7a.
+
+---
+
+### Step 9: Update Tests
+
+**File: `e2e-tests/compilables/kernel/kernel_basic.mn`**
+
+This test (`kernel x() -> i32 { 0 }`) should still work — it has no array params,
+so the wrapper is trivially a pass-through. The internal function returns `arith.constant 0`.
+
+**File: `e2e-tests/compilables/kernel/kernel_map.mn`**
+
+Update to actually call the kernel and verify the output:
+
+```
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+
+kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let b = double_arr(a);
+  printf("%f\n", b[0]);
+  printf("%f\n", b[1]);
+  printf("%f\n", b[2]);
+  0
+}
+
+// CHECK:      2.000000
+// CHECK-NEXT: 4.000000
+// CHECK-NEXT: 6.000000
+```
+
+**File: `e2e-tests/compilables/kernel/kernel_reduce.mn`**
+
+```
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+
+kernel sum_arr(a: [3]f64) -> f64 {
+  reduce(a, +, 0.0)
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let s = sum_arr(a);
+  printf("%f\n", s);
+  0
+}
+
+// CHECK: 6.000000
+```
+
+---
+
+## File Changes Summary
+
+| File | What Changes | Lines ~Changed |
+|------|-------------|----------------|
+| `src/codegen/CMakeLists.txt` | Add ~11 MLIR library dependencies | ~15 lines added |
+| `src/compiler/Compiler.cpp` | Register 5 new dialects + includes | ~10 lines added |
+| `include/codegen/MLIRGenImpl.h` | Add `kKernelPrefix`, `in_kernel_lambda_body`, `convertTypeForKernel`, `buildKernelFuncType`, `emitKernelMapExpr`, `emitKernelReduceExpr`, `emitKernelWrapper` | ~20 lines added |
+| `src/codegen/MLIRGen.cpp` | Implement `convertTypeForKernel`, `buildKernelFuncType`, rewrite `emitKernelDef`, implement `emitKernelMapExpr`, `emitKernelReduceExpr`, `emitKernelWrapper`, update kernel forward-declaration in `generate()`, add `in_kernel_lambda_body` guards in `emitVarDef`/`emitAllocaOne` | ~270 lines changed |
+| `src/codegen/MLIRGenExpr.cpp` | Add `in_kernel_lambda_body` guards in `emitArrayLiteralExpr`, `emitAllocExpr`, `emitFreeExpr` | ~10 lines added |
+| `src/codegen/MLIRLowering.cpp` | Add 6 new passes + includes | ~25 lines added |
+| `e2e-tests/compilables/kernel/*.mn` | Update 3 test files | ~30 lines changed |
+
+## Implementation Order (for successor)
+
+1. **Step 1** (CMake + dialects) → build, verify no regressions
+2. **Step 2** (lowering pipeline) → build, verify all e2e tests pass (new passes are no-ops)
+3. **Step 3** (type conversion + header declarations) → build (new methods, not yet called)
+4. **Step 4** (forward-declaration) → build, verify `kernel_basic.mn` still compiles
+5. **Step 5** (emitKernelDef rewrite + kernel lambda guards) → verify `kernel_basic.mn` works end-to-end
+6. **Step 6** (emitKernelMapExpr) → verify MLIR output with `--mlir-ir`
+7. **Step 7** (emitKernelReduceExpr) → verify MLIR output with `--mlir-ir`
+8. **Step 8** (emitKernelWrapper) → verify `kernel_map.mn` and `kernel_reduce.mn` run correctly
+9. **Step 9** (update tests) → full e2e test suite passes
+
+After each step, run `cmake --build build -j --target e2e-tests` to verify no regressions.
+
+## Known Limitations (Phase 7a scope)
+
+1. **Single-expression lambda bodies only** — multi-statement lambdas with `let` bindings
+   are caught by the `in_kernel_lambda_body` guard with a clear error message
+2. **Element-by-element marshalling** — wrapper uses `tensor.from_elements`/`tensor.extract`
+   loop, O(N) IR nodes. Fine for small arrays, needs `bufferization.to_tensor` for large ones
+3. **Static array sizes only** — `RankedTensorType::get({arrSize})` requires compile-time size
+4. **No kernel-to-kernel calls** — kernels can only be called from CPU code via the wrapper
+5. **No generic kernels** — parser explicitly rejects `kernel<T>` (would need Monomorphizer)
+6. **No function calls in kernel lambdas** — calling user functions from inside a map/reduce
+   lambda may emit invalid ops; type checker should reject this in the future
+
+## C++ API Reference
+
+Key builders (verified from `/opt/homebrew/opt/llvm/include/mlir/Dialect/Linalg/IR/LinalgStructuredOps.h.inc`):
+
+```cpp
+// linalg.map — line 17361-17362
+MapOp::create(builder, loc,
+    inputs: ValueRange, init: Value,
+    bodyBuilder: function_ref<void(OpBuilder&, Location, ValueRange)>)
+// bodyBuilder args: one per input (element types, NOT tensor types)
+// body must end with linalg::YieldOp
+
+// linalg.reduce — line 26477-26478
+ReduceOp::create(builder, loc,
+    inputs: ValueRange, inits: ValueRange,
+    dimensions: ArrayRef<int64_t>,
+    bodyBuilder: function_ref<void(OpBuilder&, Location, ValueRange)>)
+// bodyBuilder args: [input_elements..., accumulator_elements...]
+// body must end with linalg::YieldOp
+
+// linalg.fill — line 15981-15982
+FillOp::create(builder, loc,
+    inputs: ValueRange, outputs: ValueRange)
+// inputs = scalar value(s) to fill with
+// outputs = tensor(s) to fill
+// returns filled tensor(s) via getResultTensors()
+
+// tensor.empty — line 1984-1985
+tensor::EmptyOp::create(builder, loc,
+    staticShape: ArrayRef<int64_t>, elementType: Type)
+// returns RankedTensorType result
+
+// tensor.from_elements — builds tensor from scalar values
+tensor::FromElementsOp::create(builder, loc,
+    resultType: RankedTensorType, elements: ValueRange)
+
+// tensor.extract — extracts scalar from tensor at given indices
+tensor::ExtractOp::create(builder, loc,
+    tensor: Value, indices: ValueRange)
+// empty indices = extract from 0-d tensor
+
+// linalg.yield — terminates linalg body region
+linalg::YieldOp::create(builder, loc, values: ValueRange)
+```
+
+See also: `knowledge_base/mlir_linalg_gpu_api_reference.md` for full details.
+See also: `knowledge_base/cpu_gpu_boundary_papers.md` for research context.
