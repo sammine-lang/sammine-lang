@@ -112,6 +112,7 @@ public:
   [[nodiscard]] auto ParseDefinition() -> p<DefinitionAST>;
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseReuseDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;
@@ -139,7 +140,7 @@ public:
   [[nodiscard]] auto ParseFreeExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseLenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseCallExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseIdentifierExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,
                                             Location qn_loc,
                                             std::vector<std::unique_ptr<TypeExprAST>> type_args = {}) -> p<ExprAST>;
@@ -148,6 +149,7 @@ public:
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseCaseExpr() -> p<ExprAST>;
+  [[nodiscard]] auto parseCasePattern() -> std::optional<CasePattern>;
   [[nodiscard]] auto ParseWhileExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseNumberExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStringExpr() -> p<ExprAST>;
@@ -157,7 +159,12 @@ public:
   [[nodiscard]] auto ParseBlock() -> p<BlockAST>;
 
   // Parse parameters
-  [[nodiscard]] auto ParseParams() -> ListResult<TypedVarAST>;
+  struct ParamsResult {
+    std::vector<u<TypedVarAST>> params;
+    ParserError status;
+    bool is_var_arg = false;
+  };
+  [[nodiscard]] auto ParseParams() -> ParamsResult;
 
   // Utilities
   [[nodiscard]] auto expect(TokenType tokType, bool exhausts = false,
@@ -182,7 +189,11 @@ public:
 
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
 
-  bool parsed_var_arg = false;
+  /// Parse <T, U, ...> type parameter list. Returns empty if no '<' found.
+  /// On parse error, returns the params parsed so far and sets \p had_error.
+  [[nodiscard]] auto parseTypeParams(Location err_loc, bool &had_error)
+      -> std::vector<std::string>;
+
   int pending_deref = 0;
   std::shared_ptr<Token> pending_deref_tok;
 
