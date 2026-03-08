@@ -1,0 +1,14 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 0
+
+import io;
+
+kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}
+
+let main() -> i32 {
+  io::print_i32(0);
+  io::printf("\n");
+  0
+}

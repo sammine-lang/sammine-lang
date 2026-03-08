@@ -78,7 +78,9 @@ enum class NodeKind {
   // KernelExprAST subclasses [FirstKernelExpr..LastKernelExpr]
   FirstKernelExpr,
   KernelNumberExprAST = FirstKernelExpr,
-  LastKernelExpr = KernelNumberExprAST,
+  KernelMapExprAST,
+  KernelReduceExprAST,
+  LastKernelExpr = KernelReduceExprAST,
 };
 
 class Visitable;

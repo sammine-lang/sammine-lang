@@ -942,6 +942,59 @@ public:
   }
 };
 
+/// Kernel map expression: map(array_param, (param: T) -> U { body })
+/// The lambda reuses CPU AST nodes (PrototypeAST + BlockAST) for unified front-end.
+class KernelMapExprAST : public KernelExprAST {
+public:
+  std::string input_name;
+  std::unique_ptr<PrototypeAST> lambda_proto;
+  std::unique_ptr<BlockAST> lambda_body;
+
+  KernelMapExprAST(std::shared_ptr<Token> map_tok,
+                   std::string input_name,
+                   std::unique_ptr<PrototypeAST> proto,
+                   std::unique_ptr<BlockAST> body)
+      : KernelExprAST(NodeKind::KernelMapExprAST),
+        input_name(std::move(input_name)),
+        lambda_proto(std::move(proto)),
+        lambda_body(std::move(body)) {
+    join_location(map_tok);
+    join_location(lambda_proto.get());
+    join_location(lambda_body.get());
+  }
+  std::string getTreeName() const override { return "KernelMapExprAST"; }
+  static bool classof(const AstBase *node) {
+    return node->getKind() == NodeKind::KernelMapExprAST;
+  }
+};
+
+/// Kernel reduce expression: reduce(array_param, op, identity)
+/// The identity is a regular CPU ExprAST for unified front-end.
+class KernelReduceExprAST : public KernelExprAST {
+public:
+  std::string input_name;
+  std::shared_ptr<Token> op_tok;
+  std::unique_ptr<ExprAST> identity;
+
+  KernelReduceExprAST(std::shared_ptr<Token> reduce_tok,
+                      std::string input_name,
+                      std::shared_ptr<Token> op_tok,
+                      std::unique_ptr<ExprAST> identity)
+      : KernelExprAST(NodeKind::KernelReduceExprAST),
+        input_name(std::move(input_name)),
+        op_tok(std::move(op_tok)),
+        identity(std::move(identity)) {
+    join_location(reduce_tok);
+    join_location(this->op_tok);
+    if (this->identity)
+      join_location(this->identity.get());
+  }
+  std::string getTreeName() const override { return "KernelReduceExprAST"; }
+  static bool classof(const AstBase *node) {
+    return node->getKind() == NodeKind::KernelReduceExprAST;
+  }
+};
+
 /// Kernel block: holds a vector of kernel-only expressions.
 class KernelBlockAST {
 public:

@@ -1870,6 +1870,101 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
     if (tokStream->peek()->tok_type == TokNum) {
       auto num_tok = tokStream->consume();
       exprs.push_back(std::make_unique<KernelNumberExprAST>(num_tok));
+    } else if (tokStream->peek()->tok_type == TokID &&
+               tokStream->peek()->lexeme == "map") {
+      // map(array_name, (params) -> RetType { body })
+      auto map_tok = tokStream->consume();
+
+      REQUIRE(_map_lp, TokLeftParen, "Expected '(' after 'map'",
+              map_tok->get_location(), {nullptr, FAILED});
+
+      REQUIRE(map_arr, TokID, "Expected array name as first argument to 'map'",
+              map_tok->get_location(), {nullptr, FAILED});
+      std::string input_name = map_arr->lexeme;
+
+      REQUIRE(_map_comma, TokComma,
+              "Expected ',' after array name in 'map'",
+              map_arr->get_location(), {nullptr, FAILED});
+
+      // Parse lambda: (params) -> RetType { body }
+      auto params_result = ParseParams();
+      if (params_result.status != SUCCESS) {
+        imm_error("Expected lambda parameter list in 'map'",
+                  map_tok->get_location());
+        return {nullptr, FAILED};
+      }
+
+      REQUIRE(_map_arrow, TokArrow,
+              "Expected '->' after lambda parameters in 'map'",
+              map_tok->get_location(), {nullptr, FAILED});
+
+      auto ret_type = ParseTypeExprTopLevel();
+      if (!ret_type) {
+        imm_error("Expected return type after '->' in 'map' lambda",
+                  map_tok->get_location());
+        return {nullptr, FAILED};
+      }
+
+      auto lambda_proto = std::make_unique<PrototypeAST>(
+          QualifiedName::local(""), map_tok->get_location(),
+          std::move(ret_type), std::move(params_result.params));
+
+      auto [block, block_status] = ParseBlock();
+      if (block_status != SUCCESS) {
+        imm_error("Expected block body for 'map' lambda",
+                  map_tok->get_location());
+        return {nullptr, FAILED};
+      }
+
+      REQUIRE(_map_rp, TokRightParen, "Expected ')' to close 'map'",
+              map_tok->get_location(), {nullptr, FAILED});
+
+      exprs.push_back(std::make_unique<KernelMapExprAST>(
+          map_tok, std::move(input_name), std::move(lambda_proto),
+          std::move(block)));
+    } else if (tokStream->peek()->tok_type == TokID &&
+               tokStream->peek()->lexeme == "reduce") {
+      // reduce(array_name, op, identity_expr)
+      auto reduce_tok = tokStream->consume();
+
+      REQUIRE(_red_lp, TokLeftParen, "Expected '(' after 'reduce'",
+              reduce_tok->get_location(), {nullptr, FAILED});
+
+      REQUIRE(red_arr, TokID,
+              "Expected array name as first argument to 'reduce'",
+              reduce_tok->get_location(), {nullptr, FAILED});
+      std::string input_name = red_arr->lexeme;
+
+      REQUIRE(_red_comma1, TokComma,
+              "Expected ',' after array name in 'reduce'",
+              red_arr->get_location(), {nullptr, FAILED});
+
+      // Consume operator token: +, -, *, /
+      auto op_type = tokStream->peek()->tok_type;
+      if (op_type != TokADD && op_type != TokSUB &&
+          op_type != TokMUL && op_type != TokDIV) {
+        imm_error("Expected operator (+, -, *, /) in 'reduce'",
+                  tokStream->currentLocation());
+        return {nullptr, FAILED};
+      }
+      auto op_tok = tokStream->consume();
+
+      REQUIRE(_red_comma2, TokComma,
+              "Expected ',' after operator in 'reduce'",
+              op_tok->get_location(), {nullptr, FAILED});
+
+      auto [identity, identity_status] = ParseExpr();
+      if (identity_status != SUCCESS) {
+        imm_error("Expected identity value expression in 'reduce'",
+                  op_tok->get_location());
+        return {nullptr, FAILED};
+      }
+
+      REQUIRE(_red_rp, TokRightParen, "Expected ')' to close 'reduce'",
+              reduce_tok->get_location(), {nullptr, FAILED});
+
+      exprs.push_back(std::make_unique<KernelReduceExprAST>(
+          reduce_tok, std::move(input_name), op_tok, std::move(identity)));
     } else {
       imm_error("Expected expression inside kernel body",
                 tokStream->currentLocation());

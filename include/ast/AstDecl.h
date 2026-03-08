@@ -50,6 +50,8 @@ class TypeClassDeclAST;
 class TypeClassInstanceAST;
 class KernelExprAST;
 class KernelNumberExprAST;
+class KernelMapExprAST;
+class KernelReduceExprAST;
 class KernelBlockAST;
 class KernelDefAST;
 

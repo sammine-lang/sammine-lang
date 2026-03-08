@@ -1300,7 +1300,239 @@ Type BiTypeCheckerVisitor::synthesize(TypeClassInstanceAST *ast) {
   return Type::NonExistent();
 }
 Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
-  return Type::NonExistent();
+  if (ast->synthesized())
+    return ast->get_type();
+
+  // Prototype was already visited by visit(KernelDefAST*), so param types
+  // are registered in id_to_type and the prototype has a Function type.
+  auto proto_type = ast->Prototype->get_type();
+  if (proto_type.is_poisoned())
+    return ast->set_type(Type::Poisoned());
+
+  auto &fn_type = std::get<FunctionType>(proto_type.type_data);
+  auto declared_ret = fn_type.get_return_type();
+
+  // Type-check each kernel body expression
+  Type body_result_type = Type::Unit();
+  for (auto &expr : ast->Body->expressions) {
+    if (auto *map_expr = llvm::dyn_cast<KernelMapExprAST>(expr.get())) {
+      body_result_type = synthesize_kernel_map(ast, map_expr);
+    } else if (auto *reduce_expr =
+                   llvm::dyn_cast<KernelReduceExprAST>(expr.get())) {
+      body_result_type = synthesize_kernel_reduce(ast, reduce_expr);
+    } else if (llvm::isa<KernelNumberExprAST>(expr.get())) {
+      // Number literal — assume declared return type
+      body_result_type = declared_ret;
+    } else {
+      this->add_error(expr->get_location(),
+                      "Unsupported expression in kernel body; "
+                      "only map, reduce, and literals are allowed");
+      return ast->set_type(Type::Poisoned());
+    }
+
+    if (body_result_type.is_poisoned())
+      return ast->set_type(Type::Poisoned());
+
+    expr->set_type(body_result_type);
+  }
+
+  // Verify body result type matches declared return type
+  if (!type_map_ordering.compatible_to_from(declared_ret, body_result_type)) {
+    if (body_result_type.is_polymorphic_numeric() &&
+        type_map_ordering.structurally_compatible(declared_ret,
+                                                  body_result_type)) {
+      body_result_type = declared_ret;
+    } else {
+      this->add_error(
+          ast->get_location(),
+          fmt::format(
+              "Kernel body type '{}' does not match declared return type '{}'",
+              body_result_type.to_string(), declared_ret.to_string()));
+      return ast->set_type(Type::Poisoned());
+    }
+  }
+
+  return ast->set_type(proto_type);
+}
+
+Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
+                                                 KernelMapExprAST *map_expr) {
+  // 1. Look up input array in scope
+  if (id_to_type.top().recursiveQueryName(map_expr->input_name) == nameNotFound) {
+    this->add_error(map_expr->get_location(),
+                    fmt::format("Unknown variable '{}' in kernel map",
+                                map_expr->input_name));
+    return Type::Poisoned();
+  }
+  auto input_type =
+      id_to_type.top().recursive_get_from_name(map_expr->input_name);
+
+  // 2. Verify it's an Array type
+  if (input_type.type_kind != TypeKind::Array) {
+    this->add_error(
+        map_expr->get_location(),
+        fmt::format("Kernel map input '{}' must be an array type, got '{}'",
+                    map_expr->input_name, input_type.to_string()));
+    return Type::Poisoned();
+  }
+
+  auto &arr_type = std::get<ArrayType>(input_type.type_data);
+  auto elem_type = arr_type.get_element();
+  auto arr_size = arr_type.get_size();
+
+  // 3. Check lambda has exactly 1 parameter
+  if (map_expr->lambda_proto->parameterVectors.size() != 1) {
+    this->add_error(
+        map_expr->lambda_proto->get_location(),
+        fmt::format("Kernel map lambda must have exactly 1 parameter, got {}",
+                    map_expr->lambda_proto->parameterVectors.size()));
+    return Type::Poisoned();
+  }
+
+  // 4. Push new scope for lambda body and synthesize parameter
+  enter_new_scope();
+
+  map_expr->lambda_proto->parameterVectors[0]->accept_synthesis(this);
+  auto param_type = map_expr->lambda_proto->parameterVectors[0]->get_type();
+
+  // 5. Check param type matches array element type
+  if (!type_map_ordering.compatible_to_from(param_type, elem_type)) {
+    this->add_error(
+        map_expr->lambda_proto->parameterVectors[0]->get_location(),
+        fmt::format(
+            "Kernel map lambda parameter type '{}' does not match "
+            "array element type '{}'",
+            param_type.to_string(), elem_type.to_string()));
+    exit_new_scope();
+    return Type::Poisoned();
+  }
+
+  // 6. Resolve declared return type of the lambda
+  auto declared_ret =
+      resolve_type_expr(map_expr->lambda_proto->return_type_expr.get());
+  if (declared_ret.is_poisoned()) {
+    exit_new_scope();
+    return Type::Poisoned();
+  }
+
+  // 7. Visit the lambda body (walks children via accept_vis, then synthesizes)
+  map_expr->lambda_body->accept_vis(this);
+  auto body_type = map_expr->lambda_body->accept_synthesis(this);
+
+  exit_new_scope();
+
+  if (body_type.is_poisoned())
+    return Type::Poisoned();
+
+  // 8. Handle polymorphic numeric literals in the body
+  if (body_type.is_polymorphic_numeric() &&
+      type_map_ordering.structurally_compatible(declared_ret, body_type)) {
+    if (!map_expr->lambda_body->Statements.empty()) {
+      resolve_literal_type(map_expr->lambda_body->Statements.back().get(),
+                           declared_ret);
+    }
+    body_type = declared_ret;
+    map_expr->lambda_body->set_type(declared_ret);
+  }
+
+  // 9. Check body type matches declared return type of lambda
+  if (!type_map_ordering.compatible_to_from(declared_ret, body_type)) {
+    this->add_error(
+        map_expr->lambda_body->get_location(),
+        fmt::format(
+            "Kernel map lambda body type '{}' does not match "
+            "declared return type '{}'",
+            body_type.to_string(), declared_ret.to_string()));
+    return Type::Poisoned();
+  }
+
+  // 10. Result is an array of the lambda return type with same size
+  return Type::Array(declared_ret, arr_size);
+}
+
+Type BiTypeCheckerVisitor::synthesize_kernel_reduce(
+    KernelDefAST *kd, KernelReduceExprAST *reduce_expr) {
+  // 1. Look up input array in scope
+  if (id_to_type.top().recursiveQueryName(reduce_expr->input_name) ==
+      nameNotFound) {
+    this->add_error(reduce_expr->get_location(),
+                    fmt::format("Unknown variable '{}' in kernel reduce",
+                                reduce_expr->input_name));
+    return Type::Poisoned();
+  }
+  auto input_type =
+      id_to_type.top().recursive_get_from_name(reduce_expr->input_name);
+
+  // 2. Verify Array type and extract element type
+  if (input_type.type_kind != TypeKind::Array) {
+    this->add_error(
+        reduce_expr->get_location(),
+        fmt::format(
+            "Kernel reduce input '{}' must be an array type, got '{}'",
+            reduce_expr->input_name, input_type.to_string()));
+    return Type::Poisoned();
+  }
+
+  auto &arr_type = std::get<ArrayType>(input_type.type_data);
+  auto elem_type = arr_type.get_element();
+
+  // 3. Verify operator is valid (+, -, *, /)
+  auto op_kind = reduce_expr->op_tok->tok_type;
+  if (op_kind != TokADD && op_kind != TokMUL && op_kind != TokSUB &&
+      op_kind != TokDIV) {
+    this->add_error(
+        reduce_expr->op_tok->get_location(),
+        fmt::format("Kernel reduce operator must be +, -, *, or /; got '{}'",
+                    reduce_expr->op_tok->lexeme));
+    return Type::Poisoned();
+  }
+
+  // 4. Verify element type is numeric
+  switch (elem_type.type_kind) {
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+    break;
+  default:
+    this->add_error(
+        reduce_expr->get_location(),
+        fmt::format("Kernel reduce requires a numeric array element type, "
+                    "got '{}'",
+                    elem_type.to_string()));
+    return Type::Poisoned();
+  }
+
+  // 5. Synthesize identity expression
+  auto identity_type = reduce_expr->identity->accept_synthesis(this);
+  if (identity_type.is_poisoned())
+    return Type::Poisoned();
+
+  // 6. Resolve polymorphic numeric literals to the element type
+  if (identity_type.is_polymorphic_numeric()) {
+    if (type_map_ordering.structurally_compatible(elem_type, identity_type)) {
+      resolve_literal_type(reduce_expr->identity.get(), elem_type);
+      identity_type = elem_type;
+    } else {
+      identity_type = default_polymorphic_type(identity_type);
+      resolve_literal_type(reduce_expr->identity.get(), identity_type);
+    }
+  }
+
+  // 7. Check identity type is compatible with element type
+  if (!type_map_ordering.compatible_to_from(elem_type, identity_type)) {
+    this->add_error(
+        reduce_expr->identity->get_location(),
+        fmt::format("Kernel reduce identity type '{}' is not compatible "
+                    "with array element type '{}'",
+                    identity_type.to_string(), elem_type.to_string()));
+    return Type::Poisoned();
+  }
+
+  // 8. Reduce collapses the array to its element type
+  return elem_type;
 }
 
 Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {

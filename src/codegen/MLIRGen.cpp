@@ -337,6 +337,25 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
           mlir::arith::ConstantIntOp::create(builder, location, retType, val);
       mlir::func::ReturnOp::create(builder, location,
                                    mlir::ValueRange{constVal});
+    } else if (dynamic_cast<AST::KernelMapExprAST *>(
+                   kd->Body->expressions[0].get()) ||
+               dynamic_cast<AST::KernelReduceExprAST *>(
+                   kd->Body->expressions[0].get())) {
+      // TODO: implement proper map/reduce lowering
+      if (funcType.getResults().empty()) {
+        mlir::func::ReturnOp::create(builder, location, mlir::ValueRange{});
+      } else {
+        auto retType = funcType.getResults()[0];
+        mlir::Value zero;
+        if (mlir::isa<mlir::FloatType>(retType)) {
+          zero = mlir::arith::ConstantFloatOp::create(
+              builder, location, mlir::cast<mlir::FloatType>(retType), llvm::APFloat(0.0));
+        } else {
+          zero = mlir::arith::ConstantIntOp::create(builder, location, retType, 0);
+        }
+        mlir::func::ReturnOp::create(builder, location,
+                                     mlir::ValueRange{zero});
+      }
     }
   }
 }

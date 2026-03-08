@@ -198,6 +198,10 @@ public:
                                               ArrayLiteralExprAST *arr_lit,
                                               const ArrayType &arr_type);
 
+  // Kernel intrinsic synthesis helpers
+  Type synthesize_kernel_map(KernelDefAST *kd, KernelMapExprAST *map_expr);
+  Type synthesize_kernel_reduce(KernelDefAST *kd, KernelReduceExprAST *reduce_expr);
+
   // pre order
 
   virtual void preorder_walk(ProgramAST *ast) override;
