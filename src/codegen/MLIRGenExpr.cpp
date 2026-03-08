@@ -986,6 +986,11 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 
   // 1. Emit scrutinee
   auto scrutineeVal = emitExpr(ast->scrutinee.get());
+
+  // Dispatch: literal patterns use a separate path (no enum type)
+  if (ast->scrutinee->get_type().type_kind != TypeKind::Enum)
+    return emitLiteralCaseExpr(ast, scrutineeVal);
+
   auto et = std::get<EnumType>(ast->scrutinee->get_type().type_data);
 
   // Integer-backed enum: scrutinee IS the tag, no struct to decompose
@@ -1153,6 +1158,46 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                                    mlir::Value tag,
                                                    const EnumType &et) {
+  return emitScalarCaseExpr(ast, tag,
+      [&](const AST::CaseArm &arm, mlir::Location loc) {
+        auto &vi = et.get_variant(arm.pattern.variant_index);
+        return mlir::arith::ConstantIntOp::create(
+            builder, loc, getEnumBackingMLIRType(et),
+            vi.discriminant_value.value());
+      });
+}
+
+mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
+                                              mlir::Value scrutineeVal) {
+  auto scrutineeType = ast->scrutinee->get_type();
+
+  return emitScalarCaseExpr(ast, scrutineeVal,
+      [&](const AST::CaseArm &arm, mlir::Location loc) -> mlir::Value {
+        using LK = AST::CasePattern::LiteralKind;
+        switch (arm.pattern.literal_kind) {
+        case LK::Bool: {
+          int64_t val = (arm.pattern.literal_value == "true") ? 1 : 0;
+          return mlir::arith::ConstantIntOp::create(builder, loc, val, 1);
+        }
+        case LK::Char: {
+          auto charVal = static_cast<uint8_t>(arm.pattern.literal_value[0]);
+          return mlir::arith::ConstantIntOp::create(builder, loc, charVal, 8);
+        }
+        case LK::Integer: {
+          int64_t val = std::stoll(arm.pattern.literal_value);
+          return mlir::arith::ConstantIntOp::create(
+              builder, loc, convertType(scrutineeType), val);
+        }
+        default:
+          imm_error("unexpected literal kind in case pattern",
+                    arm.pattern.location);
+        }
+      });
+}
+
+mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
+                                             mlir::Value scrutineeVal,
+                                             ArmConstFactory makeConst) {
   auto location = loc(ast);
   bool hasResult = ast->get_type().type_kind != TypeKind::Unit &&
                    ast->get_type().type_kind != TypeKind::Never;
@@ -1183,14 +1228,13 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
     mlir::LLVM::UnreachableOp::create(builder, location);
   }
 
-  // Emit switch via cascading cmpi + cond_br using discriminant values
-  // Restore insertion point to after the scrutinee (the default block creation
-  // may have moved it). Handle both OpResult and BlockArgument cases.
-  if (auto *defOp = tag.getDefiningOp())
+  // Restore insertion point after scrutinee
+  if (auto *defOp = scrutineeVal.getDefiningOp())
     builder.setInsertionPointAfter(defOp);
   else
-    builder.setInsertionPointToEnd(tag.getParentBlock());
+    builder.setInsertionPointToEnd(scrutineeVal.getParentBlock());
 
+  // Emit cascading cmpi + cond_br
   std::vector<size_t> nonWildcardIndices;
   for (size_t i = 0; i < ast->arms.size(); i++) {
     if (!ast->arms[i].pattern.is_wildcard)
@@ -1199,14 +1243,10 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
 
   for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
     size_t i = nonWildcardIndices[ci];
-    auto &arm = ast->arms[i];
-    // Use the actual discriminant value from the EnumType
-    auto &vi = et.get_variant(arm.pattern.variant_index);
-    auto tagConst = mlir::arith::ConstantIntOp::create(
-        builder, location, getEnumBackingMLIRType(et),
-        vi.discriminant_value.value());
+    auto armConst = makeConst(ast->arms[i], location);
     auto cmp = mlir::arith::CmpIOp::create(
-        builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);
+        builder, location, mlir::arith::CmpIPredicate::eq, scrutineeVal,
+        armConst);
 
     mlir::Block *falseTarget;
     if (ci + 1 < nonWildcardIndices.size()) {
@@ -1227,7 +1267,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
     mlir::cf::BranchOp::create(builder, location, defaultBlock);
   }
 
-  // Emit each arm body (no payload extraction for integer-backed enums)
+  // Emit each arm body
   bool allTerminated = true;
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
@@ -1246,8 +1286,6 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
       else
         mlir::cf::BranchOp::create(builder, location, mergeBlock);
       allTerminated = false;
-    } else {
-      allTerminated = allTerminated && true;
     }
   }
 

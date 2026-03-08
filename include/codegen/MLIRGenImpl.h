@@ -11,6 +11,7 @@
 
 #include "llvm/ADT/StringRef.h"
 
+#include <functional>
 #include <map>
 #include <string>
 
@@ -179,6 +180,18 @@ public:
   mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                         mlir::Value scrutineeVal,
                                         const EnumType &et);
+  mlir::Value emitLiteralCaseExpr(AST::CaseExprAST *ast,
+                                  mlir::Value scrutineeVal);
+
+  /// Shared codegen for scalar case expressions (integer-backed enums and
+  /// literal patterns). The makeConst callback creates the comparison constant
+  /// for each non-wildcard arm.
+  using ArmConstFactory =
+      std::function<mlir::Value(const AST::CaseArm &, mlir::Location)>;
+  mlir::Value emitScalarCaseExpr(AST::CaseExprAST *ast,
+                                 mlir::Value scrutineeVal,
+                                 ArmConstFactory makeConst);
+
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
