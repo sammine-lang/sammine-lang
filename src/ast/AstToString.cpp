@@ -254,6 +254,8 @@ std::string CaseExprAST::to_string() const {
     auto &arm = arms[i];
     if (arm.pattern.is_wildcard) {
       result += "_ => {\n";
+    } else if (arm.pattern.is_literal) {
+      result += arm.pattern.literal_value + " => {\n";
     } else {
       result += arm.pattern.variant_name.mangled();
       if (!arm.pattern.bindings.empty()) {

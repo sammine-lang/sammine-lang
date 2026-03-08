@@ -1241,6 +1241,52 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
     return pattern;
   }
 
+  // Literal patterns: numbers, booleans, characters, negative numbers
+  using LK = CasePattern::LiteralKind;
+
+  if (pat_tok->tok_type == TokNum) {
+    tokStream->consume();
+    pattern.is_literal = true;
+    pattern.literal_kind = LK::Integer;
+    pattern.literal_value = pat_tok->lexeme;
+    pattern.location = pat_tok->get_location();
+    return pattern;
+  }
+
+  if (pat_tok->tok_type == TokTrue || pat_tok->tok_type == TokFalse) {
+    tokStream->consume();
+    pattern.is_literal = true;
+    pattern.literal_kind = LK::Bool;
+    pattern.literal_value = pat_tok->lexeme;
+    pattern.location = pat_tok->get_location();
+    return pattern;
+  }
+
+  if (pat_tok->tok_type == TokChar) {
+    tokStream->consume();
+    pattern.is_literal = true;
+    pattern.literal_kind = LK::Char;
+    pattern.literal_value = pat_tok->lexeme;
+    pattern.location = pat_tok->get_location();
+    return pattern;
+  }
+
+  if (pat_tok->tok_type == TokSUB) {
+    auto minus_tok = tokStream->consume(); // consume -
+    auto next = tokStream->peek();
+    if (next->tok_type == TokNum) {
+      auto num_tok = tokStream->consume(); // consume number
+      pattern.is_literal = true;
+      pattern.literal_kind = LK::Integer;
+      pattern.literal_value = "-" + num_tok->lexeme;
+      pattern.location = minus_tok->get_location() | num_tok->get_location();
+      return pattern;
+    }
+    imm_error("Expected number after '-' in case pattern",
+              minus_tok->get_location());
+    return std::nullopt;
+  }
+
   if (pat_tok->tok_type != TokID) {
     imm_error("Expected pattern in case arm", pat_tok->get_location());
     return std::nullopt;
