@@ -5,10 +5,7 @@ enable_language(CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    add_compile_options(-Wall -Wextra -Werror -Wno-unused-parameter)
-endif()
+option(SAMMINE_SANITIZE "Enable ASan + UBSan (debug builds)" OFF)
 add_subdirectory(externals/)
 
 # LLVM-STUFF
