@@ -391,60 +391,63 @@ MLIRGenImpl::mangleName(const sammine_util::QualifiedName &qn) const {
 // because each emit* method returns an mlir::Value.
 
 mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
-  if (auto *num = llvm::dyn_cast<AST::NumberExprAST>(ast))
-    return emitNumberExpr(num);
-  if (auto *boolE = llvm::dyn_cast<AST::BoolExprAST>(ast))
-    return emitBoolExpr(boolE);
-  if (auto *charE = llvm::dyn_cast<AST::CharExprAST>(ast))
-    return emitCharExpr(charE);
-  if (auto *unit = llvm::dyn_cast<AST::UnitExprAST>(ast))
-    return emitUnitExpr(unit);
-  if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
-    return emitVariableExpr(var);
-  if (auto *bin = llvm::dyn_cast<AST::BinaryExprAST>(ast))
-    return emitBinaryExpr(bin);
-  if (auto *call = llvm::dyn_cast<AST::CallExprAST>(ast))
-    return emitCallExpr(call);
-  if (auto *ret = llvm::dyn_cast<AST::ReturnExprAST>(ast))
-    return emitReturnExpr(ret);
-  if (auto *varDef = llvm::dyn_cast<AST::VarDefAST>(ast))
-    return emitVarDef(varDef);
-  if (auto *ifE = llvm::dyn_cast<AST::IfExprAST>(ast))
-    return emitIfExpr(ifE);
-  if (auto *whileE = llvm::dyn_cast<AST::WhileExprAST>(ast))
-    return emitWhileExpr(whileE);
-  if (auto *neg = llvm::dyn_cast<AST::UnaryNegExprAST>(ast))
-    return emitUnaryNegExpr(neg);
-  if (auto *str = llvm::dyn_cast<AST::StringExprAST>(ast))
-    return emitStringExpr(str);
-  if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(ast))
-    return emitArrayLiteralExpr(arrLit);
-  if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(ast))
-    return emitIndexExpr(idx);
-  if (auto *len = llvm::dyn_cast<AST::LenExprAST>(ast))
-    return emitLenExpr(len);
-  if (auto *dim = llvm::dyn_cast<AST::DimExprAST>(ast))
-    return emitDimExpr(dim);
-  if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))
-    return emitDerefExpr(deref);
-  if (auto *addrOf = llvm::dyn_cast<AST::AddrOfExprAST>(ast))
-    return emitAddrOfExpr(addrOf);
-  if (auto *alloc = llvm::dyn_cast<AST::AllocExprAST>(ast))
-    return emitAllocExpr(alloc);
-  if (auto *freeE = llvm::dyn_cast<AST::FreeExprAST>(ast))
-    return emitFreeExpr(freeE);
-  if (auto *structLit = llvm::dyn_cast<AST::StructLiteralExprAST>(ast))
-    return emitStructLiteralExpr(structLit);
-  if (auto *fieldAccess = llvm::dyn_cast<AST::FieldAccessExprAST>(ast))
-    return emitFieldAccessExpr(fieldAccess);
-  if (auto *caseExpr = llvm::dyn_cast<AST::CaseExprAST>(ast))
-    return emitCaseExpr(caseExpr);
-  if (auto *tupleLit = llvm::dyn_cast<AST::TupleLiteralExprAST>(ast))
-    return emitTupleLiteralExpr(tupleLit);
-
-  imm_error(fmt::format("unsupported expression type '{}'",
-                        ast->getTreeName()),
-            ast->get_location());
+  using NK = AST::NodeKind;
+  switch (ast->getKind()) {
+  case NK::NumberExprAST:
+    return emitNumberExpr(llvm::cast<AST::NumberExprAST>(ast));
+  case NK::BoolExprAST:
+    return emitBoolExpr(llvm::cast<AST::BoolExprAST>(ast));
+  case NK::CharExprAST:
+    return emitCharExpr(llvm::cast<AST::CharExprAST>(ast));
+  case NK::UnitExprAST:
+    return emitUnitExpr(llvm::cast<AST::UnitExprAST>(ast));
+  case NK::VariableExprAST:
+    return emitVariableExpr(llvm::cast<AST::VariableExprAST>(ast));
+  case NK::BinaryExprAST:
+    return emitBinaryExpr(llvm::cast<AST::BinaryExprAST>(ast));
+  case NK::CallExprAST:
+    return emitCallExpr(llvm::cast<AST::CallExprAST>(ast));
+  case NK::ReturnExprAST:
+    return emitReturnExpr(llvm::cast<AST::ReturnExprAST>(ast));
+  case NK::VarDefAST:
+    return emitVarDef(llvm::cast<AST::VarDefAST>(ast));
+  case NK::IfExprAST:
+    return emitIfExpr(llvm::cast<AST::IfExprAST>(ast));
+  case NK::WhileExprAST:
+    return emitWhileExpr(llvm::cast<AST::WhileExprAST>(ast));
+  case NK::UnaryNegExprAST:
+    return emitUnaryNegExpr(llvm::cast<AST::UnaryNegExprAST>(ast));
+  case NK::StringExprAST:
+    return emitStringExpr(llvm::cast<AST::StringExprAST>(ast));
+  case NK::ArrayLiteralExprAST:
+    return emitArrayLiteralExpr(llvm::cast<AST::ArrayLiteralExprAST>(ast));
+  case NK::IndexExprAST:
+    return emitIndexExpr(llvm::cast<AST::IndexExprAST>(ast));
+  case NK::LenExprAST:
+    return emitLenExpr(llvm::cast<AST::LenExprAST>(ast));
+  case NK::DimExprAST:
+    return emitDimExpr(llvm::cast<AST::DimExprAST>(ast));
+  case NK::DerefExprAST:
+    return emitDerefExpr(llvm::cast<AST::DerefExprAST>(ast));
+  case NK::AddrOfExprAST:
+    return emitAddrOfExpr(llvm::cast<AST::AddrOfExprAST>(ast));
+  case NK::AllocExprAST:
+    return emitAllocExpr(llvm::cast<AST::AllocExprAST>(ast));
+  case NK::FreeExprAST:
+    return emitFreeExpr(llvm::cast<AST::FreeExprAST>(ast));
+  case NK::StructLiteralExprAST:
+    return emitStructLiteralExpr(llvm::cast<AST::StructLiteralExprAST>(ast));
+  case NK::FieldAccessExprAST:
+    return emitFieldAccessExpr(llvm::cast<AST::FieldAccessExprAST>(ast));
+  case NK::CaseExprAST:
+    return emitCaseExpr(llvm::cast<AST::CaseExprAST>(ast));
+  case NK::TupleLiteralExprAST:
+    return emitTupleLiteralExpr(llvm::cast<AST::TupleLiteralExprAST>(ast));
+  default:
+    imm_error(fmt::format("unsupported expression type '{}'",
+                          ast->getTreeName()),
+              ast->get_location());
+  }
 }
 
 // ===--- Block and variable definition ---===

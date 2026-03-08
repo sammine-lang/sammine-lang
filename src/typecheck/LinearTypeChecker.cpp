@@ -236,35 +236,39 @@ void LinearTypeChecker::check_block(BlockAST *ast) {
 // ── Recursive dispatch ──────────────────────────────────────────────
 
 void LinearTypeChecker::check_stmt(ExprAST *stmt) {
-  if (auto *vd = llvm::dyn_cast<VarDefAST>(stmt))
-    check_var_def(vd);
-  else if (auto *bin = llvm::dyn_cast<BinaryExprAST>(stmt))
-    check_binary(bin);
-  else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt))
-    check_call(call);
-  else if (auto *fr = llvm::dyn_cast<FreeExprAST>(stmt))
-    check_free(fr);
-  else if (auto *ret = llvm::dyn_cast<ReturnExprAST>(stmt))
-    check_return(ret);
-  else if (auto *iff = llvm::dyn_cast<IfExprAST>(stmt))
-    check_if(iff);
-  else if (auto *wh = llvm::dyn_cast<WhileExprAST>(stmt))
-    check_while(wh);
-  else if (auto *cs = llvm::dyn_cast<CaseExprAST>(stmt))
-    check_case(cs);
-  else if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(stmt))
-    check_struct_literal(sl);
-  else if (auto *al = llvm::dyn_cast<ArrayLiteralExprAST>(stmt))
-    check_array_literal(al);
-  else if (auto *tl = llvm::dyn_cast<TupleLiteralExprAST>(stmt))
-    check_tuple_literal(tl);
-  else if (auto *dr = llvm::dyn_cast<DerefExprAST>(stmt))
-    check_deref(dr);
-  else if (auto *idx = llvm::dyn_cast<IndexExprAST>(stmt))
-    check_index(idx);
-  else if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(stmt))
-    check_addr_of(addr);
-  // All other nodes (number, string, etc.): no linear state changes
+  using NK = NodeKind;
+  switch (stmt->getKind()) {
+  case NK::VarDefAST:
+    check_var_def(llvm::cast<VarDefAST>(stmt)); break;
+  case NK::BinaryExprAST:
+    check_binary(llvm::cast<BinaryExprAST>(stmt)); break;
+  case NK::CallExprAST:
+    check_call(llvm::cast<CallExprAST>(stmt)); break;
+  case NK::FreeExprAST:
+    check_free(llvm::cast<FreeExprAST>(stmt)); break;
+  case NK::ReturnExprAST:
+    check_return(llvm::cast<ReturnExprAST>(stmt)); break;
+  case NK::IfExprAST:
+    check_if(llvm::cast<IfExprAST>(stmt)); break;
+  case NK::WhileExprAST:
+    check_while(llvm::cast<WhileExprAST>(stmt)); break;
+  case NK::CaseExprAST:
+    check_case(llvm::cast<CaseExprAST>(stmt)); break;
+  case NK::StructLiteralExprAST:
+    check_struct_literal(llvm::cast<StructLiteralExprAST>(stmt)); break;
+  case NK::ArrayLiteralExprAST:
+    check_array_literal(llvm::cast<ArrayLiteralExprAST>(stmt)); break;
+  case NK::TupleLiteralExprAST:
+    check_tuple_literal(llvm::cast<TupleLiteralExprAST>(stmt)); break;
+  case NK::DerefExprAST:
+    check_deref(llvm::cast<DerefExprAST>(stmt)); break;
+  case NK::IndexExprAST:
+    check_index(llvm::cast<IndexExprAST>(stmt)); break;
+  case NK::AddrOfExprAST:
+    check_addr_of(llvm::cast<AddrOfExprAST>(stmt)); break;
+  default:
+    break; // All other nodes (number, string, etc.): no linear state changes
+  }
 }
 
 // ── check_var_def ───────────────────────────────────────────────────

@@ -120,35 +120,61 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   auto orig_loc = expr->get_location();
   std::unique_ptr<ExprAST> result;
 
-  if (auto *num = llvm::dyn_cast<NumberExprAST>(expr)) {
+  switch (expr->getKind()) {
+  case NodeKind::NumberExprAST: {
+    auto *num = llvm::cast<NumberExprAST>(expr);
     result = std::make_unique<NumberExprAST>(make_tok(num->number));
-  } else if (auto *str = llvm::dyn_cast<StringExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::StringExprAST: {
+    auto *str = llvm::cast<StringExprAST>(expr);
     auto tok = make_tok(str->string_content);
     tok->tok_type = TokenType::TokStr;
     result = std::make_unique<StringExprAST>(tok);
-  } else if (auto *b = llvm::dyn_cast<BoolExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::BoolExprAST: {
+    auto *b = llvm::cast<BoolExprAST>(expr);
     result = std::make_unique<BoolExprAST>(b->b, b->get_location());
-  } else if (auto *ch = llvm::dyn_cast<CharExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::CharExprAST: {
+    auto *ch = llvm::cast<CharExprAST>(expr);
     result = std::make_unique<CharExprAST>(ch->value, ch->get_location());
-  } else if (auto *var = llvm::dyn_cast<VariableExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::VariableExprAST: {
+    auto *var = llvm::cast<VariableExprAST>(expr);
     result = std::make_unique<VariableExprAST>(make_tok(var->variableName));
-  } else if (auto *call = llvm::dyn_cast<CallExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::CallExprAST: {
+    auto *call = llvm::cast<CallExprAST>(expr);
     auto r = std::make_unique<CallExprAST>(
         call->functionName, call->get_location(),
         clone_expr_vec(call->arguments));
     for (auto &ta : call->explicit_type_args)
       r->explicit_type_args.push_back(clone_type_expr(ta.get()));
     result = std::move(r);
-  } else if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::BinaryExprAST: {
+    auto *bin = llvm::cast<BinaryExprAST>(expr);
     result = std::make_unique<BinaryExprAST>(
         bin->Op, clone_expr(bin->LHS.get()), clone_expr(bin->RHS.get()));
-  } else if (auto *ret = llvm::dyn_cast<ReturnExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::ReturnExprAST: {
+    auto *ret = llvm::cast<ReturnExprAST>(expr);
     if (ret->is_implicit)
       result = std::make_unique<ReturnExprAST>(clone_expr(ret->return_expr.get()));
     else
       result = std::make_unique<ReturnExprAST>(
           make_tok("return"), clone_expr(ret->return_expr.get()));
-  } else if (auto *vd = llvm::dyn_cast<VarDefAST>(expr)) {
+    break;
+  }
+  case NodeKind::VarDefAST: {
+    auto *vd = llvm::cast<VarDefAST>(expr);
     if (vd->is_tuple_destructure) {
       std::vector<std::unique_ptr<TypedVarAST>> vars;
       for (auto &v : vd->destructure_vars)
@@ -161,54 +187,96 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
           make_tok("let"), clone_typed_var(vd->TypedVar.get()),
           clone_expr(vd->Expression.get()), vd->is_mutable);
     }
-  } else if (auto *ife = llvm::dyn_cast<IfExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::IfExprAST: {
+    auto *ife = llvm::cast<IfExprAST>(expr);
     result = std::make_unique<IfExprAST>(
         clone_expr(ife->bool_expr.get()), clone_block(ife->thenBlockAST.get()),
         clone_block(ife->elseBlockAST.get()));
-  } else if (auto *unit = llvm::dyn_cast<UnitExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::UnitExprAST: {
+    auto *unit = llvm::cast<UnitExprAST>(expr);
     if (unit->is_implicit)
       result = std::make_unique<UnitExprAST>();
     else
       result = std::make_unique<UnitExprAST>(make_tok("("), make_tok(")"));
-  } else if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::DerefExprAST: {
+    auto *deref = llvm::cast<DerefExprAST>(expr);
     result = std::make_unique<DerefExprAST>(make_tok("*"),
                                             clone_expr(deref->operand.get()));
-  } else if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::AddrOfExprAST: {
+    auto *addr = llvm::cast<AddrOfExprAST>(expr);
     result = std::make_unique<AddrOfExprAST>(make_tok("&"),
                                              clone_expr(addr->operand.get()));
-  } else if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::AllocExprAST: {
+    auto *alloc = llvm::cast<AllocExprAST>(expr);
     result = std::make_unique<AllocExprAST>(make_tok("alloc"),
                                             clone_type_expr(alloc->type_arg.get()),
                                             clone_expr(alloc->operand.get()));
-  } else if (auto *free_e = llvm::dyn_cast<FreeExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::FreeExprAST: {
+    auto *free_e = llvm::cast<FreeExprAST>(expr);
     result = std::make_unique<FreeExprAST>(make_tok("free"),
                                            clone_expr(free_e->operand.get()));
-  } else if (auto *arr_lit = llvm::dyn_cast<ArrayLiteralExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::ArrayLiteralExprAST: {
+    auto *arr_lit = llvm::cast<ArrayLiteralExprAST>(expr);
     result = std::make_unique<ArrayLiteralExprAST>(
         clone_expr_vec(arr_lit->elements));
-  } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::IndexExprAST: {
+    auto *idx = llvm::cast<IndexExprAST>(expr);
     result = std::make_unique<IndexExprAST>(clone_expr(idx->array_expr.get()),
                                             clone_expr(idx->index_expr.get()));
-  } else if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::LenExprAST: {
+    auto *len = llvm::cast<LenExprAST>(expr);
     result = std::make_unique<LenExprAST>(make_tok("len"),
                                           clone_expr(len->operand.get()));
-  } else if (auto *dim = llvm::dyn_cast<DimExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::DimExprAST: {
+    auto *dim = llvm::cast<DimExprAST>(expr);
     result = std::make_unique<DimExprAST>(make_tok("dim"),
                                           clone_expr(dim->operand.get()));
-  } else if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::UnaryNegExprAST: {
+    auto *neg = llvm::cast<UnaryNegExprAST>(expr);
     result = std::make_unique<UnaryNegExprAST>(make_tok("-"),
                                                clone_expr(neg->operand.get()));
-  } else if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::StructLiteralExprAST: {
+    auto *sl = llvm::cast<StructLiteralExprAST>(expr);
     auto cloned_sl = std::make_unique<StructLiteralExprAST>(
         sl->struct_name, sl->get_location(), sl->field_names,
         clone_expr_vec(sl->field_values));
     for (auto &ta : sl->explicit_type_args)
       cloned_sl->explicit_type_args.push_back(clone_type_expr(ta.get()));
     result = std::move(cloned_sl);
-  } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::FieldAccessExprAST: {
+    auto *fa = llvm::cast<FieldAccessExprAST>(expr);
     result = std::make_unique<FieldAccessExprAST>(
         clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
-  } else if (auto *ce = llvm::dyn_cast<CaseExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::CaseExprAST: {
+    auto *ce = llvm::cast<CaseExprAST>(expr);
     std::vector<CaseArm> cloned_arms;
     for (auto &arm : ce->arms) {
       CaseArm cloned_arm;
@@ -219,13 +287,21 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::make_unique<CaseExprAST>(
         make_tok("case"), clone_expr(ce->scrutinee.get()),
         std::move(cloned_arms));
-  } else if (auto *wh = llvm::dyn_cast<WhileExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::WhileExprAST: {
+    auto *wh = llvm::cast<WhileExprAST>(expr);
     result = std::make_unique<WhileExprAST>(clone_expr(wh->condition.get()),
                                             clone_block(wh->body.get()));
-  } else if (auto *tup = llvm::dyn_cast<TupleLiteralExprAST>(expr)) {
+    break;
+  }
+  case NodeKind::TupleLiteralExprAST: {
+    auto *tup = llvm::cast<TupleLiteralExprAST>(expr);
     result = std::make_unique<TupleLiteralExprAST>(
         clone_expr_vec(tup->elements));
-  } else {
+    break;
+  }
+  default:
     sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");
   }
 
