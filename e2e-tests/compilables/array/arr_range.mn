@@ -1,0 +1,18 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      1
+// CHECK-NEXT: 2
+// CHECK-NEXT: 3
+// CHECK-NEXT: 4
+// CHECK-NEXT: 5
+
+import std;
+
+let main() -> i32 {
+  let a : [5]i32 = [1...5];
+  std::printf("%d\n", a[0]);
+  std::printf("%d\n", a[1]);
+  std::printf("%d\n", a[2]);
+  std::printf("%d\n", a[3]);
+  std::printf("%d\n", a[4]);
+  return 0;
+}

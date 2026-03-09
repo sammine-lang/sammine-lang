@@ -1,0 +1,11 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      16
+
+import std;
+
+let main() -> i32 {
+  let a : [10]i32 = [1...10];
+  let sum : i32 = a[0] + a[4] + a[9];
+  std::printf("%d\n", sum);
+  return 0;
+}

@@ -642,6 +642,12 @@ void BiTypeCheckerVisitor::visit(ArrayLiteralExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(RangeExprAST *ast) {
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
+  ast->accept_synthesis(this);
+}
+
 void BiTypeCheckerVisitor::visit(IndexExprAST *ast) {
   ast->array_expr->accept_vis(this);
   ast->index_expr->accept_vis(this);
@@ -859,6 +865,7 @@ void BiTypeCheckerVisitor::preorder_walk(AddrOfExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(AllocExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::preorder_walk(RangeExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::preorder_walk(DimExprAST *ast) {}
@@ -898,6 +905,7 @@ void BiTypeCheckerVisitor::postorder_walk(AddrOfExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(AllocExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(FreeExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
+void BiTypeCheckerVisitor::postorder_walk(RangeExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(IndexExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(LenExprAST *ast) {}
 void BiTypeCheckerVisitor::postorder_walk(DimExprAST *ast) {}

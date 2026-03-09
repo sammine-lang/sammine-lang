@@ -700,6 +700,21 @@ public:
   AST_NODE_METHODS("ArrayLiteralExprAST", NodeKind::ArrayLiteralExprAST)
 };
 
+class RangeExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> start;
+  std::unique_ptr<ExprAST> end;
+  explicit RangeExprAST(std::unique_ptr<ExprAST> start,
+                        std::unique_ptr<ExprAST> end)
+      : ExprAST(NodeKind::RangeExprAST), start(std::move(start)),
+        end(std::move(end)) {
+    this->join_location(this->start.get())
+        ->join_location(this->end.get());
+  }
+  std::string to_string() const override;
+  AST_NODE_METHODS("RangeExprAST", NodeKind::RangeExprAST)
+};
+
 class IndexExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> array_expr;

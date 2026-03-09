@@ -128,6 +128,7 @@ public:
   virtual void visit(AllocExprAST *ast) override;
   virtual void visit(FreeExprAST *ast) override;
   virtual void visit(ArrayLiteralExprAST *ast) override;
+  virtual void visit(RangeExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
   virtual void visit(DimExprAST *ast) override;
@@ -215,6 +216,7 @@ public:
   virtual void preorder_walk(AllocExprAST *ast) override;
   virtual void preorder_walk(FreeExprAST *ast) override;
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void preorder_walk(RangeExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
   virtual void preorder_walk(DimExprAST *ast) override;
@@ -254,6 +256,7 @@ public:
   virtual void postorder_walk(AllocExprAST *ast) override;
   virtual void postorder_walk(FreeExprAST *ast) override;
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void postorder_walk(RangeExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
   virtual void postorder_walk(DimExprAST *ast) override;
@@ -292,6 +295,7 @@ public:
   virtual Type synthesize(AllocExprAST *ast) override;
   virtual Type synthesize(FreeExprAST *ast) override;
   virtual Type synthesize(ArrayLiteralExprAST *ast) override;
+  virtual Type synthesize(RangeExprAST *ast) override;
   virtual Type synthesize(IndexExprAST *ast) override;
   virtual Type synthesize(LenExprAST *ast) override;
   virtual Type synthesize(DimExprAST *ast) override;

@@ -232,6 +232,7 @@ void ScopeGeneratorVisitor::preorder_walk(AllocExprAST *ast) {
 }
 void ScopeGeneratorVisitor::preorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
+void ScopeGeneratorVisitor::preorder_walk(RangeExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(DimExprAST *ast) {}
@@ -380,6 +381,7 @@ void ScopeGeneratorVisitor::postorder_walk(AddrOfExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(AllocExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(FreeExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
+void ScopeGeneratorVisitor::postorder_walk(RangeExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(IndexExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(DimExprAST *ast) {}

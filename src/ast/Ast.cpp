@@ -167,6 +167,13 @@ void ASTVisitor::visit(ArrayLiteralExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(RangeExprAST *ast) {
+  preorder_walk(ast);
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
+  postorder_walk(ast);
+}
+
 void ASTVisitor::visit(IndexExprAST *ast) {
   ast->walk_with_preorder(this);
   ast->array_expr->accept_vis(this);

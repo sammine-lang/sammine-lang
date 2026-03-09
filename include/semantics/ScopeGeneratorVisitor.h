@@ -96,6 +96,7 @@ public:
   virtual void preorder_walk(AllocExprAST *ast) override;
   virtual void preorder_walk(FreeExprAST *ast) override;
   virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void preorder_walk(RangeExprAST *ast) override;
   virtual void preorder_walk(IndexExprAST *ast) override;
   virtual void preorder_walk(LenExprAST *ast) override;
   virtual void preorder_walk(DimExprAST *ast) override;
@@ -136,6 +137,7 @@ public:
   virtual void postorder_walk(AllocExprAST *ast) override;
   virtual void postorder_walk(FreeExprAST *ast) override;
   virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
+  virtual void postorder_walk(RangeExprAST *ast) override;
   virtual void postorder_walk(IndexExprAST *ast) override;
   virtual void postorder_walk(LenExprAST *ast) override;
   virtual void postorder_walk(DimExprAST *ast) override;

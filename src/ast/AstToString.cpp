@@ -217,6 +217,10 @@ std::string ArrayLiteralExprAST::to_string() const {
   return result;
 }
 
+std::string RangeExprAST::to_string() const {
+  return "[" + start->to_string() + "..." + end->to_string() + "]";
+}
+
 std::string IndexExprAST::to_string() const {
   return array_expr->to_string() + "[" + index_expr->to_string() + "]";
 }

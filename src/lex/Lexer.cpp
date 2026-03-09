@@ -211,7 +211,7 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
       i = advance(i);
     } while (i < input.length() - 1 && isdigit(input[i]));
 
-    if (input[i] == '.') {
+    if (input[i] == '.' && !(i + 1 < input.length() && input[i + 1] == '.')) {
       NumStr += input[i];
       i = advance(i);
       do {

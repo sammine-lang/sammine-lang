@@ -1001,6 +1001,65 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
 
   return ast->set_type(Type::Array(first_type, ast->elements.size()));
 }
+
+Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  auto start_type = ast->start->accept_synthesis(this);
+  auto end_type = ast->end->accept_synthesis(this);
+
+  // Check that both sides are integer types or polymorphic Integer
+  // Valid TypeKinds: I32_t, I64_t, U32_t, U64_t, Integer (polymorphic)
+  auto is_int = [](const Type &t) {
+    return t.type_kind == TypeKind::I32_t || t.type_kind == TypeKind::I64_t ||
+           t.type_kind == TypeKind::U32_t || t.type_kind == TypeKind::U64_t ||
+           t.type_kind == TypeKind::Integer;
+  };
+
+  if (!is_int(start_type)) {
+    this->add_error(ast->start->get_location(),
+                    fmt::format("Range start must be an integer type, got {}",
+                                start_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+  if (!is_int(end_type)) {
+    this->add_error(ast->end->get_location(),
+                    fmt::format("Range end must be an integer type, got {}",
+                                end_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  // Both must be NumberExprAST (compile-time constants)
+  auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
+  auto *end_num = llvm::dyn_cast<NumberExprAST>(ast->end.get());
+  if (!start_num || !end_num) {
+    this->add_error(ast->get_location(),
+                    "Range bounds must be compile-time integer constants");
+    return ast->set_type(Type::Poisoned());
+  }
+
+  // Parse the literal values
+  int64_t start_val = std::stoll(start_num->number);
+  int64_t end_val = std::stoll(end_num->number);
+
+  if (end_val < start_val) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Range end ({}) must be >= start ({})",
+                                end_val, start_val));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  size_t size = static_cast<size_t>(end_val - start_val + 1);
+
+  // Resolve element type (default polymorphic Integer to i32)
+  auto elem_type = default_polymorphic_type(start_type);
+  resolve_literal_type(ast->start.get(), elem_type);
+  resolve_literal_type(ast->end.get(), elem_type);
+
+  return ast->set_type(Type::Array(elem_type, size));
+}
+
 Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();

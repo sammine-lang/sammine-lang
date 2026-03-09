@@ -882,6 +882,25 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
   if (first_result != SUCCESS) {
     return {std::make_unique<ArrayLiteralExprAST>(std::move(elements)), FAILED};
   }
+  // Check for range syntax: [start...end]
+  if (tokStream->peek()->tok_type == TokEllipsis) {
+    tokStream->consume();
+    auto [end_expr, end_result] = ParseExpr();
+    if (end_result != SUCCESS) {
+      this->imm_error("Expected expression after '...' in range",
+                      left_bracket->get_location());
+      return {nullptr, FAILED};
+    }
+    REQUIRE(_rb, TokRightBracket, "Expected ']' to close range expression",
+            left_bracket->get_location(),
+            {std::make_unique<RangeExprAST>(std::move(first),
+                                            std::move(end_expr)),
+             FAILED});
+    return {std::make_unique<RangeExprAST>(std::move(first),
+                                           std::move(end_expr)),
+            SUCCESS};
+  }
+
   elements.push_back(std::move(first));
   while (!tokStream->isEnd()) {
     auto comma = expect(TokComma);
