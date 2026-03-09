@@ -12,6 +12,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -98,8 +101,33 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
       for (auto &method : tci->methods)
         forwardDeclareFunc(method->Prototype.get());
     } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
-      if (!kd->Prototype->is_generic())
-        forwardDeclareFunc(kd->Prototype.get());
+      if (!kd->Prototype->is_generic()) {
+        auto publicName = mangleName(kd->Prototype->functionName);
+        auto internalName = kKernelPrefix.str() + publicName;
+
+        builder.setInsertionPointToEnd(theModule.getBody());
+
+        // 1. Forward-declare internal kernel function (tensor types, private)
+        auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+        if (!theModule.lookupSymbol(internalName)) {
+          auto funcOp = mlir::func::FuncOp::create(
+              builder.getUnknownLoc(), internalName, kernelFuncType);
+          funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+          funcOp->setAttr("sammine.kernel", builder.getUnitAttr());
+          theModule.push_back(funcOp);
+        }
+
+        // 2. Forward-declare public wrapper (CPU ABI, same as buildFuncType)
+        auto wrapperFuncType = buildFuncType(kd->Prototype.get());
+        if (!theModule.lookupSymbol(publicName)) {
+          auto funcOp = mlir::func::FuncOp::create(
+              builder.getUnknownLoc(), publicName, wrapperFuncType);
+          funcOp.setVisibility(moduleName.empty()
+                                   ? mlir::SymbolTable::Visibility::Private
+                                   : mlir::SymbolTable::Visibility::Public);
+          theModule.push_back(funcOp);
+        }
+      }
     }
   }
 
@@ -289,6 +317,68 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
   }
 }
 
+// ===--- Kernel type conversion ---===
+
+mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
+  switch (type.type_kind) {
+  case TypeKind::Array: {
+    auto &arr = std::get<ArrayType>(type.type_data);
+    auto elemSamType = arr.get_element();
+    if (elemSamType.type_kind == TypeKind::Array)
+      imm_error("Nested arrays not yet supported in kernel context");
+    auto elemType = convertTypeForKernel(elemSamType);
+    return mlir::RankedTensorType::get(
+        {static_cast<int64_t>(arr.get_size())}, elemType);
+  }
+  case TypeKind::I32_t:
+  case TypeKind::Integer:
+    return builder.getI32Type();
+  case TypeKind::I64_t:
+    return builder.getI64Type();
+  case TypeKind::F64_t:
+  case TypeKind::Flt:
+    return builder.getF64Type();
+  case TypeKind::F32_t:
+    return builder.getF32Type();
+  case TypeKind::U32_t:
+    return builder.getI32Type();
+  case TypeKind::U64_t:
+    return builder.getI64Type();
+  case TypeKind::Bool:
+    return builder.getI1Type();
+  case TypeKind::Char:
+    return builder.getI8Type();
+  case TypeKind::Unit:
+    return mlir::NoneType::get(builder.getContext());
+  case TypeKind::Pointer:
+  case TypeKind::Function:
+  case TypeKind::String:
+  case TypeKind::Struct:
+  case TypeKind::Enum:
+  case TypeKind::Tuple:
+    imm_error(fmt::format("Type '{}' is not valid in kernel context",
+                          type.to_string()));
+  default:
+    imm_error("Unknown type kind in kernel context");
+  }
+}
+
+mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
+  llvm::SmallVector<mlir::Type, 4> argTypes;
+  for (auto &param : proto->parameterVectors)
+    argTypes.push_back(convertTypeForKernel(param->get_type()));
+
+  llvm::SmallVector<mlir::Type, 1> retTypes;
+  if (proto->get_type().type_kind == TypeKind::Function) {
+    auto ft = std::get<FunctionType>(proto->get_type().type_data);
+    auto retType = ft.get_return_type();
+    if (retType.type_kind != TypeKind::Unit)
+      retTypes.push_back(convertTypeForKernel(retType));
+  }
+
+  return builder.getFunctionType(argTypes, retTypes);
+}
+
 // ===--- Definition emission ---===
 
 void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
@@ -317,46 +407,334 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
 }
 
 void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
-  auto funcName = mangleName(kd->Prototype->functionName);
-  auto funcType = buildFuncType(kd->Prototype.get());
   auto location = loc(kd);
+  auto publicName = mangleName(kd->Prototype->functionName);
+  auto internalName = kKernelPrefix.str() + publicName;
 
-  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(funcName);
+  // === 1. Emit the internal kernel function (tensor types) ===
+  {
+    decltype(symbolTable)::Guard scope(symbolTable);
 
-  auto &entryBlock = *funcOp.addEntryBlock();
-  builder.setInsertionPointToStart(&entryBlock);
+    auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+    auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(internalName);
+    assert(funcOp && "Internal kernel function should be forward-declared");
 
-  // TODO: ad-hoc returning — currently hardcodes return of the first expression.
-  // Should properly handle multiple expressions and explicit return statements.
-  if (!kd->Body->expressions.empty()) {
-    if (auto *numExpr = llvm::dyn_cast<AST::KernelNumberExprAST>(
-            kd->Body->expressions[0].get())) {
-      auto retType = funcType.getResults()[0];
-      int64_t val = std::stoll(numExpr->number);
-      auto constVal =
-          mlir::arith::ConstantIntOp::create(builder, location, retType, val);
-      mlir::func::ReturnOp::create(builder, location,
-                                   mlir::ValueRange{constVal});
-    } else if (llvm::isa<AST::KernelMapExprAST>(
-                   kd->Body->expressions[0].get()) ||
-               llvm::isa<AST::KernelReduceExprAST>(
-                   kd->Body->expressions[0].get())) {
-      // TODO: implement proper map/reduce lowering
-      if (funcType.getResults().empty()) {
-        mlir::func::ReturnOp::create(builder, location, mlir::ValueRange{});
-      } else {
-        auto retType = funcType.getResults()[0];
-        mlir::Value zero;
+    auto &entryBlock = *funcOp.addEntryBlock();
+    builder.setInsertionPointToStart(&entryBlock);
+
+    // Bind parameters as tensor SSA values (no alloca wrapper).
+    for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+      auto &param = kd->Prototype->parameterVectors[i];
+      auto argVal = entryBlock.getArgument(static_cast<unsigned>(i));
+      symbolTable.registerNameT(param->name, argVal);
+    }
+
+    // Dispatch to the appropriate kernel expression handler
+    if (kd->Body->expressions.empty()) {
+      mlir::func::ReturnOp::create(builder, location);
+    } else {
+      auto *firstExpr = kd->Body->expressions[0].get();
+
+      if (auto *numExpr = llvm::dyn_cast<AST::KernelNumberExprAST>(firstExpr)) {
+        auto retType = kernelFuncType.getResults()[0];
         if (mlir::isa<mlir::FloatType>(retType)) {
-          zero = mlir::arith::ConstantFloatOp::create(
-              builder, location, mlir::cast<mlir::FloatType>(retType), llvm::APFloat(0.0));
+          double val = std::stod(numExpr->number);
+          auto constVal = mlir::arith::ConstantFloatOp::create(
+              builder, location, mlir::cast<mlir::FloatType>(retType),
+              llvm::APFloat(val)).getResult();
+          mlir::func::ReturnOp::create(builder, location,
+                                       mlir::ValueRange{constVal});
         } else {
-          zero = mlir::arith::ConstantIntOp::create(builder, location, retType, 0);
+          int64_t val = std::stoll(numExpr->number);
+          auto constVal = mlir::arith::ConstantIntOp::create(
+              builder, location, retType, val).getResult();
+          mlir::func::ReturnOp::create(builder, location,
+                                       mlir::ValueRange{constVal});
         }
-        mlir::func::ReturnOp::create(builder, location,
-                                     mlir::ValueRange{zero});
+      } else if (auto *mapExpr =
+                     llvm::dyn_cast<AST::KernelMapExprAST>(firstExpr)) {
+        emitKernelMapExpr(mapExpr, entryBlock, kd, location);
+      } else if (auto *reduceExpr =
+                     llvm::dyn_cast<AST::KernelReduceExprAST>(firstExpr)) {
+        emitKernelReduceExpr(reduceExpr, entryBlock, kd, location);
+      } else {
+        imm_error("Unknown kernel expression type", kd->get_location());
       }
     }
+  } // end symbol table scope
+
+  // === 2. Emit the public CPU-ABI wrapper ===
+  emitKernelWrapper(kd, internalName, publicName, location);
+}
+
+// ===--- Kernel map codegen ---===
+
+void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                                     mlir::Block &entryBlock,
+                                     AST::KernelDefAST *kd,
+                                     mlir::Location location) {
+  // 1. Look up the input tensor from the symbol table.
+  auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
+
+  // 2. Extract type info.
+  Type foundInputType = Type::NonExistent();
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    if (kd->Prototype->parameterVectors[i]->name == mapExpr->input_name) {
+      foundInputType = kd->Prototype->parameterVectors[i]->get_type();
+      break;
+    }
+  }
+  assert(foundInputType.type_kind != TypeKind::NonExistent &&
+         "Map input must be a kernel parameter");
+  auto arrType = std::get<ArrayType>(foundInputType.type_data);
+  auto arrSize = static_cast<int64_t>(arrType.get_size());
+
+  // Get the lambda return type from the lambda body's synthesized type.
+  // The type checker does not set lambda_proto as a FunctionType — it only
+  // synthesizes the parameter and body types individually.
+  auto lambdaRetSamType = mapExpr->lambda_body->get_type();
+  auto lambdaRetMLIRType = convertTypeForKernel(lambdaRetSamType);
+
+  // 3. Create tensor.empty() for the output.
+  auto emptyTensor = mlir::tensor::EmptyOp::create(
+      builder, location, llvm::ArrayRef<int64_t>{arrSize}, lambdaRetMLIRType);
+
+  // 4. Create linalg.map with a body builder lambda.
+  auto mapOp = mlir::linalg::MapOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*init=*/emptyTensor.getResult(),
+      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
+                          mlir::ValueRange args) {
+        auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
+
+        // CRITICAL: Redirect this->builder into the linalg body region.
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
+
+        // Push a new symbol table scope for the lambda body.
+        decltype(symbolTable)::Guard lambdaScope(symbolTable);
+
+        // Register the lambda parameter as a raw scalar value.
+        symbolTable.registerNameT(lambdaParamName, args[0]);
+
+        // Set kernel lambda guard.
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
+
+        // Emit the lambda body.
+        mlir::Value bodyResult = nullptr;
+        for (auto &expr : mapExpr->lambda_body->Statements) {
+          bodyResult = emitExpr(expr.get());
+        }
+
+        in_kernel_lambda_body = savedKernelCtx;
+
+        assert(bodyResult && "Lambda body must produce a value");
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{bodyResult});
+      });
+
+  // 5. Return the result tensor.
+  mlir::func::ReturnOp::create(builder, location, mapOp->getResults());
+}
+
+// ===--- Kernel reduce codegen ---===
+
+void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                                        mlir::Block &entryBlock,
+                                        AST::KernelDefAST *kd,
+                                        mlir::Location location) {
+  // 1. Look up the input tensor
+  auto inputTensor = symbolTable.get_from_name(reduceExpr->input_name);
+
+  // 2. Extract type info
+  Type foundInputType = Type::NonExistent();
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    if (kd->Prototype->parameterVectors[i]->name == reduceExpr->input_name) {
+      foundInputType = kd->Prototype->parameterVectors[i]->get_type();
+      break;
+    }
+  }
+  assert(foundInputType.type_kind != TypeKind::NonExistent &&
+         "Reduce input must be a kernel parameter");
+  auto arrType = std::get<ArrayType>(foundInputType.type_data);
+  auto elemSamType = arrType.get_element();
+  auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+  // 3. Emit the identity value.
+  auto identityVal = emitExpr(reduceExpr->identity.get());
+  assert(identityVal && "Identity expression must produce a value");
+
+  // 4. Create a 0-d (scalar) output tensor, filled with the identity value.
+  auto emptyScalar = mlir::tensor::EmptyOp::create(
+      builder, location, llvm::ArrayRef<int64_t>{}, elemMLIRType);
+
+  auto fillOp = mlir::linalg::FillOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{identityVal},
+      /*outputs=*/mlir::ValueRange{emptyScalar.getResult()});
+  auto filledInit = fillOp.getResultTensors()[0];
+
+  // 5. Create linalg.reduce
+  auto reduceOp = mlir::linalg::ReduceOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*inits=*/mlir::ValueRange{filledInit},
+      /*dimensions=*/llvm::ArrayRef<int64_t>{0},
+      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
+                          mlir::ValueRange args) {
+        // args[0] = current element, args[1] = accumulator
+
+        // CRITICAL: Redirect this->builder into the linalg body region.
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
+
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
+
+        mlir::Value result;
+        auto opTok = reduceExpr->op_tok->tok_type;
+
+        if (isFloatType(elemSamType)) {
+          switch (opTok) {
+          case TokenType::TokADD:
+            result = mlir::arith::AddFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokSUB:
+            result = mlir::arith::SubFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokMUL:
+            result = mlir::arith::MulFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokDIV:
+            result = mlir::arith::DivFOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          default:
+            imm_error("Unsupported reduce operator");
+          }
+        } else {
+          bool isUnsigned = isUnsignedIntegerType(elemSamType);
+          switch (opTok) {
+          case TokenType::TokADD:
+            result = mlir::arith::AddIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokSUB:
+            result = mlir::arith::SubIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokMUL:
+            result = mlir::arith::MulIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          case TokenType::TokDIV:
+            if (isUnsigned)
+              result = mlir::arith::DivUIOp::create(b, loc, args[0], args[1]).getResult();
+            else
+              result = mlir::arith::DivSIOp::create(b, loc, args[0], args[1]).getResult();
+            break;
+          default:
+            imm_error("Unsupported reduce operator");
+          }
+        }
+
+        in_kernel_lambda_body = savedKernelCtx;
+
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{result});
+      });
+
+  // 6. Extract the scalar from the 0-d result tensor.
+  auto scalarResult = mlir::tensor::ExtractOp::create(
+      builder, location, reduceOp->getResult(0), mlir::ValueRange{});
+
+  // 7. Return the scalar.
+  mlir::func::ReturnOp::create(builder, location,
+                               mlir::ValueRange{scalarResult});
+}
+
+// ===--- Kernel CPU-ABI wrapper ---===
+
+void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
+                                     const std::string &internalName,
+                                     const std::string &publicName,
+                                     mlir::Location location) {
+  auto wrapperOp = theModule.lookupSymbol<mlir::func::FuncOp>(publicName);
+  assert(wrapperOp && "Wrapper function should be forward-declared");
+
+  mlir::OpBuilder::InsertionGuard guard(builder);
+
+  auto &entryBlock = *wrapperOp.addEntryBlock();
+  builder.setInsertionPointToStart(&entryBlock);
+
+  auto protoFT = std::get<FunctionType>(kd->Prototype->get_type().type_data);
+  auto retSamType = protoFT.get_return_type();
+  bool returnsArray = retSamType.type_kind == TypeKind::Array;
+
+  // === Marshal input arguments: !llvm.array<NxT> → tensor ===
+  llvm::SmallVector<mlir::Value> kernelArgs;
+  size_t blockArgIdx = 0;
+
+  for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
+    auto paramType = kd->Prototype->parameterVectors[i]->get_type();
+    auto blockArg = entryBlock.getArgument(static_cast<unsigned>(blockArgIdx++));
+
+    if (paramType.type_kind == TypeKind::Array) {
+      auto &arrType = std::get<ArrayType>(paramType.type_data);
+      auto arrSize = static_cast<int64_t>(arrType.get_size());
+      auto elemSamType = arrType.get_element();
+      auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+      // Store !llvm.array to stack → get pointer (O(1) IR, one bulk store)
+      auto one = mlir::arith::ConstantIntOp::create(builder, location,
+                                                      builder.getI64Type(), 1);
+      auto stackPtr = mlir::LLVM::AllocaOp::create(
+          builder, location, llvmPtrTy(), blockArg.getType(), one);
+      mlir::LLVM::StoreOp::create(builder, location, blockArg, stackPtr);
+
+      // Wrap pointer as memref (O(1) descriptor construction)
+      auto inputMemref =
+          buildMemrefFromPtr(stackPtr, arrSize, elemMLIRType, location);
+
+      // Create tensor view — becomes no-op after bufferization
+      auto tensorType = mlir::RankedTensorType::get({arrSize}, elemMLIRType);
+      auto tensorVal = mlir::bufferization::ToTensorOp::create(
+          builder, location, tensorType, inputMemref, /*restrict=*/true,
+          /*writable=*/false);
+      kernelArgs.push_back(tensorVal);
+    } else {
+      kernelArgs.push_back(blockArg);
+    }
+  }
+
+  // === Call the internal kernel function ===
+  auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+  auto callOp = mlir::func::CallOp::create(
+      builder, location, internalName,
+      kernelFuncType.getResults(), kernelArgs);
+
+  // === Marshal return value ===
+  if (returnsArray) {
+    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
+    auto arrSize = static_cast<int64_t>(retArrType.get_size());
+    auto elemSamType = retArrType.get_element();
+    auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+    auto resultTensor = callOp.getResult(0);
+    auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+
+    // Wrap sret pointer as memref (O(1) descriptor construction)
+    auto sretMemref =
+        buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
+
+    // Materialize result tensor directly into sret buffer
+    // No result type (dest is memref), writable=true so bufferization
+    // knows it can write to the destination in-place.
+    mlir::bufferization::MaterializeInDestinationOp::create(
+        builder, location, mlir::TypeRange{}, resultTensor, sretMemref,
+        /*restrict=*/false, /*writable=*/true);
+    mlir::func::ReturnOp::create(builder, location);
+
+  } else if (retSamType.type_kind == TypeKind::Unit) {
+    mlir::func::ReturnOp::create(builder, location);
+  } else {
+    mlir::func::ReturnOp::create(builder, location, callOp.getResults());
   }
 }
 
@@ -421,6 +799,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitStringExpr(llvm::cast<AST::StringExprAST>(ast));
   case NK::ArrayLiteralExprAST:
     return emitArrayLiteralExpr(llvm::cast<AST::ArrayLiteralExprAST>(ast));
+  case NK::RangeExprAST:
+    return emitRangeExpr(llvm::cast<AST::RangeExprAST>(ast));
   case NK::IndexExprAST:
     return emitIndexExpr(llvm::cast<AST::IndexExprAST>(ast));
   case NK::LenExprAST:
@@ -470,6 +850,9 @@ mlir::Value MLIRGenImpl::emitBlock(AST::BlockAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
+  if (in_kernel_lambda_body)
+    imm_error("Variable definitions (let bindings) not allowed in kernel lambdas",
+              ast->get_location());
   auto location = loc(ast);
   mlir::Value initVal = emitExpr(ast->Expression.get());
   if (!initVal)
@@ -539,6 +922,8 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
 
 mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
                                         mlir::Location location) {
+  if (in_kernel_lambda_body)
+    imm_error("Stack allocation not valid inside kernel lambdas");
   // Hoist alloca to the entry block so Mem2Reg/SROA can eliminate it.
   mlir::OpBuilder::InsertionGuard guard(builder);
   auto *currentBlock = builder.getInsertionBlock();
@@ -549,6 +934,48 @@ mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
                                                   builder.getI64Type(), 1);
   return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
                                         elemType, one);
+}
+
+mlir::Value MLIRGenImpl::buildMemrefFromPtr(mlir::Value ptr, int64_t size,
+                                              mlir::Type elemType,
+                                              mlir::Location loc) {
+  // Build the LLVM struct that is the memref descriptor:
+  //   { allocated_ptr, aligned_ptr, offset, sizes[1], strides[1] }
+  auto i64Ty = builder.getI64Type();
+  auto ptrTy = llvmPtrTy();
+  auto arrI64x1 = mlir::LLVM::LLVMArrayType::get(i64Ty, 1);
+  auto descTy = mlir::LLVM::LLVMStructType::getLiteral(
+      builder.getContext(), {ptrTy, ptrTy, i64Ty, arrI64x1, arrI64x1});
+
+  mlir::Value desc = mlir::LLVM::UndefOp::create(builder, loc, descTy);
+  desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, ptr,
+                                            llvm::ArrayRef<int64_t>{0});
+  desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, ptr,
+                                            llvm::ArrayRef<int64_t>{1});
+  auto zero = mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, 0);
+  desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, zero,
+                                            llvm::ArrayRef<int64_t>{2});
+
+  auto sizeVal = mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, size);
+  mlir::Value sizes = mlir::LLVM::UndefOp::create(builder, loc, arrI64x1);
+  sizes = mlir::LLVM::InsertValueOp::create(builder, loc, sizes, sizeVal,
+                                             llvm::ArrayRef<int64_t>{0});
+  desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, sizes,
+                                            llvm::ArrayRef<int64_t>{3});
+
+  auto strideVal =
+      mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, 1);
+  mlir::Value strides = mlir::LLVM::UndefOp::create(builder, loc, arrI64x1);
+  strides = mlir::LLVM::InsertValueOp::create(builder, loc, strides, strideVal,
+                                               llvm::ArrayRef<int64_t>{0});
+  desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, strides,
+                                            llvm::ArrayRef<int64_t>{4});
+
+  // Cast LLVM descriptor struct → memref type
+  auto memrefType = mlir::MemRefType::get({size}, elemType);
+  return mlir::UnrealizedConversionCastOp::create(builder, loc, memrefType,
+                                                   mlir::ValueRange{desc})
+      .getResult(0);
 }
 
 mlir::Value MLIRGenImpl::emitRValue(AST::ExprAST *ast) {

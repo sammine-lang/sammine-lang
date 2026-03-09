@@ -535,6 +535,9 @@ mlir::Value MLIRGenImpl::emitStringExpr(AST::StringExprAST *ast) {
 // ===--- Array emission ---===
 
 mlir::Value MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
+  if (in_kernel_lambda_body)
+    imm_error("Array literals not allowed in kernel lambdas",
+              ast->get_location());
   auto location = loc(ast);
   auto arrType = std::get<ArrayType>(ast->get_type().type_data);
   auto llvmArrayType =
@@ -552,6 +555,70 @@ mlir::Value MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
         builder, location, builder.getI32Type(), static_cast<int64_t>(i));
     emitPtrArrayStore(alloca, idx, elemVal, arrType, location);
   }
+
+  return alloca;
+}
+
+mlir::Value MLIRGenImpl::emitRangeExpr(AST::RangeExprAST *ast) {
+  if (in_kernel_lambda_body)
+    imm_error("Range expressions not allowed in kernel lambdas",
+              ast->get_location());
+  auto location = loc(ast);
+  auto arrType = std::get<ArrayType>(ast->get_type().type_data);
+  auto llvmArrayType =
+      mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->get_type()));
+
+  // Stack-allocate the array
+  auto alloca = emitAllocaOne(llvmArrayType, location);
+
+  // Get start value
+  auto startVal = emitRValue(ast->start.get());
+  auto size = static_cast<int64_t>(arrType.get_size());
+
+  // Use a loop: for i in 0..size, arr[i] = start + i
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+
+  auto *headerBlock = new mlir::Block();
+  auto *bodyBlock = new mlir::Block();
+  auto *exitBlock = new mlir::Block();
+
+  // Alloca for loop counter
+  auto i32Ty = builder.getI32Type();
+  auto counterAlloca = emitAllocaOne(i32Ty, location);
+  auto zero = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 0);
+  mlir::LLVM::StoreOp::create(builder, location, zero, counterAlloca);
+
+  // Branch to header
+  mlir::cf::BranchOp::create(builder, location, headerBlock);
+
+  // Header: check i < size
+  parentRegion->push_back(headerBlock);
+  builder.setInsertionPointToStart(headerBlock);
+  auto counter = mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
+  auto sizeConst = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, size);
+  auto cmp = mlir::arith::CmpIOp::create(builder, location,
+                                          mlir::arith::CmpIPredicate::slt,
+                                          counter, sizeConst);
+  mlir::cf::CondBranchOp::create(builder, location, cmp, bodyBlock,
+                                 /*trueArgs=*/{}, exitBlock,
+                                 /*falseArgs=*/{});
+
+  // Body: arr[i] = start + i; i++
+  parentRegion->push_back(bodyBlock);
+  builder.setInsertionPointToStart(bodyBlock);
+  auto curCounter = mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
+  auto val = mlir::arith::AddIOp::create(builder, location, startVal, curCounter);
+  emitPtrArrayStore(alloca, curCounter, val, arrType, location);
+  // Increment counter
+  auto one = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 1);
+  auto incremented = mlir::arith::AddIOp::create(builder, location, curCounter, one);
+  mlir::LLVM::StoreOp::create(builder, location, incremented, counterAlloca);
+  // Back to header
+  mlir::cf::BranchOp::create(builder, location, headerBlock);
+
+  // Exit
+  parentRegion->push_back(exitBlock);
+  builder.setInsertionPointToStart(exitBlock);
 
   return alloca;
 }
@@ -696,6 +763,9 @@ mlir::Value MLIRGenImpl::emitAddrOfExpr(AST::AddrOfExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
+  if (in_kernel_lambda_body)
+    imm_error("Dynamic allocation not allowed in kernel lambdas",
+              ast->get_location());
   auto location = loc(ast);
   auto countVal = emitExpr(ast->operand.get());
   if (!countVal)
@@ -729,6 +799,9 @@ mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
+  if (in_kernel_lambda_body)
+    imm_error("Memory deallocation not allowed in kernel lambdas",
+              ast->get_location());
   auto location = loc(ast);
   auto ptr = emitExpr(ast->operand.get());
   if (!ptr)

@@ -1,5 +1,4 @@
 // RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-// CHECK: 0
 
 import io;
 
@@ -8,7 +7,14 @@ kernel double_arr(a: [3]f64) -> [3]f64 {
 }
 
 let main() -> i32 {
-  io::print_i32(0);
-  io::printf("\n");
+  let a = [1.0, 2.0, 3.0];
+  let b = double_arr(a);
+  io::printf("%f\n", b[0]);
+  io::printf("%f\n", b[1]);
+  io::printf("%f\n", b[2]);
   0
 }
+
+// CHECK:      2.000000
+// CHECK-NEXT: 4.000000
+// CHECK-NEXT: 6.000000

@@ -42,7 +42,7 @@ Replace the stub `emitKernelDef()` with real `linalg.map`/`linalg.reduce` emissi
 - Kernel parsing works: `kernel name(params) -> RetType { map/reduce/literal }`
 - Type checking works: `synthesize_kernel_map()`, `synthesize_kernel_reduce()` fully resolve types
 - Codegen is a stub: `emitKernelDef()` in `src/codegen/MLIRGen.cpp:319-361` returns hardcoded zeros for map/reduce
-- **Steps 1-2 DONE:** All MLIR dialects registered (linalg, tensor, bufferization, affine, memref) + lowering pipeline with `moduleHasTensorOps()` guard
+- **Steps 1-9 DONE:** Full kernel codegen implemented and tested (398/398 tests pass)
 - The closure/partial-application wrapper pattern in `src/codegen/MLIRGenFunction.cpp` is the **structural template** for the kernel wrapper (B2)
 
 ## Architecture: Two-Function Pattern (B2)
@@ -63,7 +63,8 @@ Emit:
      → Public CPU-ABI wrapper (same signature as current CPU functions)
      → buildFuncType() produces !llvm.array<NxT> for array params (by value),
        !llvm.ptr for sret output (array returns only)
-     → Extracts elements from !llvm.array → builds tensor → calls __kernel_* → stores result back
+     → Stores !llvm.array to alloca → wraps ptr as memref → to_tensor → calls __kernel_*
+     → Materializes result tensor into sret via bufferization.materialize_in_destination
      → CPU callers see this, unaware of tensors
 ```
 
@@ -1021,31 +1022,73 @@ let main() -> i32 {
 | `src/codegen/MLIRLowering.cpp` | Add 6 new passes + includes | ~25 lines added |
 | `e2e-tests/compilables/kernel/*.mn` | Update 3 test files | ~30 lines changed |
 
-## Implementation Order (for successor)
+## Implementation Order
 
-1. ~~**Step 1** (CMake + dialects) → build, verify no regressions~~ ✅ DONE
-2. ~~**Step 2** (lowering pipeline) → build, verify all e2e tests pass (new passes are no-ops)~~ ✅ DONE
-3. **Step 3** (type conversion + header declarations) → build (new methods, not yet called)
-4. **Step 4** (forward-declaration) → build, verify `kernel_basic.mn` still compiles
-5. **Step 5** (emitKernelDef rewrite + kernel lambda guards) → verify `kernel_basic.mn` works end-to-end
-6. **Step 6** (emitKernelMapExpr) → verify MLIR output with `--mlir-ir`
-7. **Step 7** (emitKernelReduceExpr) → verify MLIR output with `--mlir-ir`
-8. **Step 8** (emitKernelWrapper) → verify `kernel_map.mn` and `kernel_reduce.mn` run correctly
-9. **Step 9** (update tests) → full e2e test suite passes
+1. ~~**Step 1** (CMake + dialects)~~ ✅ DONE
+2. ~~**Step 2** (lowering pipeline)~~ ✅ DONE
+3. ~~**Step 3** (type conversion + header declarations)~~ ✅ DONE
+4. ~~**Step 4** (forward-declaration with `sammine.kernel` attribute)~~ ✅ DONE
+5. ~~**Step 5** (emitKernelDef rewrite + kernel lambda guards)~~ ✅ DONE
+6. ~~**Step 6** (emitKernelMapExpr)~~ ✅ DONE
+7. ~~**Step 7** (emitKernelReduceExpr)~~ ✅ DONE
+8. ~~**Step 8** (emitKernelWrapper — O(1) pointer-cast marshalling)~~ ✅ DONE
+9. ~~**Step 9** (update tests — 398/398 pass)~~ ✅ DONE
 
-After each step, run `cmake --build build -j --target e2e-tests` to verify no regressions.
+## Lessons Learned & Post-Implementation Improvements
+
+### `sammine.kernel` attribute (replaces ad-hoc name filtering)
+
+The `__kernel_` prefix is still used for function naming, but bufferization filtering
+is now **attribute-driven**. During forward-declaration (MLIRGen.cpp), `__kernel_` functions
+get `funcOp->setAttr("sammine.kernel", builder.getUnitAttr())`. In MLIRLowering.cpp, the
+`noAnalysisFuncFilter` checks `!funcOp->hasAttr("sammine.kernel")` instead of string prefix
+matching. This is the MLIR equivalent of `isa<KernelDefAST>`.
+
+### O(1) wrapper marshalling (replaces O(N) element-by-element extraction)
+
+The original wrapper generated N `extractvalue` + `tensor.from_elements(N operands)` for
+input, and N `tensor.extract` + N `insertvalue` for output — O(N) MLIR ops at compile time.
+For 1000-element arrays, that's 3000+ IR ops just for marshalling.
+
+**New approach (O(1) IR ops):**
+- **Input**: `llvm.alloca` + `llvm.store` the !llvm.array → `buildMemrefFromPtr()` wraps
+  the pointer as a memref descriptor → `bufferization.to_tensor` creates a tensor view
+  (no-op after bufferization). ~15 IR ops regardless of array size.
+- **Output**: `buildMemrefFromPtr()` wraps sret pointer as memref →
+  `bufferization.materialize_in_destination` writes result tensor into sret buffer.
+  ~15 IR ops regardless of array size.
+
+`buildMemrefFromPtr(ptr, size, elemType, loc)` constructs the LLVM memref descriptor struct
+`{allocated_ptr, aligned_ptr, offset, sizes[1], strides[1]}` from a raw pointer, then uses
+`unrealized_conversion_cast` to bridge LLVM struct → memref type.
+
+**Benchmark results (1000-element array, 10k iterations):**
+- Compilation: 0.76s → 0.44s (42% faster)
+- Runtime: ~27ms → ~19ms (30% faster, 4x vs C++ -O2)
+
+### Bufferization pipeline
+
+One-Shot Module Bufferize with `noAnalysisFuncFilter` for non-kernel functions.
+CPU functions with `cf.br` (from while loops) crash bufferization analysis, so they
+are excluded. Excluded functions get `copyBeforeWrite` semantics (safe, no analysis).
+
+The deprecated buffer deallocation pipeline was removed (crashes on CPU `cf.br`).
+Memory currently leaks (0 frees). Future work: use the **ownership-based buffer
+deallocation pipeline** or add `promote-buffers-to-stack` to convert mallocs to allocas.
 
 ## Known Limitations (Phase 7a scope)
 
 1. **Single-expression lambda bodies only** — multi-statement lambdas with `let` bindings
    are caught by the `in_kernel_lambda_body` guard with a clear error message
-2. **Element-by-element marshalling** — wrapper uses `tensor.from_elements`/`tensor.extract`
-   loop, O(N) IR nodes. Fine for small arrays, needs `bufferization.to_tensor` for large ones
-3. **Static array sizes only** — `RankedTensorType::get({arrSize})` requires compile-time size
-4. **No kernel-to-kernel calls** — kernels can only be called from CPU code via the wrapper
-5. **No generic kernels** — parser explicitly rejects `kernel<T>` (would need Monomorphizer)
-6. **No function calls in kernel lambdas** — calling user functions from inside a map/reduce
+2. **Static array sizes only** — `RankedTensorType::get({arrSize})` requires compile-time size
+3. **No kernel-to-kernel calls** — kernels can only be called from CPU code via the wrapper
+4. **No generic kernels** — parser explicitly rejects `kernel<T>` (would need Monomorphizer)
+5. **No function calls in kernel lambdas** — calling user functions from inside a map/reduce
    lambda may emit invalid ops; type checker should reject this in the future
+6. **No buffer deallocation** — bufferized memrefs are never freed (0 frees in output IR).
+   `promote-buffers-to-stack` pass would convert small allocs to allocas (no free needed).
+7. **3 mallocs per kernel call** — from bufferization of tensor.empty, tensor.from_elements,
+   and linalg.fill. Stack promotion would eliminate these.
 
 ## C++ API Reference
 

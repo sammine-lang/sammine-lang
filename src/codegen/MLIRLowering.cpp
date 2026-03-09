@@ -10,7 +10,10 @@
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
+#include "mlir/Dialect/Bufferization/Transforms/OneShotAnalysis.h"
+#include "mlir/Dialect/Bufferization/Transforms/OneShotModuleBufferize.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -67,17 +70,38 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
 
   // Phase 7a: tensor/linalg → memref/loops
   // Only run when the module contains tensor/linalg ops (kernel code).
-  // CPU-only modules skip this to avoid bufferization analysis failures
-  // on LLVM dialect ops (malloc, cf.br loops, etc.).
+  // CPU-only modules skip this entirely.
   if (moduleHasTensorOps(module)) {
-    mlir::bufferization::OneShotBufferizePassOptions bufOpts;
-    bufOpts.bufferizeFunctionBoundaries = true;
-    bufOpts.allowUnknownOps = true;
-    pm.addPass(mlir::bufferization::createOneShotBufferizePass(bufOpts));
-    mlir::bufferization::BufferDeallocationPipelineOptions deallocOpts;
-    mlir::bufferization::buildBufferDeallocationPipeline(pm, deallocOpts);
+    // Step A: Module-level bufferization (tensor → memref)
+    // Uses bufferizeFunctionBoundaries to correctly update function signatures.
+    // Only functions marked with "sammine.kernel" are analyzed; all others are
+    // excluded to prevent crashes on cf.br loops in CPU code.
+    // Excluded functions get copyBeforeWrite semantics (safe, no analysis).
+    {
+      std::vector<std::string> noAnalysisFuncs;
+      module.walk([&](mlir::func::FuncOp funcOp) {
+        if (!funcOp->hasAttr("sammine.kernel"))
+          noAnalysisFuncs.push_back(funcOp.getName().str());
+      });
+
+      mlir::bufferization::OneShotBufferizationOptions bufOpts;
+      bufOpts.bufferizeFunctionBoundaries = true;
+      bufOpts.allowUnknownOps = true;
+      bufOpts.noAnalysisFuncFilter = noAnalysisFuncs;
+
+      mlir::bufferization::BufferizationState state;
+      if (mlir::failed(mlir::bufferization::runOneShotModuleBufferize(
+              module, bufOpts, state))) {
+        module.emitError("Module bufferization failed");
+        return nullptr;
+      }
+    }
+
+    // Step B: Linalg → loops (runs per-function, only affects funcs with
+    // linalg ops; no-op for CPU functions)
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::createConvertLinalgToLoopsPass());
+    // Step C: Cleanup passes needed before memref → LLVM
     pm.addPass(mlir::memref::createExpandStridedMetadataPass());
     pm.addPass(mlir::createLowerAffinePass());
   }

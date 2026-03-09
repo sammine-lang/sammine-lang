@@ -24,6 +24,7 @@ static constexpr llvm::StringLiteral kWrapperPrefix = "__wrap_";
 static constexpr llvm::StringLiteral kPartialPrefix = "__partial_";
 static constexpr llvm::StringLiteral kStringPrefix = ".str.";
 static constexpr llvm::StringLiteral kConstArrayPrefix = ".const_arr.";
+static constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
 static constexpr llvm::StringLiteral kMallocFunc = "malloc";
 static constexpr llvm::StringLiteral kFreeFunc = "free";
 static constexpr llvm::StringLiteral kExitFunc = "exit";
@@ -78,6 +79,11 @@ public:
 
   const AST::ASTProperties &props_;
 
+  /// Flag: true when emitting inside a linalg.map/linalg.reduce body builder.
+  /// Guards against emitting LLVM ops (alloca, malloc, free) that are invalid
+  /// inside linalg body regions. Only arith/math ops are valid there.
+  bool in_kernel_lambda_body = false;
+
   // --- Block helper ---
   /// Create a new block and immediately insert it into the given region.
   mlir::Block *addBlock(mlir::Region *region) {
@@ -108,9 +114,29 @@ public:
   bool isBoolType(const Type &type);
   mlir::Type getEnumBackingMLIRType(const EnumType &et);
 
+  // --- Kernel type conversion ---
+  /// Convert a sammine Type to an MLIR type for kernel context.
+  /// Arrays become RankedTensorType; scalars are the same as CPU.
+  mlir::Type convertTypeForKernel(const Type &type);
+  /// Build a func::FunctionType for a kernel's internal implementation.
+  /// Uses tensor types for arrays, no sret transform.
+  mlir::FunctionType buildKernelFuncType(AST::PrototypeAST *proto);
+
   // --- Definition emission (MLIRGen.cpp) ---
   void emitDefinition(AST::DefinitionAST *def);
   void emitKernelDef(AST::KernelDefAST *kd);
+  void emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                         mlir::Block &entryBlock,
+                         AST::KernelDefAST *kd,
+                         mlir::Location location);
+  void emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                            mlir::Block &entryBlock,
+                            AST::KernelDefAST *kd,
+                            mlir::Location location);
+  void emitKernelWrapper(AST::KernelDefAST *kd,
+                         const std::string &internalName,
+                         const std::string &publicName,
+                         mlir::Location location);
   mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 
@@ -154,6 +180,7 @@ public:
   mlir::Value emitWhileExpr(AST::WhileExprAST *ast);
   mlir::Value emitStringExpr(AST::StringExprAST *ast);
   mlir::Value emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast);
+  mlir::Value emitRangeExpr(AST::RangeExprAST *ast);
   mlir::Value emitIndexExpr(AST::IndexExprAST *ast);
   mlir::Value emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
                               const ArrayType &arrType,
@@ -211,6 +238,10 @@ public:
                                   mlir::Location location);
 
   // --- Helpers (MLIRGen.cpp) ---
+  /// Build a memref descriptor (LLVM struct) wrapping a raw pointer.
+  /// Returns a memref<sizexelemType> via unrealized_conversion_cast.
+  mlir::Value buildMemrefFromPtr(mlir::Value ptr, int64_t size,
+                                 mlir::Type elemType, mlir::Location loc);
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
   /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
   mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);
