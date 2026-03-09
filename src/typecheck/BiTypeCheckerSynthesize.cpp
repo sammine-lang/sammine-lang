@@ -180,9 +180,8 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       auto angle_pos = module.find('<');
       if (angle_pos != std::string::npos) {
         std::string base_name = module.substr(0, angle_pos);
-        auto it = generic_enum_defs.find(base_name);
-        if (it != generic_enum_defs.end()) {
-          auto *generic_def = it->second;
+        auto *generic_def = monomorphizer.find_generic_enum(base_name);
+        if (generic_def) {
           if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
             Monomorphizer::SubstitutionMap bindings;
             std::string type_args = "<";
@@ -199,14 +198,11 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
                 generic_def->enum_name, type_args);
             auto mangled = mono.mangled();
 
-            if (ok && !instantiated_enums.contains(mangled)) {
-              auto cloned = Monomorphizer::instantiate_enum(generic_def, mono, bindings);
-              cloned->accept_vis(this);
-              instantiated_enums.insert(mangled);
-              monomorphized_enum_defs.push_back(std::move(cloned));
-            }
-            if (ok)
+            if (ok) {
+              monomorphizer.instantiate_enum(generic_def, mono, bindings)
+                  ->accept_vis(this);
               enum_type_opt = get_typename_type(mangled);
+            }
           }
         }
       }
@@ -274,7 +270,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   }
 
   // Try generic function instantiation
-  if (generic_func_defs.contains(ast->functionName.mangled()))
+  if (monomorphizer.find_generic_func(ast->functionName.mangled()))
     return synthesize_generic_call(ast);
 
   // Normal function call
@@ -377,7 +373,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
-  auto *generic_def = generic_func_defs[ast->functionName.mangled()];
+  auto *generic_def = monomorphizer.find_generic_func(ast->functionName.mangled());
   auto generic_type = generic_def->get_type();
   auto func = std::get<FunctionType>(generic_type.type_data);
   auto params = func.get_params_types();
@@ -1139,9 +1135,8 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   // If not found and we have explicit type args, try generic struct instantiation
   if (!type_opt.has_value() && !ast->explicit_type_args.empty()) {
     auto base_name = ast->struct_name.mangled();
-    auto it = generic_struct_defs.find(base_name);
-    if (it != generic_struct_defs.end()) {
-      auto *generic_def = it->second;
+    auto *generic_def = monomorphizer.find_generic_struct(base_name);
+    if (generic_def) {
 
       if (ast->explicit_type_args.size() != generic_def->type_params.size()) {
         this->add_error(
@@ -1168,16 +1163,11 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
           generic_def->struct_name, type_args_str);
       auto mangled = mono.mangled();
 
-      if (ok && !instantiated_structs.contains(mangled)) {
-        auto cloned = Monomorphizer::instantiate_struct(
-            generic_def, mono, bindings);
-        cloned->accept_vis(this);
-        instantiated_structs.insert(mangled);
-        monomorphized_struct_defs.push_back(std::move(cloned));
-      }
-
-      if (ok)
+      if (ok) {
+        monomorphizer.instantiate_struct(generic_def, mono, bindings)
+            ->accept_vis(this);
         type_opt = get_typename_type(mangled);
+      }
     }
   }
 

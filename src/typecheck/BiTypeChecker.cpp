@@ -1,13 +1,8 @@
 #include "typecheck/BiTypeChecker.h"
 #include "ast/Ast.h"
 #include "fmt/format.h"
-#include "semantics/GeneralSemanticsVisitor.h"
-#include "typecheck/Monomorphizer.h"
-#include "typecheck/Types.h"
-#include "util/LexicalContext.h"
 #include "util/MonomorphizedName.h"
 #include "util/Utilities.h"
-#include <set>
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -66,7 +61,7 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
     if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
       if (fd->Prototype->is_generic())
-        generic_func_defs[fd->Prototype->functionName.mangled()] = fd;
+        monomorphizer.register_generic_func(fd->Prototype->functionName.mangled(), fd);
       else
         pre_register_function(fd->Prototype.get());
     } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
@@ -110,7 +105,7 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->accept_synthesis(this);
 
   if (ast->Prototype->is_generic()) {
-    generic_func_defs[ast->Prototype->functionName.mangled()] = ast;
+    monomorphizer.register_generic_func(ast->Prototype->functionName.mangled(), ast);
   } else {
     ast->Block->accept_vis(this);
   }
@@ -266,7 +261,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Generic struct: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      generic_struct_defs[ast->struct_name.mangled()] = ast;
+      monomorphizer.register_generic_struct(ast->struct_name.mangled(), ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -293,14 +288,14 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
       Type::Struct(ast->struct_name, std::move(field_names),
                    std::move(field_types));
   ast->set_type(struct_type);
-  typename_to_type.registerNameT(ast->struct_name.mangled(), struct_type);
+  typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), struct_type);
 }
 
 void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Generic enum: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      generic_enum_defs[ast->enum_name.mangled()] = ast;
+      monomorphizer.register_generic_enum(ast->enum_name.mangled(), ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -388,7 +383,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos),
                               ast->is_integer_backed, backing_type);
   ast->set_type(enum_type);
-  typename_to_type.registerNameT(ast->enum_name.mangled(), enum_type);
+  typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), enum_type);
 
   // Add lattice edge: integer-backed enum → backing type
   if (ast->is_integer_backed) {
@@ -458,19 +453,12 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     return;
 
   // Generic calls: trigger monomorphization if synthesis succeeded
-  if (generic_func_defs.contains(ast->functionName.mangled())) {
+  if (auto *generic_def =
+          monomorphizer.find_generic_func(ast->functionName.mangled())) {
     if (cp.resolved_name.has_value()) {
-      auto &mono = *cp.resolved_name;
-      auto mangled = mono.mangled();
-      if (!instantiated_functions.contains(mangled)) {
-        auto *generic_def = generic_func_defs[ast->functionName.mangled()];
-        auto cloned =
-            Monomorphizer::instantiate(generic_def, mono, cp.type_bindings);
-        auto sem = GeneralSemanticsVisitor();
-        cloned->accept_vis(&sem);
+      if (auto *cloned = monomorphizer.try_instantiate_func(
+              generic_def, *cp.resolved_name, cp.type_bindings)) {
         cloned->accept_vis(this);
-        instantiated_functions.insert(mangled);
-        monomorphized_defs.push_back(std::move(cloned));
       }
     }
     return;

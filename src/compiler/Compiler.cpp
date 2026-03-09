@@ -495,23 +495,23 @@ void Compiler::typecheck() {
   programAST->accept_vis(&vs);
 
   // Inject monomorphized generic struct definitions at the front.
-  for (auto it = vs.monomorphized_struct_defs.rbegin();
-       it != vs.monomorphized_struct_defs.rend(); ++it) {
+  for (auto it = vs.monomorphizer.monomorphized_struct_defs.rbegin();
+       it != vs.monomorphizer.monomorphized_struct_defs.rend(); ++it) {
     programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                      std::move(*it));
   }
 
   // Inject monomorphized generic enum definitions at the front.
-  for (auto it = vs.monomorphized_enum_defs.rbegin();
-       it != vs.monomorphized_enum_defs.rend(); ++it) {
+  for (auto it = vs.monomorphizer.monomorphized_enum_defs.rbegin();
+       it != vs.monomorphizer.monomorphized_enum_defs.rend(); ++it) {
     programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                      std::move(*it));
   }
 
   // Inject monomorphized generic function definitions at the front.
   // Order doesn't matter — codegen forward-declares all functions first.
-  for (auto it = vs.monomorphized_defs.rbegin();
-       it != vs.monomorphized_defs.rend(); ++it) {
+  for (auto it = vs.monomorphizer.monomorphized_defs.rbegin();
+       it != vs.monomorphizer.monomorphized_defs.rend(); ++it) {
     programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                      std::move(*it));
   }

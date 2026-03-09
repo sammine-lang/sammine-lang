@@ -10,9 +10,85 @@ static std::shared_ptr<Token> make_tok(const std::string &lexeme) {
                                  sammine_util::Location{});
 }
 
+// --- Registration ---
+
+void Monomorphizer::register_generic_func(const std::string &mangled,
+                                           FuncDefAST *def) {
+  generic_func_defs_[mangled] = def;
+}
+
+void Monomorphizer::register_generic_enum(const std::string &mangled,
+                                           EnumDefAST *def) {
+  generic_enum_defs_[mangled] = def;
+}
+
+void Monomorphizer::register_generic_struct(const std::string &mangled,
+                                             StructDefAST *def) {
+  generic_struct_defs_[mangled] = def;
+}
+
+// --- Lookup ---
+
+FuncDefAST *Monomorphizer::find_generic_func(const std::string &mangled) {
+  auto it = generic_func_defs_.find(mangled);
+  return it != generic_func_defs_.end() ? it->second : nullptr;
+}
+
+EnumDefAST *Monomorphizer::find_generic_enum(const std::string &mangled) {
+  auto it = generic_enum_defs_.find(mangled);
+  return it != generic_enum_defs_.end() ? it->second : nullptr;
+}
+
+StructDefAST *Monomorphizer::find_generic_struct(const std::string &mangled) {
+  auto it = generic_struct_defs_.find(mangled);
+  return it != generic_struct_defs_.end() ? it->second : nullptr;
+}
+
+// --- Instantiate ---
+
+FuncDefAST *
+Monomorphizer::try_instantiate_func(
+    FuncDefAST *generic,
+    const sammine_util::MonomorphizedName &mono,
+    const SubstitutionMap &bindings) {
+  auto mangled = mono.mangled();
+  if (instantiated_functions_.contains(mangled))
+    return nullptr;
+
+  auto cloned = clone_func(generic, mono, bindings);
+  auto *ptr = cloned.get();
+  instantiated_functions_.insert(mangled);
+  monomorphized_defs.push_back(std::move(cloned));
+  return ptr;
+}
+
+EnumDefAST *
+Monomorphizer::instantiate_enum(
+    EnumDefAST *generic,
+    const sammine_util::MonomorphizedName &mono,
+    const SubstitutionMap &bindings) {
+  auto cloned = clone_enum(generic, mono, bindings);
+  auto *ptr = cloned.get();
+  monomorphized_enum_defs.push_back(std::move(cloned));
+  return ptr;
+}
+
+StructDefAST *
+Monomorphizer::instantiate_struct(
+    StructDefAST *generic,
+    const sammine_util::MonomorphizedName &mono,
+    const SubstitutionMap &bindings) {
+  auto cloned = clone_struct(generic, mono, bindings);
+  auto *ptr = cloned.get();
+  monomorphized_struct_defs.push_back(std::move(cloned));
+  return ptr;
+}
+
+// --- Clone internals ---
+
 std::string Monomorphizer::resolve_type_name(const std::string &name) const {
-  auto it = bindings.find(name);
-  if (it != bindings.end())
+  auto it = bindings_->find(name);
+  if (it != bindings_->end())
     return it->second.to_string();
   return name;
 }
@@ -309,25 +385,28 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   return result;
 }
 
+// --- Internal clone helpers ---
+
 std::unique_ptr<FuncDefAST>
-Monomorphizer::instantiate(
+Monomorphizer::clone_func(
     FuncDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
     const SubstitutionMap &bindings) {
-  Monomorphizer m(bindings);
-  auto proto = m.clone_prototype(generic->Prototype.get(), mono_name);
-  auto block = m.clone_block(generic->Block.get());
+  bindings_ = &bindings;
+  auto proto = clone_prototype(generic->Prototype.get(), mono_name);
+  auto block = clone_block(generic->Block.get());
   auto result = std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
   result->set_location(generic->get_location());
+  bindings_ = nullptr;
   return result;
 }
 
 std::unique_ptr<EnumDefAST>
-Monomorphizer::instantiate_enum(
+Monomorphizer::clone_enum(
     EnumDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
     const SubstitutionMap &bindings) {
-  Monomorphizer m(bindings);
+  bindings_ = &bindings;
 
   // Clone variant definitions with substituted payload types
   std::vector<EnumVariantDef> cloned_variants;
@@ -337,7 +416,7 @@ Monomorphizer::instantiate_enum(
     cloned.location = variant.location;
     cloned.discriminant_value = variant.discriminant_value;
     for (auto &type_expr : variant.payload_types)
-      cloned.payload_types.push_back(m.clone_type_expr(type_expr.get()));
+      cloned.payload_types.push_back(clone_type_expr(type_expr.get()));
     cloned_variants.push_back(std::move(cloned));
   }
 
@@ -347,25 +426,27 @@ Monomorphizer::instantiate_enum(
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
   // type_params left empty — this is a concrete instantiation
+  bindings_ = nullptr;
   return result;
 }
 
 std::unique_ptr<StructDefAST>
-Monomorphizer::instantiate_struct(
+Monomorphizer::clone_struct(
     StructDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
     const SubstitutionMap &bindings) {
-  Monomorphizer m(bindings);
+  bindings_ = &bindings;
 
   // Clone struct members with substituted types
   std::vector<std::unique_ptr<TypedVarAST>> cloned_members;
   for (auto &member : generic->struct_members)
-    cloned_members.push_back(m.clone_typed_var(member.get()));
+    cloned_members.push_back(clone_typed_var(member.get()));
 
   auto result = std::make_unique<StructDefAST>(
       mono_name.to_qualified_name(), generic->get_location(),
       std::move(cloned_members));
   // type_params left empty — this is a concrete instantiation
+  bindings_ = nullptr;
   return result;
 }
 

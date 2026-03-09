@@ -292,6 +292,14 @@ public:
   void registerNameT(const std::string &name, T l) {
     return this->top().registerNameT(name, l);
   }
+  /// Register at the root (bottom) scope — survives Guard pops.
+  /// Used for type definitions (struct/enum) which are always top-level.
+  void registerNameTAtRoot(const std::string &name, T l) {
+    auto *ctx = &this->top();
+    while (ctx->parent_scope)
+      ctx = ctx->parent_scope;
+    ctx->registerNameT(name, l);
+  }
   NameQueryResult recursiveQueryName(const std::string &name) const {
     return this->top().recursiveQueryName(name);
   }

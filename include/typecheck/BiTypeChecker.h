@@ -6,7 +6,6 @@
 #include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
-#include <set>
 #include <unordered_map>
 
 //! \file BiTypeChecker.h
@@ -34,20 +33,8 @@ public:
   LexicalStack<Type> typename_to_type;
   TypeMapOrdering type_map_ordering;
 
-  // Generic function support
-  std::unordered_map<std::string, FuncDefAST *> generic_func_defs;
-  std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
-  std::set<std::string> instantiated_functions;
-
-  // Generic enum support
-  std::unordered_map<std::string, EnumDefAST *> generic_enum_defs;
-  std::vector<std::unique_ptr<EnumDefAST>> monomorphized_enum_defs;
-  std::set<std::string> instantiated_enums;
-
-  // Generic struct support
-  std::unordered_map<std::string, StructDefAST *> generic_struct_defs;
-  std::vector<std::unique_ptr<StructDefAST>> monomorphized_struct_defs;
-  std::set<std::string> instantiated_structs;
+  // Monomorphization state: generic registration, dedup, cloning, output
+  Monomorphizer monomorphizer;
 
   // Unification and substitution helpers
   bool unify(const Type &pattern, const Type &concrete,
@@ -385,10 +372,10 @@ public:
       auto base_mangled = gen->base_name.mangled();
 
       // Determine if this is a generic enum or generic struct
-      auto enum_it = generic_enum_defs.find(base_mangled);
-      auto struct_it = generic_struct_defs.find(base_mangled);
-      bool is_enum = (enum_it != generic_enum_defs.end());
-      bool is_struct = (struct_it != generic_struct_defs.end());
+      auto *enum_def = monomorphizer.find_generic_enum(base_mangled);
+      auto *struct_def = monomorphizer.find_generic_struct(base_mangled);
+      bool is_enum = (enum_def != nullptr);
+      bool is_struct = (struct_def != nullptr);
 
       if (!is_enum && !is_struct) {
         this->add_error(type_expr->location,
@@ -397,10 +384,10 @@ public:
         return Type::Poisoned();
       }
 
-      size_t expected_params = is_enum ? enum_it->second->type_params.size()
-                                       : struct_it->second->type_params.size();
-      const auto &param_names = is_enum ? enum_it->second->type_params
-                                        : struct_it->second->type_params;
+      size_t expected_params = is_enum ? enum_def->type_params.size()
+                                       : struct_def->type_params.size();
+      const auto &param_names = is_enum ? enum_def->type_params
+                                        : struct_def->type_params;
 
       if (gen->type_args.size() != expected_params) {
         this->add_error(
@@ -441,7 +428,7 @@ public:
           return existing.value();
 
         if (is_struct) {
-          auto *sdef = struct_it->second;
+          auto *sdef = struct_def;
           std::vector<std::string> fnames;
           std::vector<Type> ftypes;
           for (auto &[pname, ptype] : bindings)
@@ -461,35 +448,20 @@ public:
         return Type::Poisoned();
       }
 
-      if (is_enum) {
-        // Already instantiated?
-        if (instantiated_enums.contains(mangled)) {
-          auto existing = this->get_typename_type(mangled);
-          if (existing.has_value())
-            return existing.value();
-        }
-
-        // Instantiate the generic enum
-        auto cloned =
-            Monomorphizer::instantiate_enum(enum_it->second, mono, bindings);
-        cloned->accept_vis(this);
-        instantiated_enums.insert(mangled);
-        monomorphized_enum_defs.push_back(std::move(cloned));
-      } else {
-        // Already instantiated?
-        if (instantiated_structs.contains(mangled)) {
-          auto existing = this->get_typename_type(mangled);
-          if (existing.has_value())
-            return existing.value();
-        }
-
-        // Instantiate the generic struct
-        auto cloned = Monomorphizer::instantiate_struct(struct_it->second, mono,
-                                                        bindings);
-        cloned->accept_vis(this);
-        instantiated_structs.insert(mangled);
-        monomorphized_struct_defs.push_back(std::move(cloned));
+      // Check if already instantiated (registered at root scope)
+      {
+        auto existing = this->get_typename_type(mangled);
+        if (existing.has_value())
+          return existing.value();
       }
+
+      // Not yet instantiated — clone + type-check
+      if (is_enum)
+        monomorphizer.instantiate_enum(enum_def, mono, bindings)
+            ->accept_vis(this);
+      else
+        monomorphizer.instantiate_struct(struct_def, mono, bindings)
+            ->accept_vis(this);
 
       auto result = this->get_typename_type(mangled);
       return result.has_value() ? result.value() : Type::Poisoned();

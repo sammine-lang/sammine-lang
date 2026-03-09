@@ -178,7 +178,12 @@ struct Type {
   static Type F32_t() { return Type{TypeKind::F32_t, std::monostate()}; }
   static Type Bool() { return Type{TypeKind::Bool, std::monostate()}; }
   static Type Char() { return Type{TypeKind::Char, std::monostate()}; }
-  static Type Poisoned() { return Type{TypeKind::Poisoned, std::monostate()}; }
+  static Type
+  Poisoned(std::source_location src = std::source_location::current()) {
+    auto path = std::filesystem::path(src.file_name()).filename().string();
+    return Type{TypeKind::Poisoned,
+                fmt::format("{}:{}", path, src.line())};
+  }
   static Type Unit() { return Type{TypeKind::Unit, std::monostate()}; }
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
   static Type Integer() { return Type{TypeKind::Integer, std::monostate()}; }
@@ -299,6 +304,8 @@ struct Type {
     case TypeKind::NonExistent:
       return "??";
     case TypeKind::Poisoned:
+      if (auto *origin = std::get_if<std::string>(&type_data))
+        return fmt::format("Poisoned({})", *origin);
       return "Poisoned";
     case TypeKind::String:
       return fmt::format("\"{}\"", std::get<std::string>(type_data));
