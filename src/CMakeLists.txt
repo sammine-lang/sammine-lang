@@ -8,6 +8,11 @@ target_link_libraries(project_options INTERFACE
   ${llvm_libs}
   fmt::fmt
 )
+# Match LLVM's RTTI setting — LLVM is built with -fno-rtti, so we must too
+# to avoid typeinfo link errors when using MLIR pass options structs.
+if(NOT LLVM_ENABLE_RTTI)
+  target_compile_options(project_options INTERFACE -fno-rtti)
+endif()
 
 # Strict warnings — scoped to our code only (not third-party deps)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")

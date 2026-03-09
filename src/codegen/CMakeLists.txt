@@ -17,6 +17,14 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRReconcileUnrealizedCasts
   MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
   MLIRLLVMDialect
+  # Phase 7a: kernel linalg codegen
+  MLIRLinalgDialect MLIRTensorDialect MLIRBufferizationDialect
+  MLIRAffineDialect MLIRMemRefDialect
+  MLIRLinalgTransforms MLIRBufferizationTransforms MLIRBufferizationPipelines
+  MLIRMemRefTransforms
+  MLIRMemRefToLLVM MLIRAffineToStandard
+  MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
+  MLIRSCFTransforms MLIRTensorTransforms
 )
 
 # Final linkage for folder
@@ -30,4 +38,12 @@ target_link_libraries(_codegen SammineJIT MLIRBackend LLVMSupport ${llvm_libs} $
   MLIRReconcileUnrealizedCasts
   MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
   MLIRLLVMDialect
+  # Phase 7a: kernel linalg codegen
+  MLIRLinalgDialect MLIRTensorDialect MLIRBufferizationDialect
+  MLIRAffineDialect MLIRMemRefDialect
+  MLIRLinalgTransforms MLIRBufferizationTransforms MLIRBufferizationPipelines
+  MLIRMemRefTransforms
+  MLIRMemRefToLLVM MLIRAffineToStandard
+  MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
+  MLIRSCFTransforms MLIRTensorTransforms
 )

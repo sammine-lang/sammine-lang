@@ -7,9 +7,17 @@
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
+#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
@@ -27,15 +35,58 @@
 
 namespace sammine_lang {
 
+/// Check if the module contains any tensor or linalg ops that need
+/// bufferization. CPU-only modules (no kernel code) skip the entire
+/// bufferization pipeline to avoid analysis failures on LLVM dialect ops.
+static bool moduleHasTensorOps(mlir::ModuleOp module) {
+  bool found = false;
+  module.walk([&](mlir::Operation *op) {
+    if (llvm::isa<mlir::linalg::LinalgDialect, mlir::tensor::TensorDialect>(
+            op->getDialect())) {
+      found = true;
+      return mlir::WalkResult::interrupt();
+    }
+    // Also check for tensor-typed results on any op
+    for (auto result : op->getResults()) {
+      if (mlir::isa<mlir::RankedTensorType>(result.getType())) {
+        found = true;
+        return mlir::WalkResult::interrupt();
+      }
+    }
+    return mlir::WalkResult::advance();
+  });
+  return found;
+}
+
 std::unique_ptr<llvm::Module>
 lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
   auto *context = module->getContext();
 
-  // Run lowering passes: scf → cf, then everything → llvm
+  // Run lowering passes
   mlir::PassManager pm(context);
+
+  // Phase 7a: tensor/linalg → memref/loops
+  // Only run when the module contains tensor/linalg ops (kernel code).
+  // CPU-only modules skip this to avoid bufferization analysis failures
+  // on LLVM dialect ops (malloc, cf.br loops, etc.).
+  if (moduleHasTensorOps(module)) {
+    mlir::bufferization::OneShotBufferizePassOptions bufOpts;
+    bufOpts.bufferizeFunctionBoundaries = true;
+    bufOpts.allowUnknownOps = true;
+    pm.addPass(mlir::bufferization::createOneShotBufferizePass(bufOpts));
+    mlir::bufferization::BufferDeallocationPipelineOptions deallocOpts;
+    mlir::bufferization::buildBufferDeallocationPipeline(pm, deallocOpts);
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::createConvertLinalgToLoopsPass());
+    pm.addPass(mlir::memref::createExpandStridedMetadataPass());
+    pm.addPass(mlir::createLowerAffinePass());
+  }
+
+  // Existing: scf/arith/cf/memref/func → llvm
   pm.addPass(mlir::createSCFToControlFlowPass());
   pm.addPass(mlir::createArithToLLVMConversionPass());
   pm.addPass(mlir::createConvertControlFlowToLLVMPass());
+  pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
   pm.addPass(mlir::createConvertFuncToLLVMPass());
   pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 

@@ -269,8 +269,13 @@ mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
   switch (type.type_kind) {
   case TypeKind::Array: {
     auto &arr = std::get<ArrayType>(type.type_data);
-    // Recursively convert element type (supports nested arrays in future)
-    auto elemType = convertTypeForKernel(arr.get_element());
+    auto elemSamType = arr.get_element();
+    // Nested arrays (e.g. [[f64;4];3]) would produce tensor<3xtensor<4xf64>>
+    // which is invalid MLIR — tensors must have scalar element types.
+    // The type checker already prevents nested arrays in kernels, but guard here too.
+    if (elemSamType.type_kind == TypeKind::Array)
+      imm_error("Nested arrays not yet supported in kernel context");
+    auto elemType = convertTypeForKernel(elemSamType);
     return mlir::RankedTensorType::get(
         {static_cast<int64_t>(arr.get_size())}, elemType);
   }
@@ -544,29 +549,32 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
       /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
                           mlir::ValueRange args) {
         // args[0] is the scalar element from the input tensor.
-        // Bind the lambda parameter name to this block argument.
         auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
 
-        // IMPORTANT: We temporarily set the builder insertion point inside
-        // the linalg body region. The body builder lambda is called with
-        // the builder already positioned inside the region block.
+        // CRITICAL: The body builder receives its own OpBuilder &b pre-positioned
+        // inside the linalg body region, but emitExpr() uses this->builder.
+        // We must redirect this->builder into the body region so all ops
+        // emitted by emitExpr() land inside the linalg body, not the outer
+        // function. InsertionGuard restores the original position on exit.
+        // This follows the same pattern used in emitIfExpr() (MLIRGenExpr.cpp).
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
 
-        // Register the lambda parameter in the symbol table.
-        // Because this is a scalar (e.g., f64), NOT a pointer,
-        // emitRValue/emitVariableExpr will return it directly without
-        // doing an llvm.load. This is the same behavior as SSA variables
-        // in Phase 2 (immutable vars without alloca).
+        // Push a new symbol table scope for the lambda body so the lambda
+        // parameter doesn't leak into the outer kernel scope.
+        decltype(symbolTable)::Guard lambdaScope(symbolTable);
+
+        // Register the lambda parameter as a raw scalar value (not a pointer).
+        // emitVariableExpr() returns non-pointer values directly without
+        // llvm.load — same behavior as SSA variables in Phase 2.
         symbolTable.registerNameT(lambdaParamName, args[0]);
 
         // Set kernel lambda guard — prevents emitVarDef/emitArrayLiteralExpr/etc.
         // from emitting llvm.alloca or other LLVM ops inside the linalg body.
-        // Same save/restore pattern used throughout the codebase.
         bool savedKernelCtx = in_kernel_lambda_body;
         in_kernel_lambda_body = true;
 
-        // Emit the lambda body. The lambda body is a standard BlockAST
-        // containing CPU ExprAST nodes (BinaryExprAST, NumberExprAST, etc.).
-        // Inside the linalg body, only arith ops are valid (no memory ops).
+        // Emit the lambda body. Only arith/math ops are valid here.
         // The type checker guarantees kernel lambdas are pure scalar expressions.
         // NOTE: BlockAST field is `Statements`, NOT `exprs`.
         mlir::Value bodyResult = nullptr;
@@ -586,7 +594,22 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
 }
 ```
 
-**CRITICAL SUBTLETY — Lambda body emission inside linalg region:**
+**CRITICAL SUBTLETY — Builder insertion point inside linalg body regions:**
+
+The body builder lambda receives its own `OpBuilder &b` pre-positioned inside the
+linalg body region. However, `emitExpr()` uses `this->builder` (the class member),
+NOT the lambda's `&b` parameter. Without redirection, all ops would be emitted at
+the **outer scope** (the kernel function entry block), not inside the linalg body.
+
+**Fix:** At the start of every body builder lambda, redirect `this->builder`:
+```cpp
+mlir::OpBuilder::InsertionGuard builderGuard(builder);
+builder.setInsertionPointToStart(b.getInsertionBlock());
+```
+This follows the same pattern used in `emitIfExpr()` (MLIRGenExpr.cpp:458-461).
+The `InsertionGuard` restores the original position when the lambda returns.
+
+**Lambda body emission inside linalg region:**
 
 The lambda body uses standard `ExprAST` nodes that normally emit LLVM dialect ops
 (alloca, load, store, GEP). Inside a linalg body region, ONLY arith/math ops are valid.
@@ -709,6 +732,11 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
                           mlir::ValueRange args) {
         // args[0] = current element from input tensor (e.g., f64)
         // args[1] = accumulator (initialized to identity value)
+
+        // CRITICAL: Redirect this->builder into the linalg body region.
+        // Same fix as emitKernelMapExpr — see that function for full rationale.
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
 
         // Set kernel lambda guard (same pattern as emitKernelMapExpr)
         bool savedKernelCtx = in_kernel_lambda_body;

@@ -14,6 +14,20 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -584,6 +598,26 @@ void Compiler::codegen_mlir() {
   mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
   mlirCtx.getOrLoadDialect<mlir::cf::ControlFlowDialect>();
+  mlirCtx.getOrLoadDialect<mlir::linalg::LinalgDialect>();
+  mlirCtx.getOrLoadDialect<mlir::tensor::TensorDialect>();
+  mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
+  mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
+  mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
+
+  // Register bufferization interface extensions for each dialect so
+  // one-shot-bufferize knows how to bufferize their ops.
+  mlir::DialectRegistry registry;
+  mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::arith::registerBufferDeallocationOpInterfaceExternalModels(registry);
+  mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
+      registry);
+  mlir::cf::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::cf::registerBufferDeallocationOpInterfaceExternalModels(registry);
+  mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::scf::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::scf::registerBufferDeallocationOpInterfaceExternalModels(registry);
+  mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
+  mlirCtx.appendDialectRegistry(registry);
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   std::string moduleName = has_main ? "" : stem;

@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cpptrace/cpptrace.hpp>
-#include <cpptrace/from_current.hpp>
 #include <cstdlib>
 #include <filesystem>
 #include <map>

@@ -329,7 +329,7 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
   // TODO: ad-hoc returning — currently hardcodes return of the first expression.
   // Should properly handle multiple expressions and explicit return statements.
   if (!kd->Body->expressions.empty()) {
-    if (auto *numExpr = dynamic_cast<AST::KernelNumberExprAST *>(
+    if (auto *numExpr = llvm::dyn_cast<AST::KernelNumberExprAST>(
             kd->Body->expressions[0].get())) {
       auto retType = funcType.getResults()[0];
       int64_t val = std::stoll(numExpr->number);
@@ -337,9 +337,9 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
           mlir::arith::ConstantIntOp::create(builder, location, retType, val);
       mlir::func::ReturnOp::create(builder, location,
                                    mlir::ValueRange{constVal});
-    } else if (dynamic_cast<AST::KernelMapExprAST *>(
+    } else if (llvm::isa<AST::KernelMapExprAST>(
                    kd->Body->expressions[0].get()) ||
-               dynamic_cast<AST::KernelReduceExprAST *>(
+               llvm::isa<AST::KernelReduceExprAST>(
                    kd->Body->expressions[0].get())) {
       // TODO: implement proper map/reduce lowering
       if (funcType.getResults().empty()) {
