@@ -42,8 +42,7 @@ Replace the stub `emitKernelDef()` with real `linalg.map`/`linalg.reduce` emissi
 - Kernel parsing works: `kernel name(params) -> RetType { map/reduce/literal }`
 - Type checking works: `synthesize_kernel_map()`, `synthesize_kernel_reduce()` fully resolve types
 - Codegen is a stub: `emitKernelDef()` in `src/codegen/MLIRGen.cpp:319-361` returns hardcoded zeros for map/reduce
-- MLIR dialects loaded: arith, func, llvm, scf, cf (registered in `src/compiler/Compiler.cpp:581-587`)
-- No tensor/linalg/bufferization/memref/affine dialects yet
+- **Steps 1-2 DONE:** All MLIR dialects registered (linalg, tensor, bufferization, affine, memref) + lowering pipeline with `moduleHasTensorOps()` guard
 - The closure/partial-application wrapper pattern in `src/codegen/MLIRGenFunction.cpp` is the **structural template** for the kernel wrapper (B2)
 
 ## Architecture: Two-Function Pattern (B2)
@@ -109,7 +108,7 @@ CPU functions using !llvm.array/llvm.alloca are UNTOUCHED by the new passes.
 
 ## Implementation Steps
 
-### Step 1: CMake + Dialect Registration
+### Step 1: CMake + Dialect Registration ✅ DONE
 
 **File: `src/codegen/CMakeLists.txt`**
 
@@ -164,7 +163,7 @@ Run `cmake --build build -j --target e2e-tests` to verify no regressions.
 
 ---
 
-### Step 2: Lowering Pipeline Update
+### Step 2: Lowering Pipeline Update ✅ DONE
 
 **File: `src/codegen/MLIRLowering.cpp`**
 
@@ -1024,8 +1023,8 @@ let main() -> i32 {
 
 ## Implementation Order (for successor)
 
-1. **Step 1** (CMake + dialects) → build, verify no regressions
-2. **Step 2** (lowering pipeline) → build, verify all e2e tests pass (new passes are no-ops)
+1. ~~**Step 1** (CMake + dialects) → build, verify no regressions~~ ✅ DONE
+2. ~~**Step 2** (lowering pipeline) → build, verify all e2e tests pass (new passes are no-ops)~~ ✅ DONE
 3. **Step 3** (type conversion + header declarations) → build (new methods, not yet called)
 4. **Step 4** (forward-declaration) → build, verify `kernel_basic.mn` still compiles
 5. **Step 5** (emitKernelDef rewrite + kernel lambda guards) → verify `kernel_basic.mn` works end-to-end
@@ -1095,3 +1094,27 @@ linalg::YieldOp::create(builder, loc, values: ValueRange)
 
 See also: `knowledge_base/mlir_linalg_gpu_api_reference.md` for full details.
 See also: `knowledge_base/cpu_gpu_boundary_papers.md` for research context.
+
+---
+
+## Lessons Learned (Steps 1-2 Implementation)
+
+These issues were NOT in the original plan but were discovered and fixed during implementation:
+
+### 1. `-fno-rtti` required when linking against LLVM built without RTTI
+LLVM on Homebrew is built with `LLVM_ENABLE_RTTI:BOOL=OFF`. The `OneShotBufferizePassOptions` struct inherits from `PassOptions` which uses `llvm::cl::opt<bool>`, generating typeinfo references that don't exist in RTTI-less LLVM libs. Fix: add `-fno-rtti` to `project_options` conditional on `NOT LLVM_ENABLE_RTTI` in `src/CMakeLists.txt`.
+
+### 2. cpptrace `from_current.hpp` incompatible with `-fno-rtti`
+This header uses `typeid()` in templates. We only included it (in `src/util/Utilities.cpp`) but never used its macros. Fix: remove the unused include.
+
+### 3. `dynamic_cast` → `llvm::dyn_cast` in kernel stub
+Three `dynamic_cast` calls in `MLIRGen.cpp` kernel stub are incompatible with `-fno-rtti`. Fix: use `llvm::dyn_cast`/`llvm::isa` (LLVM's `classof()`-based RTTI).
+
+### 4. Bufferization interface registration is mandatory
+`one-shot-bufferize` requires each dialect to have `BufferizableOpInterfaceExternalModels` registered, and the buffer deallocation pipeline requires `BufferDeallocationOpInterfaceExternalModels`. Without these, you get runtime errors like "BufferizableOpInterface not registered for 'func' dialect". Fix: register both interfaces for func, arith, cf, linalg, scf, tensor in `Compiler.cpp`.
+
+### 5. `moduleHasTensorOps()` guard is essential
+`one-shot-bufferize` with `allowUnknownOps=true` still fails on LLVM dialect ops (malloc, cf.br loops) because the analysis requires memory effect annotations even for "unknown" ops. Also "Only structured control-flow loops are supported" from `cf.br` loops. Fix: skip the entire bufferization pipeline for CPU-only modules using `moduleHasTensorOps()`.
+
+### 6. `OneShotBufferizePassOptions` vs `OneShotBufferizationOptions`
+The `Passes.h` header forward-declares `OneShotBufferizationOptions` but the pass constructor actually takes `OneShotBufferizePassOptions` (tablegen-generated). Use the latter.
