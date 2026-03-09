@@ -11,6 +11,7 @@
 
 #include "llvm/ADT/StringRef.h"
 
+#include <functional>
 #include <map>
 #include <string>
 
@@ -179,6 +180,30 @@ public:
   mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                         mlir::Value scrutineeVal,
                                         const EnumType &et);
+  mlir::Value emitLiteralCaseExpr(AST::CaseExprAST *ast,
+                                  mlir::Value scrutineeVal);
+
+  /// Given a case arm, produce the integer constant that the scrutinee should
+  /// be compared against.
+  ///
+  /// - emitIntegerBackedCaseExpr passes a lambda that looks up the enum
+  ///   variant's discriminant value  (e.g. HUP(1) → 1).
+  /// - emitLiteralCaseExpr passes a lambda that parses the source literal
+  ///   (e.g. "42" → 42, "true" → 1).
+  using ArmToComparisonConst =
+      std::function<mlir::Value(const AST::CaseArm &, mlir::Location)>;
+
+  /// Shared codegen for case expressions where every arm boils down to
+  /// "compare scrutinee against an integer constant".  This covers both
+  /// integer-backed enums and literal (i32/bool/char) patterns.
+  ///
+  /// Emits a cascading chain of:
+  ///     if (scrutinee == armConst) goto armBlock; else goto nextCheck;
+  /// where `armConst` is produced by the caller-supplied callback.
+  mlir::Value emitScalarCaseExpr(AST::CaseExprAST *ast,
+                                 mlir::Value scrutineeVal,
+                                 ArmToComparisonConst armToConst);
+
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,

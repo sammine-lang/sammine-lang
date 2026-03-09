@@ -1,0 +1,22 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      zero
+// CHECK-NEXT: one
+// CHECK-NEXT: other
+
+import std;
+
+let describe(x: i32) -> i32 {
+  case x {
+    0 => std::printf("zero\n"),
+    1 => std::printf("one\n"),
+    _ => std::printf("other\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  describe(0);
+  describe(1);
+  describe(42);
+  return 0;
+}

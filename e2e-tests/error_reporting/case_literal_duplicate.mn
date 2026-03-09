@@ -1,0 +1,12 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK-ERR: Duplicate literal pattern '0'
+
+let main() -> i32 {
+  let x: i32 = 42;
+  case x {
+    0 => 1,
+    0 => 2,
+    _ => 3,
+  };
+  return 0;
+}

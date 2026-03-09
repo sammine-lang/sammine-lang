@@ -805,7 +805,7 @@ public:
   AST_NODE_METHODS("FieldAccessExprAST", NodeKind::FieldAccessExprAST)
 };
 
-/// Pattern in a case arm: `Enum::Variant(x, y)` or `_` (wildcard).
+/// Pattern in a case arm: `Enum::Variant(x, y)`, `_` (wildcard), or a literal.
 struct CasePattern {
   sammine_util::QualifiedName variant_name =
       sammine_util::QualifiedName::local("");
@@ -813,6 +813,12 @@ struct CasePattern {
   bool is_wildcard = false;          // true for `_` catch-all pattern
   sammine_util::Location location;
   size_t variant_index = 0;          // resolved during type checking
+
+  // Literal pattern fields (e.g., `0`, `42`, `true`, `'a'`, `-1`)
+  enum class LiteralKind { None, Integer, Bool, Char };
+  bool is_literal = false;
+  std::string literal_value;         // raw string: "42", "-42", "true", "a"
+  LiteralKind literal_kind = LiteralKind::None; // set by parser
 };
 
 /// A single arm in a case expression: pattern => body block.

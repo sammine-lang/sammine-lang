@@ -1,0 +1,19 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      yes
+// CHECK-NEXT: no
+
+import std;
+
+let yesno(b: bool) -> i32 {
+  case b {
+    true => std::printf("yes\n"),
+    false => std::printf("no\n"),
+  };
+  return 0;
+}
+
+let main() -> i32 {
+  yesno(true);
+  yesno(false);
+  return 0;
+}

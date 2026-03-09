@@ -639,6 +639,8 @@ void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
     auto &arm = ast->arms[i];
     if (arm.pattern.is_wildcard)
       arms_str += "_";
+    else if (arm.pattern.is_literal)
+      arms_str += arm.pattern.literal_value;
     else {
       arms_str += arm.pattern.variant_name.mangled();
       if (!arm.pattern.bindings.empty()) {

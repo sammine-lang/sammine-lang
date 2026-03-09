@@ -345,6 +345,23 @@ struct Type {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
 
+  /// True for concrete scalar types valid as literal case-expression scrutinees.
+  /// Excludes floats (equality is unreliable) and polymorphic types (must be
+  /// resolved first).
+  bool is_matchable_scalar() const {
+    switch (type_kind) {
+    case TypeKind::I32_t:
+    case TypeKind::I64_t:
+    case TypeKind::U32_t:
+    case TypeKind::U64_t:
+    case TypeKind::Bool:
+    case TypeKind::Char:
+      return true;
+    default:
+      return false;
+    }
+  }
+
   /// True for compound types that contain inner types (used by forEachInnerType).
   bool isTypeWrapping() const {
     switch (type_kind) {
