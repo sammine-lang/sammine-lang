@@ -1158,6 +1158,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                                    mlir::Value tag,
                                                    const EnumType &et) {
+  // Each arm's comparison constant is the variant's discriminant value.
   return emitScalarCaseExpr(ast, tag,
       [&](const AST::CaseArm &arm, mlir::Location loc) {
         auto &vi = et.get_variant(arm.pattern.variant_index);
@@ -1171,6 +1172,7 @@ mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
                                               mlir::Value scrutineeVal) {
   auto scrutineeType = ast->scrutinee->get_type();
 
+  // Each arm's comparison constant is the literal value parsed from source.
   return emitScalarCaseExpr(ast, scrutineeVal,
       [&](const AST::CaseArm &arm, mlir::Location loc) -> mlir::Value {
         using LK = AST::CasePattern::LiteralKind;
@@ -1197,7 +1199,7 @@ mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
 
 mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
                                              mlir::Value scrutineeVal,
-                                             ArmConstFactory makeConst) {
+                                             ArmToComparisonConst armToConst) {
   auto location = loc(ast);
   bool hasResult = ast->get_type().type_kind != TypeKind::Unit &&
                    ast->get_type().type_kind != TypeKind::Never;
@@ -1243,7 +1245,7 @@ mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
 
   for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
     size_t i = nonWildcardIndices[ci];
-    auto armConst = makeConst(ast->arms[i], location);
+    auto armConst = armToConst(ast->arms[i], location);
     auto cmp = mlir::arith::CmpIOp::create(
         builder, location, mlir::arith::CmpIPredicate::eq, scrutineeVal,
         armConst);

@@ -1,0 +1,16 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK-ERR: Cannot mix literal and enum variant patterns in case expression
+
+import std;
+
+type Sig = HUP(1) | INT(2) | KILL(9) | TERM(15);
+
+let main() -> i32 {
+  let s: Sig = Sig::HUP;
+  case s {
+    Sig::KILL => std::printf("kill\n"),
+    9 => std::printf("nine\n"),
+    _ => std::printf("other\n"),
+  };
+  return 0;
+}

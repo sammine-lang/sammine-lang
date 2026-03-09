@@ -1581,15 +1581,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     }
 
     // Must be integer, bool, or char
-    bool valid_scrutinee =
-        scrutinee_type.type_kind == TypeKind::I32_t ||
-        scrutinee_type.type_kind == TypeKind::I64_t ||
-        scrutinee_type.type_kind == TypeKind::U32_t ||
-        scrutinee_type.type_kind == TypeKind::U64_t ||
-        scrutinee_type.type_kind == TypeKind::Bool ||
-        scrutinee_type.type_kind == TypeKind::Char;
-
-    if (!valid_scrutinee) {
+    if (!scrutinee_type.is_matchable_scalar()) {
       this->add_error(
           ast->scrutinee->get_location(),
           fmt::format("Literal case patterns require an integer, bool, or char "
