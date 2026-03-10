@@ -38,99 +38,81 @@
 
 namespace sammine_lang {
 
-/// Check if the module contains any tensor or linalg ops that need
-/// bufferization. CPU-only modules (no kernel code) skip the entire
-/// bufferization pipeline to avoid analysis failures on LLVM dialect ops.
-static bool moduleHasTensorOps(mlir::ModuleOp module) {
-  bool found = false;
-  module.walk([&](mlir::Operation *op) {
-    if (llvm::isa<mlir::linalg::LinalgDialect, mlir::tensor::TensorDialect>(
-            op->getDialect())) {
-      found = true;
-      return mlir::WalkResult::interrupt();
-    }
-    // Also check for tensor-typed results on any op
-    for (auto result : op->getResults()) {
-      if (mlir::isa<mlir::RankedTensorType>(result.getType())) {
-        found = true;
-        return mlir::WalkResult::interrupt();
-      }
-    }
-    return mlir::WalkResult::advance();
-  });
-  return found;
-}
-
 std::unique_ptr<llvm::Module>
-lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
-  auto *context = module->getContext();
+lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule, mlir::ModuleOp kernelModule,
+                  llvm::LLVMContext &llvmCtx) {
+  auto *context = cpuModule->getContext();
 
-  // Run lowering passes
-  mlir::PassManager pm(context);
-
-  // Phase 7a: tensor/linalg → memref/loops
-  // Only run when the module contains tensor/linalg ops (kernel code).
-  // CPU-only modules skip this entirely.
-  if (moduleHasTensorOps(module)) {
-    // Step A: Module-level bufferization (tensor → memref)
-    // Uses bufferizeFunctionBoundaries to correctly update function signatures.
-    // Only functions marked with "sammine.kernel" are analyzed; all others are
-    // excluded to prevent crashes on cf.br loops in CPU code.
-    // Excluded functions get copyBeforeWrite semantics (safe, no analysis).
+  // Phase 1: Process kernel module (if present)
+  if (kernelModule) {
+    // Step A: Bufferize the kernel module (clean — no ad-hoc filters needed).
+    // The kernel module contains only func/tensor/linalg/arith ops,
+    // so full analysis works without allowUnknownOps or noAnalysisFuncFilter.
     {
-      std::vector<std::string> noAnalysisFuncs;
-      module.walk([&](mlir::func::FuncOp funcOp) {
-        if (!funcOp->hasAttr("sammine.kernel"))
-          noAnalysisFuncs.push_back(funcOp.getName().str());
-      });
-
       mlir::bufferization::OneShotBufferizationOptions bufOpts;
       bufOpts.bufferizeFunctionBoundaries = true;
-      bufOpts.allowUnknownOps = true;
-      bufOpts.noAnalysisFuncFilter = noAnalysisFuncs;
+      // Use identity layout (memref<NxT>) at function boundaries instead
+      // of the default inferred layout (memref<NxT, strided<[?], offset: ?>>).
+      // Our memrefs always have identity layout (offset=0, stride=1) since
+      // buildMemrefFromPtr constructs them that way.
+      bufOpts.setFunctionBoundaryTypeConversion(
+          mlir::bufferization::LayoutMapOption::IdentityLayoutMap);
 
       mlir::bufferization::BufferizationState state;
       if (mlir::failed(mlir::bufferization::runOneShotModuleBufferize(
-              module, bufOpts, state))) {
-        module.emitError("Module bufferization failed");
+              kernelModule, bufOpts, state))) {
+        kernelModule.emitError("Kernel module bufferization failed");
         return nullptr;
       }
     }
 
-    // Step B: Linalg → loops (runs per-function, only affects funcs with
-    // linalg ops; no-op for CPU functions)
-    pm.addNestedPass<mlir::func::FuncOp>(
-        mlir::createConvertLinalgToLoopsPass());
-
-    // Step B2: Buffer optimization passes (all operate on func::FuncOp)
-    // Move allocations out of loops (10k iterations → 1 alloc)
-    pm.addNestedPass<mlir::func::FuncOp>(
-        mlir::bufferization::createBufferHoistingPass());
-    pm.addNestedPass<mlir::func::FuncOp>(
-        mlir::bufferization::createBufferLoopHoistingPass());
-    // Convert memref.alloc (malloc) → memref.alloca (stack) for small static
-    // arrays. Default maxAllocSizeInBytes=1024; our kernel arrays are up to
-    // 8KB (1000 x f64), so raise to 64KB to cover realistic array sizes.
+    // Step B: Linalg → loops + buffer optimization (on kernel module only)
     {
-      mlir::bufferization::PromoteBuffersToStackPassOptions stackOpts;
-      stackOpts.maxAllocSizeInBytes = 65536;
-      pm.addNestedPass<mlir::func::FuncOp>(
-          mlir::bufferization::createPromoteBuffersToStackPass(stackOpts));
+      mlir::PassManager kernelPM(context);
+
+      kernelPM.addNestedPass<mlir::func::FuncOp>(
+          mlir::createConvertLinalgToLoopsPass());
+
+      // Buffer optimization: move allocations out of loops, promote to stack
+      kernelPM.addNestedPass<mlir::func::FuncOp>(
+          mlir::bufferization::createBufferHoistingPass());
+      kernelPM.addNestedPass<mlir::func::FuncOp>(
+          mlir::bufferization::createBufferLoopHoistingPass());
+      {
+        mlir::bufferization::PromoteBuffersToStackPassOptions stackOpts;
+        stackOpts.maxAllocSizeInBytes = 65536;
+        kernelPM.addNestedPass<mlir::func::FuncOp>(
+            mlir::bufferization::createPromoteBuffersToStackPass(stackOpts));
+      }
+
+      // Cleanup passes needed before merging into CPU module
+      kernelPM.addPass(mlir::memref::createExpandStridedMetadataPass());
+      kernelPM.addPass(mlir::createLowerAffinePass());
+
+      if (mlir::failed(kernelPM.run(kernelModule)))
+        return nullptr;
     }
 
-    // Note: Ownership-based buffer deallocation is NOT used because it
-    // crashes on CPU functions with cf.br loops (same limitation as the
-    // deprecated pipeline). Since promote-buffers-to-stack converts all
-    // small static allocations to alloca (no free needed), this is fine
-    // for current use cases. If large dynamic allocations are added in
-    // the future, a selective deallocation pass will be needed.
-
-    // Step C: Cleanup passes needed before memref → LLVM
-    pm.addPass(mlir::memref::createExpandStridedMetadataPass());
-    pm.addPass(mlir::createLowerAffinePass());
+    // Step C: Merge kernel functions into CPU module.
+    // After bufferization + lowering, kernel functions have memref signatures
+    // matching the forward-declarations in the CPU module.
+    for (auto &op :
+         llvm::make_early_inc_range(kernelModule.getBody()->getOperations())) {
+      if (auto funcOp = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
+        auto name = funcOp.getName();
+        // Erase the memref-typed forward-declaration in CPU module
+        if (auto existing =
+                cpuModule.lookupSymbol<mlir::func::FuncOp>(name))
+          existing.erase();
+        // Move the actual definition into CPU module
+        funcOp->remove();
+        cpuModule.push_back(funcOp);
+      }
+    }
   }
 
-  // Existing: scf/arith/cf/memref/func → llvm
+  // Phase 2: Lower everything to LLVM (on the merged CPU module)
+  mlir::PassManager pm(context);
   pm.addPass(mlir::createSCFToControlFlowPass());
   pm.addPass(mlir::createArithToLLVMConversionPass());
   pm.addPass(mlir::createConvertControlFlowToLLVMPass());
@@ -138,7 +120,7 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
   pm.addPass(mlir::createConvertFuncToLLVMPass());
   pm.addPass(mlir::createReconcileUnrealizedCastsPass());
 
-  if (mlir::failed(pm.run(module)))
+  if (mlir::failed(pm.run(cpuModule)))
     return nullptr;
 
   // Register translations
@@ -146,7 +128,7 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
   mlir::registerLLVMDialectTranslation(*context);
 
   // Export to LLVM IR
-  auto llvmModule = mlir::translateModuleToLLVMIR(module, llvmCtx);
+  auto llvmModule = mlir::translateModuleToLLVMIR(cpuModule, llvmCtx);
   if (!llvmModule)
     return nullptr;
 

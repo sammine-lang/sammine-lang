@@ -48,6 +48,9 @@ public:
   // --- Member variables ---
 
   mlir::ModuleOp theModule;
+  /// Separate module for kernel functions (tensor/linalg dialect only).
+  /// Created lazily when the first KernelDefAST is encountered.
+  mlir::ModuleOp kernelModule;
   mlir::OpBuilder builder;
   std::string moduleName;
   std::string fileName;
@@ -118,9 +121,15 @@ public:
   /// Convert a sammine Type to an MLIR type for kernel context.
   /// Arrays become RankedTensorType; scalars are the same as CPU.
   mlir::Type convertTypeForKernel(const Type &type);
+  /// Convert a sammine Type to the post-bufferization MLIR type.
+  /// Arrays become MemRefType; scalars are the same as CPU.
+  mlir::Type convertTypeForKernelMemref(const Type &type);
   /// Build a func::FunctionType for a kernel's internal implementation.
   /// Uses tensor types for arrays, no sret transform.
   mlir::FunctionType buildKernelFuncType(AST::PrototypeAST *proto);
+  /// Build the post-bufferization function type for a kernel.
+  /// Uses memref types for arrays. Used by the wrapper to call __kernel_.
+  mlir::FunctionType buildKernelMemrefFuncType(AST::PrototypeAST *proto);
 
   // --- Definition emission (MLIRGen.cpp) ---
   void emitDefinition(AST::DefinitionAST *def);

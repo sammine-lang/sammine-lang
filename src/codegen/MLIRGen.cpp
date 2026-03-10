@@ -12,7 +12,6 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 
@@ -105,23 +104,32 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         auto publicName = mangleName(kd->Prototype->functionName);
         auto internalName = kKernelPrefix.str() + publicName;
 
-        builder.setInsertionPointToEnd(theModule.getBody());
+        // Create kernel module lazily on first kernel def
+        if (!kernelModule)
+          kernelModule = mlir::ModuleOp::create(builder.getUnknownLoc());
 
-        // 1. Forward-declare internal kernel function (tensor types, private)
+        // 1. Forward-declare internal kernel in kernel module (tensor types)
         auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
-        if (!theModule.lookupSymbol(internalName)) {
+        if (!kernelModule.lookupSymbol(internalName)) {
           auto funcOp = mlir::func::FuncOp::create(
               builder.getUnknownLoc(), internalName, kernelFuncType);
           funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
-          funcOp->setAttr("sammine.kernel", builder.getUnitAttr());
+          kernelModule.push_back(funcOp);
+        }
+
+        // 2. Forward-declare internal kernel in CPU module (memref types).
+        // The wrapper calls __kernel_ with memref types; this declaration
+        // ensures func.call resolves during verification. Replaced during
+        // merge with the actual bufferized definition.
+        auto memrefFuncType = buildKernelMemrefFuncType(kd->Prototype.get());
+        if (!theModule.lookupSymbol(internalName)) {
+          auto funcOp = mlir::func::FuncOp::create(
+              builder.getUnknownLoc(), internalName, memrefFuncType);
+          funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
           theModule.push_back(funcOp);
         }
 
-        // 2. Forward-declare public wrapper (CPU ABI, same as buildFuncType)
-        // Mark with sammine.kernel so bufferization analysis runs on it
-        // (wrapper has no cf.br loops, so analysis is safe). Without this,
-        // the wrapper gets copyBeforeWrite semantics which creates copies
-        // of DPS buffers, breaking the zero-copy sret path.
+        // 3. Forward-declare public wrapper in CPU module (CPU ABI)
         auto wrapperFuncType = buildFuncType(kd->Prototype.get());
         if (!theModule.lookupSymbol(publicName)) {
           auto funcOp = mlir::func::FuncOp::create(
@@ -129,7 +137,6 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
           funcOp.setVisibility(moduleName.empty()
                                    ? mlir::SymbolTable::Visibility::Private
                                    : mlir::SymbolTable::Visibility::Public);
-          funcOp->setAttr("sammine.kernel", builder.getUnitAttr());
           theModule.push_back(funcOp);
         }
       }
@@ -138,6 +145,13 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
 
   for (auto &def : program->DefinitionVec)
     emitDefinition(def.get());
+
+  if (kernelModule) {
+    if (mlir::failed(mlir::verify(kernelModule))) {
+      kernelModule.emitError("MLIR kernel module verification failed");
+      return nullptr;
+    }
+  }
 
   if (mlir::failed(mlir::verify(theModule))) {
     theModule.emitError("MLIR module verification failed");
@@ -368,6 +382,16 @@ mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
   }
 }
 
+mlir::Type MLIRGenImpl::convertTypeForKernelMemref(const Type &type) {
+  if (type.type_kind == TypeKind::Array) {
+    auto arrType = std::get<ArrayType>(type.type_data);
+    auto elemType = convertTypeForKernel(arrType.get_element());
+    auto size = static_cast<int64_t>(arrType.get_size());
+    return mlir::MemRefType::get({size}, elemType);
+  }
+  return convertTypeForKernel(type);
+}
+
 mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
   llvm::SmallVector<mlir::Type, 4> argTypes;
   for (auto &param : proto->parameterVectors)
@@ -383,6 +407,27 @@ mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
       // DPS: array-returning kernels take the output tensor as an extra
       // parameter. The caller provides it, so __kernel_ doesn't allocate.
       // GPU-forward-compatible: kernels never allocate internally.
+      if (retType.type_kind == TypeKind::Array)
+        argTypes.push_back(mlirRetType);
+    }
+  }
+
+  return builder.getFunctionType(argTypes, retTypes);
+}
+
+mlir::FunctionType
+MLIRGenImpl::buildKernelMemrefFuncType(AST::PrototypeAST *proto) {
+  llvm::SmallVector<mlir::Type, 4> argTypes;
+  for (auto &param : proto->parameterVectors)
+    argTypes.push_back(convertTypeForKernelMemref(param->get_type()));
+
+  llvm::SmallVector<mlir::Type, 1> retTypes;
+  if (proto->get_type().type_kind == TypeKind::Function) {
+    auto ft = std::get<FunctionType>(proto->get_type().type_data);
+    auto retType = ft.get_return_type();
+    if (retType.type_kind != TypeKind::Unit) {
+      auto mlirRetType = convertTypeForKernelMemref(retType);
+      retTypes.push_back(mlirRetType);
       if (retType.type_kind == TypeKind::Array)
         argTypes.push_back(mlirRetType);
     }
@@ -428,8 +473,8 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
     decltype(symbolTable)::Guard scope(symbolTable);
 
     auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
-    auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(internalName);
-    assert(funcOp && "Internal kernel function should be forward-declared");
+    auto funcOp = kernelModule.lookupSymbol<mlir::func::FuncOp>(internalName);
+    assert(funcOp && "Internal kernel function should be forward-declared in kernel module");
 
     auto &entryBlock = *funcOp.addEntryBlock();
     builder.setInsertionPointToStart(&entryBlock);
@@ -682,7 +727,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   auto retSamType = protoFT.get_return_type();
   bool returnsArray = retSamType.type_kind == TypeKind::Array;
 
-  // === Marshal input arguments: !llvm.array<NxT> → tensor ===
+  // === Marshal input arguments: !llvm.array<NxT> → memref ===
   llvm::SmallVector<mlir::Value> kernelArgs;
   size_t blockArgIdx = 0;
 
@@ -703,26 +748,19 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
           builder, location, llvmPtrTy(), blockArg.getType(), one);
       mlir::LLVM::StoreOp::create(builder, location, blockArg, stackPtr);
 
-      // Wrap pointer as memref (O(1) descriptor construction)
+      // Wrap pointer as memref — passed directly to __kernel_ (no tensor)
       auto inputMemref =
           buildMemrefFromPtr(stackPtr, arrSize, elemMLIRType, location);
-
-      // Create tensor view — becomes no-op after bufferization
-      auto tensorType = mlir::RankedTensorType::get({arrSize}, elemMLIRType);
-      auto tensorVal = mlir::bufferization::ToTensorOp::create(
-          builder, location, tensorType, inputMemref, /*restrict=*/true,
-          /*writable=*/false);
-      kernelArgs.push_back(tensorVal);
+      kernelArgs.push_back(inputMemref);
     } else {
       kernelArgs.push_back(blockArg);
     }
   }
 
-  // === DPS: pass sret buffer directly as the output tensor ===
-  // Instead of tensor.empty() + materialize_in_destination (which creates an
-  // intermediate alloc + copy), wrap the sret pointer as a writable tensor
-  // and pass it as the DPS output. The kernel writes directly into sret —
-  // zero alloc, zero copy. On GPU, this becomes device memory passed in.
+  // === DPS: pass sret buffer as memref directly ===
+  // The sret pointer is wrapped as a memref and passed to __kernel_ as the
+  // DPS output parameter. The kernel writes directly into sret — zero alloc,
+  // zero copy. On GPU, this becomes device memory passed in.
   if (returnsArray) {
     auto &retArrType = std::get<ArrayType>(retSamType.type_data);
     auto arrSize = static_cast<int64_t>(retArrType.get_size());
@@ -732,26 +770,19 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
     auto sretMemref =
         buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
-
-    auto tensorType = mlir::RankedTensorType::get({arrSize}, elemMLIRType);
-    auto sretTensor = mlir::bufferization::ToTensorOp::create(
-        builder, location, tensorType, sretMemref,
-        /*restrict=*/true, /*writable=*/true);
-    kernelArgs.push_back(sretTensor);
+    kernelArgs.push_back(sretMemref);
   }
 
-  // === Call the internal kernel function ===
-  auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
+  // === Call the internal kernel function (memref types) ===
+  auto memrefFuncType = buildKernelMemrefFuncType(kd->Prototype.get());
   auto callOp = mlir::func::CallOp::create(
       builder, location, internalName,
-      kernelFuncType.getResults(), kernelArgs);
+      memrefFuncType.getResults(), kernelArgs);
 
   // === Marshal return value ===
   if (returnsArray) {
-    // DPS: kernel already wrote into sret via the DPS output parameter.
-    // No materialize_in_destination or copy needed.
+    // DPS: kernel wrote into sret via the output memref parameter.
     mlir::func::ReturnOp::create(builder, location);
-
   } else if (retSamType.type_kind == TypeKind::Unit) {
     mlir::func::ReturnOp::create(builder, location);
   } else {
@@ -1265,12 +1296,19 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
 
 // ===--- Public entry point ---===
 
-mlir::OwningOpRef<mlir::ModuleOp>
+MLIRGenResult
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
         const std::string &moduleName, const std::string &fileName,
         const std::string &sourceText, const AST::ASTProperties &props) {
-  return MLIRGenImpl(context, moduleName, fileName, sourceText, props)
-      .generate(program);
+  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props);
+  auto cpuModule = impl.generate(program);
+  MLIRGenResult result;
+  if (!cpuModule)
+    return result; // cpuModule null indicates failure
+  result.cpuModule = cpuModule;
+  if (impl.kernelModule)
+    result.kernelModule = impl.kernelModule;
+  return result;
 }
 
 } // namespace sammine_lang

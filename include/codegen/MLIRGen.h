@@ -18,9 +18,17 @@
 
 namespace sammine_lang {
 
-/// Emit MLIR for the given type-checked AST. Returns a newly created MLIR
-/// module, or nullptr on failure.
-mlir::OwningOpRef<mlir::ModuleOp>
+/// Result of MLIR generation: a CPU module and an optional kernel module.
+struct MLIRGenResult {
+  mlir::OwningOpRef<mlir::ModuleOp> cpuModule;
+  /// Separate module for kernel functions (tensor/linalg).
+  /// Null if the program has no kernel definitions.
+  mlir::OwningOpRef<mlir::ModuleOp> kernelModule;
+};
+
+/// Emit MLIR for the given type-checked AST. Returns a CPU module and
+/// (optionally) a kernel module, or an empty result on failure.
+MLIRGenResult
 mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
         const std::string &moduleName, const std::string &fileName,
         const std::string &sourceText, const AST::ASTProperties &props);

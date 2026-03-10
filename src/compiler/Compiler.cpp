@@ -624,9 +624,9 @@ void Compiler::codegen_mlir() {
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   std::string moduleName = has_main ? "" : stem;
 
-  auto mlirModule =
+  auto mlirResult =
       mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input, props_);
-  if (!mlirModule) {
+  if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
     set_error();
@@ -636,13 +636,23 @@ void Compiler::codegen_mlir() {
   if (compiler_options[compiler_option_enum::MLIR_IR] == "true") {
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
-    mlirModule->print(llvm::outs(), flags);
+    if (mlirResult.kernelModule) {
+      llvm::outs() << "// === Kernel Module ===\n";
+      mlirResult.kernelModule->print(llvm::outs(), flags);
+      llvm::outs() << "\n";
+    }
+    llvm::outs() << "// === CPU Module ===\n";
+    mlirResult.cpuModule->print(llvm::outs(), flags);
     llvm::outs() << "\n";
     state_ = State::Finished;
     return;
   }
 
-  auto llvmModule = lowerMLIRToLLVMIR(*mlirModule, *resPtr->Context);
+  mlir::ModuleOp kernelMod;
+  if (mlirResult.kernelModule)
+    kernelMod = *mlirResult.kernelModule;
+  auto llvmModule = lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod,
+                                       *resPtr->Context);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
