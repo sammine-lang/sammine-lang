@@ -1,0 +1,23 @@
+// RUN: %sammine -f %full %O --llvm-ir pre 2>&1 | grep -c "call.*@malloc" > %T/malloc_count.txt || true
+// RUN: cat %T/malloc_count.txt | %check %full
+// Verify kernel codegen produces zero malloc calls after buffer optimization.
+
+import io;
+
+kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}
+
+kernel sum_arr(a: [3]f64) -> f64 {
+  reduce(a, +, 0.0)
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let b = double_arr(a);
+  io::printf("%f\n", b[0]);
+  io::printf("%f\n", sum_arr(a));
+  0
+}
+
+// CHECK: 0

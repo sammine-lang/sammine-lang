@@ -28,6 +28,7 @@
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/MemRef/Transforms/AllocationOpInterfaceImpl.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -617,6 +618,7 @@ void Compiler::codegen_mlir() {
   mlir::scf::registerBufferizableOpInterfaceExternalModels(registry);
   mlir::scf::registerBufferDeallocationOpInterfaceExternalModels(registry);
   mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
+  mlir::memref::registerAllocationOpInterfaceExternalModels(registry);
   mlirCtx.appendDialectRegistry(registry);
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();

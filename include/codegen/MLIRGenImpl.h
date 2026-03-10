@@ -128,7 +128,8 @@ public:
   void emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
                          mlir::Block &entryBlock,
                          AST::KernelDefAST *kd,
-                         mlir::Location location);
+                         mlir::Location location,
+                         mlir::Value dpsOutput);
   void emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
                             mlir::Block &entryBlock,
                             AST::KernelDefAST *kd,

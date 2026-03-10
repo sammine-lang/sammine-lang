@@ -101,6 +101,30 @@ lowerMLIRToLLVMIR(mlir::ModuleOp module, llvm::LLVMContext &llvmCtx) {
     // linalg ops; no-op for CPU functions)
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::createConvertLinalgToLoopsPass());
+
+    // Step B2: Buffer optimization passes (all operate on func::FuncOp)
+    // Move allocations out of loops (10k iterations → 1 alloc)
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::bufferization::createBufferHoistingPass());
+    pm.addNestedPass<mlir::func::FuncOp>(
+        mlir::bufferization::createBufferLoopHoistingPass());
+    // Convert memref.alloc (malloc) → memref.alloca (stack) for small static
+    // arrays. Default maxAllocSizeInBytes=1024; our kernel arrays are up to
+    // 8KB (1000 x f64), so raise to 64KB to cover realistic array sizes.
+    {
+      mlir::bufferization::PromoteBuffersToStackPassOptions stackOpts;
+      stackOpts.maxAllocSizeInBytes = 65536;
+      pm.addNestedPass<mlir::func::FuncOp>(
+          mlir::bufferization::createPromoteBuffersToStackPass(stackOpts));
+    }
+
+    // Note: Ownership-based buffer deallocation is NOT used because it
+    // crashes on CPU functions with cf.br loops (same limitation as the
+    // deprecated pipeline). Since promote-buffers-to-stack converts all
+    // small static allocations to alloca (no free needed), this is fine
+    // for current use cases. If large dynamic allocations are added in
+    // the future, a selective deallocation pass will be needed.
+
     // Step C: Cleanup passes needed before memref → LLVM
     pm.addPass(mlir::memref::createExpandStridedMetadataPass());
     pm.addPass(mlir::createLowerAffinePass());

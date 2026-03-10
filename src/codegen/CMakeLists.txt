@@ -25,6 +25,7 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRMemRefToLLVM MLIRAffineToStandard
   MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
   MLIRSCFTransforms MLIRTensorTransforms
+  MLIRTransforms
 )
 
 # Final linkage for folder
@@ -46,4 +47,5 @@ target_link_libraries(_codegen SammineJIT MLIRBackend LLVMSupport ${llvm_libs} $
   MLIRMemRefToLLVM MLIRAffineToStandard
   MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
   MLIRSCFTransforms MLIRTensorTransforms
+  MLIRTransforms
 )

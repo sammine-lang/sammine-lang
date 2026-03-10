@@ -118,6 +118,10 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         }
 
         // 2. Forward-declare public wrapper (CPU ABI, same as buildFuncType)
+        // Mark with sammine.kernel so bufferization analysis runs on it
+        // (wrapper has no cf.br loops, so analysis is safe). Without this,
+        // the wrapper gets copyBeforeWrite semantics which creates copies
+        // of DPS buffers, breaking the zero-copy sret path.
         auto wrapperFuncType = buildFuncType(kd->Prototype.get());
         if (!theModule.lookupSymbol(publicName)) {
           auto funcOp = mlir::func::FuncOp::create(
@@ -125,6 +129,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
           funcOp.setVisibility(moduleName.empty()
                                    ? mlir::SymbolTable::Visibility::Private
                                    : mlir::SymbolTable::Visibility::Public);
+          funcOp->setAttr("sammine.kernel", builder.getUnitAttr());
           theModule.push_back(funcOp);
         }
       }
@@ -372,8 +377,15 @@ mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
   if (proto->get_type().type_kind == TypeKind::Function) {
     auto ft = std::get<FunctionType>(proto->get_type().type_data);
     auto retType = ft.get_return_type();
-    if (retType.type_kind != TypeKind::Unit)
-      retTypes.push_back(convertTypeForKernel(retType));
+    if (retType.type_kind != TypeKind::Unit) {
+      auto mlirRetType = convertTypeForKernel(retType);
+      retTypes.push_back(mlirRetType);
+      // DPS: array-returning kernels take the output tensor as an extra
+      // parameter. The caller provides it, so __kernel_ doesn't allocate.
+      // GPU-forward-compatible: kernels never allocate internally.
+      if (retType.type_kind == TypeKind::Array)
+        argTypes.push_back(mlirRetType);
+    }
   }
 
   return builder.getFunctionType(argTypes, retTypes);
@@ -429,6 +441,15 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
       symbolTable.registerNameT(param->name, argVal);
     }
 
+    // DPS: for array-returning kernels, the last entry block argument is the
+    // output tensor provided by the caller (the wrapper).
+    auto protoFT = std::get<FunctionType>(kd->Prototype->get_type().type_data);
+    auto retSamType = protoFT.get_return_type();
+    mlir::Value dpsOutput;
+    if (retSamType.type_kind == TypeKind::Array) {
+      dpsOutput = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+    }
+
     // Dispatch to the appropriate kernel expression handler
     if (kd->Body->expressions.empty()) {
       mlir::func::ReturnOp::create(builder, location);
@@ -453,7 +474,7 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
         }
       } else if (auto *mapExpr =
                      llvm::dyn_cast<AST::KernelMapExprAST>(firstExpr)) {
-        emitKernelMapExpr(mapExpr, entryBlock, kd, location);
+        emitKernelMapExpr(mapExpr, entryBlock, kd, location, dpsOutput);
       } else if (auto *reduceExpr =
                      llvm::dyn_cast<AST::KernelReduceExprAST>(firstExpr)) {
         emitKernelReduceExpr(reduceExpr, entryBlock, kd, location);
@@ -472,7 +493,8 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
 void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
                                      mlir::Block &entryBlock,
                                      AST::KernelDefAST *kd,
-                                     mlir::Location location) {
+                                     mlir::Location location,
+                                     mlir::Value dpsOutput) {
   // 1. Look up the input tensor from the symbol table.
   auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
 
@@ -486,24 +508,17 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
   }
   assert(foundInputType.type_kind != TypeKind::NonExistent &&
          "Map input must be a kernel parameter");
-  auto arrType = std::get<ArrayType>(foundInputType.type_data);
-  auto arrSize = static_cast<int64_t>(arrType.get_size());
 
-  // Get the lambda return type from the lambda body's synthesized type.
-  // The type checker does not set lambda_proto as a FunctionType — it only
-  // synthesizes the parameter and body types individually.
-  auto lambdaRetSamType = mapExpr->lambda_body->get_type();
-  auto lambdaRetMLIRType = convertTypeForKernel(lambdaRetSamType);
-
-  // 3. Create tensor.empty() for the output.
-  auto emptyTensor = mlir::tensor::EmptyOp::create(
-      builder, location, llvm::ArrayRef<int64_t>{arrSize}, lambdaRetMLIRType);
+  // 3. Use DPS output tensor (provided by caller) instead of tensor.empty().
+  // This eliminates memref.alloc inside __kernel_ — the caller manages
+  // the output buffer. GPU-forward-compatible: kernels never allocate.
+  assert(dpsOutput && "Map kernel must have DPS output parameter");
 
   // 4. Create linalg.map with a body builder lambda.
   auto mapOp = mlir::linalg::MapOp::create(
       builder, location,
       /*inputs=*/mlir::ValueRange{inputTensor},
-      /*init=*/emptyTensor.getResult(),
+      /*init=*/dpsOutput,
       /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
                           mlir::ValueRange args) {
         auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
@@ -703,6 +718,28 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     }
   }
 
+  // === DPS: pass sret buffer directly as the output tensor ===
+  // Instead of tensor.empty() + materialize_in_destination (which creates an
+  // intermediate alloc + copy), wrap the sret pointer as a writable tensor
+  // and pass it as the DPS output. The kernel writes directly into sret —
+  // zero alloc, zero copy. On GPU, this becomes device memory passed in.
+  if (returnsArray) {
+    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
+    auto arrSize = static_cast<int64_t>(retArrType.get_size());
+    auto elemSamType = retArrType.get_element();
+    auto elemMLIRType = convertTypeForKernel(elemSamType);
+
+    auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+    auto sretMemref =
+        buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
+
+    auto tensorType = mlir::RankedTensorType::get({arrSize}, elemMLIRType);
+    auto sretTensor = mlir::bufferization::ToTensorOp::create(
+        builder, location, tensorType, sretMemref,
+        /*restrict=*/true, /*writable=*/true);
+    kernelArgs.push_back(sretTensor);
+  }
+
   // === Call the internal kernel function ===
   auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
   auto callOp = mlir::func::CallOp::create(
@@ -711,24 +748,8 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
 
   // === Marshal return value ===
   if (returnsArray) {
-    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
-    auto arrSize = static_cast<int64_t>(retArrType.get_size());
-    auto elemSamType = retArrType.get_element();
-    auto elemMLIRType = convertTypeForKernel(elemSamType);
-
-    auto resultTensor = callOp.getResult(0);
-    auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
-
-    // Wrap sret pointer as memref (O(1) descriptor construction)
-    auto sretMemref =
-        buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
-
-    // Materialize result tensor directly into sret buffer
-    // No result type (dest is memref), writable=true so bufferization
-    // knows it can write to the destination in-place.
-    mlir::bufferization::MaterializeInDestinationOp::create(
-        builder, location, mlir::TypeRange{}, resultTensor, sretMemref,
-        /*restrict=*/false, /*writable=*/true);
+    // DPS: kernel already wrote into sret via the DPS output parameter.
+    // No materialize_in_destination or copy needed.
     mlir::func::ReturnOp::create(builder, location);
 
   } else if (retSamType.type_kind == TypeKind::Unit) {
