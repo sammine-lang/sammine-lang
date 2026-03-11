@@ -89,7 +89,7 @@ public:
 
   // --- Block helper ---
   /// Create a new block and immediately insert it into the given region.
-  mlir::Block *addBlock(mlir::Region *region) {
+  mlir::Block *addBlockTo(mlir::Region *region) {
     auto *block = new mlir::Block();
     region->push_back(block);
     return block;
@@ -115,6 +115,13 @@ public:
   bool isUnsignedIntegerType(const Type &type);
   bool isFloatType(const Type &type);
   bool isBoolType(const Type &type);
+  /// Emit an integer constant with the given value and sammine type.
+  mlir::Value emitIntConstant(int64_t value, const Type &type,
+                              mlir::Location loc);
+  /// Emit a float constant with the given value and sammine type.
+  /// Handles F32 precision conversion via APFloat.
+  mlir::Value emitFloatConstant(double value, const Type &type,
+                                mlir::Location loc);
   mlir::Type getEnumBackingMLIRType(const EnumType &et);
 
   // --- Kernel type conversion ---

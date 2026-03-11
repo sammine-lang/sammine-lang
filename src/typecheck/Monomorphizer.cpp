@@ -182,6 +182,14 @@ std::unique_ptr<BlockAST> Monomorphizer::clone_block(BlockAST *block) {
   return result;
 }
 
+// Clone macro — casts to NodeType (as `n`), constructs via __VA_ARGS__.
+#define CLONE_CASE(NodeType, ...)                                              \
+  case NodeKind::NodeType: {                                                   \
+    auto *n = llvm::cast<NodeType>(expr);                                      \
+    result = std::make_unique<NodeType>(__VA_ARGS__);                          \
+    break;                                                                     \
+  }
+
 // Handled ExprAST subtypes (update when adding new ExprAST nodes):
 // NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
 // VariableExprAST, CallExprAST, BinaryExprAST, ReturnExprAST,
@@ -197,11 +205,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   std::unique_ptr<ExprAST> result;
 
   switch (expr->getKind()) {
-  case NodeKind::NumberExprAST: {
-    auto *num = llvm::cast<NumberExprAST>(expr);
-    result = std::make_unique<NumberExprAST>(make_tok(num->number));
-    break;
-  }
+  CLONE_CASE(NumberExprAST, make_tok(n->number))
   case NodeKind::StringExprAST: {
     auto *str = llvm::cast<StringExprAST>(expr);
     auto tok = make_tok(str->string_content);
@@ -219,11 +223,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::make_unique<CharExprAST>(ch->value, ch->get_location());
     break;
   }
-  case NodeKind::VariableExprAST: {
-    auto *var = llvm::cast<VariableExprAST>(expr);
-    result = std::make_unique<VariableExprAST>(make_tok(var->variableName));
-    break;
-  }
+  CLONE_CASE(VariableExprAST, make_tok(n->variableName))
   case NodeKind::CallExprAST: {
     auto *call = llvm::cast<CallExprAST>(expr);
     auto r = std::make_unique<CallExprAST>(
@@ -234,12 +234,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::move(r);
     break;
   }
-  case NodeKind::BinaryExprAST: {
-    auto *bin = llvm::cast<BinaryExprAST>(expr);
-    result = std::make_unique<BinaryExprAST>(
-        bin->Op, clone_expr(bin->LHS.get()), clone_expr(bin->RHS.get()));
-    break;
-  }
+  CLONE_CASE(BinaryExprAST, n->Op, clone_expr(n->LHS.get()), clone_expr(n->RHS.get()))
   case NodeKind::ReturnExprAST: {
     auto *ret = llvm::cast<ReturnExprAST>(expr);
     if (ret->is_implicit)
@@ -265,13 +260,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     }
     break;
   }
-  case NodeKind::IfExprAST: {
-    auto *ife = llvm::cast<IfExprAST>(expr);
-    result = std::make_unique<IfExprAST>(
-        clone_expr(ife->bool_expr.get()), clone_block(ife->thenBlockAST.get()),
-        clone_block(ife->elseBlockAST.get()));
-    break;
-  }
+  CLONE_CASE(IfExprAST, clone_expr(n->bool_expr.get()), clone_block(n->thenBlockAST.get()), clone_block(n->elseBlockAST.get()))
   case NodeKind::UnitExprAST: {
     auto *unit = llvm::cast<UnitExprAST>(expr);
     if (unit->is_implicit)
@@ -280,67 +269,16 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
       result = std::make_unique<UnitExprAST>(make_tok("("), make_tok(")"));
     break;
   }
-  case NodeKind::DerefExprAST: {
-    auto *deref = llvm::cast<DerefExprAST>(expr);
-    result = std::make_unique<DerefExprAST>(make_tok("*"),
-                                            clone_expr(deref->operand.get()));
-    break;
-  }
-  case NodeKind::AddrOfExprAST: {
-    auto *addr = llvm::cast<AddrOfExprAST>(expr);
-    result = std::make_unique<AddrOfExprAST>(make_tok("&"),
-                                             clone_expr(addr->operand.get()));
-    break;
-  }
-  case NodeKind::AllocExprAST: {
-    auto *alloc = llvm::cast<AllocExprAST>(expr);
-    result = std::make_unique<AllocExprAST>(make_tok("alloc"),
-                                            clone_type_expr(alloc->type_arg.get()),
-                                            clone_expr(alloc->operand.get()));
-    break;
-  }
-  case NodeKind::FreeExprAST: {
-    auto *free_e = llvm::cast<FreeExprAST>(expr);
-    result = std::make_unique<FreeExprAST>(make_tok("free"),
-                                           clone_expr(free_e->operand.get()));
-    break;
-  }
-  case NodeKind::ArrayLiteralExprAST: {
-    auto *arr_lit = llvm::cast<ArrayLiteralExprAST>(expr);
-    result = std::make_unique<ArrayLiteralExprAST>(
-        clone_expr_vec(arr_lit->elements));
-    break;
-  }
-  case NodeKind::RangeExprAST: {
-    auto *range = llvm::cast<RangeExprAST>(expr);
-    result = std::make_unique<RangeExprAST>(clone_expr(range->start.get()),
-                                            clone_expr(range->end.get()));
-    break;
-  }
-  case NodeKind::IndexExprAST: {
-    auto *idx = llvm::cast<IndexExprAST>(expr);
-    result = std::make_unique<IndexExprAST>(clone_expr(idx->array_expr.get()),
-                                            clone_expr(idx->index_expr.get()));
-    break;
-  }
-  case NodeKind::LenExprAST: {
-    auto *len = llvm::cast<LenExprAST>(expr);
-    result = std::make_unique<LenExprAST>(make_tok("len"),
-                                          clone_expr(len->operand.get()));
-    break;
-  }
-  case NodeKind::DimExprAST: {
-    auto *dim = llvm::cast<DimExprAST>(expr);
-    result = std::make_unique<DimExprAST>(make_tok("dim"),
-                                          clone_expr(dim->operand.get()));
-    break;
-  }
-  case NodeKind::UnaryNegExprAST: {
-    auto *neg = llvm::cast<UnaryNegExprAST>(expr);
-    result = std::make_unique<UnaryNegExprAST>(make_tok("-"),
-                                               clone_expr(neg->operand.get()));
-    break;
-  }
+  CLONE_CASE(DerefExprAST, make_tok("*"), clone_expr(n->operand.get()))
+  CLONE_CASE(AddrOfExprAST, make_tok("&"), clone_expr(n->operand.get()))
+  CLONE_CASE(AllocExprAST, make_tok("alloc"), clone_type_expr(n->type_arg.get()), clone_expr(n->operand.get()))
+  CLONE_CASE(FreeExprAST, make_tok("free"), clone_expr(n->operand.get()))
+  CLONE_CASE(ArrayLiteralExprAST, clone_expr_vec(n->elements))
+  CLONE_CASE(RangeExprAST, clone_expr(n->start.get()), clone_expr(n->end.get()))
+  CLONE_CASE(IndexExprAST, clone_expr(n->array_expr.get()), clone_expr(n->index_expr.get()))
+  CLONE_CASE(LenExprAST, make_tok("len"), clone_expr(n->operand.get()))
+  CLONE_CASE(DimExprAST, make_tok("dim"), clone_expr(n->operand.get()))
+  CLONE_CASE(UnaryNegExprAST, make_tok("-"), clone_expr(n->operand.get()))
   case NodeKind::StructLiteralExprAST: {
     auto *sl = llvm::cast<StructLiteralExprAST>(expr);
     auto cloned_sl = std::make_unique<StructLiteralExprAST>(
@@ -351,12 +289,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::move(cloned_sl);
     break;
   }
-  case NodeKind::FieldAccessExprAST: {
-    auto *fa = llvm::cast<FieldAccessExprAST>(expr);
-    result = std::make_unique<FieldAccessExprAST>(
-        clone_expr(fa->object_expr.get()), make_tok(fa->field_name));
-    break;
-  }
+  CLONE_CASE(FieldAccessExprAST, clone_expr(n->object_expr.get()), make_tok(n->field_name))
   case NodeKind::CaseExprAST: {
     auto *ce = llvm::cast<CaseExprAST>(expr);
     std::vector<CaseArm> cloned_arms;
@@ -371,18 +304,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
         std::move(cloned_arms));
     break;
   }
-  case NodeKind::WhileExprAST: {
-    auto *wh = llvm::cast<WhileExprAST>(expr);
-    result = std::make_unique<WhileExprAST>(clone_expr(wh->condition.get()),
-                                            clone_block(wh->body.get()));
-    break;
-  }
-  case NodeKind::TupleLiteralExprAST: {
-    auto *tup = llvm::cast<TupleLiteralExprAST>(expr);
-    result = std::make_unique<TupleLiteralExprAST>(
-        clone_expr_vec(tup->elements));
-    break;
-  }
+  CLONE_CASE(WhileExprAST, clone_expr(n->condition.get()), clone_block(n->body.get()))
+  CLONE_CASE(TupleLiteralExprAST, clone_expr_vec(n->elements))
   default:
     sammine_util::abort("Unknown ExprAST subclass in Monomorphizer");
   }
@@ -390,6 +313,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   result->set_location(orig_loc);
   return result;
 }
+
+#undef CLONE_CASE
 
 // --- Internal clone helpers ---
 
