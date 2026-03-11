@@ -948,12 +948,12 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
 }
 ```
 
-**Note on `tensor.from_elements` / `tensor.extract` scaling:**
-For small static arrays (like `[3]f64` in tests), extracting/inserting element-by-element
-is fine. For larger arrays (hundreds of elements), this generates excessive IR.
-A future optimization would use `bufferization.to_tensor` with a `memref.cast` from
-the `!llvm.ptr` to `memref<NxT>` — but that requires careful aliasing annotations.
-Element-by-element is correct and sufficient for Phase 7a.
+**Note on wrapper marshalling (UPDATED):**
+The original O(N) element-by-element approach was replaced with O(1) pointer-cast
+marshalling. See "Lessons Learned" section for details on `buildMemrefFromPtr`,
+`bufferization.to_tensor`, and `bufferization.materialize_in_destination`.
+The Step 8 code above shows the ORIGINAL plan; the actual implementation uses the
+optimized approach described in the Lessons Learned section.
 
 ---
 
@@ -1090,6 +1090,42 @@ deallocation pipeline** or add `promote-buffers-to-stack` to convert mallocs to 
 7. **3 mallocs per kernel call** — from bufferization of tensor.empty, tensor.from_elements,
    and linalg.fill. Stack promotion would eliminate these.
 
+## Next Steps (Phase 7b+)
+
+### Near-term optimizations (low-hanging fruit)
+1. **`promote-buffers-to-stack`** — Add after `convert-linalg-to-loops` in MLIRLowering.cpp.
+   Converts `memref.alloc` (malloc) → `memref.alloca` (stack) for small static allocations.
+   Our 8KB buffers (1000 x f64) are well within safe stack thresholds (64KB+).
+   Also add `buffer-hoisting` + `buffer-loop-hoisting` before stack promotion to move
+   allocations out of loops (10k iterations → 1 alloca instead of 10k mallocs).
+   Pipeline: `bufferize → linalg-to-loops → buffer-hoisting → buffer-loop-hoisting →
+   promote-buffers-to-stack → expand-strided-metadata → lower-affine`
+
+2. **Ownership-based buffer deallocation** — Replace the deprecated (and removed)
+   `buildBufferDeallocationPipeline` with the new ownership-based pipeline.
+   Would eliminate memory leaks for heap-allocated buffers.
+
+3. **`alwaysinline` on `__kernel_` functions** — In MLIRLowering.cpp's post-export loop,
+   add `F.addFnAttr(llvm::Attribute::AlwaysInline)` for `__kernel_` functions.
+   LLVM -O2 likely inlines them already (private, single call site), but this guarantees it.
+
+### Medium-term features
+4. **Tensor-level fusion** — Add `linalg-fuse-elementwise-ops` before bufferization.
+   Enables fusing consecutive map/reduce ops into single loops when kernel chaining
+   (e.g., `map(a, f) |> map(g)` → single fused loop).
+
+5. **Kernel chaining / composition** — Allow multiple map/reduce ops in a single kernel body,
+   connected by pipes. The tensor SSA chain enables fusion across ops.
+
+6. **MLIR-level inlining** — Inline `__kernel_` into wrapper at the MLIR level (before
+   bufferization). This exposes more optimization opportunities: bufferization sees the
+   full pipeline and can eliminate intermediate buffers.
+
+### Long-term (Phase 7c: GPU)
+7. **GPU offload** — The linalg/tensor abstraction can lower to GPU backends via
+   `convert-linalg-to-parallel-loops` → `gpu.launch`. The `sammine.kernel` attribute
+   naturally extends to mark functions for GPU compilation.
+
 ## C++ API Reference
 
 Key builders (verified from `/opt/homebrew/opt/llvm/include/mlir/Dialect/Linalg/IR/LinalgStructuredOps.h.inc`):
@@ -1140,12 +1176,101 @@ See also: `knowledge_base/cpu_gpu_boundary_papers.md` for research context.
 
 ---
 
-## Lessons Learned (Steps 1-2 Implementation)
+## Lessons Learned (Full Implementation)
 
-These issues were NOT in the original plan but were discovered and fixed during implementation:
+### Build & Linking
 
-### 1. `-fno-rtti` required when linking against LLVM built without RTTI
-LLVM on Homebrew is built with `LLVM_ENABLE_RTTI:BOOL=OFF`. The `OneShotBufferizePassOptions` struct inherits from `PassOptions` which uses `llvm::cl::opt<bool>`, generating typeinfo references that don't exist in RTTI-less LLVM libs. Fix: add `-fno-rtti` to `project_options` conditional on `NOT LLVM_ENABLE_RTTI` in `src/CMakeLists.txt`.
+1. **`-fno-rtti` required** when linking against LLVM built without RTTI.
+   `OneShotBufferizePassOptions` inherits from `PassOptions` which uses `llvm::cl::opt<bool>`,
+   generating typeinfo references that don't exist in RTTI-less LLVM libs.
+   Fix: add `-fno-rtti` conditional on `NOT LLVM_ENABLE_RTTI` in `src/CMakeLists.txt`.
+
+### Bufferization Debugging
+
+2. **"Only structured control-flow loops are supported"** — Module-level bufferization
+   analysis crashes on CPU functions with `cf.br` ops (from while-loop lowering). The fix
+   was `noAnalysisFuncFilter` to exclude all non-kernel functions from analysis. Excluded
+   functions get `copyBeforeWrite` semantics (safe but may allocate extra copies).
+
+3. **`buildBufferDeallocationPipeline` crashes on CPU functions** with `cf.br` loops.
+   Removed entirely. Bufferized memrefs currently leak. Future fix: ownership-based buffer
+   deallocation pipeline (non-deprecated) or `promote-buffers-to-stack`.
+
+4. **`bufferizeFunctionBoundaries = true` is required** for `runOneShotModuleBufferize`
+   to correctly update function signatures from tensor to memref types. Without it,
+   `func.func` retains tensor-typed signatures and `convert-func-to-llvm` fails.
+
+5. **Per-function bufferization doesn't work** — it can't update function signatures.
+   The kernel's tensor-typed signature survives to LLVM translation, causing
+   "missing LLVMTranslationDialectInterface for func.func". Must use module-level.
+
+### Codegen Gotchas
+
+6. **`get_type()` returns by value** — `auto &ref = ...get_type()` binds to a temporary.
+   Always use `auto` (value), never `auto &` for AST type accessors.
+
+7. **`bad_variant_access` on `lambda_proto->get_type()`** — The type checker doesn't set
+   `lambda_proto` as a `FunctionType`. Get the lambda return type from
+   `mapExpr->lambda_body->get_type()` instead.
+
+8. **`llvm.extractvalue`/`llvm.insertvalue` require constant indices** — You cannot loop
+   over an `!llvm.array` with a runtime index. To iterate, store the array to an alloca
+   first, then use GEP + load, or (better) wrap the alloca pointer as a memref.
+
+9. **`in_kernel_lambda_body` flag** — Required to prevent emitting LLVM ops (alloca, malloc,
+   free) inside `linalg.map`/`linalg.reduce` body regions. Only arith/math ops are valid
+   inside linalg body regions. Guards needed in: `emitVarDef`, `emitAllocaOne`,
+   `emitArrayLiteralExpr`, `emitAllocExpr`, `emitFreeExpr`.
+
+10. **`InsertionGuard` in linalg body builders** — The body builder lambda receives its own
+    `OpBuilder &b`, but `emitExpr()` uses `this->builder`. Must redirect `this->builder`
+    into the body region: `builder.setInsertionPointToStart(b.getInsertionBlock())`.
+    Without this, ops land in the outer function instead of the linalg body.
+
+### Design Decisions
+
+11. **Why tensors, not memref, in `__kernel_` functions** — `linalg-fuse-elementwise-ops`
+    only works on tensor-based linalg ops. Consecutive `linalg.map` on tensors can be fused
+    into a single loop; on memrefs they remain separate loops. Tensor signatures also
+    preserve the SSA chain across inlined kernel calls, enabling cross-kernel fusion.
+
+12. **Why the wrapper exists** — CPU code uses `!llvm.array<NxT>` (flat LLVM aggregate);
+    kernels use `tensor<NxT>` (MLIR value semantics). The wrapper bridges these two type
+    systems. It's the kernel equivalent of closure wrappers in `getOrCreateClosureWrapper()`.
+
+13. **Why `sammine.kernel` attribute instead of name prefix matching** — Attribute-based
+    filtering is the MLIR-idiomatic equivalent of `isa<KernelDefAST>` from the AST world.
+    It's set during codegen and checked during lowering. Decouples the naming convention
+    from the semantic meaning.
+
+14. **Why O(1) pointer-cast marshalling instead of O(N) element extraction** — The original
+    wrapper generated N MLIR ops per array element (extractvalue + insertvalue). For 1000
+    elements: 3000+ IR ops. This doesn't scale to large arrays and bloats compilation time.
+    The memref descriptor approach (`buildMemrefFromPtr`) wraps an existing pointer as a
+    memref in ~15 ops regardless of array size. Key ops:
+    - `llvm.alloca` + `llvm.store` — put !llvm.array value in memory to get a pointer
+    - `buildMemrefFromPtr` — construct `{ptr, ptr, offset, sizes, strides}` descriptor
+    - `unrealized_conversion_cast` — bridge LLVM struct → memref type
+    - `bufferization.to_tensor` — create tensor view (no-op after bufferization)
+    - `bufferization.materialize_in_destination` — write result into sret buffer
+
+### Performance
+
+15. **Benchmark results (1000-element `[f64]`, 10k iterations):**
+
+    | Benchmark | C++ -O2 | Sammine kernel | Ratio |
+    |-----------|---------|----------------|-------|
+    | map (x*2) | ~4ms    | ~19ms          | 4.0x  |
+    | reduce (+)| ~5ms    | ~15ms          | 3.0x  |
+
+    Primary overhead: 3 mallocs per kernel call from bufferization (tensor.empty →
+    memref.alloc). LLVM -O2 inlines both `__kernel_` and the wrapper into `main`, but
+    cannot eliminate heap allocations (SROA only works on allocas, not malloc).
+
+16. **Larger arrays close the gap** — With 3-element arrays, sammine was 84x slower than
+    C++. With 1000 elements, it's 3-4x. The per-call overhead (mallocs) is constant; as
+    compute grows with N, the ratio converges. `promote-buffers-to-stack` would eliminate
+    the malloc overhead entirely for statically-sized arrays.
 
 ### 2. cpptrace `from_current.hpp` incompatible with `-fno-rtti`
 This header uses `typeid()` in templates. We only included it (in `src/util/Utilities.cpp`) but never used its macros. Fix: remove the unused include.
