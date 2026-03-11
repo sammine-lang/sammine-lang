@@ -28,6 +28,7 @@ include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 llvm_map_components_to_libnames(llvm_libs native orcjit core support irreader)
 
+set(llvm_targets "")
 foreach(target ${LLVM_TARGETS_TO_BUILD})
   list(APPEND llvm_targets "LLVM${target}CodeGen")
 endforeach()
@@ -146,8 +147,8 @@ list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.so ${STDLIB_DIR}/io.a ${STDLIB_DIR}/
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 
 option(SAMMINE_TEST "Enable the test in sammine-lang repository(disabled by default)" OFF)
-include(CTest)
 if (SAMMINE_TEST)
+  include(CTest)
   enable_testing()
   add_subdirectory(unit-tests)
   add_subdirectory(e2e-tests)

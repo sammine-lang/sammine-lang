@@ -18,8 +18,6 @@
 //! \file AstBase.h
 //! \brief Defines the AST Abstract class for printing out AST Nodes
 namespace llvm {
-class Value;
-
 class Function;
 } // namespace llvm
 
@@ -292,6 +290,8 @@ public:
     ~Guard() { stack_.pop_context(); }
     Guard(const Guard &) = delete;
     Guard &operator=(const Guard &) = delete;
+    Guard(Guard &&) = delete;
+    Guard &operator=(Guard &&) = delete;
   };
 
   void registerNameT(const std::string &name, T l) {
@@ -440,7 +440,6 @@ public:
   static void set_properties(ASTProperties *p) { current_props_ = p; }
   NodeKind getKind() const { return kind; }
   bool pe = false;       // parser error: set when a child is null (failed parse)
-  llvm::Value *val;      // legacy LLVM codegen value (unused with MLIR backend)
   AstBase *join_location(AstBase *ast) {
     if (!ast)
       pe = true;

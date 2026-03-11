@@ -51,6 +51,27 @@ void abort_if_not(const T &condition,
     abort(message);
   }
 }
+
+/// Safe map lookup that ICEs instead of throwing std::out_of_range.
+template <typename MapT>
+auto cautious_at(const MapT &map, const typename MapT::key_type &key,
+                 const std::string &context) ->
+    const typename MapT::mapped_type & {
+  auto it = map.find(key);
+  if (it == map.end())
+    abort(fmt::format("ICE: key not found in {} lookup", context));
+  return it->second;
+}
+
+/// Safe optional access that ICEs instead of throwing std::bad_optional_access.
+template <typename T>
+auto cautious_value(const std::optional<T> &opt, const std::string &context)
+    -> const T & {
+  if (!opt.has_value())
+    abort(fmt::format("ICE: missing value in {}", context));
+  return opt.value();
+}
+
 inline void log_diagnostics(const std::string &diagnostics) {
   fmt::print(stderr, fg(fmt::terminal_color::green), "{}\n", diagnostics);
 }

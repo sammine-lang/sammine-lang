@@ -60,7 +60,7 @@ add_subdirectory(compiler)
 add_executable(sammine ${CMAKE_CURRENT_LIST_DIR}/sammine.cpp)
 target_include_directories(sammine PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 target_link_libraries(sammine project_options compiler cpptrace::cpptrace util _ast Lexer Parser
-     semantics typecheck Types Monomorphizer _codegen  fmt CLI11::CLI11)
+     semantics typecheck _codegen fmt CLI11::CLI11)
 
 set_target_properties(sammine PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin

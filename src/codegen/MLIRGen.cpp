@@ -1,6 +1,9 @@
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRGenImpl.h"
 
+using sammine_util::cautious_at;
+using sammine_util::cautious_value;
+
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
@@ -282,13 +285,15 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   }
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(type.type_data);
-    return structTypes.at(st.get_name().mangled());
+    return cautious_at(structTypes, st.get_name().mangled(),
+                                      "structTypes");
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
     if (et.is_integer_backed())
       return getEnumBackingMLIRType(et);
-    return enumTypes.at(et.get_name().mangled());
+    return cautious_at(enumTypes, et.get_name().mangled(),
+                                      "enumTypes");
   }
   case TypeKind::Tuple: {
     auto &tt = std::get<TupleType>(type.type_data);

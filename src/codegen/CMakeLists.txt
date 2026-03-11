@@ -31,21 +31,4 @@ target_link_libraries(MLIRBackend PRIVATE
 # Final linkage for folder
 add_library(_codegen)
 target_include_directories(_codegen PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
-target_link_libraries(_codegen SammineJIT MLIRBackend LLVMSupport ${llvm_libs} ${llvm_targets}
-  MLIRIR MLIRParser MLIRSupport MLIRPass
-  MLIRArithDialect MLIRFuncDialect MLIRSCFDialect
-  MLIRArithToLLVM MLIRFuncToLLVM
-  MLIRSCFToControlFlow MLIRControlFlowToLLVM
-  MLIRReconcileUnrealizedCasts
-  MLIRTargetLLVMIRExport MLIRLLVMToLLVMIRTranslation MLIRBuiltinToLLVMIRTranslation
-  MLIRLLVMDialect
-  # Phase 7a: kernel linalg codegen
-  MLIRLinalgDialect MLIRTensorDialect MLIRBufferizationDialect
-  MLIRAffineDialect MLIRMemRefDialect
-  MLIRLinalgTransforms MLIRBufferizationTransforms MLIRBufferizationPipelines
-  MLIRMemRefTransforms
-  MLIRMemRefToLLVM MLIRAffineToStandard
-  MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
-  MLIRSCFTransforms MLIRTensorTransforms
-  MLIRTransforms
-)
+target_link_libraries(_codegen SammineJIT MLIRBackend LLVMSupport ${llvm_libs} ${llvm_targets})

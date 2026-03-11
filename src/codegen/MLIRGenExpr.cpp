@@ -1,6 +1,9 @@
 #include "ast/Ast.h"
 #include "codegen/MLIRGenImpl.h"
 
+using sammine_util::cautious_at;
+using sammine_util::cautious_value;
+
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -71,12 +74,12 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
       auto &vi = et.get_variant(vp->enum_variant_index);
       return mlir::arith::ConstantIntOp::create(builder, location,
                                                 getEnumBackingMLIRType(et),
-                                                vi.discriminant_value.value())
+                                                cautious_value(vi.discriminant_value, "enum discriminant"))
           .getResult();
     }
 
     // Tagged union: build { tag, undef_payload }
-    auto enumTy = enumTypes.at(et.get_name().mangled());
+    auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
 
     auto alloca = emitAllocaOne(enumTy, location);
 
@@ -817,7 +820,7 @@ mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
 
 mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   auto st = std::get<StructType>(ast->get_type().type_data);
-  auto structTy = structTypes.at(st.get_name().mangled());
+  auto structTy = cautious_at(structTypes, st.get_name().mangled(), "structTypes");
   auto location = loc(ast);
 
   // Start with poison (all fields will be filled by InsertValueOp)
@@ -826,9 +829,10 @@ mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   // Insert each field value at its index
   for (size_t i = 0; i < ast->field_values.size(); i++) {
     auto fieldIdx = st.get_field_index(ast->field_names[i]);
+    auto idx = cautious_value(fieldIdx, "struct field index");
     auto val = emitRValue(ast->field_values[i].get());
     agg = mlir::LLVM::InsertValueOp::create(builder, location, agg, val,
-                                            static_cast<int64_t>(fieldIdx.value()));
+                                            static_cast<int64_t>(idx));
   }
   return agg;
 }
@@ -837,15 +841,18 @@ mlir::Value MLIRGenImpl::emitFieldAccessExpr(AST::FieldAccessExprAST *ast) {
   auto objVal = emitExpr(ast->object_expr.get());
   auto st = std::get<StructType>(ast->object_expr->get_type().type_data);
   auto fieldIdx = st.get_field_index(ast->field_name);
-  auto fieldType = convertType(st.get_field_type(fieldIdx.value()));
+  auto idx = cautious_value(fieldIdx, "struct field index");
+  auto fieldType = convertType(st.get_field_type(idx));
   return mlir::LLVM::ExtractValueOp::create(builder, loc(ast), fieldType,
-                                            objVal, static_cast<int64_t>(fieldIdx.value()));
+                                            objVal, static_cast<int64_t>(idx));
 }
 
 mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
   auto location = loc(ast);
   auto et = std::get<EnumType>(ast->get_type().type_data);
   auto callEnum = props_.call(ast->id());
+  sammine_util::abort_if_not(callEnum != nullptr,
+                             "ICE: missing call props for enum constructor");
   size_t variant_idx = callEnum->enum_variant_index;
 
   // Integer-backed enum: emit bare integer constant (no struct)
@@ -853,11 +860,11 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
     auto &vi = et.get_variant(variant_idx);
     return mlir::arith::ConstantIntOp::create(builder, location,
                                               getEnumBackingMLIRType(et),
-                                              vi.discriminant_value.value())
+                                              cautious_value(vi.discriminant_value, "enum discriminant"))
         .getResult();
   }
 
-  auto enumTy = enumTypes.at(et.get_name().mangled());
+  auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
 
   // Alloca the enum struct
   auto alloca = emitAllocaOne(enumTy, location);
@@ -1070,7 +1077,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   if (et.is_integer_backed())
     return emitIntegerBackedCaseExpr(ast, scrutineeVal, et);
 
-  auto enumTy = enumTypes.at(et.get_name().mangled());
+  auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
 
   // Alloca the scrutinee so we can GEP into it
   auto scrutineeAlloca = emitAllocaOne(enumTy, location);
@@ -1237,7 +1244,7 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
         auto &vi = et.get_variant(arm.pattern.variant_index);
         return mlir::arith::ConstantIntOp::create(
             builder, loc, getEnumBackingMLIRType(et),
-            vi.discriminant_value.value());
+            cautious_value(vi.discriminant_value, "enum discriminant"));
       });
 }
 

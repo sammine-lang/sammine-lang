@@ -2,8 +2,7 @@
 // Created by Jasmine Tang on 3/29/24.
 //
 
-#ifndef SAMMINE_LANG_SAMMINEJIT_H
-#define SAMMINE_LANG_SAMMINEJIT_H
+#pragma once
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/Core.h" // Core utilities such as ExecutionSession and JITDylib.
@@ -47,4 +46,3 @@ public:
 };
 
 } // namespace sammine_lang
-#endif // SAMMINE_LANG_SAMMINEJIT_H

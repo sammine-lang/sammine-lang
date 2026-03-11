@@ -154,7 +154,7 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
 }
 
 bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
-    VarDefAST *ast, ArrayLiteralExprAST *arr_lit, const ArrayType &arr_type) {
+    ArrayLiteralExprAST *arr_lit, const ArrayType &arr_type) {
   auto expected_elem = arr_type.get_element();
   size_t first_error_idx = 0;
   size_t error_count = 0;
@@ -186,7 +186,6 @@ bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
             arr_lit->elements[first_error_idx]->accept_synthesis(this)))
       this->add_diagnostics(
           arr_lit->elements[first_error_idx]->get_location(), *hint);
-    ast->set_type(Type::Poisoned());
     arr_lit->set_type(Type::Poisoned());
     return true;
   }
@@ -215,8 +214,10 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
         auto arr_data = std::get<ArrayType>(ast->get_type().type_data);
         for (auto &elem : arr_lit->elements)
           elem->accept_vis(this);
-        if (check_array_literal_against_annotation(ast, arr_lit, arr_data))
+        if (check_array_literal_against_annotation(arr_lit, arr_data)) {
+          ast->set_type(Type::Poisoned());
           return;
+        }
         arr_lit->set_type(ast->get_type());
         return;
       }
@@ -304,16 +305,17 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Resolve backing type if specified
   TypeKind backing_type = TypeKind::I32_t;
   if (ast->backing_type_name.has_value()) {
+    static const std::unordered_map<std::string, TypeKind> backing_type_map = {
+        {"i32", TypeKind::I32_t},
+        {"i64", TypeKind::I64_t},
+        {"u32", TypeKind::U32_t},
+        {"u64", TypeKind::U64_t},
+    };
     auto &bt_name = ast->backing_type_name.value();
-    if (bt_name == "i32")
-      backing_type = TypeKind::I32_t;
-    else if (bt_name == "i64")
-      backing_type = TypeKind::I64_t;
-    else if (bt_name == "u32")
-      backing_type = TypeKind::U32_t;
-    else if (bt_name == "u64")
-      backing_type = TypeKind::U64_t;
-    else {
+    auto it = backing_type_map.find(bt_name);
+    if (it != backing_type_map.end()) {
+      backing_type = it->second;
+    } else {
       this->add_error(
           ast->get_location(),
           fmt::format("Invalid backing type '{}' for type '{}' — must be "
@@ -511,39 +513,7 @@ void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
       auto &arr_data = std::get<ArrayType>(return_type.type_data);
       for (auto &elem : arr_lit->elements)
         elem->accept_vis(this);
-      auto expected_elem = arr_data.get_element();
-      size_t first_error_idx = 0;
-      size_t error_count = 0;
-      for (size_t i = 0; i < arr_lit->elements.size(); i++) {
-        auto elem_type = arr_lit->elements[i]->accept_synthesis(this);
-        if (!type_map_ordering.compatible_to_from(expected_elem, elem_type)) {
-          if (error_count == 0)
-            first_error_idx = i;
-          error_count++;
-        } else {
-          resolve_literal_type(arr_lit->elements[i].get(), expected_elem);
-        }
-      }
-      if (error_count > 0) {
-        std::vector<std::string> msgs;
-        msgs.push_back(
-            fmt::format("Array element type mismatch: expected {}, got {}",
-                        expected_elem.to_string(),
-                        arr_lit->elements[first_error_idx]
-                            ->accept_synthesis(this)
-                            .to_string()));
-        if (error_count > 1)
-          msgs.push_back(fmt::format(
-              "{} more type mismatch {} in this array", error_count - 1,
-              (error_count - 1 == 1) ? "error" : "errors"));
-        this->add_error(arr_lit->elements[first_error_idx]->get_location(),
-                        msgs);
-        if (auto hint = incompatibility_hint(
-                expected_elem,
-                arr_lit->elements[first_error_idx]->accept_synthesis(this)))
-          this->add_diagnostics(
-              arr_lit->elements[first_error_idx]->get_location(), *hint);
-      }
+      check_array_literal_against_annotation(arr_lit, arr_data);
       arr_lit->set_type(return_type);
       ast->accept_synthesis(this);
       return;

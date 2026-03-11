@@ -180,9 +180,8 @@ public:
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);
 
-  // VarDef array checking helper
-  bool check_array_literal_against_annotation(VarDefAST *ast,
-                                              ArrayLiteralExprAST *arr_lit,
+  // Array literal type checking helper — returns true if errors were found
+  bool check_array_literal_against_annotation(ArrayLiteralExprAST *arr_lit,
                                               const ArrayType &arr_type);
 
   // Kernel intrinsic synthesis helpers

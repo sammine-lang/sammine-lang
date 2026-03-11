@@ -742,16 +742,28 @@ void Compiler::optimize() {
     auto post_path = std::filesystem::temp_directory_path() / "sammine_post.ll";
     {
       std::ofstream pre_file(pre_path);
+      if (!pre_file.is_open()) {
+        llvm::errs() << "Could not open file for writing: " << pre_path << "\n";
+        return;
+      }
       pre_file << pre_ir;
     }
     {
       std::ofstream post_file(post_path);
+      if (!post_file.is_open()) {
+        llvm::errs() << "Could not open file for writing: " << post_path << "\n";
+        return;
+      }
       post_file << post_ir;
     }
 
     std::string diff_cmd = fmt::format("diff --color -u {} {} 1>&2",
                                        pre_path.string(), post_path.string());
-    std::system(diff_cmd.c_str());
+    int diff_ret = std::system(diff_cmd.c_str());
+    if (diff_ret != 0 && diff_ret != 1) {
+      // diff returns 1 when files differ (expected), >1 on error
+      llvm::errs() << "diff command failed with exit code: " << diff_ret << "\n";
+    }
 
     std::filesystem::remove(pre_path);
     std::filesystem::remove(post_path);
@@ -780,14 +792,16 @@ void Compiler::emit_object() {
   std::string obj_file = output_path(stem + ".o");
   llvm::raw_fd_ostream dest(llvm::raw_fd_ostream(obj_file, resPtr->EC));
   if (resPtr->EC) {
-    llvm::errs() << "Could not open file: " << resPtr->EC.message();
+    llvm::errs() << "Could not open file: " << resPtr->EC.message() << "\n";
+    set_error();
     return;
   }
   auto FileType = llvm::CodeGenFileType::ObjectFile;
 
   if (resPtr->target_machine->addPassesToEmitFile(resPtr->pass, dest, nullptr,
                                                   FileType)) {
-    llvm::errs() << "TargetMachine can't emit a file of this type";
+    llvm::errs() << "TargetMachine can't emit a file of this type\n";
+    set_error();
     return;
   }
 
