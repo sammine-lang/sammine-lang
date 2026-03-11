@@ -25,11 +25,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(fmt)
 
 FetchContent_Declare(
-    argparse
-    GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+    CLI11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG        v2.4.2
     SYSTEM
 )
-FetchContent_MakeAvailable(argparse)
+FetchContent_MakeAvailable(CLI11)
 
 # Restore main project build type
 # set(CMAKE_BUILD_TYPE "${MAIN_PROJECT_BUILD_TYPE}" CACHE STRING "Restore main project build type" FORCE)

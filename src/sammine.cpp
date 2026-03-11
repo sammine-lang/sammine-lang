@@ -5,14 +5,10 @@
 //! \brief The main file to produce an executable that is the sammine compiler
 
 #include "compiler/Compiler.h"
-#include "fmt/color.h"
-#include "util/Utilities.h"
-#include <argparse/argparse.hpp>
+#include <CLI/CLI.hpp>
 #include <cpptrace/cpptrace.hpp>
 #include <csignal>
 #include <cstdlib>
-using sammine_lang::compiler_option_enum;
-
 void handler(int sig) {
   // print out all the frames to stderr
   fprintf(stderr,
@@ -23,128 +19,89 @@ void handler(int sig) {
   cpptrace::generate_trace().print_with_snippets();
   exit(1);
 }
-using namespace sammine_lang;
+using sammine_lang::compiler_option_enum;
+namespace co = sammine_lang; // short alias for enum access
+
 int main(int argc, char *argv[]) {
   signal(SIGSEGV, handler);
-  argparse::ArgumentParser program("sammine");
+  CLI::App app{"sammine"};
 
   std::map<compiler_option_enum, std::string> compiler_options;
 
-  auto &gi = program.add_mutually_exclusive_group(true);
-  gi.add_argument("-f", "--file")
-      .help("An input file for compiler to scan over.");
-  gi.add_argument("-s", "--str")
-      .help("An input string for compiler to scan over.");
+  std::string file_arg, str_arg;
+  auto *input_group = app.add_option_group("Input");
+  input_group->add_option("-f,--file", file_arg,
+                          "An input file for compiler to scan over.");
+  input_group->add_option("-s,--str", str_arg,
+                          "An input string for compiler to scan over.");
+  input_group->require_option(1); // exactly one of -f or -s
 
-  program.add_argument("--check")
-      .help("Performs compiler check only, no codegen")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"));
+  bool check = false;
+  app.add_flag("--check", check, "Performs compiler check only, no codegen");
 
-  auto &g_diag = program.add_group("Diagnostics related options");
-  g_diag.add_argument("", "--llvm-ir")
-      .default_value(std::string("false"))
-      .nargs(1)
-      .help("Emit LLVM IR. Required value: pre, post, or diff");
-  g_diag.add_argument("", "--mlir-ir")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("Dump MLIR before lowering to LLVM IR");
-  g_diag.add_argument("", "--ast-ir")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("true"))
-      .help("sammine compiler spits out the internal AST to stdout");
-  g_diag.add_argument("", "--diagnostics")
-      .default_value(std::string("none"))
-      .help("sammine compiler spits out diagnostics for "
-            "sammine-lang developers. Use "
-            "with value for logging: --diagnostics=stages;lexer;parser. "
-            "Use 'dev' to show compiler source locations in error messages. "
-            "Default value is none");
-  g_diag.add_argument("", "--time")
-      .default_value(std::string("false"))
-      .implicit_value(std::string("simple"))
-      .nargs(0, 1)
-      .help("Print compilation timing. Also accepts: sparse (per-phase table), "
-            "coarse (per-phase + all LLVM passes)");
+  std::string llvm_ir;
+  app.add_option("--llvm-ir", llvm_ir,
+                 "Emit LLVM IR. Required value: pre, post, or diff")
+      ->check(CLI::IsMember({"pre", "post", "diff"}));
 
-  program.add_argument("-O")
-      .default_value(std::string(""))
-      .help("Output directory for build artifacts (.so, .a, .exe). Defaults to current directory.");
+  bool mlir_ir = false;
+  app.add_flag("--mlir-ir", mlir_ir, "Dump MLIR before lowering to LLVM IR");
 
-  program.add_argument("-I")
-      .default_value(std::vector<std::string>{})
-      .append()
-      .help("Add directory to import search path (repeatable).");
+  bool ast_ir = false;
+  app.add_flag("--ast-ir", ast_ir,
+               "sammine compiler spits out the internal AST to stdout");
 
-  program.add_argument("--lib")
-      .default_value(std::string(""))
-      .implicit_value(std::string("shared"))
-      .nargs(0, 1)
-      .help("Emit library output instead of executable. Use --lib=static for "
-            "a .a archive, or --lib (no value) for a .so shared library.");
+  std::string diagnostics = "none";
+  app.add_option("--diagnostics", diagnostics,
+                 "Diagnostics for sammine-lang developers. "
+                 "Values: stages;lexer;parser or 'dev' for source locations.")
+      ->expected(0, 1)
+      ->default_str("dev");
 
-  if (argc < 1) {
-    std::cerr << program;
-    return 1;
-  }
-  try {
-    program.parse_args(argc, argv); // Example: ./main -abc 1.95 2.47
-    compiler_options[compiler_option_enum::FILE] =
-        program.present("-f") ? program.get("-f") : "";
-    compiler_options[STR] = program.present("-s") ? program.get("-s") : "";
-    if (program.is_used("--llvm-ir")) {
-      auto val = program.get("--llvm-ir");
-      if (val != "pre" && val != "post" && val != "diff") {
-        fmt::print(stderr,
-                   sammine_util::styled(fmt::terminal_color::bright_red),
-                   "Error: --llvm-ir requires a value: pre, post, or diff\n");
-        std::cerr << program;
-        return 1;
-      }
-      compiler_options[LLVM_IR] = val;
-    } else {
-      compiler_options[LLVM_IR] = "false";
-    }
-    compiler_options[AST_IR] = program.get("--ast-ir");
-    compiler_options[MLIR_IR] = program.get("--mlir-ir");
-    compiler_options[DIAGNOSTIC] = program.get("--diagnostics");
-    compiler_options[CHECK] = program.get("--check");
-    if (program.is_used("--time")) {
-      auto val = program.get("--time");
-      compiler_options[TIME] = (val == "false") ? "simple" : val;
-    } else {
-      compiler_options[TIME] = "false";
-    }
-  } catch (const std::exception &err) {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
-               "Error while parsing arguments\n");
-    std::cerr << err.what() << std::endl;
-    std::cerr << program;
-    return 1;
-  }
+  std::string time_val;
+  app.add_option("--time", time_val,
+                 "Print compilation timing. Values: simple, sparse, coarse")
+      ->check(CLI::IsMember({"simple", "sparse", "coarse"}))
+      ->expected(0, 1)
+      ->default_str("simple");
 
-  compiler_options[ARGV0] = argv[0];
-  compiler_options[OUTPUT_DIR] = program.get("-O");
+  std::string output_dir;
+  app.add_option("-O", output_dir,
+                 "Output directory for build artifacts (.so, .a, .exe).");
+
+  std::vector<std::string> import_paths;
+  app.add_option("-I", import_paths,
+                 "Add directory to import search path (repeatable).");
+
+  std::string lib_format;
+  app.add_option("--lib", lib_format,
+                 "Emit library output. Values: static (.a) or shared (.so)")
+      ->check(CLI::IsMember({"static", "shared"}))
+      ->expected(0, 1)
+      ->default_str("shared");
+
+  CLI11_PARSE(app, argc, argv);
+
+  compiler_options[co::FILE] = file_arg;
+  compiler_options[co::STR] = str_arg;
+  compiler_options[co::LLVM_IR] = llvm_ir.empty() ? "false" : llvm_ir;
+  compiler_options[co::AST_IR] = ast_ir ? "true" : "false";
+  compiler_options[co::MLIR_IR] = mlir_ir ? "true" : "false";
+  compiler_options[co::DIAGNOSTIC] = diagnostics;
+  compiler_options[co::CHECK] = check ? "true" : "false";
+  compiler_options[co::TIME] = time_val.empty() ? "false" : time_val;
+  compiler_options[co::ARGV0] = argv[0];
+  compiler_options[co::OUTPUT_DIR] = output_dir;
   {
-    auto ipaths = program.get<std::vector<std::string>>("-I");
     std::string joined;
-    for (size_t i = 0; i < ipaths.size(); i++) {
+    for (size_t i = 0; i < import_paths.size(); i++) {
       if (i > 0)
         joined += ";";
-      joined += ipaths[i];
+      joined += import_paths[i];
     }
-    compiler_options[IMPORT_PATHS] = joined;
+    compiler_options[co::IMPORT_PATHS] = joined;
   }
-  {
-    auto lib_val = program.get("--lib");
-    if (!lib_val.empty() && lib_val != "static" && lib_val != "shared") {
-      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::bright_red),
-                 "Error: --lib only accepts 'static' (or no value for shared)\n");
-      std::cerr << program;
-      return 1;
-    }
-    compiler_options[LIB_FORMAT] = lib_val;
-  }
-  return CompilerRunner::run(compiler_options);
+  compiler_options[co::LIB_FORMAT] = lib_format;
+
+  return sammine_lang::CompilerRunner::run(compiler_options);
 }
