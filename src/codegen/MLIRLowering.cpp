@@ -134,10 +134,14 @@ lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule, mlir::ModuleOp kernelModule,
 
   // Annotate all functions with nounwind (sammine has no exceptions).
   // Mark malloc's return as noalias.
+  // Kernel wrappers are noinline to preserve LICM: LLVM can hoist the
+  // call out of loops when the ptr args point to loop-invariant data.
   for (auto &F : *llvmModule) {
     F.addFnAttr(llvm::Attribute::NoUnwind);
     if (F.getName() == "malloc")
       F.addRetAttr(llvm::Attribute::NoAlias);
+    if (llvmModule->getFunction(("__kernel_" + F.getName()).str()))
+      F.addFnAttr(llvm::Attribute::NoInline);
   }
 
   return llvmModule;

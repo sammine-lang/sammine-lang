@@ -394,18 +394,7 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
 
   auto location = loc(ast);
 
-  // Emit arguments — array args arrive as !llvm.ptr (alloca), load to get value
-  llvm::SmallVector<mlir::Value, 4> operands;
-  for (auto &arg : ast->arguments) {
-    auto val = emitRValue(arg.get());
-    if (val) {
-      operands.push_back(val);
-    }
-  }
-
-  // Resolve callee name — use the qualified name directly, matching
-  // the LLVM backend. Names already include module prefixes where needed
-  // (e.g. "math$add" for imports, "wrapper" for local calls).
+  // Resolve callee name first — needed to detect kernel wrappers.
   std::string callee;
   if (cp && cp->resolved_name.has_value())
     callee = cp->resolved_name->mangled();
@@ -416,6 +405,26 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   if (!theModule.lookupSymbol(callee)) {
     if (theModule.lookupSymbol(ast->functionName.get_name()))
       callee = ast->functionName.get_name();
+  }
+
+  // Check if callee is a kernel wrapper (takes arrays by ptr, not by value)
+  bool isKernelWrapper = false;
+  if (auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(callee))
+    isKernelWrapper = funcOp->hasAttr("sammine.kernel_wrapper");
+
+  // Emit arguments — kernel wrappers take array args as !llvm.ptr (no copy),
+  // normal functions take arrays by value via emitRValue (loads from alloca).
+  llvm::SmallVector<mlir::Value, 4> operands;
+  for (auto &arg : ast->arguments) {
+    if (isKernelWrapper && arg->get_type().type_kind == TypeKind::Array) {
+      auto val = emitExpr(arg.get()); // returns !llvm.ptr directly
+      if (val)
+        operands.push_back(val);
+    } else {
+      auto val = emitRValue(arg.get());
+      if (val)
+        operands.push_back(val);
+    }
   }
 
   // Path 1: Direct call (not partial) — callee found in module

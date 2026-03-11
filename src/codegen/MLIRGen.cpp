@@ -121,7 +121,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         // The wrapper calls __kernel_ with memref types; this declaration
         // ensures func.call resolves during verification. Replaced during
         // merge with the actual bufferized definition.
-        auto memrefFuncType = buildKernelMemrefFuncType(kd->Prototype.get());
+        auto memrefFuncType = buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
         if (!theModule.lookupSymbol(internalName)) {
           auto funcOp = mlir::func::FuncOp::create(
               builder.getUnknownLoc(), internalName, memrefFuncType);
@@ -129,15 +129,38 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
           theModule.push_back(funcOp);
         }
 
-        // 3. Forward-declare public wrapper in CPU module (CPU ABI)
-        auto wrapperFuncType = buildFuncType(kd->Prototype.get());
-        if (!theModule.lookupSymbol(publicName)) {
-          auto funcOp = mlir::func::FuncOp::create(
-              builder.getUnknownLoc(), publicName, wrapperFuncType);
-          funcOp.setVisibility(moduleName.empty()
-                                   ? mlir::SymbolTable::Visibility::Private
-                                   : mlir::SymbolTable::Visibility::Public);
-          theModule.push_back(funcOp);
+        // 3. Forward-declare public wrapper in CPU module (CPU ABI).
+        // Array params use !llvm.ptr (pass-by-reference) to avoid copying
+        // large arrays by value through the wrapper.
+        {
+          llvm::SmallVector<mlir::Type, 4> wrapperArgTypes;
+          for (auto &param : kd->Prototype->parameterVectors) {
+            if (param->get_type().type_kind == TypeKind::Array)
+              wrapperArgTypes.push_back(llvmPtrTy());
+            else
+              wrapperArgTypes.push_back(convertType(param->get_type()));
+          }
+          llvm::SmallVector<mlir::Type, 1> wrapperRetTypes;
+          auto protoFT = std::get<FunctionType>(
+              kd->Prototype->get_type().type_data);
+          auto retSamType = protoFT.get_return_type();
+          if (retSamType.type_kind == TypeKind::Array) {
+            wrapperArgTypes.push_back(llvmPtrTy()); // sret
+          } else if (retSamType.type_kind != TypeKind::Unit) {
+            wrapperRetTypes.push_back(convertType(retSamType));
+          }
+          auto wrapperFuncType =
+              builder.getFunctionType(wrapperArgTypes, wrapperRetTypes);
+          if (!theModule.lookupSymbol(publicName)) {
+            auto funcOp = mlir::func::FuncOp::create(
+                builder.getUnknownLoc(), publicName, wrapperFuncType);
+            funcOp.setVisibility(moduleName.empty()
+                                     ? mlir::SymbolTable::Visibility::Private
+                                     : mlir::SymbolTable::Visibility::Public);
+            funcOp->setAttr("sammine.kernel_wrapper",
+                            builder.getUnitAttr());
+            theModule.push_back(funcOp);
+          }
         }
       }
     }
@@ -338,16 +361,18 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
 
 // ===--- Kernel type conversion ---===
 
-mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
+mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type, bool asMemref) {
   switch (type.type_kind) {
   case TypeKind::Array: {
     auto &arr = std::get<ArrayType>(type.type_data);
     auto elemSamType = arr.get_element();
     if (elemSamType.type_kind == TypeKind::Array)
       imm_error("Nested arrays not yet supported in kernel context");
-    auto elemType = convertTypeForKernel(elemSamType);
-    return mlir::RankedTensorType::get(
-        {static_cast<int64_t>(arr.get_size())}, elemType);
+    auto elemType = convertTypeForKernel(elemSamType, false);
+    auto size = static_cast<int64_t>(arr.get_size());
+    if (asMemref)
+      return mlir::MemRefType::get({size}, elemType);
+    return mlir::RankedTensorType::get({size}, elemType);
   }
   case TypeKind::I32_t:
   case TypeKind::Integer:
@@ -382,52 +407,21 @@ mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type) {
   }
 }
 
-mlir::Type MLIRGenImpl::convertTypeForKernelMemref(const Type &type) {
-  if (type.type_kind == TypeKind::Array) {
-    auto arrType = std::get<ArrayType>(type.type_data);
-    auto elemType = convertTypeForKernel(arrType.get_element());
-    auto size = static_cast<int64_t>(arrType.get_size());
-    return mlir::MemRefType::get({size}, elemType);
-  }
-  return convertTypeForKernel(type);
-}
-
-mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto) {
-  llvm::SmallVector<mlir::Type, 4> argTypes;
-  for (auto &param : proto->parameterVectors)
-    argTypes.push_back(convertTypeForKernel(param->get_type()));
-
-  llvm::SmallVector<mlir::Type, 1> retTypes;
-  if (proto->get_type().type_kind == TypeKind::Function) {
-    auto ft = std::get<FunctionType>(proto->get_type().type_data);
-    auto retType = ft.get_return_type();
-    if (retType.type_kind != TypeKind::Unit) {
-      auto mlirRetType = convertTypeForKernel(retType);
-      retTypes.push_back(mlirRetType);
-      // DPS: array-returning kernels take the output tensor as an extra
-      // parameter. The caller provides it, so __kernel_ doesn't allocate.
-      // GPU-forward-compatible: kernels never allocate internally.
-      if (retType.type_kind == TypeKind::Array)
-        argTypes.push_back(mlirRetType);
-    }
-  }
-
-  return builder.getFunctionType(argTypes, retTypes);
-}
-
 mlir::FunctionType
-MLIRGenImpl::buildKernelMemrefFuncType(AST::PrototypeAST *proto) {
+MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto, bool asMemref) {
   llvm::SmallVector<mlir::Type, 4> argTypes;
   for (auto &param : proto->parameterVectors)
-    argTypes.push_back(convertTypeForKernelMemref(param->get_type()));
+    argTypes.push_back(convertTypeForKernel(param->get_type(), asMemref));
 
   llvm::SmallVector<mlir::Type, 1> retTypes;
   if (proto->get_type().type_kind == TypeKind::Function) {
     auto ft = std::get<FunctionType>(proto->get_type().type_data);
     auto retType = ft.get_return_type();
     if (retType.type_kind != TypeKind::Unit) {
-      auto mlirRetType = convertTypeForKernelMemref(retType);
+      auto mlirRetType = convertTypeForKernel(retType, asMemref);
       retTypes.push_back(mlirRetType);
+      // DPS: array-returning kernels take the output as an extra parameter.
+      // The caller provides it, so __kernel_ doesn't allocate.
       if (retType.type_kind == TypeKind::Array)
         argTypes.push_back(mlirRetType);
     }
@@ -741,16 +735,9 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
       auto elemSamType = arrType.get_element();
       auto elemMLIRType = convertTypeForKernel(elemSamType);
 
-      // Store !llvm.array to stack → get pointer (O(1) IR, one bulk store)
-      auto one = mlir::arith::ConstantIntOp::create(builder, location,
-                                                      builder.getI64Type(), 1);
-      auto stackPtr = mlir::LLVM::AllocaOp::create(
-          builder, location, llvmPtrTy(), blockArg.getType(), one);
-      mlir::LLVM::StoreOp::create(builder, location, blockArg, stackPtr);
-
-      // Wrap pointer as memref — passed directly to __kernel_ (no tensor)
+      // blockArg is already !llvm.ptr (pass-by-reference) — wrap directly
       auto inputMemref =
-          buildMemrefFromPtr(stackPtr, arrSize, elemMLIRType, location);
+          buildMemrefFromPtr(blockArg, arrSize, elemMLIRType, location);
       kernelArgs.push_back(inputMemref);
     } else {
       kernelArgs.push_back(blockArg);
@@ -774,7 +761,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   }
 
   // === Call the internal kernel function (memref types) ===
-  auto memrefFuncType = buildKernelMemrefFuncType(kd->Prototype.get());
+  auto memrefFuncType = buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
   auto callOp = mlir::func::CallOp::create(
       builder, location, internalName,
       memrefFuncType.getResults(), kernelArgs);
