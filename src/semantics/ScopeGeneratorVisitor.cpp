@@ -174,9 +174,6 @@ void ScopeGeneratorVisitor::qualify_type_expr(TypeExprAST *expr) {
       qualify_type_expr(elem.get());
   }
 }
-void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(TypeAliasDefAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
   auto var_name = ast->functionName.mangled();
@@ -208,57 +205,17 @@ void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {
     }
   }
 }
-void ScopeGeneratorVisitor::preorder_walk(ReturnExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(BinaryExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(NumberExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(StringExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(BoolExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(CharExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(VariableExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(BlockAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(IfExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(UnitExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(TypedVarAST *ast) {
   if (ctx().in_imported_def && ast->type_expr) {
     qualify_type_expr(ast->type_expr.get());
   }
 }
-void ScopeGeneratorVisitor::preorder_walk(DerefExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(AddrOfExprAST *ast) {}
 void ScopeGeneratorVisitor::preorder_walk(AllocExprAST *ast) {
   if (ctx().in_imported_def && ast->type_arg) {
     qualify_type_expr(ast->type_arg.get());
   }
 }
-void ScopeGeneratorVisitor::preorder_walk(FreeExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(RangeExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(IndexExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(LenExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(DimExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(UnaryNegExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(StructLiteralExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(FieldAccessExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(CaseExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(WhileExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(TypeClassDeclAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(TypeClassInstanceAST *ast) {}
-void ScopeGeneratorVisitor::preorder_walk(KernelDefAST *ast) {}
-
 // post order
-void ScopeGeneratorVisitor::postorder_walk(ProgramAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(VarDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(ExternAST *ast) {
-  // Import context cleanup handled by exit_new_scope() popping ASTContext
-}
-void ScopeGeneratorVisitor::postorder_walk(FuncDefAST *ast) {
-  // Import context cleanup handled by exit_new_scope() popping ASTContext
-}
-void ScopeGeneratorVisitor::postorder_walk(StructDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(EnumDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(TypeAliasDefAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(PrototypeAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   // Qualify call names with explicit type args in imported generic bodies
   // (must run BEFORE the early return below)
@@ -327,12 +284,6 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   }
 }
 
-void ScopeGeneratorVisitor::postorder_walk(ReturnExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(BinaryExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(NumberExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(StringExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(BoolExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(CharExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
 
   auto var_name = ast->variableName;
@@ -372,20 +323,6 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
                           var_name));
   }
 }
-void ScopeGeneratorVisitor::postorder_walk(BlockAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(IfExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(UnitExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(TypedVarAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(DerefExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(AddrOfExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(AllocExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(FreeExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(RangeExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(IndexExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(LenExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(DimExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
   // Qualify struct names in imported generic function bodies
   if (ctx().in_imported_def && !ast->struct_name.is_qualified()) {
@@ -396,11 +333,4 @@ void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
     }
   }
 }
-void ScopeGeneratorVisitor::postorder_walk(FieldAccessExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(CaseExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(WhileExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(TypeClassDeclAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
-void ScopeGeneratorVisitor::postorder_walk(KernelDefAST *ast) {}
 } // namespace sammine_lang::AST

@@ -108,156 +108,156 @@ public:
   abort(const std::string &msg = "<NO MESSAGE>") override final;
 
   virtual void visit(ProgramAST *ast);
-  virtual void preorder_walk(ProgramAST *ast) = 0;
-  virtual void postorder_walk(ProgramAST *ast) = 0;
+  virtual void preorder_walk(ProgramAST *ast) {}
+  virtual void postorder_walk(ProgramAST *ast) {}
 
   virtual void visit(VarDefAST *ast);
-  virtual void preorder_walk(VarDefAST *ast) = 0;
-  virtual void postorder_walk(VarDefAST *ast) = 0;
+  virtual void preorder_walk(VarDefAST *ast) {}
+  virtual void postorder_walk(VarDefAST *ast) {}
 
   virtual void visit(ExternAST *ast);
-  virtual void preorder_walk(ExternAST *ast) = 0;
-  virtual void postorder_walk(ExternAST *ast) = 0;
+  virtual void preorder_walk(ExternAST *ast) {}
+  virtual void postorder_walk(ExternAST *ast) {}
 
   virtual void visit(FuncDefAST *ast);
-  virtual void preorder_walk(FuncDefAST *ast) = 0;
-  virtual void postorder_walk(FuncDefAST *ast) = 0;
+  virtual void preorder_walk(FuncDefAST *ast) {}
+  virtual void postorder_walk(FuncDefAST *ast) {}
 
   virtual void visit(StructDefAST *ast);
-  virtual void preorder_walk(StructDefAST *ast) = 0;
-  virtual void postorder_walk(StructDefAST *ast) = 0;
+  virtual void preorder_walk(StructDefAST *ast) {}
+  virtual void postorder_walk(StructDefAST *ast) {}
 
   virtual void visit(EnumDefAST *ast);
-  virtual void preorder_walk(EnumDefAST *ast) = 0;
-  virtual void postorder_walk(EnumDefAST *ast) = 0;
+  virtual void preorder_walk(EnumDefAST *ast) {}
+  virtual void postorder_walk(EnumDefAST *ast) {}
 
   virtual void visit(TypeAliasDefAST *ast);
-  virtual void preorder_walk(TypeAliasDefAST *ast) = 0;
-  virtual void postorder_walk(TypeAliasDefAST *ast) = 0;
+  virtual void preorder_walk(TypeAliasDefAST *ast) {}
+  virtual void postorder_walk(TypeAliasDefAST *ast) {}
 
   virtual void visit(PrototypeAST *ast);
-  virtual void preorder_walk(PrototypeAST *ast) = 0;
-  virtual void postorder_walk(PrototypeAST *ast) = 0;
+  virtual void preorder_walk(PrototypeAST *ast) {}
+  virtual void postorder_walk(PrototypeAST *ast) {}
 
   virtual void visit(CallExprAST *ast);
-  virtual void preorder_walk(CallExprAST *ast) = 0;
-  virtual void postorder_walk(CallExprAST *ast) = 0;
+  virtual void preorder_walk(CallExprAST *ast) {}
+  virtual void postorder_walk(CallExprAST *ast) {}
 
   virtual void visit(ReturnExprAST *ast);
-  virtual void preorder_walk(ReturnExprAST *ast) = 0;
-  virtual void postorder_walk(ReturnExprAST *ast) = 0;
+  virtual void preorder_walk(ReturnExprAST *ast) {}
+  virtual void postorder_walk(ReturnExprAST *ast) {}
 
   virtual void visit(BinaryExprAST *ast);
-  virtual void preorder_walk(BinaryExprAST *ast) = 0;
-  virtual void postorder_walk(BinaryExprAST *ast) = 0;
+  virtual void preorder_walk(BinaryExprAST *ast) {}
+  virtual void postorder_walk(BinaryExprAST *ast) {}
 
   virtual void visit(NumberExprAST *ast);
-  virtual void preorder_walk(NumberExprAST *ast) = 0;
-  virtual void postorder_walk(NumberExprAST *ast) = 0;
+  virtual void preorder_walk(NumberExprAST *ast) {}
+  virtual void postorder_walk(NumberExprAST *ast) {}
 
   virtual void visit(StringExprAST *ast);
-  virtual void preorder_walk(StringExprAST *ast) = 0;
-  virtual void postorder_walk(StringExprAST *ast) = 0;
+  virtual void preorder_walk(StringExprAST *ast) {}
+  virtual void postorder_walk(StringExprAST *ast) {}
 
   virtual void visit(BoolExprAST *ast);
-  virtual void preorder_walk(BoolExprAST *ast) = 0;
-  virtual void postorder_walk(BoolExprAST *ast) = 0;
+  virtual void preorder_walk(BoolExprAST *ast) {}
+  virtual void postorder_walk(BoolExprAST *ast) {}
 
   virtual void visit(CharExprAST *ast);
-  virtual void preorder_walk(CharExprAST *ast) = 0;
-  virtual void postorder_walk(CharExprAST *ast) = 0;
+  virtual void preorder_walk(CharExprAST *ast) {}
+  virtual void postorder_walk(CharExprAST *ast) {}
 
   virtual void visit(UnitExprAST *ast);
-  virtual void preorder_walk(UnitExprAST *ast) = 0;
-  virtual void postorder_walk(UnitExprAST *ast) = 0;
+  virtual void preorder_walk(UnitExprAST *ast) {}
+  virtual void postorder_walk(UnitExprAST *ast) {}
 
   virtual void visit(VariableExprAST *ast);
-  virtual void preorder_walk(VariableExprAST *ast) = 0;
-  virtual void postorder_walk(VariableExprAST *ast) = 0;
+  virtual void preorder_walk(VariableExprAST *ast) {}
+  virtual void postorder_walk(VariableExprAST *ast) {}
 
   virtual void visit(BlockAST *ast);
-  virtual void preorder_walk(BlockAST *ast) = 0;
-  virtual void postorder_walk(BlockAST *ast) = 0;
+  virtual void preorder_walk(BlockAST *ast) {}
+  virtual void postorder_walk(BlockAST *ast) {}
 
   virtual void visit(IfExprAST *ast);
-  virtual void preorder_walk(IfExprAST *ast) = 0;
-  virtual void postorder_walk(IfExprAST *ast) = 0;
+  virtual void preorder_walk(IfExprAST *ast) {}
+  virtual void postorder_walk(IfExprAST *ast) {}
 
   virtual void visit(TypedVarAST *ast);
-  virtual void preorder_walk(TypedVarAST *ast) = 0;
-  virtual void postorder_walk(TypedVarAST *ast) = 0;
+  virtual void preorder_walk(TypedVarAST *ast) {}
+  virtual void postorder_walk(TypedVarAST *ast) {}
 
   virtual void visit(DerefExprAST *ast);
-  virtual void preorder_walk(DerefExprAST *ast) = 0;
-  virtual void postorder_walk(DerefExprAST *ast) = 0;
+  virtual void preorder_walk(DerefExprAST *ast) {}
+  virtual void postorder_walk(DerefExprAST *ast) {}
 
   virtual void visit(AddrOfExprAST *ast);
-  virtual void preorder_walk(AddrOfExprAST *ast) = 0;
-  virtual void postorder_walk(AddrOfExprAST *ast) = 0;
+  virtual void preorder_walk(AddrOfExprAST *ast) {}
+  virtual void postorder_walk(AddrOfExprAST *ast) {}
 
   virtual void visit(AllocExprAST *ast);
-  virtual void preorder_walk(AllocExprAST *ast) = 0;
-  virtual void postorder_walk(AllocExprAST *ast) = 0;
+  virtual void preorder_walk(AllocExprAST *ast) {}
+  virtual void postorder_walk(AllocExprAST *ast) {}
 
   virtual void visit(FreeExprAST *ast);
-  virtual void preorder_walk(FreeExprAST *ast) = 0;
-  virtual void postorder_walk(FreeExprAST *ast) = 0;
+  virtual void preorder_walk(FreeExprAST *ast) {}
+  virtual void postorder_walk(FreeExprAST *ast) {}
 
   virtual void visit(ArrayLiteralExprAST *ast);
-  virtual void preorder_walk(ArrayLiteralExprAST *ast) = 0;
-  virtual void postorder_walk(ArrayLiteralExprAST *ast) = 0;
+  virtual void preorder_walk(ArrayLiteralExprAST *ast) {}
+  virtual void postorder_walk(ArrayLiteralExprAST *ast) {}
 
   virtual void visit(RangeExprAST *ast);
-  virtual void preorder_walk(RangeExprAST *ast) = 0;
-  virtual void postorder_walk(RangeExprAST *ast) = 0;
+  virtual void preorder_walk(RangeExprAST *ast) {}
+  virtual void postorder_walk(RangeExprAST *ast) {}
 
   virtual void visit(IndexExprAST *ast);
-  virtual void preorder_walk(IndexExprAST *ast) = 0;
-  virtual void postorder_walk(IndexExprAST *ast) = 0;
+  virtual void preorder_walk(IndexExprAST *ast) {}
+  virtual void postorder_walk(IndexExprAST *ast) {}
 
   virtual void visit(LenExprAST *ast);
-  virtual void preorder_walk(LenExprAST *ast) = 0;
-  virtual void postorder_walk(LenExprAST *ast) = 0;
+  virtual void preorder_walk(LenExprAST *ast) {}
+  virtual void postorder_walk(LenExprAST *ast) {}
 
   virtual void visit(DimExprAST *ast);
-  virtual void preorder_walk(DimExprAST *ast) = 0;
-  virtual void postorder_walk(DimExprAST *ast) = 0;
+  virtual void preorder_walk(DimExprAST *ast) {}
+  virtual void postorder_walk(DimExprAST *ast) {}
 
   virtual void visit(UnaryNegExprAST *ast);
-  virtual void preorder_walk(UnaryNegExprAST *ast) = 0;
-  virtual void postorder_walk(UnaryNegExprAST *ast) = 0;
+  virtual void preorder_walk(UnaryNegExprAST *ast) {}
+  virtual void postorder_walk(UnaryNegExprAST *ast) {}
 
   virtual void visit(StructLiteralExprAST *ast);
-  virtual void preorder_walk(StructLiteralExprAST *ast) = 0;
-  virtual void postorder_walk(StructLiteralExprAST *ast) = 0;
+  virtual void preorder_walk(StructLiteralExprAST *ast) {}
+  virtual void postorder_walk(StructLiteralExprAST *ast) {}
 
   virtual void visit(FieldAccessExprAST *ast);
-  virtual void preorder_walk(FieldAccessExprAST *ast) = 0;
-  virtual void postorder_walk(FieldAccessExprAST *ast) = 0;
+  virtual void preorder_walk(FieldAccessExprAST *ast) {}
+  virtual void postorder_walk(FieldAccessExprAST *ast) {}
 
   virtual void visit(CaseExprAST *ast);
-  virtual void preorder_walk(CaseExprAST *ast) = 0;
-  virtual void postorder_walk(CaseExprAST *ast) = 0;
+  virtual void preorder_walk(CaseExprAST *ast) {}
+  virtual void postorder_walk(CaseExprAST *ast) {}
 
   virtual void visit(WhileExprAST *ast);
-  virtual void preorder_walk(WhileExprAST *ast) = 0;
-  virtual void postorder_walk(WhileExprAST *ast) = 0;
+  virtual void preorder_walk(WhileExprAST *ast) {}
+  virtual void postorder_walk(WhileExprAST *ast) {}
 
   virtual void visit(TupleLiteralExprAST *ast);
-  virtual void preorder_walk(TupleLiteralExprAST *ast) = 0;
-  virtual void postorder_walk(TupleLiteralExprAST *ast) = 0;
+  virtual void preorder_walk(TupleLiteralExprAST *ast) {}
+  virtual void postorder_walk(TupleLiteralExprAST *ast) {}
 
   virtual void visit(TypeClassDeclAST *ast);
-  virtual void preorder_walk(TypeClassDeclAST *ast) = 0;
-  virtual void postorder_walk(TypeClassDeclAST *ast) = 0;
+  virtual void preorder_walk(TypeClassDeclAST *ast) {}
+  virtual void postorder_walk(TypeClassDeclAST *ast) {}
 
   virtual void visit(TypeClassInstanceAST *ast);
-  virtual void preorder_walk(TypeClassInstanceAST *ast) = 0;
-  virtual void postorder_walk(TypeClassInstanceAST *ast) = 0;
+  virtual void preorder_walk(TypeClassInstanceAST *ast) {}
+  virtual void postorder_walk(TypeClassInstanceAST *ast) {}
 
   virtual void visit(KernelDefAST *ast);
-  virtual void preorder_walk(KernelDefAST *ast) = 0;
-  virtual void postorder_walk(KernelDefAST *ast) = 0;
+  virtual void preorder_walk(KernelDefAST *ast) {}
+  virtual void postorder_walk(KernelDefAST *ast) {}
 
   virtual ~ASTVisitor() = 0;
 };

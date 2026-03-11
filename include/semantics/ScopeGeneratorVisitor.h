@@ -48,14 +48,6 @@ public:
   void register_name(const std::string &symbol, sammine_util::Location loc) {
     return this->scope_stack.registerNameT(symbol, loc);
   }
-  // pre order
-
-  // INFO: Nothing here
-  virtual void preorder_walk(ProgramAST *ast) override;
-
-  // INFO: CheckAndReg variable name
-  virtual void preorder_walk(VarDefAST *ast) override;
-
   // Case expressions: arm bodies contain pattern bindings not known at scope-gen time
   virtual void visit(CaseExprAST *ast) override {
     ast->scrutinee->accept_vis(this);
@@ -65,91 +57,22 @@ public:
   virtual void visit(TypeClassDeclAST *ast) override {}
   virtual void visit(TypeClassInstanceAST *ast) override {}
 
-  // INFO: CheckAndReg extern name — uses enter/exit_new_scope for ASTContext
   virtual void visit(ExternAST *ast) override;
+
+  // pre order — only non-empty overrides
+  virtual void preorder_walk(ProgramAST *ast) override;
+  virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
-  // INFO: CheckAndReg function name, enter new block
   virtual void preorder_walk(FuncDefAST *ast) override;
-  virtual void preorder_walk(StructDefAST *ast) override;
-  virtual void preorder_walk(EnumDefAST *ast) override;
-  virtual void preorder_walk(TypeAliasDefAST *ast) override;
-  // INFO: CheckAndReg all variable name, which should only clash if you have
-  // the same names in prototype
   virtual void preorder_walk(PrototypeAST *ast) override;
-  // INFO: Check
   virtual void preorder_walk(CallExprAST *ast) override;
-  virtual void preorder_walk(ReturnExprAST *ast) override;
-  virtual void preorder_walk(BinaryExprAST *ast) override;
-  virtual void preorder_walk(NumberExprAST *ast) override;
-  virtual void preorder_walk(StringExprAST *ast) override;
-  virtual void preorder_walk(BoolExprAST *ast) override;
-  virtual void preorder_walk(CharExprAST *ast) override;
-
-  // INFO: Check
-  virtual void preorder_walk(VariableExprAST *ast) override;
-  virtual void preorder_walk(BlockAST *ast) override;
-  virtual void preorder_walk(IfExprAST *ast) override;
-  virtual void preorder_walk(UnitExprAST *ast) override;
   virtual void preorder_walk(TypedVarAST *ast) override;
-  virtual void preorder_walk(DerefExprAST *ast) override;
-  virtual void preorder_walk(AddrOfExprAST *ast) override;
   virtual void preorder_walk(AllocExprAST *ast) override;
-  virtual void preorder_walk(FreeExprAST *ast) override;
-  virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
-  virtual void preorder_walk(RangeExprAST *ast) override;
-  virtual void preorder_walk(IndexExprAST *ast) override;
-  virtual void preorder_walk(LenExprAST *ast) override;
-  virtual void preorder_walk(DimExprAST *ast) override;
-  virtual void preorder_walk(UnaryNegExprAST *ast) override;
-  virtual void preorder_walk(StructLiteralExprAST *ast) override;
-  virtual void preorder_walk(FieldAccessExprAST *ast) override;
-  virtual void preorder_walk(CaseExprAST *ast) override;
-  virtual void preorder_walk(WhileExprAST *ast) override;
-  virtual void preorder_walk(TupleLiteralExprAST *ast) override;
-  virtual void preorder_walk(TypeClassDeclAST *ast) override;
-  virtual void preorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void preorder_walk(KernelDefAST *ast) override;
 
-  // post order
-  virtual void postorder_walk(ProgramAST *ast) override;
-  virtual void postorder_walk(VarDefAST *ast) override;
-  virtual void postorder_walk(ExternAST *ast) override;
-  // INFO: Pop the scope
-  virtual void postorder_walk(FuncDefAST *ast) override;
-  virtual void postorder_walk(StructDefAST *ast) override;
-  virtual void postorder_walk(EnumDefAST *ast) override;
-  virtual void postorder_walk(TypeAliasDefAST *ast) override;
-  virtual void postorder_walk(PrototypeAST *ast) override;
+  // post order — only non-empty overrides
   virtual void postorder_walk(CallExprAST *ast) override;
-  virtual void postorder_walk(ReturnExprAST *ast) override;
-  virtual void postorder_walk(BinaryExprAST *ast) override;
-  virtual void postorder_walk(NumberExprAST *ast) override;
-  virtual void postorder_walk(StringExprAST *ast) override;
-  virtual void postorder_walk(BoolExprAST *ast) override;
-  virtual void postorder_walk(CharExprAST *ast) override;
   virtual void postorder_walk(VariableExprAST *ast) override;
-  virtual void postorder_walk(BlockAST *ast) override;
-  virtual void postorder_walk(IfExprAST *ast) override;
-  virtual void postorder_walk(UnitExprAST *ast) override;
-  virtual void postorder_walk(TypedVarAST *ast) override;
-  virtual void postorder_walk(DerefExprAST *ast) override;
-  virtual void postorder_walk(AddrOfExprAST *ast) override;
-  virtual void postorder_walk(AllocExprAST *ast) override;
-  virtual void postorder_walk(FreeExprAST *ast) override;
-  virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
-  virtual void postorder_walk(RangeExprAST *ast) override;
-  virtual void postorder_walk(IndexExprAST *ast) override;
-  virtual void postorder_walk(LenExprAST *ast) override;
-  virtual void postorder_walk(DimExprAST *ast) override;
-  virtual void postorder_walk(UnaryNegExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
-  virtual void postorder_walk(FieldAccessExprAST *ast) override;
-  virtual void postorder_walk(CaseExprAST *ast) override;
-  virtual void postorder_walk(WhileExprAST *ast) override;
-  virtual void postorder_walk(TupleLiteralExprAST *ast) override;
-  virtual void postorder_walk(TypeClassDeclAST *ast) override;
-  virtual void postorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void postorder_walk(KernelDefAST *ast) override;
 };
 
 } // namespace sammine_lang::AST
