@@ -43,36 +43,23 @@ public:
   }
 
   virtual void visit(ProgramAST *ast) override;
-
   virtual void visit(VarDefAST *ast) override;
-
   virtual void visit(ExternAST *ast) override;
-
   virtual void visit(FuncDefAST *ast) override;
-
   virtual void visit(StructDefAST *ast) override;
   virtual void visit(EnumDefAST *ast) override;
   virtual void visit(TypeAliasDefAST *ast) override;
-
   virtual void visit(PrototypeAST *ast) override;
-
   virtual void visit(CallExprAST *ast) override;
-
   virtual void visit(BinaryExprAST *ast) override;
-
   virtual void visit(NumberExprAST *ast) override;
   virtual void visit(StringExprAST *ast) override;
-
   virtual void visit(BoolExprAST *ast) override;
-
   virtual void visit(VariableExprAST *ast) override;
-
   virtual void visit(BlockAST *ast) override;
   virtual void visit(ReturnExprAST *ast) override;
-
   virtual void visit(IfExprAST *ast) override;
   virtual void visit(UnitExprAST *ast) override;
-
   virtual void visit(TypedVarAST *ast) override;
   virtual void visit(DerefExprAST *ast) override;
   virtual void visit(AddrOfExprAST *ast) override;
@@ -89,86 +76,6 @@ public:
   virtual void visit(CaseExprAST *ast) override;
   virtual void visit(WhileExprAST *ast) override;
   virtual void visit(TupleLiteralExprAST *ast) override;
-  // pre order
-  virtual void preorder_walk(ProgramAST *ast) override;
-  virtual void preorder_walk(VarDefAST *ast) override;
-  virtual void preorder_walk(ExternAST *ast) override;
-  virtual void preorder_walk(FuncDefAST *ast) override;
-  virtual void preorder_walk(StructDefAST *ast) override;
-  virtual void preorder_walk(EnumDefAST *ast) override;
-  virtual void preorder_walk(TypeAliasDefAST *ast) override;
-  virtual void preorder_walk(PrototypeAST *ast) override;
-  virtual void preorder_walk(CallExprAST *ast) override;
-  virtual void preorder_walk(ReturnExprAST *ast) override;
-  virtual void preorder_walk(BinaryExprAST *ast) override;
-  virtual void preorder_walk(NumberExprAST *ast) override;
-  virtual void preorder_walk(StringExprAST *ast) override;
-  virtual void preorder_walk(BoolExprAST *ast) override;
-  virtual void preorder_walk(CharExprAST *ast) override;
-  virtual void preorder_walk(VariableExprAST *ast) override;
-  virtual void preorder_walk(BlockAST *ast) override;
-  virtual void preorder_walk(IfExprAST *ast) override;
-  virtual void preorder_walk(UnitExprAST *ast) override;
-  virtual void preorder_walk(TypedVarAST *ast) override;
-  virtual void preorder_walk(DerefExprAST *ast) override;
-  virtual void preorder_walk(AddrOfExprAST *ast) override;
-  virtual void preorder_walk(AllocExprAST *ast) override;
-  virtual void preorder_walk(FreeExprAST *ast) override;
-  virtual void preorder_walk(ArrayLiteralExprAST *ast) override;
-  virtual void preorder_walk(RangeExprAST *ast) override;
-  virtual void preorder_walk(IndexExprAST *ast) override;
-  virtual void preorder_walk(LenExprAST *ast) override;
-  virtual void preorder_walk(DimExprAST *ast) override;
-  virtual void preorder_walk(UnaryNegExprAST *ast) override;
-  virtual void preorder_walk(StructLiteralExprAST *ast) override;
-  virtual void preorder_walk(FieldAccessExprAST *ast) override;
-  virtual void preorder_walk(CaseExprAST *ast) override;
-  virtual void preorder_walk(WhileExprAST *ast) override;
-  virtual void preorder_walk(TupleLiteralExprAST *ast) override;
-  virtual void preorder_walk(TypeClassDeclAST *ast) override;
-  virtual void preorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void preorder_walk(KernelDefAST *ast) override;
-
-  // post order
-  virtual void postorder_walk(ProgramAST *ast) override;
-  virtual void postorder_walk(VarDefAST *ast) override;
-  virtual void postorder_walk(ExternAST *ast) override;
-  virtual void postorder_walk(FuncDefAST *ast) override;
-  virtual void postorder_walk(StructDefAST *ast) override;
-  virtual void postorder_walk(EnumDefAST *ast) override;
-  virtual void postorder_walk(TypeAliasDefAST *ast) override;
-  virtual void postorder_walk(PrototypeAST *ast) override;
-  virtual void postorder_walk(CallExprAST *ast) override;
-  virtual void postorder_walk(ReturnExprAST *ast) override;
-  virtual void postorder_walk(BinaryExprAST *ast) override;
-  virtual void postorder_walk(NumberExprAST *ast) override;
-  virtual void postorder_walk(StringExprAST *ast) override;
-  virtual void postorder_walk(BoolExprAST *ast) override;
-  virtual void postorder_walk(CharExprAST *ast) override;
-  virtual void postorder_walk(VariableExprAST *ast) override;
-  virtual void postorder_walk(BlockAST *ast) override;
-  virtual void postorder_walk(IfExprAST *ast) override;
-  virtual void postorder_walk(UnitExprAST *ast) override;
-  virtual void postorder_walk(TypedVarAST *ast) override;
-  virtual void postorder_walk(DerefExprAST *ast) override;
-  virtual void postorder_walk(AddrOfExprAST *ast) override;
-  virtual void postorder_walk(AllocExprAST *ast) override;
-  virtual void postorder_walk(FreeExprAST *ast) override;
-  virtual void postorder_walk(ArrayLiteralExprAST *ast) override;
-  virtual void postorder_walk(RangeExprAST *ast) override;
-  virtual void postorder_walk(IndexExprAST *ast) override;
-  virtual void postorder_walk(LenExprAST *ast) override;
-  virtual void postorder_walk(DimExprAST *ast) override;
-  virtual void postorder_walk(UnaryNegExprAST *ast) override;
-  virtual void postorder_walk(StructLiteralExprAST *ast) override;
-  virtual void postorder_walk(FieldAccessExprAST *ast) override;
-  virtual void postorder_walk(CaseExprAST *ast) override;
-  virtual void postorder_walk(WhileExprAST *ast) override;
-  virtual void postorder_walk(TupleLiteralExprAST *ast) override;
-  virtual void postorder_walk(TypeClassDeclAST *ast) override;
-  virtual void postorder_walk(TypeClassInstanceAST *ast) override;
-  virtual void postorder_walk(KernelDefAST *ast) override;
-
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
   virtual void visit(KernelDefAST *ast) override;
@@ -204,17 +111,26 @@ std::string_view AstPrinterVisitor::tabs() const { return this->current_tabs; }
 
 void AstPrinterVisitor::visit(ProgramAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &def : ast->DefinitionVec) {
     safeguard_visit(def.get(), "!!nullptr!! DefinitionAST\n");
   }
-  ast->walk_with_postorder(this);
+  // Print the AST
+  fmt::print("{}", this->disclaimer);
+  while (!this->rep.empty()) {
+    auto &ch = this->rep.back();
+    if (ch == ' ' || ch == '\n') {
+      this->rep.pop_back();
+    } else {
+      break;
+    }
+  }
+  add_to_rep("\n");
+  fmt::print("{}", this->rep);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(VarDefAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   if (ast->is_tuple_destructure) {
     for (auto &v : ast->destructure_vars)
       safeguard_visit(v.get(), "!!nullptr!! TypedVarAST\n");
@@ -222,25 +138,20 @@ void AstPrinterVisitor::visit(VarDefAST *ast) {
     safeguard_visit(ast->TypedVar.get(), "!!nullptr!! TypedVarAST\n");
   }
   safeguard_visit(ast->Expression.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(ExternAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->Prototype.get(), "!!nullptr!! PrototypeAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(FuncDefAST *ast) {
   generic_preprintln(ast);
   this->enter_new_scope();
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->Prototype.get(), "!!nullptr!! PrototypeAST\n");
   safeguard_visit(ast->Block.get(), "!!nullptr!! BlockAST\n");
-  ast->walk_with_postorder(this);
   this->exit_new_scope();
   generic_postprint();
 }
@@ -248,10 +159,9 @@ void AstPrinterVisitor::visit(FuncDefAST *ast) {
 void AstPrinterVisitor::visit(StructDefAST *ast) {
   generic_preprintln(ast);
   this->enter_new_scope();
-  ast->walk_with_preorder(this);
+  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.mangled()));
   for (auto &t : ast->struct_members)
     safeguard_visit(t.get(), "!!nullptr!! struct_members (typed var)");
-  ast->walk_with_postorder(this);
   this->exit_new_scope();
   generic_postprint();
 }
@@ -259,113 +169,117 @@ void AstPrinterVisitor::visit(StructDefAST *ast) {
 void AstPrinterVisitor::visit(EnumDefAST *ast) {
   generic_preprintln(ast);
   this->enter_new_scope();
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  std::string variants_str;
+  for (size_t i = 0; i < ast->variants.size(); i++) {
+    variants_str += ast->variants[i].name;
+    if (!ast->variants[i].payload_types.empty()) {
+      variants_str += "(";
+      for (size_t j = 0; j < ast->variants[i].payload_types.size(); j++) {
+        variants_str += ast->variants[i].payload_types[j]->to_string();
+        if (j + 1 < ast->variants[i].payload_types.size())
+          variants_str += ", ";
+      }
+      variants_str += ")";
+    }
+    if (i + 1 < ast->variants.size())
+      variants_str += " | ";
+  }
+  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.mangled(), variants_str));
   this->exit_new_scope();
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(TypeAliasDefAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.mangled(), ast->type_expr->to_string()));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(PrototypeAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
+  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.mangled()));
   for (auto &var : ast->parameterVectors) {
     safeguard_visit(var.get(), "!!nullptr!! TypedVarAST\n");
   }
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(TypedVarAST *ast) {
   add_to_rep(fmt::format("{} {}: ", tabs(), ast->getTreeName()));
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  auto type_str = ast->type_expr ? ast->type_expr->to_string() : "";
+  add_to_rep(fmt::format("(name, type_expr, type): (\"{}\", \"{}\", {})",
+                         ast->name, type_str, ast->get_type().to_string()));
   add_to_rep("\n");
 }
 
 void AstPrinterVisitor::visit(CallExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &arg : ast->arguments) {
     safeguard_visit(arg.get(), "!!nullptr!! ExprAST\n");
   }
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(BinaryExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->LHS.get(), "!!nullptr!! ExprAST\n");
   safeguard_visit(ast->RHS.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("{} Operator: \"{}\"", tabs(),
+                         ast->Op ? ast->Op->lexeme : " - !!ParserError!!"));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(StringExprAST *ast) {
   generic_preprint(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("\"{}\")", ast->string_content));
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(NumberExprAST *ast) {
   generic_preprint(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("(num, type): (\"{}\", {})", ast->number,
+                         ast->get_type().to_string()));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(VariableExprAST *ast) {
   generic_preprint(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("(var_name, type): (\"{}\", {})", ast->variableName,
+                         ast->get_type().to_string()));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(UnitExprAST *ast) {
   generic_preprint(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
+  add_to_rep(fmt::format("{}", ast->is_implicit ? "implicit" : "explicit"));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(IfExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->bool_expr.get(), "!!nullptr!! ExprAST\n");
   safeguard_visit(ast->thenBlockAST.get(), "!!nullptr!! thenBlockAST\n");
   safeguard_visit(ast->elseBlockAST.get(), "!!nullptr!! elseBlockAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(BoolExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(ReturnExprAST *ast) {
-
   generic_preprint(ast);
-  ast->walk_with_preorder(this);
+  add_to_rep(fmt::format("{}\n", ast->is_implicit ? "implicit" : "explicit"));
   safeguard_visit(ast->return_expr.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(BlockAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &stmt : ast->Statements) {
     safeguard_visit(stmt.get(), "!!nullptr!! ExprAST\n");
   }
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
@@ -417,236 +331,85 @@ void AstPrinterVisitor::generic_postprint() {
   if (this->rep.back() != '\n')
     add_to_rep(fmt::format("\n"));
 }
-void AstPrinterVisitor::preorder_walk(ProgramAST *ast) {}
-void AstPrinterVisitor::preorder_walk(VarDefAST *ast) {}
-void AstPrinterVisitor::preorder_walk(ExternAST *ast) {}
-void AstPrinterVisitor::preorder_walk(FuncDefAST *ast) {}
-void AstPrinterVisitor::preorder_walk(StructDefAST *ast) {
-  // print the record’s name at the current indent
-  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.mangled()));
-}
-void AstPrinterVisitor::preorder_walk(EnumDefAST *ast) {
-  std::string variants_str;
-  for (size_t i = 0; i < ast->variants.size(); i++) {
-    variants_str += ast->variants[i].name;
-    if (!ast->variants[i].payload_types.empty()) {
-      variants_str += "(";
-      for (size_t j = 0; j < ast->variants[i].payload_types.size(); j++) {
-        variants_str += ast->variants[i].payload_types[j]->to_string();
-        if (j + 1 < ast->variants[i].payload_types.size())
-          variants_str += ", ";
-      }
-      variants_str += ")";
-    }
-    if (i + 1 < ast->variants.size())
-      variants_str += " | ";
-  }
-  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.mangled(), variants_str));
-}
-void AstPrinterVisitor::preorder_walk(TypeAliasDefAST *ast) {
-  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.mangled(), ast->type_expr->to_string()));
-}
-void AstPrinterVisitor::preorder_walk(PrototypeAST *ast) {
-  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.mangled()));
-}
-void AstPrinterVisitor::preorder_walk(CallExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(ReturnExprAST *ast) {
-  add_to_rep(fmt::format("{}\n", ast->is_implicit ? "implicit" : "explicit"));
-}
-void AstPrinterVisitor::preorder_walk(BinaryExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(StringExprAST *ast) {
-  add_to_rep(fmt::format("\"{}\")", ast->string_content));
-}
-void AstPrinterVisitor::preorder_walk(NumberExprAST *ast) {
-  add_to_rep(fmt::format("(num, type): (\"{}\", {})", ast->number,
-                         ast->get_type().to_string()));
-}
-void AstPrinterVisitor::preorder_walk(BoolExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(CharExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(VariableExprAST *ast) {
-  add_to_rep(fmt::format("(var_name, type): (\"{}\", {})", ast->variableName,
-                         ast->get_type().to_string()));
-}
-void AstPrinterVisitor::preorder_walk(BlockAST *ast) {}
-void AstPrinterVisitor::preorder_walk(IfExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(UnitExprAST *ast) {
-  add_to_rep(fmt::format("{}", ast->is_implicit ? "implicit" : "explicit"));
-}
-void AstPrinterVisitor::preorder_walk(TypedVarAST *ast) {
-  auto type_str = ast->type_expr ? ast->type_expr->to_string() : "";
-  add_to_rep(fmt::format("(name, type_expr, type): (\"{}\", \"{}\", {})",
-                         ast->name, type_str, ast->get_type().to_string()));
-}
-//
-// post order
-void AstPrinterVisitor::postorder_walk(ProgramAST *ast) {
-  fmt::print("{}", this->disclaimer);
-  while (!this->rep.empty()) {
-    auto &ch = this->rep.back();
-    if (ch == ' ' || ch == '\n') {
-      this->rep.pop_back();
-    } else {
-      break;
-    }
-  }
-  add_to_rep("\n");
-
-  fmt::print("{}", this->rep);
-}
-
-void AstPrinterVisitor::postorder_walk(VarDefAST *ast) {}
-void AstPrinterVisitor::postorder_walk(ExternAST *ast) {}
-void AstPrinterVisitor::postorder_walk(FuncDefAST *ast) {}
-void AstPrinterVisitor::postorder_walk(StructDefAST *ast) {}
-void AstPrinterVisitor::postorder_walk(EnumDefAST *ast) {}
-void AstPrinterVisitor::postorder_walk(TypeAliasDefAST *ast) {}
-
-void AstPrinterVisitor::postorder_walk(PrototypeAST *ast) {}
-void AstPrinterVisitor::postorder_walk(CallExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(ReturnExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(BinaryExprAST *ast) {
-  add_to_rep(fmt::format("{} Operator: \"{}\"", tabs(),
-                         ast->Op ? ast->Op->lexeme : " - !!ParserError!!"));
-}
-void AstPrinterVisitor::postorder_walk(NumberExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(StringExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(BoolExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(CharExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(VariableExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(BlockAST *ast) {}
-void AstPrinterVisitor::postorder_walk(IfExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(UnitExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(TypedVarAST *ast) {}
 
 void AstPrinterVisitor::visit(DerefExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(AddrOfExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(DerefExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(AddrOfExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(DerefExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(AddrOfExprAST *ast) {}
 
 void AstPrinterVisitor::visit(AllocExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(FreeExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(AllocExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(FreeExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(AllocExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(FreeExprAST *ast) {}
 
 void AstPrinterVisitor::visit(ArrayLiteralExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &elem : ast->elements)
     safeguard_visit(elem.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(RangeExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->start.get(), "!!nullptr!! ExprAST\n");
   safeguard_visit(ast->end.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(IndexExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->array_expr.get(), "!!nullptr!! ExprAST\n");
   safeguard_visit(ast->index_expr.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
+
 void AstPrinterVisitor::visit(LenExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(ArrayLiteralExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(RangeExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(IndexExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(LenExprAST *ast) {}
-void AstPrinterVisitor::preorder_walk(DimExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(ArrayLiteralExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(RangeExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(IndexExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(LenExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(DimExprAST *ast) {}
 
 void AstPrinterVisitor::visit(DimExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(UnaryNegExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(UnaryNegExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(UnaryNegExprAST *ast) {}
 
 void AstPrinterVisitor::visit(StructLiteralExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &val : ast->field_values)
     safeguard_visit(val.get(), "!!nullptr!! field_value");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(StructLiteralExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(StructLiteralExprAST *ast) {}
 
 void AstPrinterVisitor::visit(FieldAccessExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->object_expr.get(), "!!nullptr!! object_expr");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(FieldAccessExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(FieldAccessExprAST *ast) {}
 
 void AstPrinterVisitor::visit(CaseExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
-  safeguard_visit(ast->scrutinee.get(), "!!nullptr!! scrutinee");
-  for (auto &arm : ast->arms)
-    safeguard_visit(arm.body.get(), "!!nullptr!! arm body");
-  ast->walk_with_postorder(this);
-  generic_postprint();
-}
-void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
   std::string arms_str;
   for (size_t i = 0; i < ast->arms.size(); i++) {
     auto &arm = ast->arms[i];
@@ -670,48 +433,28 @@ void AstPrinterVisitor::preorder_walk(CaseExprAST *ast) {
       arms_str += " | ";
   }
   add_to_rep(fmt::format("{}patterns: {}\n", tabs(), arms_str));
+  safeguard_visit(ast->scrutinee.get(), "!!nullptr!! scrutinee");
+  for (auto &arm : ast->arms)
+    safeguard_visit(arm.body.get(), "!!nullptr!! arm body");
+  generic_postprint();
 }
-void AstPrinterVisitor::postorder_walk(CaseExprAST *ast) {}
 
 void AstPrinterVisitor::visit(WhileExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   safeguard_visit(ast->condition.get(), "!!nullptr!! condition\n");
   safeguard_visit(ast->body.get(), "!!nullptr!! body\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(WhileExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(WhileExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TupleLiteralExprAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
   for (auto &elem : ast->elements)
     safeguard_visit(elem.get(), "!!nullptr!! ExprAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(TupleLiteralExprAST *ast) {}
-void AstPrinterVisitor::postorder_walk(TupleLiteralExprAST *ast) {}
 
 void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
-  for (auto &method : ast->methods)
-    safeguard_visit(method.get(), "!!nullptr!! PrototypeAST\n");
-  ast->walk_with_postorder(this);
-  generic_postprint();
-}
-void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
-  generic_preprintln(ast);
-  ast->walk_with_preorder(this);
-  for (auto &method : ast->methods)
-    safeguard_visit(method.get(), "!!nullptr!! FuncDefAST\n");
-  ast->walk_with_postorder(this);
-  generic_postprint();
-}
-void AstPrinterVisitor::preorder_walk(TypeClassDeclAST *ast) {
   std::string params;
   for (size_t i = 0; i < ast->type_params.size(); i++) {
     if (i > 0)
@@ -720,8 +463,13 @@ void AstPrinterVisitor::preorder_walk(TypeClassDeclAST *ast) {
   }
   add_to_rep(
       fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name, params));
+  for (auto &method : ast->methods)
+    safeguard_visit(method.get(), "!!nullptr!! PrototypeAST\n");
+  generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
+
+void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
+  generic_preprintln(ast);
   std::string types;
   for (size_t i = 0; i < ast->concrete_type_exprs.size(); i++) {
     if (i > 0)
@@ -732,20 +480,16 @@ void AstPrinterVisitor::preorder_walk(TypeClassInstanceAST *ast) {
   }
   add_to_rep(
       fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name, types));
+  for (auto &method : ast->methods)
+    safeguard_visit(method.get(), "!!nullptr!! FuncDefAST\n");
+  generic_postprint();
 }
-void AstPrinterVisitor::postorder_walk(TypeClassDeclAST *ast) {}
-void AstPrinterVisitor::postorder_walk(TypeClassInstanceAST *ast) {}
 
 void AstPrinterVisitor::visit(KernelDefAST *ast) {
   generic_preprintln(ast);
-  ast->walk_with_preorder(this);
+  add_to_rep(fmt::format("{}kernel {}\n", tabs(), ast->Prototype->functionName.mangled()));
   safeguard_visit(ast->Prototype.get(), "!!nullptr!! PrototypeAST\n");
-  ast->walk_with_postorder(this);
   generic_postprint();
 }
-void AstPrinterVisitor::preorder_walk(KernelDefAST *ast) {
-  add_to_rep(fmt::format("{}kernel {}\n", tabs(), ast->Prototype->functionName.mangled()));
-}
-void AstPrinterVisitor::postorder_walk(KernelDefAST *ast) {}
 
 } // namespace sammine_lang::AST
