@@ -577,7 +577,7 @@ Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
   return ast->set_type(func.get_return_type());
 }
 
-Type BiTypeCheckerVisitor::synthesize(ReturnExprAST *ast) {
+Type BiTypeCheckerVisitor::synthesize(ReturnStmtAST *ast) {
   return ast->set_type(Type::Never());
 }
 // Binary ops: resolved via typeclass instances (e.g. Add<i32>::add for `+`).

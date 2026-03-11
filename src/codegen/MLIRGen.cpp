@@ -829,8 +829,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitBinaryExpr(llvm::cast<AST::BinaryExprAST>(ast));
   case NK::CallExprAST:
     return emitCallExpr(llvm::cast<AST::CallExprAST>(ast));
-  case NK::ReturnExprAST:
-    return emitReturnExpr(llvm::cast<AST::ReturnExprAST>(ast));
+  case NK::ReturnStmtAST:
+    return emitReturnStmt(llvm::cast<AST::ReturnStmtAST>(ast));
   case NK::VarDefAST:
     return emitVarDef(llvm::cast<AST::VarDefAST>(ast));
   case NK::IfExprAST:

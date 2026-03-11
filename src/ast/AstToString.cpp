@@ -74,7 +74,7 @@ std::string BlockAST::to_string() const {
   std::string result;
   for (size_t i = 0; i < Statements.size(); i++) {
     auto &stmt = Statements[i];
-    if (auto *ret = llvm::dyn_cast<ReturnExprAST>(stmt.get())) {
+    if (auto *ret = llvm::dyn_cast<ReturnStmtAST>(stmt.get())) {
       if (ret->is_implicit) {
         // implicit return: emit expression without "return" or trailing ";"
         if (ret->return_expr)
@@ -129,7 +129,7 @@ std::string BinaryExprAST::to_string() const {
          ")";
 }
 
-std::string ReturnExprAST::to_string() const {
+std::string ReturnStmtAST::to_string() const {
   if (is_implicit) {
     if (return_expr)
       return return_expr->to_string();

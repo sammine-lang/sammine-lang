@@ -472,7 +472,7 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   return emitIndirectCall(ast, operands);
 }
 
-mlir::Value MLIRGenImpl::emitReturnExpr(AST::ReturnExprAST *ast) {
+mlir::Value MLIRGenImpl::emitReturnStmt(AST::ReturnStmtAST *ast) {
   auto location = loc(ast);
 
   if (ast->return_expr) {

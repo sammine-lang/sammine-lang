@@ -184,7 +184,7 @@ std::unique_ptr<BlockAST> Monomorphizer::clone_block(BlockAST *block) {
 
 // Handled ExprAST subtypes (update when adding new ExprAST nodes):
 // NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
-// VariableExprAST, CallExprAST, BinaryExprAST, ReturnExprAST,
+// VariableExprAST, CallExprAST, BinaryExprAST, ReturnStmtAST,
 // VarDefAST, IfExprAST, UnitExprAST, DerefExprAST, AddrOfExprAST,
 // AllocExprAST, FreeExprAST, ArrayLiteralExprAST, RangeExprAST, IndexExprAST,
 // LenExprAST, UnaryNegExprAST, StructLiteralExprAST, FieldAccessExprAST,
@@ -240,12 +240,12 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
         bin->Op, clone_expr(bin->LHS.get()), clone_expr(bin->RHS.get()));
     break;
   }
-  case NodeKind::ReturnExprAST: {
-    auto *ret = llvm::cast<ReturnExprAST>(expr);
+  case NodeKind::ReturnStmtAST: {
+    auto *ret = llvm::cast<ReturnStmtAST>(expr);
     if (ret->is_implicit)
-      result = std::make_unique<ReturnExprAST>(clone_expr(ret->return_expr.get()));
+      result = std::make_unique<ReturnStmtAST>(clone_expr(ret->return_expr.get()));
     else
-      result = std::make_unique<ReturnExprAST>(
+      result = std::make_unique<ReturnStmtAST>(
           make_tok("return"), clone_expr(ret->return_expr.get()));
     break;
   }

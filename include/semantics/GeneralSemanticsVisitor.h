@@ -41,7 +41,7 @@ public:
   // Only non-empty overrides
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;
-  virtual void preorder_walk(ReturnExprAST *ast) override;
+  virtual void preorder_walk(ReturnStmtAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(EnumDefAST *ast) override;

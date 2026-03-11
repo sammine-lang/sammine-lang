@@ -246,8 +246,8 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
     check_call(llvm::cast<CallExprAST>(stmt)); break;
   case NK::FreeExprAST:
     check_free(llvm::cast<FreeExprAST>(stmt)); break;
-  case NK::ReturnExprAST:
-    check_return(llvm::cast<ReturnExprAST>(stmt)); break;
+  case NK::ReturnStmtAST:
+    check_return(llvm::cast<ReturnStmtAST>(stmt)); break;
   case NK::IfExprAST:
     check_if(llvm::cast<IfExprAST>(stmt)); break;
   case NK::WhileExprAST:
@@ -678,7 +678,7 @@ void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
 
 // ── check_return ────────────────────────────────────────────────────
 
-void LinearTypeChecker::check_return(ReturnExprAST *ast) {
+void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
   if (!ast->return_expr)
     return;
 

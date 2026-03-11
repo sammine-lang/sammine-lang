@@ -60,11 +60,11 @@ Checked in `preorder_walk` for: `FuncDefAST` (function name), `VarDefAST` (varia
 
 **`preorder_walk(BlockAST*)`** — Non-function blocks: resets `returned = false`.
 
-**`preorder_walk(ReturnExprAST*)`** — Sets `returned = true`.
+**`preorder_walk(ReturnStmtAST*)`** — Sets `returned = true`.
 
 **`postorder_walk(BlockAST*)`** — Only acts on function blocks. If no explicit return found:
-- **Unit-returning**: appends `return ()` (`ReturnExprAST` wrapping `UnitExprAST`)
-- **Value-returning**: wraps last statement in implicit `return`, only if block is non-empty, last statement isn't already `ReturnExprAST`, and last statement is an expression (`is_statement == false`)
+- **Unit-returning**: appends `return ()` (`ReturnStmtAST` wrapping `UnitExprAST`)
+- **Value-returning**: wraps last statement in implicit `return`, only if block is non-empty, last statement isn't already `ReturnStmtAST`, and last statement is an expression (`is_statement == false`)
 
 Resets `returned = false` after each function block.
 

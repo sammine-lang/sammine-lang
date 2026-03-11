@@ -201,7 +201,7 @@ Called at every `compatible_to_from` failure site in `BiTypeChecker.cpp` (5 site
 Separate pass after BiTypeChecker — enforces that `'ptr<T>` (heap-allocated) pointers are consumed exactly once.
 
 ### Dispatch (`check_stmt`)
-Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnExprAST`, `IfExprAST`, `WhileExprAST`, `CaseExprAST`, `StructLiteralExprAST`, `ArrayLiteralExprAST`, `TupleLiteralExprAST`, `DerefExprAST`.
+Handles: `VarDefAST`, `BinaryExprAST`, `CallExprAST`, `FreeExprAST`, `ReturnStmtAST`, `IfExprAST`, `WhileExprAST`, `CaseExprAST`, `StructLiteralExprAST`, `ArrayLiteralExprAST`, `TupleLiteralExprAST`, `DerefExprAST`.
 
 ### Consumption Rules
 - `free(p)`, `let q = p` (move), `return p` (ownership transfer), passing as linear param, moving into struct field or array element

@@ -88,7 +88,7 @@ enum class NodeKind {
   FirstExpr,
   VarDefAST = FirstExpr,
   NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
-  BinaryExprAST, CallExprAST, ReturnExprAST, UnitExprAST,
+  BinaryExprAST, CallExprAST, ReturnStmtAST, UnitExprAST,
   VariableExprAST, IfExprAST, DerefExprAST, AddrOfExprAST,
   AllocExprAST, FreeExprAST, ArrayLiteralExprAST, IndexExprAST,
   LenExprAST, UnaryNegExprAST, StructLiteralExprAST,

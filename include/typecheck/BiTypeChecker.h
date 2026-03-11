@@ -112,7 +112,7 @@ public:
   virtual void visit(TypeAliasDefAST *ast) override;
   virtual void visit(PrototypeAST *ast) override;
   virtual void visit(CallExprAST *ast) override;
-  virtual void visit(ReturnExprAST *ast) override;
+  virtual void visit(ReturnStmtAST *ast) override;
   virtual void visit(BinaryExprAST *ast) override;
   virtual void visit(NumberExprAST *ast) override;
   virtual void visit(StringExprAST *ast) override;
@@ -202,7 +202,7 @@ public:
   virtual Type synthesize(TypeAliasDefAST *ast) override;
   virtual Type synthesize(PrototypeAST *ast) override;
   virtual Type synthesize(CallExprAST *ast) override;
-  virtual Type synthesize(ReturnExprAST *ast) override;
+  virtual Type synthesize(ReturnStmtAST *ast) override;
   virtual Type synthesize(BinaryExprAST *ast) override;
   virtual Type synthesize(NumberExprAST *ast) override;
   virtual Type synthesize(UnitExprAST *ast) override;

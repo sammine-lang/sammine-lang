@@ -73,7 +73,7 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_binary(BinaryExprAST *ast);
   void check_call(CallExprAST *ast);
   void check_free(FreeExprAST *ast);
-  void check_return(ReturnExprAST *ast);
+  void check_return(ReturnStmtAST *ast);
   void check_if(IfExprAST *ast);
   void check_while(WhileExprAST *ast);
   void check_case(CaseExprAST *ast);

@@ -61,15 +61,15 @@ void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {
       if (returns_unit) {
         // Unit-returning function: add implicit return unit
         ast->Statements.push_back(
-            std::make_unique<ReturnExprAST>(std::make_unique<UnitExprAST>()));
+            std::make_unique<ReturnStmtAST>(std::make_unique<UnitExprAST>()));
       } else if (!ast->Statements.empty()) {
         // Value-returning function: wrap last statement in implicit return
         auto last_stmt = std::move(ast->Statements.back());
         // Only wrap if not already a return
-        if (!llvm::isa<ReturnExprAST>(last_stmt.get()) &&
+        if (!llvm::isa<ReturnStmtAST>(last_stmt.get()) &&
             last_stmt->is_statement == false) {
           ast->Statements.back() =
-              std::make_unique<ReturnExprAST>(std::move(last_stmt));
+              std::make_unique<ReturnStmtAST>(std::move(last_stmt));
         } else {
           // Put it back if it was already a return
           ast->Statements.back() = std::move(last_stmt);
@@ -80,7 +80,7 @@ void GeneralSemanticsVisitor::postorder_walk(BlockAST *ast) {
     returned = false;
   }
 }
-void GeneralSemanticsVisitor::preorder_walk(ReturnExprAST *ast) {
+void GeneralSemanticsVisitor::preorder_walk(ReturnStmtAST *ast) {
   returned = true;
 }
 

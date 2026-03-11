@@ -21,7 +21,7 @@ class Stmt;
 class ExprAST;
 class CallExprAST;
 class UnitExprAST;
-class ReturnExprAST;
+class ReturnStmtAST;
 class BinaryExprAST;
 class NumberExprAST;
 class StringExprAST;

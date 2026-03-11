@@ -529,14 +529,14 @@ public:
   std::string to_string() const override;
   AST_NODE_METHODS("BinaryExprAST", NodeKind::BinaryExprAST)
 };
-class ReturnExprAST : public ExprAST {
+class ReturnStmtAST : public ExprAST {
 
 public:
   bool is_implicit; // true when generated from last expression in a block (no `return` keyword)
   std::unique_ptr<ExprAST> return_expr;
-  ReturnExprAST(std::shared_ptr<Token> return_tok,
+  ReturnStmtAST(std::shared_ptr<Token> return_tok,
                 std::unique_ptr<ExprAST> return_expr)
-      : ExprAST(NodeKind::ReturnExprAST), is_implicit(false),
+      : ExprAST(NodeKind::ReturnStmtAST), is_implicit(false),
         return_expr(std::move(return_expr)) {
     if (this->return_expr == nullptr) {
       this->join_location(return_tok);
@@ -547,14 +547,14 @@ public:
     }
   }
 
-  ReturnExprAST(std::unique_ptr<ExprAST> return_expr)
-      : ExprAST(NodeKind::ReturnExprAST), is_implicit(true),
+  ReturnStmtAST(std::unique_ptr<ExprAST> return_expr)
+      : ExprAST(NodeKind::ReturnStmtAST), is_implicit(true),
         return_expr(std::move(return_expr)) {
     this->join_location(this->return_expr.get());
   }
 
   std::string to_string() const override;
-  AST_NODE_METHODS("ReturnExprAST", NodeKind::ReturnExprAST)
+  AST_NODE_METHODS("ReturnStmtAST", NodeKind::ReturnStmtAST)
 };
 class CallExprAST : public ExprAST {
 

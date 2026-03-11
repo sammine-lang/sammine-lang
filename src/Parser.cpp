@@ -1060,23 +1060,23 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
   return {std::move(LHS), SUCCESS};
 }
 
-auto Parser::ParseReturnExpr() -> p<ExprAST> {
+auto Parser::ParseReturnStmt() -> p<ExprAST> {
   auto return_tok = expect(TokenType::TokReturn);
   if (!return_tok)
-    return {std::make_unique<ReturnExprAST>(nullptr, nullptr), NONCOMMITTED};
+    return {std::make_unique<ReturnStmtAST>(nullptr, nullptr), NONCOMMITTED};
   auto [expr, result] = ParseExpr();
   if (result == FAILED)
-    return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
+    return {std::make_unique<ReturnStmtAST>(return_tok, std::move(expr)),
             FAILED};
   REQUIRE(
       _semi, TokSemiColon, "Missing ';' after return statement",
       return_tok->get_location(),
-      {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)), FAILED});
+      {std::make_unique<ReturnStmtAST>(return_tok, std::move(expr)), FAILED});
   if (result == NONCOMMITTED)
-    return {std::make_unique<ReturnExprAST>(return_tok,
+    return {std::make_unique<ReturnStmtAST>(return_tok,
                                             std::make_unique<UnitExprAST>()),
             SUCCESS};
-  return {std::make_unique<ReturnExprAST>(return_tok, std::move(expr)),
+  return {std::make_unique<ReturnStmtAST>(return_tok, std::move(expr)),
           SUCCESS};
 }
 
@@ -1652,7 +1652,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
 
     if (tryStatement(ParseVarDef()))
       continue;
-    if (tryStatement(ParseReturnExpr()))
+    if (tryStatement(ParseReturnStmt()))
       continue;
     break;
   }

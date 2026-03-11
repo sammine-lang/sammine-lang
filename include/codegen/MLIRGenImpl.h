@@ -179,7 +179,7 @@ public:
                                llvm::ArrayRef<mlir::Value> operands);
   void emitFuncCallAndLLVMReturn(llvm::StringRef callee, const Type &retType,
                                  mlir::ValueRange args, mlir::Location loc);
-  mlir::Value emitReturnExpr(AST::ReturnExprAST *ast);
+  mlir::Value emitReturnStmt(AST::ReturnStmtAST *ast);
 
   // --- Expression emission (MLIRGenExpr.cpp) ---
   mlir::Value emitNumberExpr(AST::NumberExprAST *ast);

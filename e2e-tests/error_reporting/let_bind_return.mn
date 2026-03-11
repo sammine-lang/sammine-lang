@@ -1,0 +1,7 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK: Expected an expression in variable definition
+
+let main() -> i32 {
+  let x = return 5;
+  return 0;
+}

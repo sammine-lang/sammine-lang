@@ -42,7 +42,7 @@ enum class NodeKind {
   CharExprAST,
   BinaryExprAST,
   CallExprAST,
-  ReturnExprAST,
+  ReturnStmtAST,
   UnitExprAST,
   VariableExprAST,
   IfExprAST,
@@ -143,9 +143,9 @@ public:
   virtual void preorder_walk(CallExprAST *ast) {}
   virtual void postorder_walk(CallExprAST *ast) {}
 
-  virtual void visit(ReturnExprAST *ast);
-  virtual void preorder_walk(ReturnExprAST *ast) {}
-  virtual void postorder_walk(ReturnExprAST *ast) {}
+  virtual void visit(ReturnStmtAST *ast);
+  virtual void preorder_walk(ReturnStmtAST *ast) {}
+  virtual void postorder_walk(ReturnStmtAST *ast) {}
 
   virtual void visit(BinaryExprAST *ast);
   virtual void preorder_walk(BinaryExprAST *ast) {}
@@ -365,7 +365,7 @@ public:
   virtual Type synthesize(TypeAliasDefAST *ast) = 0;
   virtual Type synthesize(PrototypeAST *ast) = 0;
   virtual Type synthesize(CallExprAST *ast) = 0;
-  virtual Type synthesize(ReturnExprAST *ast) = 0;
+  virtual Type synthesize(ReturnStmtAST *ast) = 0;
   virtual Type synthesize(BinaryExprAST *ast) = 0;
   virtual Type synthesize(NumberExprAST *ast) = 0;
   virtual Type synthesize(StringExprAST *ast) = 0;

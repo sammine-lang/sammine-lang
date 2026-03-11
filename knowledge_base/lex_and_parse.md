@@ -160,7 +160,7 @@ Uses LLVM-style RTTI (`classof`, `llvm::dyn_cast`). NOT part of visitor pattern 
 | `CharExprAST` | `value` (char) |
 | `BinaryExprAST` | `Op` (Token), `LHS`, `RHS`, `resolved_op_method` |
 | `CallExprAST` | `functionName` (QN), `arguments`, `callee_func_type`, `is_partial`, `resolved_generic_name`, `type_bindings`, `explicit_type_args`, `is_typeclass_call`, `is_enum_constructor`, `enum_variant_index` |
-| `ReturnExprAST` | `is_implicit`, `return_expr` |
+| `ReturnStmtAST` | `is_implicit`, `return_expr` |
 | `UnitExprAST` | `is_implicit` — explicit `()` or implicit (empty block) |
 | `VariableExprAST` | `variableName` (string), `is_enum_unit_variant`, `enum_variant_index` |
 | `IfExprAST` | `bool_expr`, `thenBlockAST`, `elseBlockAST` |

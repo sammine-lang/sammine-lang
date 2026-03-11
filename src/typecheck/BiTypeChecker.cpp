@@ -501,7 +501,7 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   }
 }
 
-void BiTypeCheckerVisitor::visit(ReturnExprAST *ast) {
+void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   // Special case: array literal return — propagate function return type
   // into array elements before they default to i32.
   if (auto *arr_lit =

@@ -57,7 +57,7 @@ public:
   virtual void visit(BoolExprAST *ast) override;
   virtual void visit(VariableExprAST *ast) override;
   virtual void visit(BlockAST *ast) override;
-  virtual void visit(ReturnExprAST *ast) override;
+  virtual void visit(ReturnStmtAST *ast) override;
   virtual void visit(IfExprAST *ast) override;
   virtual void visit(UnitExprAST *ast) override;
   virtual void visit(TypedVarAST *ast) override;
@@ -268,7 +268,7 @@ void AstPrinterVisitor::visit(BoolExprAST *ast) {
   generic_postprint();
 }
 
-void AstPrinterVisitor::visit(ReturnExprAST *ast) {
+void AstPrinterVisitor::visit(ReturnStmtAST *ast) {
   generic_preprint(ast);
   add_to_rep(fmt::format("{}\n", ast->is_implicit ? "implicit" : "explicit"));
   safeguard_visit(ast->return_expr.get(), "!!nullptr!! ExprAST\n");
