@@ -55,8 +55,7 @@ class Parser : public Reportee {
     }
     this->error_count++;
   }
-  void imm_diag(const std::string &msg,
-                Location loc = Location::NonPrintable(),
+  void imm_diag(const std::string &msg, Location loc = Location::NonPrintable(),
                 std::source_location src = std::source_location::current()) {
     if (loc == Location::NonPrintable())
       loc = last_exhaustible_loc;
@@ -64,8 +63,7 @@ class Parser : public Reportee {
       reporter->get().immediate_diag(msg, loc, src);
     }
   }
-  void imm_warn(const std::string &msg,
-                Location loc = Location::NonPrintable(),
+  void imm_warn(const std::string &msg, Location loc = Location::NonPrintable(),
                 std::source_location src = std::source_location::current()) {
     if (loc == Location::NonPrintable())
       loc = last_exhaustible_loc;
@@ -83,19 +81,21 @@ class Parser : public Reportee {
 public:
   template <class T> using p = ParseResult<T>;
   template <class T> using u = std::unique_ptr<T>;
-  template <class T> using ListResult = std::pair<std::vector<u<T>>, ParserError>;
+  template <class T>
+  using ListResult = std::pair<std::vector<u<T>>, ParserError>;
 
 private:
   template <typename NodeT>
   [[nodiscard]] auto ParseBuiltinCallExpr(TokenType keyword,
-                                          const std::string &name) -> p<ExprAST>;
+                                          const std::string &name)
+      -> p<ExprAST>;
 
   template <typename NodeT>
   [[nodiscard]] auto ParseUnaryPrefixExpr(TokenType opTok,
-                                          const std::string &opStr) -> p<ExprAST>;
+                                          const std::string &opStr)
+      -> p<ExprAST>;
 
-  template <typename T, typename... Fns>
-  auto tryParsers(Fns... fns) -> p<T> {
+  template <typename T, typename... Fns> auto tryParsers(Fns... fns) -> p<T> {
     p<T> result{nullptr, NONCOMMITTED};
     (void)((result = (this->*fns)(), result.status != NONCOMMITTED) || ...);
     return result;
@@ -143,9 +143,9 @@ public:
   [[nodiscard]] auto ParseDimExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIdentifierExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseStructLiteralExpr(sammine_util::QualifiedName qn,
-                                            Location qn_loc,
-                                            std::vector<std::unique_ptr<TypeExprAST>> type_args = {}) -> p<ExprAST>;
+  [[nodiscard]] auto ParseStructLiteralExpr(
+      sammine_util::QualifiedName qn, Location qn_loc,
+      std::vector<std::unique_ptr<TypeExprAST>> type_args = {}) -> p<ExprAST>;
   [[nodiscard]] auto ParseReturnStmt() -> p<ExprAST>;
   [[nodiscard]] auto ParseArguments() -> ListResult<ExprAST>;
   [[nodiscard]] auto ParseParenExpr() -> p<ExprAST>;
@@ -176,17 +176,17 @@ public:
 
   /// Greedily consume ::ID pairs after an already-consumed first TokID.
   /// \param first_tok     The already-consumed TokID token
-  /// \param resolve_alias If true, resolve first segment through alias_to_module
+  /// \param resolve_alias If true, resolve first segment through
+  /// alias_to_module
   [[nodiscard]] auto parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
                                             bool resolve_alias = true)
       -> ParsedQualifiedName;
 
   /// Speculatively parse <TypeExpr, ...> after a qualified name.
-  /// On success, populates type_args and may update qn/qn_loc if ::member follows.
-  /// On failure, rolls back the token stream and returns empty.
-  [[nodiscard]] auto
-  parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
-                            sammine_util::Location &qn_loc)
+  /// On success, populates type_args and may update qn/qn_loc if ::member
+  /// follows. On failure, rolls back the token stream and returns empty.
+  [[nodiscard]] auto parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
+                                               sammine_util::Location &qn_loc)
       -> std::vector<std::unique_ptr<TypeExprAST>>;
 
   [[nodiscard]] auto consumeClosingAngleBracket() -> bool;
@@ -200,11 +200,13 @@ public:
   std::shared_ptr<Token> pending_deref_tok;
 
   [[nodiscard]] Parser(
-      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt, const std::string &default_namespace = "")
+      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt,
+      const std::string &default_namespace = "")
       : reporter(reporter) {}
   [[nodiscard]] Parser(
       std::shared_ptr<TokenStream> tokStream,
-      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt, const std::string &default_namespace = "")
+      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt,
+      const std::string &default_namespace = "")
       : reporter(reporter), tokStream(tokStream) {}
 
   [[nodiscard]] auto Parse() -> u<ProgramAST>;

@@ -11,11 +11,21 @@ static std::string escape_string(const std::string &s) {
   std::string result;
   for (char c : s) {
     switch (c) {
-    case '\n': result += "\\n"; break;
-    case '\t': result += "\\t"; break;
-    case '\\': result += "\\\\"; break;
-    case '"':  result += "\\\""; break;
-    default:   result += c; break;
+    case '\n':
+      result += "\\n";
+      break;
+    case '\t':
+      result += "\\t";
+      break;
+    case '\\':
+      result += "\\\\";
+      break;
+    case '"':
+      result += "\\\"";
+      break;
+    default:
+      result += c;
+      break;
     }
   }
   return result;
@@ -23,12 +33,18 @@ static std::string escape_string(const std::string &s) {
 
 static std::string escape_char(char c) {
   switch (c) {
-  case '\n': return "\\n";
-  case '\t': return "\\t";
-  case '\\': return "\\\\";
-  case '\'': return "\\'";
-  case '\0': return "\\0";
-  default:   return std::string(1, c);
+  case '\n':
+    return "\\n";
+  case '\t':
+    return "\\t";
+  case '\\':
+    return "\\\\";
+  case '\'':
+    return "\\'";
+  case '\0':
+    return "\\0";
+  default:
+    return std::string(1, c);
   }
 }
 
@@ -282,8 +298,7 @@ std::string CaseExprAST::to_string() const {
 }
 
 std::string WhileExprAST::to_string() const {
-  return "while " + condition->to_string() + " {\n" + body->to_string() +
-         "\n}";
+  return "while " + condition->to_string() + " {\n" + body->to_string() + "\n}";
 }
 
 std::string TupleLiteralExprAST::to_string() const {

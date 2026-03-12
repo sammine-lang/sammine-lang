@@ -85,7 +85,8 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
   if (input[i] == '\'') {
     // Disambiguate: 'ptr<T> (tick for linear pointer) vs 'a' (char literal)
     // If next char is alpha AND char after that is NOT ', it's a tick token
-    if (i + 2 < input.length() && isalpha(input[i + 1]) && input[i + 2] != '\'') {
+    if (i + 2 < input.length() && isalpha(input[i + 1]) &&
+        input[i + 2] != '\'') {
       i = advance(i); // consume the '
       tokStream->push_back(Token(TokTick, "'", location));
       return i; // leave the alpha char for the next token (e.g., "ptr")
@@ -125,8 +126,7 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       i = advance(i);
       tokStream->push_back(Token(TokChar, std::string(1, ch), location));
     } else {
-      tokStream->push_back(
-          Token(TokINVALID, std::string(1, ch), location));
+      tokStream->push_back(Token(TokINVALID, std::string(1, ch), location));
       add_error(location, "Unterminated char literal, expected closing '");
     }
     return i;
@@ -181,15 +181,27 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
     }
 
     static const std::unordered_map<std::string, TokenType> keywords = {
-        {"fn", TokFunc},       {"return", TokReturn}, {"struct", TokStruct},
-        {"type", TokType},     {"if", TokIf},         {"else", TokElse},
-        {"let", TokLet},       {"mut", TokMUT},       {"true", TokTrue},
-        {"false", TokFalse},   {"reuse", TokReuse},   {"export", TokExport},
+        {"fn", TokFunc},
+        {"return", TokReturn},
+        {"struct", TokStruct},
+        {"type", TokType},
+        {"if", TokIf},
+        {"else", TokElse},
+        {"let", TokLet},
+        {"mut", TokMUT},
+        {"true", TokTrue},
+        {"false", TokFalse},
+        {"reuse", TokReuse},
+        {"export", TokExport},
         {"ptr", TokPtr},
-        {"alloc", TokAlloc},   {"free", TokFree},     {"len", TokLen},
+        {"alloc", TokAlloc},
+        {"free", TokFree},
+        {"len", TokLen},
         {"dim", TokDim},
-        {"import", TokImport}, {"as", TokAs},
-        {"typeclass", TokTypeclass}, {"instance", TokInstance},
+        {"import", TokImport},
+        {"as", TokAs},
+        {"typeclass", TokTypeclass},
+        {"instance", TokInstance},
         {"while", TokWhile},
         {"case", TokCase},
         {"kernel", TokKernel},
@@ -345,7 +357,8 @@ size_t Lexer::handleOperators(size_t i, const std::string &input) {
     }
 
     i = advance(i);
-    tokStream->push_back(Token(rule.fallback_tok, rule.fallback_lexeme, location));
+    tokStream->push_back(
+        Token(rule.fallback_tok, rule.fallback_lexeme, location));
     updateLocation();
     return i;
   }

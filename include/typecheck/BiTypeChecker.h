@@ -141,17 +141,24 @@ public:
       const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
       const std::vector<std::string> &type_params);
 
+  // Report a type mismatch error with an optional incompatibility hint
+  void report_type_mismatch(sammine_util::Location loc, const std::string &msg,
+                            const Type &expected, const Type &actual) {
+    this->add_error(loc, msg);
+    if (auto hint = incompatibility_hint(expected, actual))
+      this->add_diagnostics(loc, *hint);
+  }
+
   // Binary expression synthesis helper
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);
 
-
   // Kernel intrinsic synthesis helpers
   Type synthesize_kernel_map(KernelDefAST *kd, KernelMapExprAST *map_expr);
-  Type synthesize_kernel_reduce(KernelDefAST *kd, KernelReduceExprAST *reduce_expr);
+  Type synthesize_kernel_reduce(KernelDefAST *kd,
+                                KernelReduceExprAST *reduce_expr);
 
   // pre order
-
 
   // post order
 
@@ -275,8 +282,8 @@ public:
 
       size_t expected_params = is_enum ? enum_def->type_params.size()
                                        : struct_def->type_params.size();
-      const auto &param_names = is_enum ? enum_def->type_params
-                                        : struct_def->type_params;
+      const auto &param_names =
+          is_enum ? enum_def->type_params : struct_def->type_params;
 
       if (gen->type_args.size() != expected_params) {
         this->add_error(

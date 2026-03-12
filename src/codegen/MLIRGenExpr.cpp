@@ -21,7 +21,8 @@ using sammine_util::cautious_value;
 
 namespace sammine_lang {
 
-// Comparison predicate lookup table — maps token to (signed_int, unsigned_int, float)
+// Comparison predicate lookup table — maps token to (signed_int, unsigned_int,
+// float)
 struct CmpPredicates {
   mlir::arith::CmpIPredicate signed_int;
   mlir::arith::CmpIPredicate unsigned_int;
@@ -106,9 +107,9 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     // Integer-backed enum: emit bare integer constant
     if (et.is_integer_backed()) {
       auto &vi = et.get_variant(vp->enum_variant_index);
-      return mlir::arith::ConstantIntOp::create(builder, location,
-                                                getEnumBackingMLIRType(et),
-                                                cautious_value(vi.discriminant_value, "enum discriminant"))
+      return mlir::arith::ConstantIntOp::create(
+                 builder, location, getEnumBackingMLIRType(et),
+                 cautious_value(vi.discriminant_value, "enum discriminant"))
           .getResult();
     }
 
@@ -207,11 +208,12 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
 
   auto lhsType = ast->LHS->get_type();
 
-  if (isIntegerType(lhsType)) {
+  // Integer and bool comparisons share the same CmpIOp + AND/OR logic
+  if (isIntegerType(lhsType) || isBoolType(lhsType)) {
     auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
     if (cmp) {
-      auto pred = isUnsignedIntegerType(lhsType) ? cmp->unsigned_int
-                                                  : cmp->signed_int;
+      auto pred =
+          isUnsignedIntegerType(lhsType) ? cmp->unsigned_int : cmp->signed_int;
       return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
           .getResult();
     }
@@ -223,18 +225,16 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
       return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
           .getResult();
     default:
-      imm_error(
-          fmt::format("unsupported integer operator '{}'", ast->Op->lexeme),
-          ast->get_location());
+      imm_error(fmt::format("unsupported operator '{}'", ast->Op->lexeme),
+                ast->get_location());
     }
   }
 
   if (isFloatType(lhsType)) {
     auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
     if (!cmp)
-      imm_error(
-          fmt::format("unsupported float operator '{}'", ast->Op->lexeme),
-          ast->get_location());
+      imm_error(fmt::format("unsupported float operator '{}'", ast->Op->lexeme),
+                ast->get_location());
     return mlir::arith::CmpFOp::create(builder, location, cmp->flt, lhs, rhs)
         .getResult();
   }
@@ -244,10 +244,8 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
     if (!cmp)
       imm_error("only == and != supported for pointers", ast->get_location());
     auto i64Ty = builder.getI64Type();
-    auto lhsInt =
-        mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, lhs);
-    auto rhsInt =
-        mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, rhs);
+    auto lhsInt = mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, lhs);
+    auto rhsInt = mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, rhs);
     return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
                                        lhsInt, rhsInt)
         .getResult();
@@ -255,26 +253,6 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
 
   if (lhsType.type_kind == TypeKind::Array)
     return emitArrayComparison(lhs, rhs, lhsType, ast->Op->tok_type, location);
-
-  if (isBoolType(lhsType)) {
-    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-    if (cmp)
-      return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
-                                         lhs, rhs)
-          .getResult();
-    switch (ast->Op->tok_type) {
-    case TokAND:
-      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokOR:
-      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    default:
-      imm_error(
-          fmt::format("unsupported bool operator '{}'", ast->Op->lexeme),
-          ast->get_location());
-    }
-  }
 
   return nullptr;
 }
@@ -323,14 +301,11 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   if (!lhs || !rhs)
     return nullptr;
 
-  using Handler = mlir::Value (MLIRGenImpl::*)(AST::BinaryExprAST *,
-                                               mlir::Value, mlir::Value,
-                                               mlir::Location);
+  using Handler = mlir::Value (MLIRGenImpl::*)(
+      AST::BinaryExprAST *, mlir::Value, mlir::Value, mlir::Location);
   static constexpr Handler handlers[] = {
-      &MLIRGenImpl::emitBinaryIntArith,
-      &MLIRGenImpl::emitBinaryFloatArith,
-      &MLIRGenImpl::emitBinaryComparison,
-      &MLIRGenImpl::emitBinaryEnumBitwise,
+      &MLIRGenImpl::emitBinaryIntArith,    &MLIRGenImpl::emitBinaryFloatArith,
+      &MLIRGenImpl::emitBinaryComparison,  &MLIRGenImpl::emitBinaryEnumBitwise,
       &MLIRGenImpl::emitBinaryTypeclassOp,
   };
 
@@ -401,8 +376,7 @@ mlir::Value MLIRGenImpl::emitIfExpr(AST::IfExprAST *ast) {
 
     auto *End = builder.getInsertionBlock();
     bool Terminated =
-        !End->empty() &&
-        End->back().hasTrait<mlir::OpTrait::IsTerminator>();
+        !End->empty() && End->back().hasTrait<mlir::OpTrait::IsTerminator>();
     if (!Terminated) {
       if (hasResult)
         mlir::cf::BranchOp::create(builder, location, mergeBlock,
@@ -533,11 +507,12 @@ mlir::Value MLIRGenImpl::emitRangeExpr(AST::RangeExprAST *ast) {
   // Header: check i < size
   parentRegion->push_back(headerBlock);
   builder.setInsertionPointToStart(headerBlock);
-  auto counter = mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
-  auto sizeConst = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, size);
-  auto cmp = mlir::arith::CmpIOp::create(builder, location,
-                                          mlir::arith::CmpIPredicate::slt,
-                                          counter, sizeConst);
+  auto counter =
+      mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
+  auto sizeConst =
+      mlir::arith::ConstantIntOp::create(builder, location, i32Ty, size);
+  auto cmp = mlir::arith::CmpIOp::create(
+      builder, location, mlir::arith::CmpIPredicate::slt, counter, sizeConst);
   mlir::cf::CondBranchOp::create(builder, location, cmp, bodyBlock,
                                  /*trueArgs=*/{}, exitBlock,
                                  /*falseArgs=*/{});
@@ -545,12 +520,15 @@ mlir::Value MLIRGenImpl::emitRangeExpr(AST::RangeExprAST *ast) {
   // Body: arr[i] = start + i; i++
   parentRegion->push_back(bodyBlock);
   builder.setInsertionPointToStart(bodyBlock);
-  auto curCounter = mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
-  auto val = mlir::arith::AddIOp::create(builder, location, startVal, curCounter);
+  auto curCounter =
+      mlir::LLVM::LoadOp::create(builder, location, i32Ty, counterAlloca);
+  auto val =
+      mlir::arith::AddIOp::create(builder, location, startVal, curCounter);
   emitPtrArrayStore(alloca, curCounter, val, arrType, location);
   // Increment counter
   auto one = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 1);
-  auto incremented = mlir::arith::AddIOp::create(builder, location, curCounter, one);
+  auto incremented =
+      mlir::arith::AddIOp::create(builder, location, curCounter, one);
   mlir::LLVM::StoreOp::create(builder, location, incremented, counterAlloca);
   // Back to header
   mlir::cf::BranchOp::create(builder, location, headerBlock);
@@ -631,10 +609,9 @@ mlir::Value MLIRGenImpl::emitPtrElementGEP(mlir::Value ptr, mlir::Value idx,
   auto elemMlirType = convertType(pointeeType);
   // Pointer arithmetic GEP: ptr + idx * sizeof(elemType)
   // Single index {idx}, unlike array GEP which uses {0, idx}
-  return mlir::LLVM::GEPOp::create(
-      builder, location, llvmPtrTy(), elemMlirType, ptr,
-      llvm::ArrayRef<mlir::LLVM::GEPArg>{idx},
-      mlir::LLVM::GEPNoWrapFlags::inbounds);
+  return mlir::LLVM::GEPOp::create(builder, location, llvmPtrTy(), elemMlirType,
+                                   ptr, llvm::ArrayRef<mlir::LLVM::GEPArg>{idx},
+                                   mlir::LLVM::GEPNoWrapFlags::inbounds);
 }
 
 mlir::Value MLIRGenImpl::emitLenExpr(AST::LenExprAST *ast) {
@@ -663,8 +640,8 @@ mlir::Value MLIRGenImpl::emitDimExpr(AST::DimExprAST *ast) {
   mlir::Value agg = mlir::LLVM::PoisonOp::create(builder, location, tupleTy);
   for (size_t i = 0; i < dims.size(); i++) {
     auto val = mlir::arith::ConstantIntOp::create(builder, location,
-                                                   builder.getI32Type(),
-                                                   dims[i]).getResult();
+                                                  builder.getI32Type(), dims[i])
+                   .getResult();
     agg = mlir::LLVM::InsertValueOp::create(
         builder, location, agg, val,
         llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
@@ -794,9 +771,9 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
   // Integer-backed enum: emit bare integer constant (no struct)
   if (et.is_integer_backed()) {
     auto &vi = et.get_variant(variant_idx);
-    return mlir::arith::ConstantIntOp::create(builder, location,
-                                              getEnumBackingMLIRType(et),
-                                              cautious_value(vi.discriminant_value, "enum discriminant"))
+    return mlir::arith::ConstantIntOp::create(
+               builder, location, getEnumBackingMLIRType(et),
+               cautious_value(vi.discriminant_value, "enum discriminant"))
         .getResult();
   }
 
@@ -998,8 +975,8 @@ mlir::Value MLIRGenImpl::emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast) {
 }
 
 mlir::Value MLIRGenImpl::emitPayloadCaseExpr(AST::CaseExprAST *ast,
-                                              mlir::Value scrutineeVal,
-                                              const EnumType &et) {
+                                             mlir::Value scrutineeVal,
+                                             const EnumType &et) {
   auto location = loc(ast);
   auto enumTy = cautious_at(enumTypes, ast->scrutinee->get_type(), "enumTypes");
 
@@ -1163,8 +1140,8 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                                    mlir::Value tag,
                                                    const EnumType &et) {
   // Each arm's comparison constant is the variant's discriminant value.
-  return emitScalarCaseExpr(ast, tag,
-      [&](const AST::CaseArm &arm, mlir::Location loc) {
+  return emitScalarCaseExpr(
+      ast, tag, [&](const AST::CaseArm &arm, mlir::Location loc) {
         auto &vi = et.get_variant(arm.pattern.variant_index);
         return mlir::arith::ConstantIntOp::create(
             builder, loc, getEnumBackingMLIRType(et),
@@ -1173,17 +1150,18 @@ mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
 }
 
 mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
-                                              mlir::Value scrutineeVal) {
+                                             mlir::Value scrutineeVal) {
   auto scrutineeType = ast->scrutinee->get_type();
 
   // Each arm's comparison constant is the literal value parsed from source.
-  return emitScalarCaseExpr(ast, scrutineeVal,
+  return emitScalarCaseExpr(
+      ast, scrutineeVal,
       [&](const AST::CaseArm &arm, mlir::Location loc) -> mlir::Value {
         using LK = AST::CasePattern::LiteralKind;
         switch (arm.pattern.literal_kind) {
         case LK::Bool:
-          return emitIntConstant(
-              (arm.pattern.literal_value == "true") ? 1 : 0, Type::Bool(), loc);
+          return emitIntConstant((arm.pattern.literal_value == "true") ? 1 : 0,
+                                 Type::Bool(), loc);
         case LK::Char:
           return emitIntConstant(
               static_cast<uint8_t>(arm.pattern.literal_value[0]), Type::Char(),
@@ -1199,8 +1177,9 @@ mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
 }
 
 mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
-                                             mlir::Value scrutineeVal,
-                                             ArmToComparisonConst armToConst) {
+                                            mlir::Value scrutineeVal,
+                                            ArmToComparisonConst armToConst,
+                                            ArmPreamble armPreamble) {
   auto location = loc(ast);
   bool hasResult = ast->get_type().type_kind != TypeKind::Unit &&
                    ast->get_type().type_kind != TypeKind::Never;
@@ -1247,9 +1226,9 @@ mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
   for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
     size_t i = nonWildcardIndices[ci];
     auto armConst = armToConst(ast->arms[i], location);
-    auto cmp = mlir::arith::CmpIOp::create(
-        builder, location, mlir::arith::CmpIPredicate::eq, scrutineeVal,
-        armConst);
+    auto cmp = mlir::arith::CmpIOp::create(builder, location,
+                                           mlir::arith::CmpIPredicate::eq,
+                                           scrutineeVal, armConst);
 
     mlir::Block *falseTarget;
     if (ci + 1 < nonWildcardIndices.size()) {
@@ -1276,6 +1255,9 @@ mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
   for (size_t i = 0; i < ast->arms.size(); i++) {
     auto &arm = ast->arms[i];
     builder.setInsertionPointToStart(armBlocks[i]);
+
+    if (armPreamble)
+      armPreamble(arm, location);
 
     auto armVal = emitBlock(arm.body.get());
 

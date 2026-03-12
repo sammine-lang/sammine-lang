@@ -53,7 +53,8 @@ private:
 
 public:
   explicit Lexer(const std::string &input);
-  Lexer(const std::string &input, std::shared_ptr<sammine_util::SourceInfo> source_info);
+  Lexer(const std::string &input,
+        std::shared_ptr<sammine_util::SourceInfo> source_info);
   Lexer() : location(), cursor(0), at_eof(false) {
     tokStream = std::make_shared<TokenStream>();
   }

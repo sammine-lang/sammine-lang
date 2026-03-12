@@ -67,19 +67,19 @@ enum TokenType {
 
   // TokFunction
   TokReturn,
-  TokFunc,   // fn
-  TokStruct, // struct
-  TokPtr,    // ptr
-  TokAlloc,  // alloc
-  TokFree,   // free
-  TokLen,    // len
-  TokDim,    // dim
-  TokArrow,  // ->
-  TokLet,    // let
-  TokMUT,    // mut
-  TokReuse,  // reuse
-  TokExport, // export
-  TokImport, // import
+  TokFunc,      // fn
+  TokStruct,    // struct
+  TokPtr,       // ptr
+  TokAlloc,     // alloc
+  TokFree,      // free
+  TokLen,       // len
+  TokDim,       // dim
+  TokArrow,     // ->
+  TokLet,       // let
+  TokMUT,       // mut
+  TokReuse,     // reuse
+  TokExport,    // export
+  TokImport,    // import
   TokAs,        // as
   TokEllipsis,  // ...
   TokTypeclass, // typeclass
@@ -359,9 +359,9 @@ public:
     auto original = *cursor;
     auto loc = original->location;
     *cursor = std::make_shared<Token>(first_type, first_lex, loc);
-    auto inserted = TokStream.insert(
-        std::next(cursor),
-        std::make_shared<Token>(second_type, second_lex, loc));
+    auto inserted =
+        TokStream.insert(std::next(cursor),
+                         std::make_shared<Token>(second_type, second_lex, loc));
     pending_splits.push_back({inserted, original});
   }
 };

@@ -41,15 +41,18 @@ void LinearTypeChecker::register_linear(const std::string &name,
                                         sammine_util::Location loc) {
   if (scope_stack.empty())
     return;
-  scope_stack.back()[name] = VarInfo{VarState::Unconsumed, loc, {}, name, {}, {}};
+  scope_stack.back()[name] =
+      VarInfo{VarState::Unconsumed, loc, {}, name, {}, {}};
 }
 
 void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc,
                                 const std::string &reason) {
   if (info->state == VarState::Consumed) {
     this->add_error(
-        loc, fmt::format("Cannot use linear variable '{}' — it was already {} previously",
-                         info->name, info->consume_reason));
+        loc,
+        fmt::format(
+            "Cannot use linear variable '{}' — it was already {} previously",
+            info->name, info->consume_reason));
     this->add_error(
         info->consume_location,
         fmt::format("'{}' was {} here", info->name, info->consume_reason));
@@ -61,14 +64,13 @@ void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc,
 }
 
 bool LinearTypeChecker::check_use_after_consume(VarInfo *info,
-                                                 sammine_util::Location use_loc,
-                                                 const std::string &verb) {
+                                                sammine_util::Location use_loc,
+                                                const std::string &verb) {
   if (!info || info->state != VarState::Consumed)
     return false;
-  this->add_error(
-      use_loc,
-      fmt::format("Cannot {} '{}' — it was already {} previously",
-                  verb, info->name, info->consume_reason));
+  this->add_error(use_loc,
+                  fmt::format("Cannot {} '{}' — it was already {} previously",
+                              verb, info->name, info->consume_reason));
   this->add_error(
       info->consume_location,
       fmt::format("'{}' was {} here", info->name, info->consume_reason));
@@ -107,9 +109,9 @@ void LinearTypeChecker::restore(const LinearVarMap &snap) {
 
 // ── Branch consistency ──────────────────────────────────────────────
 
-LinearTypeChecker::BranchAgreement LinearTypeChecker::check_agreement(
-    const std::vector<LinearVarMap> &branches,
-    const StateExtractor &get_state) {
+LinearTypeChecker::BranchAgreement
+LinearTypeChecker::check_agreement(const std::vector<LinearVarMap> &branches,
+                                   const StateExtractor &get_state) {
   bool first_consumed = false;
   bool seen_first = false;
   for (auto &branch : branches) {
@@ -153,11 +155,11 @@ void LinearTypeChecker::check_branch_consistency(
     auto *info = find_linear(name);
 
     // Check the var itself
-    auto result = check_agreement(branches, [&](const LinearVarMap &b)
-        -> std::optional<VarState> {
-      auto it = b.find(name);
-      return it != b.end() ? std::optional(it->second.state) : std::nullopt;
-    });
+    auto result = check_agreement(
+        branches, [&](const LinearVarMap &b) -> std::optional<VarState> {
+          auto it = b.find(name);
+          return it != b.end() ? std::optional(it->second.state) : std::nullopt;
+        });
     apply_consistency(result, info, name, loc);
 
     // Check children (e.g. v.data inside a struct wrapper)
@@ -165,14 +167,16 @@ void LinearTypeChecker::check_branch_consistency(
       if (child_before.state != VarState::Unconsumed)
         continue;
 
-      auto child_result = check_agreement(branches, [&](const LinearVarMap &b)
-          -> std::optional<VarState> {
-        auto it = b.find(name);
-        if (it == b.end()) return std::nullopt;
-        auto cit = it->second.children.find(child_name);
-        return cit != it->second.children.end()
-            ? std::optional(cit->second.state) : std::nullopt;
-      });
+      auto child_result = check_agreement(
+          branches, [&](const LinearVarMap &b) -> std::optional<VarState> {
+            auto it = b.find(name);
+            if (it == b.end())
+              return std::nullopt;
+            auto cit = it->second.children.find(child_name);
+            return cit != it->second.children.end()
+                       ? std::optional(cit->second.state)
+                       : std::nullopt;
+          });
       apply_consistency(child_result,
                         info ? find_child(name, child_name) : nullptr,
                         child_before.name, loc);
@@ -239,33 +243,47 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
   using NK = NodeKind;
   switch (stmt->getKind()) {
   case NK::VarDefAST:
-    check_var_def(llvm::cast<VarDefAST>(stmt)); break;
+    check_var_def(llvm::cast<VarDefAST>(stmt));
+    break;
   case NK::BinaryExprAST:
-    check_binary(llvm::cast<BinaryExprAST>(stmt)); break;
+    check_binary(llvm::cast<BinaryExprAST>(stmt));
+    break;
   case NK::CallExprAST:
-    check_call(llvm::cast<CallExprAST>(stmt)); break;
+    check_call(llvm::cast<CallExprAST>(stmt));
+    break;
   case NK::FreeExprAST:
-    check_free(llvm::cast<FreeExprAST>(stmt)); break;
+    check_free(llvm::cast<FreeExprAST>(stmt));
+    break;
   case NK::ReturnStmtAST:
-    check_return(llvm::cast<ReturnStmtAST>(stmt)); break;
+    check_return(llvm::cast<ReturnStmtAST>(stmt));
+    break;
   case NK::IfExprAST:
-    check_if(llvm::cast<IfExprAST>(stmt)); break;
+    check_if(llvm::cast<IfExprAST>(stmt));
+    break;
   case NK::WhileExprAST:
-    check_while(llvm::cast<WhileExprAST>(stmt)); break;
+    check_while(llvm::cast<WhileExprAST>(stmt));
+    break;
   case NK::CaseExprAST:
-    check_case(llvm::cast<CaseExprAST>(stmt)); break;
+    check_case(llvm::cast<CaseExprAST>(stmt));
+    break;
   case NK::StructLiteralExprAST:
-    check_struct_literal(llvm::cast<StructLiteralExprAST>(stmt)); break;
+    check_struct_literal(llvm::cast<StructLiteralExprAST>(stmt));
+    break;
   case NK::ArrayLiteralExprAST:
-    check_array_literal(llvm::cast<ArrayLiteralExprAST>(stmt)); break;
+    check_array_literal(llvm::cast<ArrayLiteralExprAST>(stmt));
+    break;
   case NK::TupleLiteralExprAST:
-    check_tuple_literal(llvm::cast<TupleLiteralExprAST>(stmt)); break;
+    check_tuple_literal(llvm::cast<TupleLiteralExprAST>(stmt));
+    break;
   case NK::DerefExprAST:
-    check_deref(llvm::cast<DerefExprAST>(stmt)); break;
+    check_deref(llvm::cast<DerefExprAST>(stmt));
+    break;
   case NK::IndexExprAST:
-    check_index(llvm::cast<IndexExprAST>(stmt)); break;
+    check_index(llvm::cast<IndexExprAST>(stmt));
+    break;
   case NK::AddrOfExprAST:
-    check_addr_of(llvm::cast<AddrOfExprAST>(stmt)); break;
+    check_addr_of(llvm::cast<AddrOfExprAST>(stmt));
+    break;
   default:
     break; // All other nodes (number, string, etc.): no linear state changes
   }
@@ -281,7 +299,8 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
 
   // Tuple destructuring: let (a, b) = expr;
   if (ast->is_tuple_destructure) {
-    // If RHS is a wrapper var, consume it (children dissolve into individual vars)
+    // If RHS is a wrapper var, consume it (children dissolve into individual
+    // vars)
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
       auto *info = find_linear(var->variableName);
       if (info)
@@ -311,7 +330,8 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       closure_captures_[ast->TypedVar->name] = it->second;
   }
 
-  // Check if RHS is a field access extracting a linear field (e.g. let q = b.data)
+  // Check if RHS is a field access extracting a linear field (e.g. let q =
+  // b.data)
   if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->Expression.get())) {
     if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
       auto *child = find_child(obj->variableName, fa->field_name);
@@ -344,9 +364,11 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       };
   if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(ast->Expression.get()))
     propagate_from_elements(sl->field_values);
-  else if (auto *tl = llvm::dyn_cast<TupleLiteralExprAST>(ast->Expression.get()))
+  else if (auto *tl =
+               llvm::dyn_cast<TupleLiteralExprAST>(ast->Expression.get()))
     propagate_from_elements(tl->elements);
-  else if (auto *al = llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get()))
+  else if (auto *al =
+               llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get()))
     propagate_from_elements(al->elements);
 
   // Walk into RHS (may contain calls that consume things)
@@ -359,7 +381,8 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
 
 // Returns a human-readable path to the first non-linear pointer found,
 // e.g. "non-linear ptr<i32> in field 'data'", or nullopt if none.
-// NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here too.
+// NOTE: if you add a new wrapping TypeKind to forEachInnerType, add it here
+// too.
 static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
   switch (t.type_kind) {
   case TypeKind::Pointer:
@@ -486,10 +509,12 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
 
     // LHS deref: *pp = x updates the "*" child's location
     if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
-      if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
+      if (auto *lhs_var =
+              llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
         auto *child = find_child(lhs_var->variableName, "*");
         if (child) {
-          if (child->state == VarState::Unconsumed && ast->RHS->get_type().linearity == Linearity::Linear) {
+          if (child->state == VarState::Unconsumed &&
+              ast->RHS->get_type().linearity == Linearity::Linear) {
             this->add_error(
                 ast->get_location(),
                 fmt::format("Reassigning linear variable '{}' without "
@@ -573,10 +598,9 @@ void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
   // value creates a non-linear pointer to it, which would allow aliasing
   // and break the single-owner invariant.
   if (ast->operand->get_type().linearity == Linearity::Linear) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Cannot take address of a linear value — "
-                    "linear values cannot be aliased"));
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot take address of a linear value — "
+                                "linear values cannot be aliased"));
     return;
   }
   check_stmt(ast->operand.get());
@@ -659,7 +683,7 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
 // ── Closure capture tracking ─────────────────────────────────────────
 
 void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
-                                                 const std::string &dest_var) {
+                                                const std::string &dest_var) {
   auto *cp = props_ ? props_->call(ast->id()) : nullptr;
   if (!cp || !cp->is_partial || !cp->callee_func_type)
     return;
@@ -692,11 +716,11 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
     // Returning a type that contains a non-linear pointer — error (may dangle)
     auto path = find_nonlinear_pointer_path(var->get_type());
     if (path) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("Cannot return '{}' of type '{}': {} "
-                      "(may reference a local variable)",
-                      var->variableName, var->get_type().to_string(), *path));
+      this->add_error(ast->get_location(),
+                      fmt::format("Cannot return '{}' of type '{}': {} "
+                                  "(may reference a local variable)",
+                                  var->variableName,
+                                  var->get_type().to_string(), *path));
       return;
     }
     // Returning a closure — check if any captured arg contains a pointer
@@ -727,7 +751,8 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
     }
   }
 
-  // Returning a compound literal (struct/tuple/array) that wraps a tainted closure
+  // Returning a compound literal (struct/tuple/array) that wraps a tainted
+  // closure
   auto check_elements_for_tainted_closure =
       [&](const std::vector<std::unique_ptr<ExprAST>> &elements) -> bool {
     for (auto &elem : elements) {
@@ -768,11 +793,9 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
   if (auto *call = llvm::dyn_cast<CallExprAST>(ast->return_expr.get())) {
     auto *cp = props_ ? props_->call(call->id()) : nullptr;
     if (cp && cp->is_partial && cp->callee_func_type) {
-      auto &func_type =
-          std::get<FunctionType>(cp->callee_func_type->type_data);
+      auto &func_type = std::get<FunctionType>(cp->callee_func_type->type_data);
       auto params = func_type.get_params_types();
-      for (size_t i = 0; i < call->arguments.size() && i < params.size();
-           i++) {
+      for (size_t i = 0; i < call->arguments.size() && i < params.size(); i++) {
         if (params[i].containsNonLinearPtr()) {
           this->add_error(
               ast->get_location(),
@@ -842,10 +865,9 @@ void LinearTypeChecker::check_while(WhileExprAST *ast) {
     if (it != after.end() && it->second.state == VarState::Consumed) {
       this->add_error(
           it->second.consume_location,
-          fmt::format(
-              "Cannot consume linear variable '{}' inside a loop"
-              " (defined outside the loop)",
-              name));
+          fmt::format("Cannot consume linear variable '{}' inside a loop"
+                      " (defined outside the loop)",
+                      name));
     }
   }
 
@@ -894,7 +916,7 @@ void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
 // ── Inner-linear tracking helpers ────────────────────────────────────
 
 void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
-                                               sammine_util::Location loc) {
+                                              sammine_util::Location loc) {
   switch (t.type_kind) {
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(t.type_data);
@@ -902,9 +924,9 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     auto &types = st.get_field_types();
     for (size_t i = 0; i < names.size(); i++) {
       if (types[i].containsLinearTypes()) {
-        auto &child =
-            parent.children[names[i]] = VarInfo{VarState::Unconsumed, loc, {},
-                                                 parent.name + "." + names[i], {}, {}};
+        auto &child = parent.children[names[i]] =
+            VarInfo{VarState::Unconsumed,         loc, {},
+                    parent.name + "." + names[i], {},  {}};
         if (types[i].linearity != Linearity::Linear)
           register_inner_linear(child, types[i], loc);
       }
@@ -916,9 +938,8 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     for (size_t i = 0; i < tt.size(); i++) {
       if (tt.get_element(i).containsLinearTypes()) {
         auto key = std::to_string(i);
-        auto &child =
-            parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
-                                            parent.name + "." + key, {}, {}};
+        auto &child = parent.children[key] = VarInfo{
+            VarState::Unconsumed, loc, {}, parent.name + "." + key, {}, {}};
         if (tt.get_element(i).linearity != Linearity::Linear)
           register_inner_linear(child, tt.get_element(i), loc);
       }
@@ -931,9 +952,8 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
       for (size_t i = 0; i < variant.payload_types.size(); i++) {
         if (variant.payload_types[i].containsLinearTypes()) {
           auto key = variant.name + "." + std::to_string(i);
-          auto &child =
-              parent.children[key] = VarInfo{VarState::Unconsumed, loc, {},
-                                              parent.name + "." + key, {}, {}};
+          auto &child = parent.children[key] = VarInfo{
+              VarState::Unconsumed, loc, {}, parent.name + "." + key, {}, {}};
           if (variant.payload_types[i].linearity != Linearity::Linear)
             register_inner_linear(child, variant.payload_types[i], loc);
         }
@@ -944,9 +964,8 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
     if (at.get_element().containsLinearTypes()) {
-      auto &child =
-          parent.children["*"] = VarInfo{VarState::Unconsumed, loc, {},
-                                          parent.name + "[*]", {}, {}};
+      auto &child = parent.children["*"] =
+          VarInfo{VarState::Unconsumed, loc, {}, parent.name + "[*]", {}, {}};
       if (at.get_element().linearity != Linearity::Linear)
         register_inner_linear(child, at.get_element(), loc);
     }
@@ -956,9 +975,8 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
     auto &pt = std::get<PointerType>(t.type_data);
     auto pointee = pt.get_pointee();
     if (pointee.containsLinearTypes()) {
-      auto &child =
-          parent.children["*"] = VarInfo{VarState::Consumed, loc, {},
-                                          "*" + parent.name, {}, {}};
+      auto &child = parent.children["*"] =
+          VarInfo{VarState::Consumed, loc, {}, "*" + parent.name, {}, {}};
       if (pointee.linearity != Linearity::Linear)
         register_inner_linear(child, pointee, loc);
     }
@@ -1005,7 +1023,7 @@ void LinearTypeChecker::check_children_consumed(const VarInfo &info) {
 }
 
 VarInfo *LinearTypeChecker::find_child(const std::string &var_name,
-                                        const std::string &field_name) {
+                                       const std::string &field_name) {
   auto *parent = find_linear(var_name);
   if (!parent)
     return nullptr;
@@ -1016,8 +1034,8 @@ VarInfo *LinearTypeChecker::find_child(const std::string &var_name,
 }
 
 void LinearTypeChecker::register_if_linear(const std::string &name,
-                                            const Type &type,
-                                            sammine_util::Location loc) {
+                                           const Type &type,
+                                           sammine_util::Location loc) {
   if (!type.containsLinearTypes())
     return;
   register_linear(name, loc);

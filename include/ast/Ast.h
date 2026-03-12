@@ -15,8 +15,8 @@
 //! and a visitor interface for traversing the AST
 
 /// Generates boilerplate for each AST node: getTreeName (debug printing),
-/// classof (LLVM RTTI), accept_vis/walk_with_preorder/postorder (visitor dispatch),
-/// and accept_synthesis (type checker dispatch).
+/// classof (LLVM RTTI), accept_vis/walk_with_preorder/postorder (visitor
+/// dispatch), and accept_synthesis (type checker dispatch).
 // clang-format off
 #define AST_NODE_METHODS(tree_name, kind_val)                                  \
   std::string getTreeName() const override { return tree_name; }               \
@@ -42,20 +42,22 @@ namespace AST {
 class Printable {};
 
 /// Discriminator for the TypeExprAST hierarchy.
-/// NOTE: TypeExprAST is NOT part of the visitor pattern — resolved via dynamic_cast
-/// in the type checker (BiTypeChecker::resolve_type_expr).
+/// NOTE: TypeExprAST is NOT part of the visitor pattern — resolved via
+/// dynamic_cast in the type checker (BiTypeChecker::resolve_type_expr).
 enum class ParseKind {
-  Simple,    // e.g. i32, bool, MyStruct
-  Pointer,   // ptr<T> or 'ptr<T>
-  Array,     // [T; N]
-  Function,  // (T, U) -> V
-  Generic,   // Box<T>, Option<i32>
-  Tuple,     // (T, U)
+  Simple,   // e.g. i32, bool, MyStruct
+  Pointer,  // ptr<T> or 'ptr<T>
+  Array,    // [T; N]
+  Function, // (T, U) -> V
+  Generic,  // Box<T>, Option<i32>
+  Tuple,    // (T, U)
 };
 
-/// Base class for parsed type annotations. Produces a Type during type checking.
+/// Base class for parsed type annotations. Produces a Type during type
+/// checking.
 class TypeExprAST {
   ParseKind kind;
+
 public:
   ParseKind getKind() const { return kind; }
   sammine_util::Location location;
@@ -96,7 +98,8 @@ public:
     return node->getKind() == ParseKind::Pointer;
   }
   std::string to_string() const override {
-    return (is_linear ? "'" : "") + std::string("ptr<") + pointee->to_string() + ">";
+    return (is_linear ? "'" : "") + std::string("ptr<") + pointee->to_string() +
+           ">";
   }
 };
 
@@ -105,8 +108,8 @@ public:
   std::unique_ptr<TypeExprAST> element;
   size_t size;
   ArrayTypeExprAST(std::unique_ptr<TypeExprAST> element, size_t size)
-      : TypeExprAST(ParseKind::Array), element(std::move(element)),
-        size(size) {}
+      : TypeExprAST(ParseKind::Array), element(std::move(element)), size(size) {
+  }
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Array;
   }
@@ -121,8 +124,8 @@ public:
   std::unique_ptr<TypeExprAST> returnType;
   FunctionTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> paramTypes,
                       std::unique_ptr<TypeExprAST> returnType)
-      : TypeExprAST(ParseKind::Function),
-        paramTypes(std::move(paramTypes)), returnType(std::move(returnType)) {}
+      : TypeExprAST(ParseKind::Function), paramTypes(std::move(paramTypes)),
+        returnType(std::move(returnType)) {}
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Function;
   }
@@ -169,8 +172,8 @@ class TupleTypeExprAST : public TypeExprAST {
 public:
   std::vector<std::unique_ptr<TypeExprAST>> element_types;
   TupleTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> element_types)
-      : TypeExprAST(ParseKind::Tuple),
-        element_types(std::move(element_types)) {}
+      : TypeExprAST(ParseKind::Tuple), element_types(std::move(element_types)) {
+  }
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Tuple;
   }
@@ -246,13 +249,13 @@ public:
   sammine_util::QualifiedName functionName;
   std::unique_ptr<TypeExprAST> return_type_expr;
   std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors;
-  std::vector<std::string> type_params; // populated during parsing, not type checking
-  bool is_var_arg = false;              // true for C vararg externs (e.g. printf)
+  std::vector<std::string>
+      type_params;         // populated during parsing, not type checking
+  bool is_var_arg = false; // true for C vararg externs (e.g. printf)
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(
-      sammine_util::QualifiedName functionName,
-      sammine_util::Location name_loc,
+      sammine_util::QualifiedName functionName, sammine_util::Location name_loc,
       std::unique_ptr<TypeExprAST> return_type_expr,
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
       : AstBase(NodeKind::PrototypeAST),
@@ -271,8 +274,7 @@ public:
   }
 
   explicit PrototypeAST(
-      sammine_util::QualifiedName functionName,
-      sammine_util::Location name_loc,
+      sammine_util::QualifiedName functionName, sammine_util::Location name_loc,
       std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
       : AstBase(NodeKind::PrototypeAST) {
     this->functionName = std::move(functionName);
@@ -299,7 +301,8 @@ public:
 class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
-  bool is_exposed = false; // true when declared with `reuse` (re-exported to importers)
+  bool is_exposed =
+      false; // true when declared with `reuse` (re-exported to importers)
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype)
       : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype)) {
@@ -311,7 +314,8 @@ public:
 /// statements (is_statement=true, value discarded) or as values.
 class ExprAST : public AstBase, public Printable {
 public:
-  bool is_statement = true; // false when used as value (e.g. last expr in block)
+  bool is_statement =
+      true; // false when used as value (e.g. last expr in block)
   ExprAST(NodeKind kind) : AstBase(kind) {}
   ~ExprAST() = default;
   static bool classof(const AstBase *node) {
@@ -348,7 +352,9 @@ public:
         ->join_location(this->Block.get());
   }
 
-  std::string getFunctionName() const { return Prototype->functionName.mangled(); }
+  std::string getFunctionName() const {
+    return Prototype->functionName.mangled();
+  }
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
 
@@ -368,8 +374,7 @@ public:
   explicit StructDefAST(sammine_util::QualifiedName name,
                         sammine_util::Location name_loc,
                         decltype(struct_members) struct_members)
-      : DefinitionAST(NodeKind::StructDefAST),
-        struct_name(std::move(name)),
+      : DefinitionAST(NodeKind::StructDefAST), struct_name(std::move(name)),
         struct_members(std::move(struct_members)) {
     this->join_location(name_loc);
     for (auto &m : struct_members)
@@ -398,8 +403,8 @@ public:
   explicit EnumDefAST(sammine_util::QualifiedName name,
                       sammine_util::Location name_loc,
                       std::vector<EnumVariantDef> variants)
-      : DefinitionAST(NodeKind::EnumDefAST),
-        enum_name(std::move(name)), variants(std::move(variants)) {
+      : DefinitionAST(NodeKind::EnumDefAST), enum_name(std::move(name)),
+        variants(std::move(variants)) {
     this->join_location(name_loc);
     for (auto &v : this->variants)
       this->join_location(v.location);
@@ -432,7 +437,7 @@ class VarDefAST : public ExprAST {
 public:
   bool is_mutable = false;
   bool is_tuple_destructure = false;
-  std::unique_ptr<TypedVarAST> TypedVar;                      // single var (existing)
+  std::unique_ptr<TypedVarAST> TypedVar; // single var (existing)
   std::vector<std::unique_ptr<TypedVarAST>> destructure_vars; // tuple (new)
   std::unique_ptr<ExprAST> Expression;
 
@@ -532,7 +537,8 @@ public:
 class ReturnStmtAST : public ExprAST {
 
 public:
-  bool is_implicit; // true when generated from last expression in a block (no `return` keyword)
+  bool is_implicit; // true when generated from last expression in a block (no
+                    // `return` keyword)
   std::unique_ptr<ExprAST> return_expr;
   ReturnStmtAST(std::shared_ptr<Token> return_tok,
                 std::unique_ptr<ExprAST> return_expr)
@@ -566,8 +572,8 @@ public:
       std::shared_ptr<Token> tok,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
       : ExprAST(NodeKind::CallExprAST),
-        functionName(sammine_util::QualifiedName::local(
-            tok ? tok->lexeme : "")) {
+        functionName(
+            sammine_util::QualifiedName::local(tok ? tok->lexeme : "")) {
     join_location(tok);
     for (auto &arg : arguments)
       if (arg)
@@ -690,8 +696,7 @@ class ArrayLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;
   explicit ArrayLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
-      : ExprAST(NodeKind::ArrayLiteralExprAST),
-        elements(std::move(elements)) {
+      : ExprAST(NodeKind::ArrayLiteralExprAST), elements(std::move(elements)) {
     for (auto &e : this->elements)
       this->join_location(e.get());
   }
@@ -707,8 +712,7 @@ public:
                         std::unique_ptr<ExprAST> end)
       : ExprAST(NodeKind::RangeExprAST), start(std::move(start)),
         end(std::move(end)) {
-    this->join_location(this->start.get())
-        ->join_location(this->end.get());
+    this->join_location(this->start.get())->join_location(this->end.get());
   }
   std::string to_string() const override;
   AST_NODE_METHODS("RangeExprAST", NodeKind::RangeExprAST)
@@ -772,8 +776,7 @@ public:
   std::vector<std::unique_ptr<ExprAST>> field_values;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   explicit StructLiteralExprAST(
-      std::shared_ptr<Token> name_tok,
-      std::vector<std::string> field_names,
+      std::shared_ptr<Token> name_tok, std::vector<std::string> field_names,
       std::vector<std::unique_ptr<ExprAST>> field_values)
       : ExprAST(NodeKind::StructLiteralExprAST),
         struct_name(sammine_util::QualifiedName::local(
@@ -789,8 +792,7 @@ public:
       sammine_util::QualifiedName qn, sammine_util::Location loc,
       std::vector<std::string> field_names,
       std::vector<std::unique_ptr<ExprAST>> field_values)
-      : ExprAST(NodeKind::StructLiteralExprAST),
-        struct_name(std::move(qn)),
+      : ExprAST(NodeKind::StructLiteralExprAST), struct_name(std::move(qn)),
         field_names(std::move(field_names)),
         field_values(std::move(field_values)) {
     this->location = loc;
@@ -823,15 +825,16 @@ public:
 struct CasePattern {
   sammine_util::QualifiedName variant_name =
       sammine_util::QualifiedName::local("");
-  std::vector<std::string> bindings; // bound variables from payload destructuring
-  bool is_wildcard = false;          // true for `_` catch-all pattern
+  std::vector<std::string>
+      bindings;             // bound variables from payload destructuring
+  bool is_wildcard = false; // true for `_` catch-all pattern
   sammine_util::Location location;
-  size_t variant_index = 0;          // resolved during type checking
+  size_t variant_index = 0; // resolved during type checking
 
   // Literal pattern fields (e.g., `0`, `42`, `true`, `'a'`, `-1`)
   enum class LiteralKind { None, Integer, Bool, Char };
   bool is_literal = false;
-  std::string literal_value;         // raw string: "42", "-42", "true", "a"
+  std::string literal_value; // raw string: "42", "-42", "true", "a"
   LiteralKind literal_kind = LiteralKind::None; // set by parser
 };
 
@@ -870,8 +873,7 @@ public:
                         std::unique_ptr<BlockAST> body)
       : ExprAST(NodeKind::WhileExprAST), condition(std::move(condition)),
         body(std::move(body)) {
-    this->join_location(this->condition.get())
-        ->join_location(this->body.get());
+    this->join_location(this->condition.get())->join_location(this->body.get());
   }
   std::string to_string() const override;
   AST_NODE_METHODS("WhileExprAST", NodeKind::WhileExprAST)
@@ -881,8 +883,7 @@ class TupleLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;
   explicit TupleLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
-      : ExprAST(NodeKind::TupleLiteralExprAST),
-        elements(std::move(elements)) {
+      : ExprAST(NodeKind::TupleLiteralExprAST), elements(std::move(elements)) {
     for (auto &e : this->elements)
       this->join_location(e.get());
   }
@@ -899,15 +900,15 @@ public:
   explicit TypeClassDeclAST(std::shared_ptr<Token> tok, std::string name,
                             std::vector<std::string> params,
                             std::vector<std::unique_ptr<PrototypeAST>> methods)
-      : DefinitionAST(NodeKind::TypeClassDeclAST),
-        class_name(std::move(name)), type_params(std::move(params)),
-        methods(std::move(methods)) {
+      : DefinitionAST(NodeKind::TypeClassDeclAST), class_name(std::move(name)),
+        type_params(std::move(params)), methods(std::move(methods)) {
     this->join_location(tok);
   }
   AST_NODE_METHODS("TypeClassDeclAST", NodeKind::TypeClassDeclAST)
 };
 
-/// Typeclass instance: `instance Name<ConcreteType> { method implementations }`.
+/// Typeclass instance: `instance Name<ConcreteType> { method implementations
+/// }`.
 class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;
@@ -927,7 +928,8 @@ public:
 };
 
 /// Base class for kernel-only expressions (parallel to ExprAST for CPU code).
-/// Kernel expressions don't participate in the CPU visitor pattern — stubs provided here.
+/// Kernel expressions don't participate in the CPU visitor pattern — stubs
+/// provided here.
 class KernelExprAST : public AstBase, public Printable {
 public:
   KernelExprAST(NodeKind kind) : AstBase(kind) {}
@@ -941,7 +943,9 @@ public:
   void accept_vis(ASTVisitor *) override {}
   void walk_with_preorder(ASTVisitor *) override {}
   void walk_with_postorder(ASTVisitor *) override {}
-  Type accept_synthesis(TypeCheckerVisitor *) override { return Type::NonExistent(); }
+  Type accept_synthesis(TypeCheckerVisitor *) override {
+    return Type::NonExistent();
+  }
 };
 
 /// Kernel integer literal expression.
@@ -962,20 +966,19 @@ public:
 };
 
 /// Kernel map expression: map(array_param, (param: T) -> U { body })
-/// The lambda reuses CPU AST nodes (PrototypeAST + BlockAST) for unified front-end.
+/// The lambda reuses CPU AST nodes (PrototypeAST + BlockAST) for unified
+/// front-end.
 class KernelMapExprAST : public KernelExprAST {
 public:
   std::string input_name;
   std::unique_ptr<PrototypeAST> lambda_proto;
   std::unique_ptr<BlockAST> lambda_body;
 
-  KernelMapExprAST(std::shared_ptr<Token> map_tok,
-                   std::string input_name,
+  KernelMapExprAST(std::shared_ptr<Token> map_tok, std::string input_name,
                    std::unique_ptr<PrototypeAST> proto,
                    std::unique_ptr<BlockAST> body)
       : KernelExprAST(NodeKind::KernelMapExprAST),
-        input_name(std::move(input_name)),
-        lambda_proto(std::move(proto)),
+        input_name(std::move(input_name)), lambda_proto(std::move(proto)),
         lambda_body(std::move(body)) {
     join_location(map_tok);
     join_location(lambda_proto.get());
@@ -995,13 +998,11 @@ public:
   std::shared_ptr<Token> op_tok;
   std::unique_ptr<ExprAST> identity;
 
-  KernelReduceExprAST(std::shared_ptr<Token> reduce_tok,
-                      std::string input_name,
+  KernelReduceExprAST(std::shared_ptr<Token> reduce_tok, std::string input_name,
                       std::shared_ptr<Token> op_tok,
                       std::unique_ptr<ExprAST> identity)
       : KernelExprAST(NodeKind::KernelReduceExprAST),
-        input_name(std::move(input_name)),
-        op_tok(std::move(op_tok)),
+        input_name(std::move(input_name)), op_tok(std::move(op_tok)),
         identity(std::move(identity)) {
     join_location(reduce_tok);
     join_location(this->op_tok);
@@ -1030,8 +1031,8 @@ public:
 
   KernelDefAST(std::unique_ptr<PrototypeAST> proto,
                std::unique_ptr<KernelBlockAST> body)
-      : DefinitionAST(NodeKind::KernelDefAST),
-        Prototype(std::move(proto)), Body(std::move(body)) {
+      : DefinitionAST(NodeKind::KernelDefAST), Prototype(std::move(proto)),
+        Body(std::move(body)) {
     join_location(Prototype.get());
   }
   AST_NODE_METHODS("KernelDefAST", NodeKind::KernelDefAST)

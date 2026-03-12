@@ -15,11 +15,10 @@ public:
   // variable name, func name and all that
   LexicalStack<sammine_util::Location> scope_stack;
   // variant_name → list of owning enum QualifiedNames
-  std::map<std::string, std::vector<sammine_util::QualifiedName>> variant_to_enum;
+  std::map<std::string, std::vector<sammine_util::QualifiedName>>
+      variant_to_enum;
 
-  ScopeGeneratorVisitor() {
-    scope_stack.push_context();
-  }
+  ScopeGeneratorVisitor() { scope_stack.push_context(); }
   void qualify_type_expr(TypeExprAST *expr);
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
@@ -48,7 +47,8 @@ public:
   void register_name(const std::string &symbol, sammine_util::Location loc) {
     return this->scope_stack.registerNameT(symbol, loc);
   }
-  // Case expressions: arm bodies contain pattern bindings not known at scope-gen time
+  // Case expressions: arm bodies contain pattern bindings not known at
+  // scope-gen time
   virtual void visit(CaseExprAST *ast) override {
     ast->scrutinee->accept_vis(this);
   }

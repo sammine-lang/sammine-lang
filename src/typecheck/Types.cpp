@@ -84,9 +84,7 @@ const std::vector<Type> &TupleType::get_element_types() const {
   return *element_types;
 }
 size_t TupleType::size() const { return element_types->size(); }
-Type TupleType::get_element(size_t idx) const {
-  return (*element_types)[idx];
-}
+Type TupleType::get_element(size_t idx) const { return (*element_types)[idx]; }
 
 Type::Type(const Type &other) = default;
 Type::Type(Type &&other) noexcept = default;
@@ -102,8 +100,10 @@ bool Type::operator<(const Type &t) const {
   if (type_kind != t.type_kind)
     return static_cast<int>(type_kind) < static_cast<int>(t.type_kind);
   if (type_kind == TypeKind::TypeParam || type_kind == TypeKind::String)
-    return std::get<std::string>(type_data) < std::get<std::string>(t.type_data);
-  // Same TypeKind with no sub-ordering (scalars, compounds) — equal for ordering
+    return std::get<std::string>(type_data) <
+           std::get<std::string>(t.type_data);
+  // Same TypeKind with no sub-ordering (scalars, compounds) — equal for
+  // ordering
   return false;
 }
 bool Type::operator>(const Type &t) const { return t < *this; }
@@ -117,8 +117,7 @@ bool Type::operator==(const Type &other) const {
       this->type_kind == TypeKind::Pointer ||
       this->type_kind == TypeKind::Array ||
       this->type_kind == TypeKind::Struct ||
-      this->type_kind == TypeKind::Enum ||
-      this->type_kind == TypeKind::Tuple ||
+      this->type_kind == TypeKind::Enum || this->type_kind == TypeKind::Tuple ||
       this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 
@@ -147,7 +146,8 @@ size_t std::hash<Type>::operator()(const Type &t) const {
     break;
   case TypeKind::String:
   case TypeKind::TypeParam:
-    hash_combine(h, std::hash<std::string>{}(std::get<std::string>(t.type_data)));
+    hash_combine(h,
+                 std::hash<std::string>{}(std::get<std::string>(t.type_data)));
     break;
   case TypeKind::Pointer:
     hash_combine(h, (*this)(std::get<PointerType>(t.type_data).get_pointee()));
@@ -160,8 +160,9 @@ size_t std::hash<Type>::operator()(const Type &t) const {
   }
   // Nominal types: identity is the name
   case TypeKind::Struct:
-    hash_combine(h, std::hash<std::string>{}(
-                        std::get<StructType>(t.type_data).get_name().mangled()));
+    hash_combine(h,
+                 std::hash<std::string>{}(
+                     std::get<StructType>(t.type_data).get_name().mangled()));
     break;
   case TypeKind::Enum:
     hash_combine(h, std::hash<std::string>{}(
@@ -223,9 +224,8 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
   if (expected.type_kind == TypeKind::Pointer &&
       actual.type_kind == TypeKind::Pointer &&
       expected.linearity != actual.linearity) {
-    auto pointee = std::get<PointerType>(expected.type_data)
-                       .get_pointee()
-                       .to_string();
+    auto pointee =
+        std::get<PointerType>(expected.type_data).get_pointee().to_string();
     if (actual.linearity == Linearity::Linear) {
       return fmt::format(
           "note: 'ptr<{}>' is a linear (owned) pointer, 'ptr<{}>' is "
@@ -279,10 +279,11 @@ void TypeMapOrdering::populate() {
 }
 
 bool TypeMapOrdering::qualifier_compatible(const Type &to,
-                                            const Type &from) const {
+                                           const Type &from) const {
   // Linearity for pointers: must match exactly
   // ('ptr<T> and ptr<T> have different ownership semantics)
-  if (to.type_kind == TypeKind::Pointer && from.type_kind == TypeKind::Pointer) {
+  if (to.type_kind == TypeKind::Pointer &&
+      from.type_kind == TypeKind::Pointer) {
     if (to.linearity != from.linearity)
       return false;
   }
@@ -290,7 +291,7 @@ bool TypeMapOrdering::qualifier_compatible(const Type &to,
 }
 
 bool TypeMapOrdering::structurally_compatible(const Type &to,
-                                               const Type &from) const {
+                                              const Type &from) const {
   // Never is compatible with any type (bottom type subtyping rule)
   if (from.is_never())
     return true;
@@ -340,10 +341,11 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
   return to == from;
 }
 
-// Full assignment compatibility: structural match + qualifier checks (mutability, linearity).
-// Used for variable initialization, function arguments, and return type validation.
+// Full assignment compatibility: structural match + qualifier checks
+// (mutability, linearity). Used for variable initialization, function
+// arguments, and return type validation.
 bool TypeMapOrdering::compatible_to_from(const Type &to,
-                                          const Type &from) const {
+                                         const Type &from) const {
   if (!qualifier_compatible(to, from))
     return false;
   return structurally_compatible(to, from);

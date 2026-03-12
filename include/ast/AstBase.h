@@ -4,8 +4,8 @@
 
 #pragma once
 #include "ast/ASTContext.h"
-#include "ast/AstDecl.h"
 #include "ast/ASTProperties.h"
+#include "ast/AstDecl.h"
 #include "lex/Lexer.h"
 #include "lex/Token.h"
 #include "typecheck/Types.h"
@@ -25,7 +25,8 @@ namespace sammine_lang {
 namespace AST {
 
 /// Discriminator for all AST node types. Used with LLVM-style RTTI (classof).
-/// FirstExpr..LastExpr and FirstDef..LastDef ranges enable isa<ExprAST>/isa<DefinitionAST>.
+/// FirstExpr..LastExpr and FirstDef..LastDef ranges enable
+/// isa<ExprAST>/isa<DefinitionAST>.
 enum class NodeKind {
   // Direct AstBase children (not ExprAST, not DefinitionAST)
   ProgramAST,
@@ -265,8 +266,7 @@ public:
 /// Stack of scoped symbol tables with parent-chain lookup.
 /// Each context can see names from its parent scope via recursive queries.
 /// T = value type (e.g. mlir::Value, Type).
-template <class T>
-class LexicalStack : public std::stack<LexicalContext<T>> {
+template <class T> class LexicalStack : public std::stack<LexicalContext<T>> {
 public:
   void push_context() {
     if (this->empty())
@@ -283,6 +283,7 @@ public:
   /// RAII guard: pushes on construction, pops on destruction.
   class Guard {
     LexicalStack &stack_;
+
   public:
     explicit Guard(LexicalStack &stack) : stack_(stack) {
       stack_.push_context();
@@ -420,13 +421,15 @@ public:
 };
 
 /// Base class for all AST nodes. Provides LLVM-style RTTI (via NodeKind),
-/// source location tracking (via join_location), and type storage (via ASTProperties).
+/// source location tracking (via join_location), and type storage (via
+/// ASTProperties).
 class AstBase : public Visitable {
   NodeKind kind;
-  NodeId node_id_;  // unique ID for ASTProperties type lookup
+  NodeId node_id_; // unique ID for ASTProperties type lookup
 
   static inline std::atomic<NodeId> next_id_{0};
-  static inline ASTProperties *current_props_ = nullptr; // externalized type storage
+  static inline ASTProperties *current_props_ =
+      nullptr; // externalized type storage
 
   void change_location(sammine_util::Location loc) {
     if (first_location) {
@@ -447,7 +450,7 @@ public:
   static void reset_id_counter() { next_id_ = 0; }
   static void set_properties(ASTProperties *p) { current_props_ = p; }
   NodeKind getKind() const { return kind; }
-  bool pe = false;       // parser error: set when a child is null (failed parse)
+  bool pe = false; // parser error: set when a child is null (failed parse)
   AstBase *join_location(AstBase *ast) {
     if (!ast)
       pe = true;

@@ -12,11 +12,9 @@ static std::shared_ptr<Token> make_tok(const std::string &lexeme) {
 
 // --- Instantiate ---
 
-FuncDefAST *
-Monomorphizer::try_instantiate_func(
-    FuncDefAST *generic,
-    const MonomorphizedKey &key,
-    const TypeBindings &bindings) {
+FuncDefAST *Monomorphizer::try_instantiate_func(FuncDefAST *generic,
+                                                const MonomorphizedKey &key,
+                                                const TypeBindings &bindings) {
   if (instantiated_functions_.contains(key))
     return nullptr;
 
@@ -28,11 +26,9 @@ Monomorphizer::try_instantiate_func(
   return ptr;
 }
 
-EnumDefAST *
-Monomorphizer::instantiate_enum(
-    EnumDefAST *generic,
-    const MonomorphizedKey &key,
-    const TypeBindings &bindings) {
+EnumDefAST *Monomorphizer::instantiate_enum(EnumDefAST *generic,
+                                            const MonomorphizedKey &key,
+                                            const TypeBindings &bindings) {
   auto new_name = key.to_generic_name(generic->enum_name);
   auto cloned = clone_enum(generic, new_name, bindings);
   auto *ptr = cloned.get();
@@ -40,11 +36,9 @@ Monomorphizer::instantiate_enum(
   return ptr;
 }
 
-StructDefAST *
-Monomorphizer::instantiate_struct(
-    StructDefAST *generic,
-    const MonomorphizedKey &key,
-    const TypeBindings &bindings) {
+StructDefAST *Monomorphizer::instantiate_struct(StructDefAST *generic,
+                                                const MonomorphizedKey &key,
+                                                const TypeBindings &bindings) {
   auto new_name = key.to_generic_name(generic->struct_name);
   auto cloned = clone_struct(generic, new_name, bindings);
   auto *ptr = cloned.get();
@@ -118,9 +112,8 @@ std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
 }
 
 std::unique_ptr<PrototypeAST>
-Monomorphizer::clone_prototype(
-    PrototypeAST *proto,
-    const sammine_util::QualifiedName &new_name) {
+Monomorphizer::clone_prototype(PrototypeAST *proto,
+                               const sammine_util::QualifiedName &new_name) {
   std::vector<std::unique_ptr<TypedVarAST>> params;
   for (auto &p : proto->parameterVectors)
     params.push_back(clone_typed_var(p.get()));
@@ -194,9 +187,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::CallExprAST: {
     auto *call = llvm::cast<CallExprAST>(expr);
-    auto r = std::make_unique<CallExprAST>(
-        call->functionName, call->get_location(),
-        clone_expr_vec(call->arguments));
+    auto r =
+        std::make_unique<CallExprAST>(call->functionName, call->get_location(),
+                                      clone_expr_vec(call->arguments));
     for (auto &ta : call->explicit_type_args)
       r->explicit_type_args.push_back(clone_type_expr(ta.get()));
     result = std::move(r);
@@ -211,7 +204,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   case NodeKind::ReturnStmtAST: {
     auto *ret = llvm::cast<ReturnStmtAST>(expr);
     if (ret->is_implicit)
-      result = std::make_unique<ReturnStmtAST>(clone_expr(ret->return_expr.get()));
+      result =
+          std::make_unique<ReturnStmtAST>(clone_expr(ret->return_expr.get()));
     else
       result = std::make_unique<ReturnStmtAST>(
           make_tok("return"), clone_expr(ret->return_expr.get()));
@@ -223,9 +217,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
       std::vector<std::unique_ptr<TypedVarAST>> vars;
       for (auto &v : vd->destructure_vars)
         vars.push_back(clone_typed_var(v.get()));
-      result = std::make_unique<VarDefAST>(
-          make_tok("let"), std::move(vars),
-          clone_expr(vd->Expression.get()), vd->is_mutable);
+      result = std::make_unique<VarDefAST>(make_tok("let"), std::move(vars),
+                                           clone_expr(vd->Expression.get()),
+                                           vd->is_mutable);
     } else {
       result = std::make_unique<VarDefAST>(
           make_tok("let"), clone_typed_var(vd->TypedVar.get()),
@@ -235,9 +229,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::IfExprAST: {
     auto *ife = llvm::cast<IfExprAST>(expr);
-    result = std::make_unique<IfExprAST>(
-        clone_expr(ife->bool_expr.get()), clone_block(ife->thenBlockAST.get()),
-        clone_block(ife->elseBlockAST.get()));
+    result = std::make_unique<IfExprAST>(clone_expr(ife->bool_expr.get()),
+                                         clone_block(ife->thenBlockAST.get()),
+                                         clone_block(ife->elseBlockAST.get()));
     break;
   }
   case NodeKind::UnitExprAST: {
@@ -262,9 +256,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::AllocExprAST: {
     auto *alloc = llvm::cast<AllocExprAST>(expr);
-    result = std::make_unique<AllocExprAST>(make_tok("alloc"),
-                                            clone_type_expr(alloc->type_arg.get()),
-                                            clone_expr(alloc->operand.get()));
+    result = std::make_unique<AllocExprAST>(
+        make_tok("alloc"), clone_type_expr(alloc->type_arg.get()),
+        clone_expr(alloc->operand.get()));
     break;
   }
   case NodeKind::FreeExprAST: {
@@ -334,9 +328,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
       cloned_arm.body = clone_block(arm.body.get());
       cloned_arms.push_back(std::move(cloned_arm));
     }
-    result = std::make_unique<CaseExprAST>(
-        make_tok("case"), clone_expr(ce->scrutinee.get()),
-        std::move(cloned_arms));
+    result = std::make_unique<CaseExprAST>(make_tok("case"),
+                                           clone_expr(ce->scrutinee.get()),
+                                           std::move(cloned_arms));
     break;
   }
   case NodeKind::WhileExprAST: {
@@ -347,8 +341,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::TupleLiteralExprAST: {
     auto *tup = llvm::cast<TupleLiteralExprAST>(expr);
-    result = std::make_unique<TupleLiteralExprAST>(
-        clone_expr_vec(tup->elements));
+    result =
+        std::make_unique<TupleLiteralExprAST>(clone_expr_vec(tup->elements));
     break;
   }
   default:
@@ -362,24 +356,23 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 // --- Internal clone helpers ---
 
 std::unique_ptr<FuncDefAST>
-Monomorphizer::clone_func(
-    FuncDefAST *generic,
-    const sammine_util::QualifiedName &new_name,
-    const TypeBindings &bindings) {
+Monomorphizer::clone_func(FuncDefAST *generic,
+                          const sammine_util::QualifiedName &new_name,
+                          const TypeBindings &bindings) {
   bindings_ = &bindings;
   auto proto = clone_prototype(generic->Prototype.get(), new_name);
   auto block = clone_block(generic->Block.get());
-  auto result = std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
+  auto result =
+      std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
   result->set_location(generic->get_location());
   bindings_ = nullptr;
   return result;
 }
 
 std::unique_ptr<EnumDefAST>
-Monomorphizer::clone_enum(
-    EnumDefAST *generic,
-    const sammine_util::QualifiedName &new_name,
-    const TypeBindings &bindings) {
+Monomorphizer::clone_enum(EnumDefAST *generic,
+                          const sammine_util::QualifiedName &new_name,
+                          const TypeBindings &bindings) {
   bindings_ = &bindings;
 
   // Clone variant definitions with substituted payload types
@@ -394,9 +387,8 @@ Monomorphizer::clone_enum(
     cloned_variants.push_back(std::move(cloned));
   }
 
-  auto result = std::make_unique<EnumDefAST>(
-      new_name, generic->get_location(),
-      std::move(cloned_variants));
+  auto result = std::make_unique<EnumDefAST>(new_name, generic->get_location(),
+                                             std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
   // type_params left empty — this is a concrete instantiation
@@ -405,10 +397,9 @@ Monomorphizer::clone_enum(
 }
 
 std::unique_ptr<StructDefAST>
-Monomorphizer::clone_struct(
-    StructDefAST *generic,
-    const sammine_util::QualifiedName &new_name,
-    const TypeBindings &bindings) {
+Monomorphizer::clone_struct(StructDefAST *generic,
+                            const sammine_util::QualifiedName &new_name,
+                            const TypeBindings &bindings) {
   bindings_ = &bindings;
 
   // Clone struct members with substituted types
@@ -417,8 +408,7 @@ Monomorphizer::clone_struct(
     cloned_members.push_back(clone_typed_var(member.get()));
 
   auto result = std::make_unique<StructDefAST>(
-      new_name, generic->get_location(),
-      std::move(cloned_members));
+      new_name, generic->get_location(), std::move(cloned_members));
   // type_params left empty — this is a concrete instantiation
   bindings_ = nullptr;
   return result;

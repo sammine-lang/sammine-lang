@@ -4,8 +4,9 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
-#include <iostream>
 #include <filesystem>
+#include <iostream>
+#include <memory>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -13,7 +14,6 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
-#include <memory>
 
 //! \file Utilities.h
 //! \brief Holds classes and functionalities for dealing with Error handling,
@@ -27,7 +27,6 @@ inline bool stderr_is_tty() {
 inline fmt::text_style styled(fmt::terminal_color c) {
   return stderr_is_tty() ? fg(c) : fmt::text_style{};
 }
-
 
 auto get_string_from_file(const std::string &file_name) -> std::string;
 
@@ -55,8 +54,8 @@ void abort_if_not(const T &condition,
 /// Safe map lookup that ICEs instead of throwing std::out_of_range.
 template <typename MapT>
 auto cautious_at(const MapT &map, const typename MapT::key_type &key,
-                 const std::string &context) ->
-    const typename MapT::mapped_type & {
+                 const std::string &context) -> const
+    typename MapT::mapped_type & {
   auto it = map.find(key);
   if (it == map.end())
     abort(fmt::format("ICE: key not found in {} lookup", context));
@@ -277,10 +276,10 @@ private:
   int64_t context_radius;
   bool dev_mode = false;
 
-  void report_single_msg(const Location &loc,
-                         const std::vector<std::string> &format_strs,
-                         const ReportKind report_kind,
-                         std::source_location src = std::source_location::current()) const;
+  void report_single_msg(
+      const Location &loc, const std::vector<std::string> &format_strs,
+      const ReportKind report_kind,
+      std::source_location src = std::source_location::current()) const;
 
   void indicate_singular_line(ReportKind report_kind, int64_t col_start,
                               int64_t col_end) const;
@@ -291,8 +290,9 @@ private:
 
 public:
   void report(const Reportee &reports) const;
-  void immediate_error(const std::string &str, Location l = Location(-1, -1),
-                       std::source_location src = std::source_location::current()) {
+  void
+  immediate_error(const std::string &str, Location l = Location(-1, -1),
+                  std::source_location src = std::source_location::current()) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
@@ -302,8 +302,9 @@ public:
       report_single_msg(l, {str}, ReportKind::error, src);
     }
   }
-  void immediate_diag(const std::string &str, Location l = Location(-1, -1),
-                      std::source_location src = std::source_location::current()) {
+  void
+  immediate_diag(const std::string &str, Location l = Location(-1, -1),
+                 std::source_location src = std::source_location::current()) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
@@ -312,8 +313,9 @@ public:
       report_single_msg(l, {str}, ReportKind::diag, src);
     }
   }
-  void immediate_warn(const std::string &str, Location l = Location(-1, -1),
-                      std::source_location src = std::source_location::current()) {
+  void
+  immediate_warn(const std::string &str, Location l = Location(-1, -1),
+                 std::source_location src = std::source_location::current()) {
     if (l.source_start <= 0 && l.source_end <= 0) {
       print_fmt(LINE_COLOR, "    |");
       print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);

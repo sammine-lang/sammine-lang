@@ -3,35 +3,35 @@
 //
 
 #include "compiler/Compiler.h"
-#include "ast/Ast.h"
 #include "ast/ASTProperties.h"
+#include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
-#include "mlir/IR/MLIRContext.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
-#include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/MemRef/Transforms/AllocationOpInterfaceImpl.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
+#include "mlir/Dialect/Affine/IR/AffineOps.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
+#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/MemRef/IR/MemRef.h"
+#include "mlir/Dialect/MemRef/Transforms/AllocationOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
+#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/IR/MLIRContext.h"
 #include "parser/Parser.h"
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
@@ -42,10 +42,10 @@
 #include "util/Utilities.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Support/CodeGen.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <chrono>
@@ -102,8 +102,10 @@ class Compiler {
   void link();
 
   static LibFormat parse_lib_format(const std::string &s) {
-    if (s == "static") return LibFormat::Static;
-    if (s == "shared") return LibFormat::Shared;
+    if (s == "static")
+      return LibFormat::Static;
+    if (s == "shared")
+      return LibFormat::Shared;
     return LibFormat::None;
   }
   void print_timing_table(
@@ -139,7 +141,7 @@ Compiler::Compiler(
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
 
- this->mod_name = "sammine";
+  this->mod_name = "sammine";
   if (!this->input.empty()) {
     this->file_name = "-s|--str";
     this->from_string = true;
@@ -171,7 +173,8 @@ Compiler::Compiler(
 
   // Parse semicolon-joined import paths
   {
-    std::string paths_str = compiler_options[compiler_option_enum::IMPORT_PATHS];
+    std::string paths_str =
+        compiler_options[compiler_option_enum::IMPORT_PATHS];
     if (!paths_str.empty()) {
       std::istringstream ss(paths_str);
       std::string path;
@@ -190,7 +193,8 @@ Compiler::Compiler(
       stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
   }
 
-  lib_format_ = parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
+  lib_format_ =
+      parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
 }
 
 // Stage 1: Tokenize source into a TokenStream.
@@ -203,7 +207,8 @@ void Compiler::lex() {
   tokStream = lexer->getTokenStream();
 }
 
-// Stage 2: Parse tokens into AST. Also detects whether `main` exists (→ executable vs library).
+// Stage 2: Parse tokens into AST. Also detects whether `main` exists (→
+// executable vs library).
 void Compiler::parse() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -214,7 +219,8 @@ void Compiler::parse() {
   auto result = psr.Parse();
   programAST = std::move(result);
 
-  if (psr.has_errors()) set_error();
+  if (psr.has_errors())
+    set_error();
   reporter.report(*lexer);
   reporter.report(psr);
 
@@ -227,8 +233,9 @@ void Compiler::parse() {
 }
 
 // Stage 3: Resolve `import` declarations by parsing .mn files on the fly.
-// Recursively handles transitive imports. Deduplicates via canonical module name.
-// Exported defs become ExternASTs; generic defs are inlined for monomorphization.
+// Recursively handles transitive imports. Deduplicates via canonical module
+// name. Exported defs become ExternASTs; generic defs are inlined for
+// monomorphization.
 void Compiler::resolve_imports() {
   if (has_error() || programAST->imports.empty())
     return;
@@ -246,9 +253,9 @@ void Compiler::resolve_imports() {
   std::set<std::string> imported_modules;
 
   // Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
-  auto find_mn = [&](const std::string &name,
-                     const std::filesystem::path &src_dir)
-      -> std::filesystem::path {
+  auto find_mn =
+      [&](const std::string &name,
+          const std::filesystem::path &src_dir) -> std::filesystem::path {
     std::filesystem::path p = name + ".mn";
     if (std::filesystem::exists(p))
       return p;
@@ -269,15 +276,15 @@ void Compiler::resolve_imports() {
   };
 
   // Recursively import a module's definitions into programAST.
-  // - For direct imports: pull exported defs + all generic defs + link artifact.
+  // - For direct imports: pull exported defs + all generic defs + link
+  // artifact.
   // - For transitive imports (is_transitive=true): only pull generic function
   //   defs and type defs needed by the monomorphizer — no link artifact.
   std::function<bool(const std::string &, const std::filesystem::path &,
                      const sammine_util::Location &, bool)>
-      import_module = [&](const std::string &name,
-                          const std::filesystem::path &src_dir,
-                          const sammine_util::Location &loc,
-                          bool is_transitive) -> bool {
+      import_module =
+          [&](const std::string &name, const std::filesystem::path &src_dir,
+              const sammine_util::Location &loc, bool is_transitive) -> bool {
     if (imported_modules.count(name))
       return true;
     imported_modules.insert(name);
@@ -314,8 +321,8 @@ void Compiler::resolve_imports() {
     // Recursively import this module's own dependencies (transitive).
     auto mod_src_dir = mn_path.parent_path();
     for (auto &sub_import : mn_program->imports)
-      import_module(sub_import.module_name, mod_src_dir,
-                    sub_import.location, true);
+      import_module(sub_import.module_name, mod_src_dir, sub_import.location,
+                    true);
 
     // Filter definitions and inject into programAST.
     for (auto it = mn_program->DefinitionVec.rbegin();
@@ -336,8 +343,7 @@ void Compiler::resolve_imports() {
                                            std::move(def));
         } else {
           // Non-generic exported → extern
-          auto ext = std::make_unique<AST::ExternAST>(
-              std::move(fd->Prototype));
+          auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
           ext->is_exposed = fd->is_exported;
           programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                            std::move(ext));
@@ -368,13 +374,13 @@ void Compiler::resolve_imports() {
                                          std::move(def));
       } else if (llvm::isa<AST::TypeClassDeclAST>(def.get())) {
         if (!is_transitive) {
-          programAST->DefinitionVec.insert(
-              programAST->DefinitionVec.begin(), std::move(def));
+          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                           std::move(def));
         }
       } else if (llvm::isa<AST::TypeClassInstanceAST>(def.get())) {
         if (!is_transitive) {
-          programAST->DefinitionVec.insert(
-              programAST->DefinitionVec.begin(), std::move(def));
+          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                           std::move(def));
         }
       }
     }
@@ -466,15 +472,15 @@ void Compiler::semantics() {
       return;
     }
     LOG({
-      fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start scope checking stage...\n");
     });
     auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
 
     programAST->accept_vis(&vs);
     reporter.report(vs);
-    if (vs.has_errors()) set_error();
+    if (vs.has_errors())
+      set_error();
   }
 
   // INFO: GeneralSemanticsVisitor
@@ -482,15 +488,15 @@ void Compiler::semantics() {
     if (has_error())
       return;
     LOG({
-      fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start general semantics stage...\n");
     });
     auto vs = sammine_lang::AST::GeneralSemanticsVisitor();
 
     programAST->accept_vis(&vs);
     reporter.report(vs);
-    if (vs.has_errors()) set_error();
+    if (vs.has_errors())
+      set_error();
   }
 }
 
@@ -532,10 +538,12 @@ void Compiler::typecheck() {
   }
 
   reporter.report(vs);
-  if (vs.has_errors()) set_error();
+  if (vs.has_errors())
+    set_error();
 }
 
-// Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly once.
+// Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly
+// once.
 void Compiler::linear_check() {
   if (has_error())
     return;
@@ -546,22 +554,21 @@ void Compiler::linear_check() {
   auto lc = sammine_lang::AST::LinearTypeChecker();
   lc.check(programAST.get(), props_);
   reporter.report(lc);
-  if (lc.has_errors()) set_error();
+  if (lc.has_errors())
+    set_error();
 }
 
 void Compiler::dump_ast() {
   if (compiler_options[compiler_option_enum::AST_IR] == "true") {
     LOG({
-      fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start dumping ast-ir stage...\n");
     });
     AST::ASTPrinter::print(programAST.get(), props_);
   }
   if (has_error()) {
     LOG({
-      fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "There were errors in previous stages. Aborting now\n");
     });
     return;
@@ -573,8 +580,7 @@ void Compiler::codegen() {
   }
   if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
     LOG({
-      fmt::print(stderr,
-                 sammine_util::styled(fmt::terminal_color::green),
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Finished checking. Stopping at codegen stage with compiler's "
                  "--check flag. \n");
     });
@@ -590,8 +596,8 @@ void Compiler::codegen() {
 }
 
 // MLIR codegen: registers dialects (Arith, Func, LLVM, SCF, CF), generates MLIR
-// from AST via mlirGen(), then lowers MLIR→LLVM IR. Transfers data layout/triple
-// from the template LLVMRes module to the newly lowered module.
+// from AST via mlirGen(), then lowers MLIR→LLVM IR. Transfers data
+// layout/triple from the template LLVMRes module to the newly lowered module.
 void Compiler::codegen_mlir() {
   mlir::MLIRContext mlirCtx;
   mlirCtx.getOrLoadDialect<mlir::arith::ArithDialect>();
@@ -624,8 +630,8 @@ void Compiler::codegen_mlir() {
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   std::string moduleName = has_main ? "" : stem;
 
-  auto mlirResult =
-      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name, this->input, props_);
+  auto mlirResult = mlirGen(mlirCtx, programAST.get(), moduleName,
+                            this->file_name, this->input, props_);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -651,8 +657,8 @@ void Compiler::codegen_mlir() {
   mlir::ModuleOp kernelMod;
   if (mlirResult.kernelModule)
     kernelMod = *mlirResult.kernelModule;
-  auto llvmModule = lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod,
-                                       *resPtr->Context);
+  auto llvmModule =
+      lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
@@ -666,25 +672,28 @@ void Compiler::codegen_mlir() {
   if (!moduleName.empty()) {
     for (auto &def : programAST->DefinitionVec) {
       auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get());
-      if (!ext) continue;
+      if (!ext)
+        continue;
       std::string cName = ext->Prototype->functionName.mangled();
-      std::string mangled = ext->Prototype->functionName.with_module(moduleName).mangled();
+      std::string mangled =
+          ext->Prototype->functionName.with_module(moduleName).mangled();
       auto *fn = llvmModule->getFunction(cName);
-      if (!fn || llvmModule->getNamedValue(mangled)) continue;
+      if (!fn || llvmModule->getNamedValue(mangled))
+        continue;
 
       auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
       auto *resolverTy = llvm::FunctionType::get(ptrTy, false);
-      auto *resolver = llvm::Function::Create(
-          resolverTy, llvm::Function::InternalLinkage,
-          "resolve_" + mangled, llvmModule.get());
+      auto *resolver =
+          llvm::Function::Create(resolverTy, llvm::Function::InternalLinkage,
+                                 "resolve_" + mangled, llvmModule.get());
       auto *entry =
           llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
       llvm::IRBuilder<> irBuilder(entry);
       irBuilder.CreateRet(fn);
 
       llvm::GlobalIFunc::create(fn->getFunctionType(), 0,
-                                llvm::GlobalValue::ExternalLinkage,
-                                mangled, resolver, llvmModule.get());
+                                llvm::GlobalValue::ExternalLinkage, mangled,
+                                resolver, llvmModule.get());
     }
   }
 
@@ -693,7 +702,8 @@ void Compiler::codegen_mlir() {
   resPtr->Module = std::move(llvmModule);
 }
 
-// Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff modes.
+// Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff
+// modes.
 void Compiler::optimize() {
   if (has_error()) {
     return;
@@ -751,7 +761,8 @@ void Compiler::optimize() {
     {
       std::ofstream post_file(post_path);
       if (!post_file.is_open()) {
-        llvm::errs() << "Could not open file for writing: " << post_path << "\n";
+        llvm::errs() << "Could not open file for writing: " << post_path
+                     << "\n";
         return;
       }
       post_file << post_ir;
@@ -762,7 +773,8 @@ void Compiler::optimize() {
     int diff_ret = std::system(diff_cmd.c_str());
     if (diff_ret != 0 && diff_ret != 1) {
       // diff returns 1 when files differ (expected), >1 on error
-      llvm::errs() << "diff command failed with exit code: " << diff_ret << "\n";
+      llvm::errs() << "diff command failed with exit code: " << diff_ret
+                   << "\n";
     }
 
     std::filesystem::remove(pre_path);
@@ -809,8 +821,8 @@ void Compiler::emit_object() {
   dest.flush();
 }
 
-
-// Create a static archive (.a) by collecting this module's .o + transitive deps.
+// Create a static archive (.a) by collecting this module's .o + transitive
+// deps.
 void Compiler::emit_archive_impl() {
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
@@ -908,7 +920,8 @@ void Compiler::emit_library() {
     }
     if (!found) {
       auto source_dir = std::filesystem::path(file_name).parent_path();
-      if (source_dir.empty()) source_dir = ".";
+      if (source_dir.empty())
+        source_dir = ".";
       auto candidate = source_dir / runtime_obj;
       if (std::filesystem::exists(candidate))
         extra_link_objs_.push_back(candidate.string());
@@ -932,7 +945,8 @@ void Compiler::emit_library() {
   std::filesystem::remove(obj_file);
 }
 
-// Stage 12: Link .o files into executable via clang++ (fallback: g++). Executables only.
+// Stage 12: Link .o files into executable via clang++ (fallback: g++).
+// Executables only.
 void Compiler::link() {
   if (has_error() || this->from_string) {
     return;
@@ -987,7 +1001,8 @@ void Compiler::print_timing_table(
 // Main entry point: runs all pipeline stages sequentially with optional timing.
 // Returns 0 on success, 1 on error.
 int Compiler::start() {
-  if (has_error()) return 1;
+  if (has_error())
+    return 1;
   struct Stage {
     const char *name;
     std::function<void(Compiler *)> fn;

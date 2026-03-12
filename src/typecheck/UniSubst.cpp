@@ -2,9 +2,7 @@
 #include "typecheck/Types.h"
 namespace sammine_lang::AST {
 
-
-bool contains_type_param(const Type &type,
-                                               const std::string &param_name) {
+bool contains_type_param(const Type &type, const std::string &param_name) {
   if (type.type_kind == TypeKind::TypeParam)
     return std::get<std::string>(type.type_data) == param_name;
 
@@ -16,8 +14,7 @@ bool contains_type_param(const Type &type,
   return found;
 }
 
-Type substitute(
-    const Type &type, const TypeBindings &bindings) {
+Type substitute(const Type &type, const TypeBindings &bindings) {
   switch (type.type_kind) {
   case TypeKind::TypeParam: {
     auto name = std::get<std::string>(type.type_data);
@@ -55,12 +52,13 @@ Type substitute(
     bool changed = false;
     for (auto &ft : st.get_field_types()) {
       auto sub = substitute(ft, bindings);
-      if (sub != ft) changed = true;
+      if (sub != ft)
+        changed = true;
       ftypes.push_back(sub);
     }
-    if (!changed) return type;
-    return Type::Struct(st.get_name(),
-                        st.get_field_names(), std::move(ftypes));
+    if (!changed)
+      return type;
+    return Type::Struct(st.get_name(), st.get_field_names(), std::move(ftypes));
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
@@ -70,12 +68,15 @@ Type substitute(
       std::vector<Type> new_payloads;
       for (auto &pt : v.payload_types) {
         auto sub = substitute(pt, bindings);
-        if (sub != pt) changed = true;
+        if (sub != pt)
+          changed = true;
         new_payloads.push_back(sub);
       }
-      new_variants.push_back({v.name, std::move(new_payloads), v.discriminant_value});
+      new_variants.push_back(
+          {v.name, std::move(new_payloads), v.discriminant_value});
     }
-    if (!changed) return type;
+    if (!changed)
+      return type;
     return Type::Enum(et.get_name(), std::move(new_variants),
                       et.is_integer_backed(), et.get_backing_type());
   }
@@ -100,12 +101,7 @@ Type substitute(
   }
 }
 
-
-
-
-bool unify(
-    const Type &pattern, const Type &concrete,
-    TypeBindings &bindings) {
+bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
   if (pattern.type_kind == TypeKind::TypeParam) {
     auto name = std::get<std::string>(pattern.type_data);
     // Occurs check
@@ -213,4 +209,4 @@ bool unify(
   }
 }
 
-}
+} // namespace sammine_lang::AST

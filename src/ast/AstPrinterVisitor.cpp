@@ -1,5 +1,5 @@
-#include "ast/Ast.h"
 #include "ast/ASTProperties.h"
+#include "ast/Ast.h"
 #include "ast/AstBase.h"
 #include "fmt/base.h"
 #include "fmt/format.h"
@@ -159,7 +159,8 @@ void AstPrinterVisitor::visit(FuncDefAST *ast) {
 void AstPrinterVisitor::visit(StructDefAST *ast) {
   generic_preprintln(ast);
   this->enter_new_scope();
-  add_to_rep(fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.mangled()));
+  add_to_rep(
+      fmt::format("{}struct_name: \"{}\"", tabs(), ast->struct_name.mangled()));
   for (auto &t : ast->struct_members)
     safeguard_visit(t.get(), "!!nullptr!! struct_members (typed var)");
   this->exit_new_scope();
@@ -184,20 +185,24 @@ void AstPrinterVisitor::visit(EnumDefAST *ast) {
     if (i + 1 < ast->variants.size())
       variants_str += " | ";
   }
-  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(), ast->enum_name.mangled(), variants_str));
+  add_to_rep(fmt::format("{}type_name: \"{}\" = {}", tabs(),
+                         ast->enum_name.mangled(), variants_str));
   this->exit_new_scope();
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(TypeAliasDefAST *ast) {
   generic_preprintln(ast);
-  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(), ast->alias_name.mangled(), ast->type_expr->to_string()));
+  add_to_rep(fmt::format("{}type_alias: \"{}\" = {}", tabs(),
+                         ast->alias_name.mangled(),
+                         ast->type_expr->to_string()));
   generic_postprint();
 }
 
 void AstPrinterVisitor::visit(PrototypeAST *ast) {
   generic_preprintln(ast);
-  add_to_rep(fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.mangled()));
+  add_to_rep(
+      fmt::format("{} fn_name: \"{}\"\n", tabs(), ast->functionName.mangled()));
   for (auto &var : ast->parameterVectors) {
     safeguard_visit(var.get(), "!!nullptr!! TypedVarAST\n");
   }
@@ -487,7 +492,8 @@ void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
 
 void AstPrinterVisitor::visit(KernelDefAST *ast) {
   generic_preprintln(ast);
-  add_to_rep(fmt::format("{}kernel {}\n", tabs(), ast->Prototype->functionName.mangled()));
+  add_to_rep(fmt::format("{}kernel {}\n", tabs(),
+                         ast->Prototype->functionName.mangled()));
   safeguard_visit(ast->Prototype.get(), "!!nullptr!! PrototypeAST\n");
   generic_postprint();
 }

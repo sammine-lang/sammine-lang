@@ -62,9 +62,10 @@ public:
   IndexPair get_lines_indices_with_radius() const {
     auto [line_start, line_end] = get_lines_indices();
     line_start = line_start > context_radius ? line_start - context_radius : 0;
-    line_end = line_end + context_radius <= static_cast<int64_t>(data.size()) - 1
-                   ? line_end + context_radius
-                   : static_cast<int64_t>(data.size()) - 1;
+    line_end =
+        line_end + context_radius <= static_cast<int64_t>(data.size()) - 1
+            ? line_end + context_radius
+            : static_cast<int64_t>(data.size()) - 1;
 
     return {line_start, line_end};
   }
@@ -230,7 +231,8 @@ void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
 
   for (size_t j = 0; j < static_cast<size_t>(col_start); j++)
     fmt::print(stderr, "{}", msg[j]);
-  for (size_t j = static_cast<size_t>(col_start); j < static_cast<size_t>(col_end); j++) {
+  for (size_t j = static_cast<size_t>(col_start);
+       j < static_cast<size_t>(col_end); j++) {
     if (sammine_util::stderr_is_tty())
       fmt::print(stderr, fmt::emphasis::bold, "{}", msg[j]);
     else
@@ -284,19 +286,20 @@ void Reporter::report_single_msg(const Location &loc,
     print_fmt(LINE_COLOR, "    |");
     for (int64_t j = 0; j < col_start; j++)
       print_fmt(report_kind, " ");
-    print_fmt(report_kind, "[Error-borne `dev` location: {}:{}]\n", sf, src.line());
+    print_fmt(report_kind, "[Error-borne `dev` location: {}:{}]\n", sf,
+              src.line());
   }
 }
 
 // Render a set of clusters using the given diagnostic_data and file name.
 // Extracted to avoid duplicating the rendering code for each source-file
 // partition.
-static void render_clusters(
-    const std::vector<Cluster> &clusters,
-    const std::vector<GroupedReport> &groups,
-    const Reporter::DiagnosticData &diag_data,
-    const std::string &diag_file,
-    int64_t context_radius, bool dev_mode, bool &first) {
+static void render_clusters(const std::vector<Cluster> &clusters,
+                            const std::vector<GroupedReport> &groups,
+                            const Reporter::DiagnosticData &diag_data,
+                            const std::string &diag_file,
+                            int64_t context_radius, bool dev_mode,
+                            bool &first) {
 
   struct LineAnnotation {
     int64_t col_start, col_end;
@@ -324,7 +327,8 @@ static void render_clusters(
         auto [r, c] = locator.get_row_col();
         row = r;
         cs = c;
-        ce = static_cast<int64_t>(diag_data[static_cast<size_t>(r)].second.size());
+        ce = static_cast<int64_t>(
+            diag_data[static_cast<size_t>(r)].second.size());
       }
       auto msgs = g.msgs;
       if (dev_mode) {

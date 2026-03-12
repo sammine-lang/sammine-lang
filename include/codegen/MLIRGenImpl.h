@@ -1,13 +1,13 @@
 #pragma once
 
-#include "ast/Ast.h"
 #include "ast/ASTProperties.h"
+#include "ast/Ast.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
 
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
 #include "llvm/ADT/StringRef.h"
 
@@ -38,10 +38,8 @@ public:
               const std::string &fileName, const std::string &sourceText,
               const AST::ASTProperties &props)
       : builder(&context), moduleName(moduleName), fileName(fileName),
-        diagnosticData(
-            sammine_util::Reporter::get_diagnostic_data(sourceText)),
-        reporter(fileName, sourceText, 3),
-        props_(props) {}
+        diagnosticData(sammine_util::Reporter::get_diagnostic_data(sourceText)),
+        reporter(fileName, sourceText, 3), props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 
@@ -58,7 +56,8 @@ public:
   sammine_util::Reporter reporter;
 
   /// Emit an ariadne-style error before aborting. If a Location is provided,
-  /// the error points to the offending source span; otherwise shows "In <file>".
+  /// the error points to the offending source span; otherwise shows "In
+  /// <file>".
   [[noreturn]] void
   imm_error(const std::string &msg,
             sammine_util::Location loc = sammine_util::Location(-1, -1)) {
@@ -128,7 +127,8 @@ public:
 
   // --- Kernel type conversion ---
   /// Convert a sammine Type to an MLIR type for kernel context.
-  /// Arrays become RankedTensorType (asMemref=false) or MemRefType (asMemref=true).
+  /// Arrays become RankedTensorType (asMemref=false) or MemRefType
+  /// (asMemref=true).
   mlir::Type convertTypeForKernel(const Type &type, bool asMemref = false);
   /// Build a func::FunctionType for a kernel function.
   /// asMemref=false: tensor types (for __kernel_ pre-bufferization).
@@ -140,16 +140,12 @@ public:
   void emitDefinition(AST::DefinitionAST *def);
   void emitKernelDef(AST::KernelDefAST *kd);
   void emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
-                         mlir::Block &entryBlock,
-                         AST::KernelDefAST *kd,
-                         mlir::Location location,
-                         mlir::Value dpsOutput);
+                         mlir::Block &entryBlock, AST::KernelDefAST *kd,
+                         mlir::Location location, mlir::Value dpsOutput);
   void emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
-                            mlir::Block &entryBlock,
-                            AST::KernelDefAST *kd,
+                            mlir::Block &entryBlock, AST::KernelDefAST *kd,
                             mlir::Location location);
-  void emitKernelWrapper(AST::KernelDefAST *kd,
-                         const std::string &internalName,
+  void emitKernelWrapper(AST::KernelDefAST *kd, const std::string &internalName,
                          const std::string &publicName,
                          mlir::Location location);
   mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
@@ -204,7 +200,8 @@ public:
   mlir::Value emitBinaryExpr(AST::BinaryExprAST *ast);
 
   // Binary expression handlers (return non-null = handled)
-  mlir::Value emitBinaryAssign(AST::BinaryExprAST *ast, mlir::Location location);
+  mlir::Value emitBinaryAssign(AST::BinaryExprAST *ast,
+                               mlir::Location location);
   mlir::Value emitBinaryIntArith(AST::BinaryExprAST *ast, mlir::Value lhs,
                                  mlir::Value rhs, mlir::Location location);
   mlir::Value emitBinaryFloatArith(AST::BinaryExprAST *ast, mlir::Value lhs,
@@ -232,8 +229,8 @@ public:
   void emitPtrArrayStore(mlir::Value ptr, mlir::Value idx, mlir::Value val,
                          const ArrayType &arrType, mlir::Location location);
   mlir::Value emitPtrElementGEP(mlir::Value ptr, mlir::Value idx,
-                                 const Type &pointeeType,
-                                 mlir::Location location);
+                                const Type &pointeeType,
+                                mlir::Location location);
   mlir::Value emitLenExpr(AST::LenExprAST *ast);
   mlir::Value emitDimExpr(AST::DimExprAST *ast);
   mlir::Value emitDerefExpr(AST::DerefExprAST *ast);
@@ -246,8 +243,7 @@ public:
   mlir::Value emitCaseExpr(AST::CaseExprAST *ast);
   mlir::Value emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast);
   mlir::Value emitPayloadCaseExpr(AST::CaseExprAST *ast,
-                                  mlir::Value scrutineeVal,
-                                  const EnumType &et);
+                                  mlir::Value scrutineeVal, const EnumType &et);
   mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                         mlir::Value scrutineeVal,
                                         const EnumType &et);
@@ -264,16 +260,25 @@ public:
   using ArmToComparisonConst =
       std::function<mlir::Value(const AST::CaseArm &, mlir::Location)>;
 
+  /// Optional per-arm preamble executed before emitBlock in each arm.
+  /// Used by payload enums to extract bindings from the union.
+  using ArmPreamble =
+      std::function<void(const AST::CaseArm &, mlir::Location)>;
+
   /// Shared codegen for case expressions where every arm boils down to
-  /// "compare scrutinee against an integer constant".  This covers both
-  /// integer-backed enums and literal (i32/bool/char) patterns.
+  /// "compare scrutinee against an integer constant".  This covers
+  /// integer-backed enums, literal (i32/bool/char) patterns, and
+  /// payload enums (via the optional armPreamble callback).
   ///
   /// Emits a cascading chain of:
   ///     if (scrutinee == armConst) goto armBlock; else goto nextCheck;
   /// where `armConst` is produced by the caller-supplied callback.
+  /// If `armPreamble` is non-null, it is called at the start of each
+  /// arm block (before emitBlock) to emit per-arm setup code.
   mlir::Value emitScalarCaseExpr(AST::CaseExprAST *ast,
                                  mlir::Value scrutineeVal,
-                                 ArmToComparisonConst armToConst);
+                                 ArmToComparisonConst armToConst,
+                                 ArmPreamble armPreamble = nullptr);
 
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);

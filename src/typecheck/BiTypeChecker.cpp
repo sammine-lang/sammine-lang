@@ -176,12 +176,11 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   if (to == Type::Poisoned() || from == Type::Poisoned()) {
     ast->set_type(Type::Poisoned());
   } else if (!type_map_ordering.compatible_to_from(to, from)) {
-    this->add_error(ast->Expression->get_location(),
-                    fmt::format("Type mismatch: expression has type {}, "
-                                "but variable declared as {}",
-                                from.to_string(), to.to_string()));
-    if (auto hint = incompatibility_hint(to, from))
-      this->add_diagnostics(ast->Expression->get_location(), *hint);
+    report_type_mismatch(ast->Expression->get_location(),
+                         fmt::format("Type mismatch: expression has type {}, "
+                                     "but variable declared as {}",
+                                     from.to_string(), to.to_string()),
+                         to, from);
     ast->set_type(Type::Poisoned());
   } else {
     resolve_literal_type(ast->Expression.get(), to);
@@ -355,8 +354,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   auto &et = std::get<EnumType>(enum_type.type_data);
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
-    auto qualified_key =
-        ast->enum_name.with_appended({vi.name, ""}).mangled();
+    auto qualified_key = ast->enum_name.with_appended({vi.name, ""}).mangled();
     variant_constructors[qualified_key] = {enum_type, i};
 
     // For generic enum instantiations (e.g., Option<i32>), also register with
@@ -429,15 +427,13 @@ bool BiTypeCheckerVisitor::handle_normal_call_args(CallExprAST *ast,
   for (size_t i = 0; i < ast->arguments.size(); i++) {
     if (!this->type_map_ordering.compatible_to_from(
             params[i], ast->arguments[i]->get_type())) {
-      this->add_error(ast->arguments[i]->get_location(),
-                      fmt::format("Argument {} to '{}': expected {}, got {}",
-                                  i + 1,
-                                  ast->functionName.with_alias().mangled(),
-                                  params[i].to_string(),
-                                  ast->arguments[i]->get_type().to_string()));
-      if (auto hint =
-              incompatibility_hint(params[i], ast->arguments[i]->get_type()))
-        this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
+      report_type_mismatch(
+          ast->arguments[i]->get_location(),
+          fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
+                      ast->functionName.with_alias().mangled(),
+                      params[i].to_string(),
+                      ast->arguments[i]->get_type().to_string()),
+          params[i], ast->arguments[i]->get_type());
       this->add_diagnostics(
           ast->arguments[i]->get_location(),
           fmt::format("note: '{}' has signature: {}",
@@ -479,13 +475,12 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Wrong return type for function {}, expected "
-                                "{} but got {}",
-                                scope_fn->getFunctionName(),
-                                return_type.to_string(), t.to_string()));
-    if (auto hint = incompatibility_hint(return_type, t))
-      this->add_diagnostics(ast->get_location(), *hint);
+    report_type_mismatch(ast->get_location(),
+                         fmt::format("Wrong return type for function {}, "
+                                     "expected {} but got {}",
+                                     scope_fn->getFunctionName(),
+                                     return_type.to_string(), t.to_string()),
+                         return_type, t);
   } else {
     resolve_literal_type(ast->return_expr.get(), return_type);
   }

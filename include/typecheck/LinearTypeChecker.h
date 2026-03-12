@@ -1,6 +1,6 @@
 #pragma once
-#include "ast/Ast.h"
 #include "ast/ASTProperties.h"
+#include "ast/Ast.h"
 #include "util/Utilities.h"
 #include <functional>
 #include <string>
@@ -94,22 +94,21 @@ class LinearTypeChecker : public sammine_util::Reportee {
                           sammine_util::Location loc);
 
   // Consume linear vars/fields in a list of element expressions.
-  void consume_elements(
-      const std::vector<std::unique_ptr<ExprAST>> &elements,
-      sammine_util::Location loc, const std::string &reason);
+  void consume_elements(const std::vector<std::unique_ptr<ExprAST>> &elements,
+                        sammine_util::Location loc, const std::string &reason);
 
   // Recursive inner-linear tracking for wrapper types
   void register_inner_linear(VarInfo &parent, const Type &t,
-                              sammine_util::Location loc);
+                             sammine_util::Location loc);
   void check_children_consumed(const VarInfo &info);
   VarInfo *find_child(const std::string &var_name,
-                       const std::string &field_name);
+                      const std::string &field_name);
 
   const ASTProperties *props_ = nullptr;
 
   // Maps closure variable names to the types of their captured (bound) args.
-  // Used at return time: if any captured type containsNonLinearPtr(), the closure
-  // cannot escape because it holds a reference to stack-local data.
+  // Used at return time: if any captured type containsNonLinearPtr(), the
+  // closure cannot escape because it holds a reference to stack-local data.
   std::unordered_map<std::string, std::vector<Type>> closure_captures_;
 
   // Record the bound arg types of a partial application into closure_captures_.

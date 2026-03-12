@@ -9,8 +9,7 @@
 
 namespace sammine_lang::AST {
 
-template <typename T>
-struct GenericRegistry {
+template <typename T> struct GenericRegistry {
   std::unordered_map<std::string, T *> defs;
   void register_def(const std::string &mangled, T *def) { defs[mangled] = def; }
   T *find(const std::string &mangled) const {
@@ -21,7 +20,6 @@ struct GenericRegistry {
 
 class Monomorphizer {
 public:
-
   // --- Registration & Lookup ---
   GenericRegistry<FuncDefAST> generic_funcs;
   GenericRegistry<EnumDefAST> generic_enums;
@@ -33,8 +31,7 @@ public:
   FuncDefAST *try_instantiate_func(FuncDefAST *generic,
                                    const MonomorphizedKey &key,
                                    const TypeBindings &bindings);
-  EnumDefAST *instantiate_enum(EnumDefAST *generic,
-                               const MonomorphizedKey &key,
+  EnumDefAST *instantiate_enum(EnumDefAST *generic, const MonomorphizedKey &key,
                                const TypeBindings &bindings);
   StructDefAST *instantiate_struct(StructDefAST *generic,
                                    const MonomorphizedKey &key,
@@ -48,7 +45,8 @@ public:
 private:
   // Dedup set (functions only — enum/struct dedup via get_typename_type
   // at call sites, which works because they register at root scope)
-  std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash> instantiated_functions_;
+  std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash>
+      instantiated_functions_;
 
   // Cloning internals
   const TypeBindings *bindings_ = nullptr;
@@ -65,12 +63,10 @@ private:
 
   // Internal clone helpers that set bindings_ for the duration
   std::unique_ptr<FuncDefAST>
-  clone_func(FuncDefAST *generic,
-             const sammine_util::QualifiedName &new_name,
+  clone_func(FuncDefAST *generic, const sammine_util::QualifiedName &new_name,
              const TypeBindings &bindings);
   std::unique_ptr<EnumDefAST>
-  clone_enum(EnumDefAST *generic,
-             const sammine_util::QualifiedName &new_name,
+  clone_enum(EnumDefAST *generic, const sammine_util::QualifiedName &new_name,
              const TypeBindings &bindings);
   std::unique_ptr<StructDefAST>
   clone_struct(StructDefAST *generic,

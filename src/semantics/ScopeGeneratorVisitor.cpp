@@ -61,20 +61,17 @@ void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
             std::make_pair(prev_loc.source_start, prev_loc.source_end);
         auto imp_it = import_loc_to_module.find(prev_key);
         if (imp_it != import_loc_to_module.end()) {
+          add_error(loc, fmt::format("[SCOPE]: The name `{}` conflicts with "
+                                     "`{}` imported from '{}'",
+                                     fn_name, fn_name, imp_it->second));
+        } else {
           add_error(
               loc,
-              fmt::format(
-                  "[SCOPE]: The name `{}` conflicts with `{}` imported from '{}'",
-                  fn_name, fn_name, imp_it->second));
-        } else {
-          add_error(loc,
-                    fmt::format(
-                        "[SCOPE]: The name `{}` has been introduced before",
-                        fn_name));
-          add_error(
-              prev_loc,
-              fmt::format("[SCOPE]: Most recently defined `{}` is here",
+              fmt::format("[SCOPE]: The name `{}` has been introduced before",
                           fn_name));
+          add_error(prev_loc,
+                    fmt::format("[SCOPE]: Most recently defined `{}` is here",
+                                fn_name));
         }
       }
     }
@@ -236,9 +233,8 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
     // (e.g. Color::Red) — variant resolution deferred to type checker
     if (can_see(ast->functionName.get_module()) == nameFound)
       return;
-    add_error(ast->get_location(),
-              fmt::format("Module '{}' is not imported",
-                          ast->functionName.get_module()));
+    add_error(ast->get_location(), fmt::format("Module '{}' is not imported",
+                                               ast->functionName.get_module()));
     return;
   }
 
@@ -248,17 +244,20 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
     if (it != variant_to_enum.end()) {
       auto &enum_names = it->second;
       if (enum_names.size() > 1) {
-        add_error(ast->get_location(),
-          fmt::format("[SCOPE]: Variant name '{}' is ambiguous — "
-                      "multiple enums define this variant. "
-                      "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
-                      ast->functionName.get_name(), ast->functionName.get_name()));
+        add_error(
+            ast->get_location(),
+            fmt::format(
+                "[SCOPE]: Variant name '{}' is ambiguous — "
+                "multiple enums define this variant. "
+                "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
+                ast->functionName.get_name(), ast->functionName.get_name()));
         return;
       }
       // Build qualified name: enum parts + variant name
       auto parts = enum_names[0].parts();
       parts.push_back({ast->functionName.get_name(), ""});
-      ast->functionName = sammine_util::QualifiedName::from_parts(std::move(parts));
+      ast->functionName =
+          sammine_util::QualifiedName::from_parts(std::move(parts));
       return;
     }
   }
@@ -276,11 +275,10 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
     if (ast->functionName.is_qualified() &&
         can_see(ast->functionName.get_qualifier()) == nameFound)
       return;
-    add_error(
-        ast->get_location(),
-        fmt::format(
-            "[SCOPE]: The called name {} for the call expression is not found before",
-            ast->functionName.mangled()));
+    add_error(ast->get_location(),
+              fmt::format("[SCOPE]: The called name {} for the call expression "
+                          "is not found before",
+                          ast->functionName.mangled()));
   }
 }
 
@@ -294,16 +292,19 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
     auto &enum_names = vit->second;
     if (enum_names.size() > 1) {
       add_error(ast->get_location(),
-        fmt::format("[SCOPE]: Variant name '{}' is ambiguous — "
+                fmt::format(
+                    "[SCOPE]: Variant name '{}' is ambiguous — "
                     "multiple enums define this variant. "
                     "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
                     var_name, var_name));
       return;
     }
-    // Rewrite to qualified form: e.g., "A" → "Color::A" or "dummy_enum::dummy::A"
+    // Rewrite to qualified form: e.g., "A" → "Color::A" or
+    // "dummy_enum::dummy::A"
     auto parts = enum_names[0].parts();
     parts.push_back({var_name, ""});
-    ast->variableName = sammine_util::QualifiedName::from_parts(std::move(parts)).mangled();
+    ast->variableName =
+        sammine_util::QualifiedName::from_parts(std::move(parts)).mangled();
     return;
   }
 

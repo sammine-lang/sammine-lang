@@ -7,8 +7,8 @@ using sammine_util::cautious_value;
 #include "mlir/IR/Block.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "mlir/IR/Location.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/IR/Location.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Verifier.h"
 
@@ -38,7 +38,8 @@ namespace sammine_lang {
 // Three pre-passes before emitting definitions:
 // 1) Declare runtime functions (malloc, free, exit)
 // 2) Register all struct/enum LLVM types (so forward refs work)
-// 3) Forward-declare all function signatures (needed for function-as-value refs)
+// 3) Forward-declare all function signatures (needed for function-as-value
+// refs)
 
 mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
@@ -47,8 +48,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
 
   // Register the closure struct type: { ptr, ptr }
   auto closurePtrTy = llvmPtrTy();
-  closureType = mlir::LLVM::LLVMStructType::getIdentified(
-      builder.getContext(), kClosureTypeName);
+  closureType = mlir::LLVM::LLVMStructType::getIdentified(builder.getContext(),
+                                                          kClosureTypeName);
   (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
 
   // Pre-pass 1: register struct and enum types so that function
@@ -78,7 +79,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         int64_t max_payload_size = 0;
         for (auto &vi : et.get_variants())
           max_payload_size = std::max(max_payload_size,
-                                       getVariantPayloadSize(vi.payload_types));
+                                      getVariantPayloadSize(vi.payload_types));
         // Enum layout: { i32 tag, [N x i8] payload }
         llvm::SmallVector<mlir::Type> fields;
         fields.push_back(builder.getI32Type());
@@ -126,7 +127,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         // The wrapper calls __kernel_ with memref types; this declaration
         // ensures func.call resolves during verification. Replaced during
         // merge with the actual bufferized definition.
-        auto memrefFuncType = buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
+        auto memrefFuncType =
+            buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
         if (!theModule.lookupSymbol(internalName)) {
           auto funcOp = mlir::func::FuncOp::create(
               builder.getUnknownLoc(), internalName, memrefFuncType);
@@ -146,8 +148,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
               wrapperArgTypes.push_back(convertType(param->get_type()));
           }
           llvm::SmallVector<mlir::Type, 1> wrapperRetTypes;
-          auto protoFT = std::get<FunctionType>(
-              kd->Prototype->get_type().type_data);
+          auto protoFT =
+              std::get<FunctionType>(kd->Prototype->get_type().type_data);
           auto retSamType = protoFT.get_return_type();
           if (retSamType.type_kind == TypeKind::Array) {
             wrapperArgTypes.push_back(llvmPtrTy()); // sret
@@ -162,8 +164,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
             funcOp.setVisibility(moduleName.empty()
                                      ? mlir::SymbolTable::Visibility::Private
                                      : mlir::SymbolTable::Visibility::Public);
-            funcOp->setAttr("sammine.kernel_wrapper",
-                            builder.getUnitAttr());
+            funcOp->setAttr("sammine.kernel_wrapper", builder.getUnitAttr());
             theModule.push_back(funcOp);
           }
         }
@@ -205,11 +206,12 @@ mlir::Location MLIRGenImpl::loc(AST::AstBase *ast) {
   // Binary search: find the line containing source_start
   auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
   auto it = std::ranges::upper_bound(
-      diagnosticData,
-      std::make_pair(srcLoc.source_start, std::string_view("")), cmp);
+      diagnosticData, std::make_pair(srcLoc.source_start, std::string_view("")),
+      cmp);
   int64_t lineIdx =
       std::max(int64_t(it - diagnosticData.begin()), int64_t(1)) - 1;
-  int64_t col = srcLoc.source_start - diagnosticData[static_cast<size_t>(lineIdx)].first;
+  int64_t col =
+      srcLoc.source_start - diagnosticData[static_cast<size_t>(lineIdx)].first;
 
   // FileLineColLoc uses 1-based line and 0-based column
   return mlir::FileLineColLoc::get(builder.getContext(), fileName,
@@ -299,7 +301,7 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     for (auto &et : tt.get_element_types())
       elemTypes.push_back(convertType(et));
     return mlir::LLVM::LLVMStructType::getLiteral(builder.getContext(),
-                                                   elemTypes);
+                                                  elemTypes);
   }
   case TypeKind::NonExistent:
     imm_error("type was never resolved (NonExistent) — "
@@ -336,13 +338,12 @@ bool MLIRGenImpl::isIntegerType(const Type &type) {
 }
 
 bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
-  return type.type_kind == TypeKind::U32_t ||
-         type.type_kind == TypeKind::U64_t;
+  return type.type_kind == TypeKind::U32_t || type.type_kind == TypeKind::U64_t;
 }
 
 bool MLIRGenImpl::isFloatType(const Type &type) {
-  return type.type_kind == TypeKind::F64_t || type.type_kind == TypeKind::F32_t ||
-         type.type_kind == TypeKind::Flt;
+  return type.type_kind == TypeKind::F64_t ||
+         type.type_kind == TypeKind::F32_t || type.type_kind == TypeKind::Flt;
 }
 
 bool MLIRGenImpl::isBoolType(const Type &type) {
@@ -410,8 +411,8 @@ mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type, bool asMemref) {
   }
 }
 
-mlir::FunctionType
-MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto, bool asMemref) {
+mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto,
+                                                    bool asMemref) {
   llvm::SmallVector<mlir::Type, 4> argTypes;
   for (auto &param : proto->parameterVectors)
     argTypes.push_back(convertTypeForKernel(param->get_type(), asMemref));
@@ -471,7 +472,9 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
 
     auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
     auto funcOp = kernelModule.lookupSymbol<mlir::func::FuncOp>(internalName);
-    assert(funcOp && "Internal kernel function should be forward-declared in kernel module");
+    assert(
+        funcOp &&
+        "Internal kernel function should be forward-declared in kernel module");
 
     auto &entryBlock = *funcOp.addEntryBlock();
     builder.setInsertionPointToStart(&entryBlock);
@@ -502,15 +505,18 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
         auto retType = kernelFuncType.getResults()[0];
         if (mlir::isa<mlir::FloatType>(retType)) {
           double val = std::stod(numExpr->number);
-          auto constVal = mlir::arith::ConstantFloatOp::create(
-              builder, location, mlir::cast<mlir::FloatType>(retType),
-              llvm::APFloat(val)).getResult();
+          auto constVal =
+              mlir::arith::ConstantFloatOp::create(
+                  builder, location, mlir::cast<mlir::FloatType>(retType),
+                  llvm::APFloat(val))
+                  .getResult();
           mlir::func::ReturnOp::create(builder, location,
                                        mlir::ValueRange{constVal});
         } else {
           int64_t val = std::stoll(numExpr->number);
-          auto constVal = mlir::arith::ConstantIntOp::create(
-              builder, location, retType, val).getResult();
+          auto constVal = mlir::arith::ConstantIntOp::create(builder, location,
+                                                             retType, val)
+                              .getResult();
           mlir::func::ReturnOp::create(builder, location,
                                        mlir::ValueRange{constVal});
         }
@@ -533,10 +539,10 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
 // ===--- Kernel map codegen ---===
 
 void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
-                                     mlir::Block &entryBlock,
-                                     AST::KernelDefAST *kd,
-                                     mlir::Location location,
-                                     mlir::Value dpsOutput) {
+                                    mlir::Block &entryBlock,
+                                    AST::KernelDefAST *kd,
+                                    mlir::Location location,
+                                    mlir::Value dpsOutput) {
   // 1. Look up the input tensor from the symbol table.
   auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
 
@@ -561,8 +567,8 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
       builder, location,
       /*inputs=*/mlir::ValueRange{inputTensor},
       /*init=*/dpsOutput,
-      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
-                          mlir::ValueRange args) {
+      /*bodyBuilder=*/
+      [&](mlir::OpBuilder &b, mlir::Location loc, mlir::ValueRange args) {
         auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
 
         // CRITICAL: Redirect this->builder into the linalg body region.
@@ -598,9 +604,9 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
 // ===--- Kernel reduce codegen ---===
 
 void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
-                                        mlir::Block &entryBlock,
-                                        AST::KernelDefAST *kd,
-                                        mlir::Location location) {
+                                       mlir::Block &entryBlock,
+                                       AST::KernelDefAST *kd,
+                                       mlir::Location location) {
   // 1. Look up the input tensor
   auto inputTensor = symbolTable.get_from_name(reduceExpr->input_name);
 
@@ -638,8 +644,8 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
       /*inputs=*/mlir::ValueRange{inputTensor},
       /*inits=*/mlir::ValueRange{filledInit},
       /*dimensions=*/llvm::ArrayRef<int64_t>{0},
-      /*bodyBuilder=*/[&](mlir::OpBuilder &b, mlir::Location loc,
-                          mlir::ValueRange args) {
+      /*bodyBuilder=*/
+      [&](mlir::OpBuilder &b, mlir::Location loc, mlir::ValueRange args) {
         // args[0] = current element, args[1] = accumulator
 
         // CRITICAL: Redirect this->builder into the linalg body region.
@@ -655,16 +661,20 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
         if (isFloatType(elemSamType)) {
           switch (opTok) {
           case TokenType::TokADD:
-            result = mlir::arith::AddFOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::AddFOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokSUB:
-            result = mlir::arith::SubFOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::SubFOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokMUL:
-            result = mlir::arith::MulFOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::MulFOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokDIV:
-            result = mlir::arith::DivFOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::DivFOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           default:
             imm_error("Unsupported reduce operator");
@@ -673,19 +683,24 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
           bool isUnsigned = isUnsignedIntegerType(elemSamType);
           switch (opTok) {
           case TokenType::TokADD:
-            result = mlir::arith::AddIOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::AddIOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokSUB:
-            result = mlir::arith::SubIOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::SubIOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokMUL:
-            result = mlir::arith::MulIOp::create(b, loc, args[0], args[1]).getResult();
+            result = mlir::arith::MulIOp::create(b, loc, args[0], args[1])
+                         .getResult();
             break;
           case TokenType::TokDIV:
             if (isUnsigned)
-              result = mlir::arith::DivUIOp::create(b, loc, args[0], args[1]).getResult();
+              result = mlir::arith::DivUIOp::create(b, loc, args[0], args[1])
+                           .getResult();
             else
-              result = mlir::arith::DivSIOp::create(b, loc, args[0], args[1]).getResult();
+              result = mlir::arith::DivSIOp::create(b, loc, args[0], args[1])
+                           .getResult();
             break;
           default:
             imm_error("Unsupported reduce operator");
@@ -709,9 +724,9 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
 // ===--- Kernel CPU-ABI wrapper ---===
 
 void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
-                                     const std::string &internalName,
-                                     const std::string &publicName,
-                                     mlir::Location location) {
+                                    const std::string &internalName,
+                                    const std::string &publicName,
+                                    mlir::Location location) {
   auto wrapperOp = theModule.lookupSymbol<mlir::func::FuncOp>(publicName);
   assert(wrapperOp && "Wrapper function should be forward-declared");
 
@@ -730,7 +745,8 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
 
   for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
     auto paramType = kd->Prototype->parameterVectors[i]->get_type();
-    auto blockArg = entryBlock.getArgument(static_cast<unsigned>(blockArgIdx++));
+    auto blockArg =
+        entryBlock.getArgument(static_cast<unsigned>(blockArgIdx++));
 
     if (paramType.type_kind == TypeKind::Array) {
       auto &arrType = std::get<ArrayType>(paramType.type_data);
@@ -764,10 +780,10 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   }
 
   // === Call the internal kernel function (memref types) ===
-  auto memrefFuncType = buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
+  auto memrefFuncType =
+      buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
   auto callOp = mlir::func::CallOp::create(
-      builder, location, internalName,
-      memrefFuncType.getResults(), kernelArgs);
+      builder, location, internalName, memrefFuncType.getResults(), kernelArgs);
 
   // === Marshal return value ===
   if (returnsArray) {
@@ -786,7 +802,8 @@ mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
     argTypes.push_back(convertType(param->get_type()));
 
   llvm::SmallVector<mlir::Type, 1> retTypes;
-  // proto->get_type() is the full FunctionType — extract the return type from it
+  // proto->get_type() is the full FunctionType — extract the return type from
+  // it
   if (proto->get_type().type_kind == TypeKind::Function) {
     auto funcType = std::get<FunctionType>(proto->get_type().type_data);
     auto retType = funcType.get_return_type();
@@ -866,9 +883,9 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
   case NK::TupleLiteralExprAST:
     return emitTupleLiteralExpr(llvm::cast<AST::TupleLiteralExprAST>(ast));
   default:
-    imm_error(fmt::format("unsupported expression type '{}'",
-                          ast->getTreeName()),
-              ast->get_location());
+    imm_error(
+        fmt::format("unsupported expression type '{}'", ast->getTreeName()),
+        ast->get_location());
   }
 }
 
@@ -917,11 +934,10 @@ mlir::Value MLIRGenImpl::emitVarDefArray(AST::VarDefAST *ast,
 
   // For immutable arrays with all-constant elements, emit as global constant
   if (!ast->is_mutable) {
-    if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(
-            ast->Expression.get())) {
+    if (auto *arrLit =
+            llvm::dyn_cast<AST::ArrayLiteralExprAST>(ast->Expression.get())) {
       bool allConst = std::all_of(
-          arrLit->elements.begin(), arrLit->elements.end(),
-          [](const auto &e) {
+          arrLit->elements.begin(), arrLit->elements.end(), [](const auto &e) {
             return llvm::isa<AST::NumberExprAST>(e.get()) ||
                    llvm::isa<AST::BoolExprAST>(e.get()) ||
                    llvm::isa<AST::CharExprAST>(e.get());
@@ -989,7 +1005,7 @@ mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
 // ===--- Helpers ---===
 
 mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
-                                        mlir::Location location) {
+                                       mlir::Location location) {
   if (in_kernel_lambda_body)
     imm_error("Stack allocation not valid inside kernel lambdas");
   // Hoist alloca to the entry block so Mem2Reg/SROA can eliminate it.
@@ -999,14 +1015,14 @@ mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
   builder.setInsertionPointToStart(&entryBlock);
 
   auto one = mlir::arith::ConstantIntOp::create(builder, location,
-                                                  builder.getI64Type(), 1);
-  return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(),
-                                        elemType, one);
+                                                builder.getI64Type(), 1);
+  return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(), elemType,
+                                      one);
 }
 
 mlir::Value MLIRGenImpl::buildMemrefFromPtr(mlir::Value ptr, int64_t size,
-                                              mlir::Type elemType,
-                                              mlir::Location loc) {
+                                            mlir::Type elemType,
+                                            mlir::Location loc) {
   // Build the LLVM struct that is the memref descriptor:
   //   { allocated_ptr, aligned_ptr, offset, sizes[1], strides[1] }
   auto i64Ty = builder.getI64Type();
@@ -1017,32 +1033,31 @@ mlir::Value MLIRGenImpl::buildMemrefFromPtr(mlir::Value ptr, int64_t size,
 
   mlir::Value desc = mlir::LLVM::UndefOp::create(builder, loc, descTy);
   desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, ptr,
-                                            llvm::ArrayRef<int64_t>{0});
+                                           llvm::ArrayRef<int64_t>{0});
   desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, ptr,
-                                            llvm::ArrayRef<int64_t>{1});
+                                           llvm::ArrayRef<int64_t>{1});
   auto zero = mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, 0);
   desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, zero,
-                                            llvm::ArrayRef<int64_t>{2});
+                                           llvm::ArrayRef<int64_t>{2});
 
   auto sizeVal = mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, size);
   mlir::Value sizes = mlir::LLVM::UndefOp::create(builder, loc, arrI64x1);
   sizes = mlir::LLVM::InsertValueOp::create(builder, loc, sizes, sizeVal,
-                                             llvm::ArrayRef<int64_t>{0});
+                                            llvm::ArrayRef<int64_t>{0});
   desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, sizes,
-                                            llvm::ArrayRef<int64_t>{3});
+                                           llvm::ArrayRef<int64_t>{3});
 
-  auto strideVal =
-      mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, 1);
+  auto strideVal = mlir::arith::ConstantIntOp::create(builder, loc, i64Ty, 1);
   mlir::Value strides = mlir::LLVM::UndefOp::create(builder, loc, arrI64x1);
   strides = mlir::LLVM::InsertValueOp::create(builder, loc, strides, strideVal,
-                                               llvm::ArrayRef<int64_t>{0});
+                                              llvm::ArrayRef<int64_t>{0});
   desc = mlir::LLVM::InsertValueOp::create(builder, loc, desc, strides,
-                                            llvm::ArrayRef<int64_t>{4});
+                                           llvm::ArrayRef<int64_t>{4});
 
   // Cast LLVM descriptor struct → memref type
   auto memrefType = mlir::MemRefType::get({size}, elemType);
   return mlir::UnrealizedConversionCastOp::create(builder, loc, memrefType,
-                                                   mlir::ValueRange{desc})
+                                                  mlir::ValueRange{desc})
       .getResult(0);
 }
 
@@ -1128,7 +1143,8 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     return 16; // closure struct: two pointers
   case TypeKind::Array: {
     auto &arr = std::get<ArrayType>(type.type_data);
-    return getTypeSize(arr.get_element()) * static_cast<int64_t>(arr.get_size());
+    return getTypeSize(arr.get_element()) *
+           static_cast<int64_t>(arr.get_size());
   }
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(type.type_data);
@@ -1155,7 +1171,8 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     }
     int64_t max_payload = 0;
     for (auto &vi : et.get_variants())
-      max_payload = std::max(max_payload, getVariantPayloadSize(vi.payload_types));
+      max_payload =
+          std::max(max_payload, getVariantPayloadSize(vi.payload_types));
     return 4 + max_payload; // i32 tag + payload
   }
   case TypeKind::Tuple: {
@@ -1199,7 +1216,8 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
   }
 }
 
-int64_t MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_types) {
+int64_t
+MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_types) {
   int64_t size = 0;
   for (auto &pt : payload_types) {
     int64_t fieldSize = getTypeSize(pt);
@@ -1209,7 +1227,8 @@ int64_t MLIRGenImpl::getVariantPayloadSize(const std::vector<Type> &payload_type
   return size;
 }
 
-int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset, const Type &field_type) {
+int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset,
+                                          const Type &field_type) {
   int64_t fieldSize = getTypeSize(field_type);
   byte_offset = static_cast<int64_t>(llvm::alignTo(byte_offset, fieldSize));
   int64_t offset = byte_offset;
@@ -1217,16 +1236,15 @@ int64_t MLIRGenImpl::advancePayloadOffset(int64_t &byte_offset, const Type &fiel
   return offset;
 }
 
-mlir::Value
-MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
-                                  const Type &type, mlir::Location location) {
+mlir::Value MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
+                                              const Type &type,
+                                              mlir::Location location) {
   auto arrType = std::get<ArrayType>(type.type_data);
   auto elemType = convertType(arrType.get_element());
   auto llvmArrayType =
       mlir::LLVM::LLVMArrayType::get(elemType, arrType.get_size());
 
-  auto name =
-      fmt::format("{}{}", kConstArrayPrefix.str(), constArrayCounter++);
+  auto name = fmt::format("{}{}", kConstArrayPrefix.str(), constArrayCounter++);
 
   // Build the global constant in the module scope, then return to caller scope
   {
@@ -1259,8 +1277,8 @@ MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
             apVal.convert(llvm::APFloat::IEEEsingle(),
                           llvm::APFloat::rmNearestTiesToEven, &losesInfo);
           }
-          elemVal = mlir::arith::ConstantFloatOp::create(
-              builder, location, mlirFloatType, apVal);
+          elemVal = mlir::arith::ConstantFloatOp::create(builder, location,
+                                                         mlirFloatType, apVal);
         } else {
           int64_t val = std::stoll(num->number);
           elemVal = mlir::arith::ConstantIntOp::create(builder, location,
@@ -1284,8 +1302,8 @@ MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
 }
 
 mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
-                                                  llvm::StringRef value,
-                                                  mlir::Location location) {
+                                                 llvm::StringRef value,
+                                                 mlir::Location location) {
   // Check if we already have this global
   auto globalOp = theModule.lookupSymbol<mlir::LLVM::GlobalOp>(name);
   if (!globalOp) {
@@ -1297,8 +1315,7 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
     builder.setInsertionPointToStart(theModule.getBody());
 
     auto strType = mlir::LLVM::LLVMArrayType::get(
-        mlir::IntegerType::get(builder.getContext(), 8),
-        nullTerminated.size());
+        mlir::IntegerType::get(builder.getContext(), 8), nullTerminated.size());
     globalOp = mlir::LLVM::GlobalOp::create(
         builder, location, strType, /*isConstant=*/true,
         mlir::LLVM::Linkage::Internal, name,
@@ -1312,10 +1329,11 @@ mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
 
 // ===--- Public entry point ---===
 
-MLIRGenResult
-mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
-        const std::string &moduleName, const std::string &fileName,
-        const std::string &sourceText, const AST::ASTProperties &props) {
+MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
+                      const std::string &moduleName,
+                      const std::string &fileName,
+                      const std::string &sourceText,
+                      const AST::ASTProperties &props) {
   MLIRGenImpl impl(context, moduleName, fileName, sourceText, props);
   auto cpuModule = impl.generate(program);
   MLIRGenResult result;

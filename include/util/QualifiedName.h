@@ -26,7 +26,7 @@ struct QualifiedName {
   };
 
 private:
-  std::vector<Part> parts_; // [{math,""}, {Color,""}, {Red,""}]
+  std::vector<Part> parts_;                 // [{math,""}, {Color,""}, {Red,""}]
   std::optional<std::string> module_alias_; // original alias before resolution
   bool unresolved_ = false;
 
@@ -62,9 +62,9 @@ public:
   }
 
   // Convenience: create from plain strings (no type args)
-  static QualifiedName from_parts(std::vector<std::string> names,
-                                  bool unresolved = false,
-                                  std::optional<std::string> module_alias = std::nullopt) {
+  static QualifiedName
+  from_parts(std::vector<std::string> names, bool unresolved = false,
+             std::optional<std::string> module_alias = std::nullopt) {
     QualifiedName qn;
     qn.parts_.clear();
     qn.parts_.reserve(names.size());
@@ -76,9 +76,9 @@ public:
   }
 
   // Create from structured Parts (with type args)
-  static QualifiedName from_parts(std::vector<Part> parts,
-                                  bool unresolved = false,
-                                  std::optional<std::string> module_alias = std::nullopt) {
+  static QualifiedName
+  from_parts(std::vector<Part> parts, bool unresolved = false,
+             std::optional<std::string> module_alias = std::nullopt) {
     QualifiedName qn;
     qn.parts_ = std::move(parts);
     qn.unresolved_ = unresolved;

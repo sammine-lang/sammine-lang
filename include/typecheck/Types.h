@@ -20,11 +20,11 @@ enum class TypeKind {
   // --- Concrete scalar types ---
   I32_t,
   I64_t,
-  U32_t,   // unsigned 32-bit — requires explicit suffix (42u32)
-  U64_t,   // unsigned 64-bit — requires explicit suffix (100u64)
+  U32_t, // unsigned 32-bit — requires explicit suffix (42u32)
+  U64_t, // unsigned 64-bit — requires explicit suffix (100u64)
   F64_t,
-  F32_t,   // 32-bit float — suffix syntax: 3.14f32
-  Unit,    // void-like type, written as ()
+  F32_t, // 32-bit float — suffix syntax: 3.14f32
+  Unit,  // void-like type, written as ()
   Bool,
   Char,
   String,
@@ -39,7 +39,8 @@ enum class TypeKind {
   Never,       // diverging expressions (e.g. return, abort)
   NonExistent, // not-yet-typed AST node (default before synthesis)
   Poisoned,    // type error sentinel — suppresses cascading errors
-  Integer,     // polymorphic integer literal — flows into i32/i64/u32/u64 via context
+  Integer,     // polymorphic integer literal — flows into i32/i64/u32/u64 via
+               // context
   Flt,         // polymorphic float literal — flows into f64/f32 via context
   TypeParam,   // generic type parameter (e.g. T in identity<T>)
   Generic      // uninstantiated generic function/struct template
@@ -108,14 +109,15 @@ public:
              std::vector<Type> field_types);
 };
 /// Sum type with named variants. Supports unit variants, payload variants,
-/// and integer-backed enums (explicit discriminant values, optional backing type).
+/// and integer-backed enums (explicit discriminant values, optional backing
+/// type).
 class EnumType {
   sammine_util::QualifiedName name;
 
 public:
   struct VariantInfo {
     std::string name;
-    std::vector<Type> payload_types;          // empty for unit variants
+    std::vector<Type> payload_types;           // empty for unit variants
     std::optional<int64_t> discriminant_value; // set for integer-backed enums
   };
 
@@ -138,7 +140,8 @@ public:
            bool integer_backed = false,
            TypeKind backing_type = TypeKind::I32_t);
 };
-/// Anonymous product type: (T, U, V). Supports destructuring via let (a, b) = t.
+/// Anonymous product type: (T, U, V). Supports destructuring via let (a, b) =
+/// t.
 class TupleType {
   std::shared_ptr<std::vector<Type>> element_types;
 
@@ -149,13 +152,16 @@ public:
   Type get_element(size_t idx) const;
   TupleType(std::vector<Type> element_types);
 };
-/// Payload for compound types. std::string holds TypeParam names and String values.
-/// std::monostate for scalar types that carry no extra data.
+/// Payload for compound types. std::string holds TypeParam names and String
+/// values. std::monostate for scalar types that carry no extra data.
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, TupleType, std::string, std::monostate>;
 
 enum class Mutability : uint8_t { Immutable = 0, Mutable = 1 };
-enum class Linearity : uint8_t { NonLinear = 0, Linear = 1 }; // Linear = must be consumed exactly once
+enum class Linearity : uint8_t {
+  NonLinear = 0,
+  Linear = 1
+}; // Linear = must be consumed exactly once
 
 /// Core type representation. Every AST node gets a Type via ASTProperties.
 /// type_kind discriminates, type_data carries compound type details,
@@ -182,8 +188,7 @@ struct Type {
   static Type
   Poisoned(std::source_location src = std::source_location::current()) {
     auto path = std::filesystem::path(src.file_name()).filename().string();
-    return Type{TypeKind::Poisoned,
-                fmt::format("{}:{}", path, src.line())};
+    return Type{TypeKind::Poisoned, fmt::format("{}:{}", path, src.line())};
   }
   static Type Unit() { return Type{TypeKind::Unit, std::monostate()}; }
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
@@ -216,9 +221,8 @@ struct Type {
                    std::vector<EnumType::VariantInfo> variants,
                    bool integer_backed = false,
                    TypeKind backing_type = TypeKind::I32_t) {
-    return Type{TypeKind::Enum,
-                EnumType(std::move(name), std::move(variants), integer_backed,
-                         backing_type)};
+    return Type{TypeKind::Enum, EnumType(std::move(name), std::move(variants),
+                                         integer_backed, backing_type)};
   }
   static Type Tuple(std::vector<Type> element_types) {
     return Type{TypeKind::Tuple, TupleType(std::move(element_types))};
@@ -227,9 +231,7 @@ struct Type {
   explicit operator bool() const {
     return this->type_kind != TypeKind::Poisoned;
   }
-  bool synthesized() const {
-    return this->type_kind != TypeKind::NonExistent;
-  }
+  bool synthesized() const { return this->type_kind != TypeKind::NonExistent; }
   Type(TypeKind type_kind, TypeData type_data)
       : type_kind(type_kind), type_data(type_data) {}
 
@@ -325,7 +327,8 @@ struct Type {
 
   bool is_poisoned() const { return this->type_kind == TypeKind::Poisoned; }
 
-  /// Returns true for types that can appear as literal values (scalars + polymorphic).
+  /// Returns true for types that can appear as literal values (scalars +
+  /// polymorphic).
   bool is_literal() const {
     switch (type_kind) {
     case TypeKind::I32_t:
@@ -348,7 +351,8 @@ struct Type {
     }
   }
 
-  /// True for unresolved numeric literals (Integer/Flt) that need context to specialize.
+  /// True for unresolved numeric literals (Integer/Flt) that need context to
+  /// specialize.
   bool is_polymorphic_numeric() const {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
@@ -374,13 +378,11 @@ struct Type {
 
   bool is_never() const { return type_kind == TypeKind::Never; }
 
-  bool is_numeric() const {
-    return is_integer() || is_float();
-  }
+  bool is_numeric() const { return is_integer() || is_float(); }
 
-  /// True for concrete scalar types valid as literal case-expression scrutinees.
-  /// Excludes floats (equality is unreliable) and polymorphic types (must be
-  /// resolved first).
+  /// True for concrete scalar types valid as literal case-expression
+  /// scrutinees. Excludes floats (equality is unreliable) and polymorphic types
+  /// (must be resolved first).
   bool is_matchable_scalar() const {
     switch (type_kind) {
     case TypeKind::I32_t:
@@ -395,7 +397,8 @@ struct Type {
     }
   }
 
-  /// True for compound types that contain inner types (used by forEachInnerType).
+  /// True for compound types that contain inner types (used by
+  /// forEachInnerType).
   bool isTypeWrapping() const {
     switch (type_kind) {
     case TypeKind::Pointer:
@@ -422,7 +425,8 @@ struct Type {
     return found;
   }
 
-  /// Recursively checks if this type or any nested type contains a non-linear pointer.
+  /// Recursively checks if this type or any nested type contains a non-linear
+  /// pointer.
   bool containsNonLinearPtr() const {
     if (type_kind == TypeKind::Pointer && linearity != Linearity::Linear)
       return true;
@@ -434,7 +438,8 @@ struct Type {
     return found;
   }
 
-  /// Visits all immediately-nested types (pointee, elements, fields, params, etc.).
+  /// Visits all immediately-nested types (pointee, elements, fields, params,
+  /// etc.).
   template <typename F> void forEachInnerType(F &&callback) const {
     switch (type_kind) {
     case TypeKind::Pointer: {
@@ -481,7 +486,6 @@ struct Type {
   operator std::string() const { return to_string(); }
 };
 
-
 /// Utility for combining hash values (boost-style).
 inline void hash_combine(size_t &seed, size_t h) {
   seed ^= h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -509,10 +513,10 @@ struct MonomorphizedKey {
   bool operator==(const MonomorphizedKey &) const = default;
 
   /// Build from type param names + bindings (extracts concrete types in order).
-  static MonomorphizedKey from_bindings(
-      const std::string &name,
-      const std::vector<std::string> &type_params,
-      const std::unordered_map<std::string, Type> &bindings) {
+  static MonomorphizedKey
+  from_bindings(const std::string &name,
+                const std::vector<std::string> &type_params,
+                const std::unordered_map<std::string, Type> &bindings) {
     std::vector<Type> args;
     for (auto &tp : type_params)
       args.push_back(bindings.at(tp));
@@ -524,7 +528,8 @@ struct MonomorphizedKey {
   std::string type_args_string() const {
     std::string result;
     for (size_t i = 0; i < type_args.size(); i++) {
-      if (i > 0) result += ", ";
+      if (i > 0)
+        result += ", ";
       result += type_args[i].to_string();
     }
     return result;
@@ -571,7 +576,8 @@ inline bool is_builtin_type_name(std::string_view name) {
 
 /// Type lattice for subtyping and compatibility checks.
 /// Maps child types to parent types (e.g. Integer→i32, Flt→f64).
-/// Used by the type checker to resolve polymorphic literals and validate assignments.
+/// Used by the type checker to resolve polymorphic literals and validate
+/// assignments.
 struct TypeMapOrdering {
   std::map<Type, Type> type_map;
 
@@ -584,7 +590,8 @@ struct TypeMapOrdering {
   /// Full check: structure + qualifiers (use for assignments, args, returns)
   bool compatible_to_from(const Type &to, const Type &from) const;
 
-  /// Structure only: ignores mutability/linearity (use for if/case arm unification)
+  /// Structure only: ignores mutability/linearity (use for if/case arm
+  /// unification)
   bool structurally_compatible(const Type &to, const Type &from) const;
 
   /// Qualifier check only: mutability + linearity

@@ -1,14 +1,14 @@
 #include "codegen/MLIRLowering.h"
 
+#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVMPass.h"
 #include "mlir/Conversion/LLVMCommon/ConversionTarget.h"
 #include "mlir/Conversion/LLVMCommon/TypeConverter.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Conversion/ReconcileUnrealizedCasts/ReconcileUnrealizedCasts.h"
 #include "mlir/Conversion/SCFToControlFlow/SCFToControlFlow.h"
-#include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
-#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Bufferization/IR/BufferizableOpInterface.h"
 #include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
@@ -16,12 +16,12 @@
 #include "mlir/Dialect/Bufferization/Transforms/OneShotModuleBufferize.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
@@ -38,9 +38,9 @@
 
 namespace sammine_lang {
 
-std::unique_ptr<llvm::Module>
-lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule, mlir::ModuleOp kernelModule,
-                  llvm::LLVMContext &llvmCtx) {
+std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
+                                                mlir::ModuleOp kernelModule,
+                                                llvm::LLVMContext &llvmCtx) {
   auto *context = cpuModule->getContext();
 
   // Phase 1: Process kernel module (if present)
@@ -101,8 +101,7 @@ lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule, mlir::ModuleOp kernelModule,
       if (auto funcOp = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
         auto name = funcOp.getName();
         // Erase the memref-typed forward-declaration in CPU module
-        if (auto existing =
-                cpuModule.lookupSymbol<mlir::func::FuncOp>(name))
+        if (auto existing = cpuModule.lookupSymbol<mlir::func::FuncOp>(name))
           existing.erase();
         // Move the actual definition into CPU module
         funcOp->remove();
