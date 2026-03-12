@@ -36,13 +36,6 @@ public:
   // Monomorphization state: generic registration, dedup, cloning, output
   Monomorphizer monomorphizer;
 
-  // Unification and substitution helpers
-  bool unify(const Type &pattern, const Type &concrete,
-             std::unordered_map<std::string, Type> &bindings);
-  Type substitute(const Type &type,
-                  const std::unordered_map<std::string, Type> &bindings) const;
-  bool contains_type_param(const Type &type, const std::string &param_name);
-
   virtual void enter_new_scope() override {
     push_ast_context();
     id_to_type.push_context();
@@ -175,6 +168,14 @@ public:
   std::optional<Type> synthesize_typeclass_call(CallExprAST *ast);
   Type synthesize_generic_call(CallExprAST *ast);
   Type synthesize_normal_call(CallExprAST *ast);
+
+  /// Resolve explicit type args against type params, producing bindings and a
+  /// comma-separated string (without angle brackets). Returns nullopt if any
+  /// type arg resolves to Poisoned. Caller must check size equality beforehand.
+  std::optional<std::pair<TypeBindings, std::string>>
+  resolve_explicit_type_args(
+      const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
+      const std::vector<std::string> &type_params);
 
   // Binary expression synthesis helper
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
@@ -326,7 +327,7 @@ public:
       }
 
       // Resolve type arguments
-      Monomorphizer::SubstitutionMap bindings;
+      TypeBindings bindings;
       std::string type_args = "<";
       bool has_unresolved_type_param = false;
       for (size_t i = 0; i < gen->type_args.size(); i++) {

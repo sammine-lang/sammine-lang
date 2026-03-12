@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 //! \file Types.h
@@ -454,6 +455,9 @@ struct Type {
 
   operator std::string() const { return to_string(); }
 };
+
+
+using TypeBindings = std::unordered_map<std::string, Type>;
 
 std::optional<std::string> incompatibility_hint(const Type &expected,
                                                 const Type &actual);

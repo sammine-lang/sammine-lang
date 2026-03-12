@@ -14,7 +14,7 @@ struct CallProps {
   std::optional<Type> callee_func_type;
   bool is_partial = false;
   std::optional<sammine_util::MonomorphizedName> resolved_name;
-  std::unordered_map<std::string, Type> type_bindings;
+  TypeBindings type_bindings;
   bool is_typeclass_call = false;
   bool is_enum_constructor = false;
   size_t enum_variant_index = 0;

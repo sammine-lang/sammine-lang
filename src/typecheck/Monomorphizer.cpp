@@ -50,7 +50,7 @@ FuncDefAST *
 Monomorphizer::try_instantiate_func(
     FuncDefAST *generic,
     const sammine_util::MonomorphizedName &mono,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   auto mangled = mono.mangled();
   if (instantiated_functions_.contains(mangled))
     return nullptr;
@@ -66,7 +66,7 @@ EnumDefAST *
 Monomorphizer::instantiate_enum(
     EnumDefAST *generic,
     const sammine_util::MonomorphizedName &mono,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   auto cloned = clone_enum(generic, mono, bindings);
   auto *ptr = cloned.get();
   monomorphized_enum_defs.push_back(std::move(cloned));
@@ -77,7 +77,7 @@ StructDefAST *
 Monomorphizer::instantiate_struct(
     StructDefAST *generic,
     const sammine_util::MonomorphizedName &mono,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   auto cloned = clone_struct(generic, mono, bindings);
   auto *ptr = cloned.get();
   monomorphized_struct_defs.push_back(std::move(cloned));
@@ -397,7 +397,7 @@ std::unique_ptr<FuncDefAST>
 Monomorphizer::clone_func(
     FuncDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   bindings_ = &bindings;
   auto proto = clone_prototype(generic->Prototype.get(), mono_name);
   auto block = clone_block(generic->Block.get());
@@ -411,7 +411,7 @@ std::unique_ptr<EnumDefAST>
 Monomorphizer::clone_enum(
     EnumDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   bindings_ = &bindings;
 
   // Clone variant definitions with substituted payload types
@@ -440,7 +440,7 @@ std::unique_ptr<StructDefAST>
 Monomorphizer::clone_struct(
     StructDefAST *generic,
     const sammine_util::MonomorphizedName &mono_name,
-    const SubstitutionMap &bindings) {
+    const TypeBindings &bindings) {
   bindings_ = &bindings;
 
   // Clone struct members with substituted types

@@ -12,7 +12,6 @@ namespace sammine_lang::AST {
 
 class Monomorphizer {
 public:
-  using SubstitutionMap = std::unordered_map<std::string, Type>;
 
   // --- Registration (called during type-check passes 1-2) ---
   void register_generic_func(const std::string &mangled, FuncDefAST *def);
@@ -29,13 +28,13 @@ public:
   // Enums/Structs: always clone (callers dedup via get_typename_type).
   FuncDefAST *try_instantiate_func(FuncDefAST *generic,
                                    const sammine_util::MonomorphizedName &mono,
-                                   const SubstitutionMap &bindings);
+                                   const TypeBindings &bindings);
   EnumDefAST *instantiate_enum(EnumDefAST *generic,
                                const sammine_util::MonomorphizedName &mono,
-                               const SubstitutionMap &bindings);
+                               const TypeBindings &bindings);
   StructDefAST *instantiate_struct(StructDefAST *generic,
                                    const sammine_util::MonomorphizedName &mono,
-                                   const SubstitutionMap &bindings);
+                                   const TypeBindings &bindings);
 
   // --- Output (accessed by Compiler.cpp after type-checking) ---
   std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
@@ -53,7 +52,7 @@ private:
   std::set<std::string> instantiated_functions_;
 
   // Cloning internals
-  const SubstitutionMap *bindings_ = nullptr;
+  const TypeBindings *bindings_ = nullptr;
   std::string resolve_type_name(const std::string &name) const;
   std::unique_ptr<TypeExprAST> clone_type_expr(TypeExprAST *expr);
   std::unique_ptr<TypedVarAST> clone_typed_var(TypedVarAST *var);
@@ -69,15 +68,15 @@ private:
   std::unique_ptr<FuncDefAST>
   clone_func(FuncDefAST *generic,
              const sammine_util::MonomorphizedName &mono_name,
-             const SubstitutionMap &bindings);
+             const TypeBindings &bindings);
   std::unique_ptr<EnumDefAST>
   clone_enum(EnumDefAST *generic,
              const sammine_util::MonomorphizedName &mono_name,
-             const SubstitutionMap &bindings);
+             const TypeBindings &bindings);
   std::unique_ptr<StructDefAST>
   clone_struct(StructDefAST *generic,
                const sammine_util::MonomorphizedName &mono_name,
-               const SubstitutionMap &bindings);
+               const TypeBindings &bindings);
 };
 
 } // namespace sammine_lang::AST
