@@ -323,6 +323,15 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
       return true;
   }
 
+  // Array compatibility: element-wise, same size
+  if (to.type_kind == TypeKind::Array && from.type_kind == TypeKind::Array) {
+    auto &at = std::get<ArrayType>(to.type_data);
+    auto &bt = std::get<ArrayType>(from.type_data);
+    if (at.get_size() != bt.get_size())
+      return false;
+    return compatible_to_from(at.get_element(), bt.get_element());
+  }
+
   // Tuple compatibility: element-wise, same arity
   if (to.type_kind == TypeKind::Tuple && from.type_kind == TypeKind::Tuple) {
     auto &at = std::get<TupleType>(to.type_data);

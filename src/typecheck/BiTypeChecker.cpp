@@ -153,44 +153,6 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   }
 }
 
-bool BiTypeCheckerVisitor::check_array_literal_against_annotation(
-    ArrayLiteralExprAST *arr_lit, const ArrayType &arr_type) {
-  auto expected_elem = arr_type.get_element();
-  size_t first_error_idx = 0;
-  size_t error_count = 0;
-  for (size_t i = 0; i < arr_lit->elements.size(); i++) {
-    auto elem_type = arr_lit->elements[i]->accept_synthesis(this);
-    if (!type_map_ordering.compatible_to_from(expected_elem, elem_type)) {
-      if (error_count == 0)
-        first_error_idx = i;
-      error_count++;
-    } else {
-      resolve_literal_type(arr_lit->elements[i].get(), expected_elem);
-    }
-  }
-  if (error_count > 0) {
-    std::vector<std::string> msgs;
-    msgs.push_back(
-        fmt::format("Array element type mismatch: expected {}, got {}",
-                    expected_elem.to_string(),
-                    arr_lit->elements[first_error_idx]
-                        ->accept_synthesis(this)
-                        .to_string()));
-    if (error_count > 1)
-      msgs.push_back(fmt::format("{} more type mismatch {} in this array",
-                                 error_count - 1,
-                                 (error_count - 1 == 1) ? "error" : "errors"));
-    this->add_error(arr_lit->elements[first_error_idx]->get_location(), msgs);
-    if (auto hint = incompatibility_hint(
-            expected_elem,
-            arr_lit->elements[first_error_idx]->accept_synthesis(this)))
-      this->add_diagnostics(
-          arr_lit->elements[first_error_idx]->get_location(), *hint);
-    arr_lit->set_type(Type::Poisoned());
-    return true;
-  }
-  return false;
-}
 
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   // Tuple destructuring: let (a, b) = expr;
@@ -204,25 +166,6 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   // (ensures variant_constructors is populated for unqualified constructors)
   if (ast->TypedVar->type_expr != nullptr)
     resolve_type_expr(ast->TypedVar->type_expr.get());
-
-  // Special case: array type annotation + array literal RHS
-  if (ast->TypedVar->type_expr != nullptr) {
-    if (auto *arr_lit =
-            llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get())) {
-      ast->accept_synthesis(this);
-      if (ast->get_type().type_kind == TypeKind::Array) {
-        auto arr_data = std::get<ArrayType>(ast->get_type().type_data);
-        for (auto &elem : arr_lit->elements)
-          elem->accept_vis(this);
-        if (check_array_literal_against_annotation(arr_lit, arr_data)) {
-          ast->set_type(Type::Poisoned());
-          return;
-        }
-        arr_lit->set_type(ast->get_type());
-        return;
-      }
-    }
-  }
 
   // Normal case
   ast->Expression->accept_vis(this);
@@ -239,7 +182,7 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
     if (auto hint = incompatibility_hint(to, from))
       this->add_diagnostics(ast->Expression->get_location(), *hint);
     ast->set_type(Type::Poisoned());
-  } else if (from.is_polymorphic_numeric()) {
+  } else {
     resolve_literal_type(ast->Expression.get(), to);
   }
 }
@@ -502,25 +445,6 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
-  // Special case: array literal return — propagate function return type
-  // into array elements before they default to i32.
-  if (auto *arr_lit =
-          llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
-    auto scope_fn = this->ctx().enclosing_function;
-    auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
-    auto return_type = fn_type.get_return_type();
-    if (return_type.type_kind == TypeKind::Array) {
-      auto &arr_data = std::get<ArrayType>(return_type.type_data);
-      for (auto &elem : arr_lit->elements)
-        elem->accept_vis(this);
-      check_array_literal_against_annotation(arr_lit, arr_data);
-      arr_lit->set_type(return_type);
-      ast->accept_synthesis(this);
-      return;
-    }
-  }
-
-  // Normal case
   if (ast->return_expr)
     ast->return_expr->accept_vis(this);
   ast->accept_synthesis(this);
@@ -536,7 +460,7 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
                                 return_type.to_string(), t.to_string()));
     if (auto hint = incompatibility_hint(return_type, t))
       this->add_diagnostics(ast->get_location(), *hint);
-  } else if (t.is_polymorphic_numeric()) {
+  } else {
     resolve_literal_type(ast->return_expr.get(), return_type);
   }
 }

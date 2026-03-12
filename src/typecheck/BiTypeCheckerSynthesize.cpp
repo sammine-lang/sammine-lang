@@ -116,8 +116,8 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   else if (ast->Expression) {
     ast->set_type(ast->Expression->accept_synthesis(this));
     // No annotation: default polymorphic literals (Integer→i32, Flt→f64)
-    if (ast->get_type().is_polymorphic_numeric()) {
-      auto concrete = default_polymorphic_type(ast->get_type());
+    auto concrete = default_polymorphic_type(ast->get_type());
+    if (concrete != ast->get_type()) {
       resolve_literal_type(ast->Expression.get(), concrete);
       ast->set_type(concrete);
     }
@@ -976,14 +976,6 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
     }
   }
 
-  // Default polymorphic element type (annotation resolution happens in visit(VarDefAST*))
-  if (first_type.is_polymorphic_numeric()) {
-    auto concrete = default_polymorphic_type(first_type);
-    for (auto &elem : ast->elements)
-      resolve_literal_type(elem.get(), concrete);
-    first_type = concrete;
-  }
-
   return ast->set_type(Type::Array(first_type, ast->elements.size()));
 }
 
@@ -1305,12 +1297,6 @@ Type BiTypeCheckerVisitor::synthesize(TupleLiteralExprAST *ast) {
     auto t = elem->accept_synthesis(this);
     if (t.is_poisoned())
       return ast->set_type(Type::Poisoned());
-    // Default polymorphic literals in tuple elements
-    if (t.is_polymorphic_numeric()) {
-      auto concrete = default_polymorphic_type(t);
-      resolve_literal_type(elem.get(), concrete);
-      t = concrete;
-    }
     elem_types.push_back(t);
   }
   return ast->set_type(Type::Tuple(std::move(elem_types)));

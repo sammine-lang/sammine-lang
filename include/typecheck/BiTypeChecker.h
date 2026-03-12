@@ -140,9 +140,6 @@ public:
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);
 
-  // Array literal type checking helper — returns true if errors were found
-  bool check_array_literal_against_annotation(ArrayLiteralExprAST *arr_lit,
-                                              const ArrayType &arr_type);
 
   // Kernel intrinsic synthesis helpers
   Type synthesize_kernel_map(KernelDefAST *kd, KernelMapExprAST *map_expr);
@@ -357,20 +354,64 @@ public:
 // --- Numeric literal type inference helpers (shared across .cpp files) ---
 
 /// Default a polymorphic numeric type to its concrete default:
-/// Integer → I32_t, Flt → F64_t. Non-polymorphic types pass through unchanged.
+/// Integer → I32_t, Flt → F64_t. Recurses into Array and Tuple.
+/// Non-polymorphic types pass through unchanged.
 inline Type default_polymorphic_type(const Type &t) {
   if (t.type_kind == TypeKind::Integer)
     return Type::I32_t();
   if (t.type_kind == TypeKind::Flt)
     return Type::F64_t();
+  if (t.type_kind == TypeKind::Array) {
+    auto &arr = std::get<ArrayType>(t.type_data);
+    auto elem = default_polymorphic_type(arr.get_element());
+    if (elem != arr.get_element())
+      return Type::Array(elem, arr.get_size());
+  }
+  if (t.type_kind == TypeKind::Tuple) {
+    auto &tup = std::get<TupleType>(t.type_data);
+    std::vector<Type> elems;
+    bool changed = false;
+    for (size_t i = 0; i < tup.size(); i++) {
+      auto elem = default_polymorphic_type(tup.get_element(i));
+      if (elem != tup.get_element(i))
+        changed = true;
+      elems.push_back(elem);
+    }
+    if (changed)
+      return Type::Tuple(std::move(elems));
+  }
   return t;
 }
 
 /// Recursively resolve polymorphic literal types in an expression tree
 /// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
-/// and BlockAST to reach all leaf literals.
+/// ArrayLiteral, and TupleLiteral to reach all leaf literals.
 inline void resolve_literal_type(ExprAST *expr, const Type &target) {
-  if (!expr || !expr->get_type().is_polymorphic_numeric())
+  if (!expr)
+    return;
+
+  // Compound types: recurse into elements
+  if (auto *arr = llvm::dyn_cast<ArrayLiteralExprAST>(expr)) {
+    if (target.type_kind == TypeKind::Array) {
+      auto &arr_type = std::get<ArrayType>(target.type_data);
+      for (auto &elem : arr->elements)
+        resolve_literal_type(elem.get(), arr_type.get_element());
+      expr->set_type(target);
+    }
+    return;
+  }
+  if (auto *tup = llvm::dyn_cast<TupleLiteralExprAST>(expr)) {
+    if (target.type_kind == TypeKind::Tuple) {
+      auto &tup_type = std::get<TupleType>(target.type_data);
+      for (size_t i = 0; i < tup->elements.size() && i < tup_type.size(); i++)
+        resolve_literal_type(tup->elements[i].get(), tup_type.get_element(i));
+      expr->set_type(target);
+    }
+    return;
+  }
+
+  // Scalar polymorphic literals
+  if (!expr->get_type().is_polymorphic_numeric())
     return;
 
   expr->set_type(target);
@@ -392,8 +433,6 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
       if_expr->elseBlockAST->set_type(target);
     }
   }
-  // For all other expression types (NumberExprAST, CallExprAST, IndexExprAST,
-  // etc.), the type is already set above — no children to recurse into.
 }
 
 } // namespace AST
