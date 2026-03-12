@@ -123,6 +123,11 @@ public:
   void register_typeclass_instance(TypeClassInstanceAST *ast);
   void register_builtin_op_instances();
 
+  // Call expression visit handlers (return true = handled, stops dispatch)
+  bool handle_enum_or_typeclass_call(CallExprAST *ast, CallProps &cp);
+  bool handle_generic_call(CallExprAST *ast, CallProps &cp);
+  bool handle_normal_call_args(CallExprAST *ast, CallProps &cp);
+
   // Call expression synthesis helpers
   std::optional<Type> synthesize_typeclass_call(CallExprAST *ast);
   std::optional<Type> synthesize_generic_call(CallExprAST *ast);

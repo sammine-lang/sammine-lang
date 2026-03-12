@@ -9,7 +9,8 @@
 
 //! \file BiTypeChecker.cpp
 //! \brief Bidirectional type checker. Uses two operations:
-//!   - synthesize(): infer a type bottom-up from an expression (in BiTypeCheckerSynthesize.cpp)
+//!   - synthesize(): infer a type bottom-up from an expression (in
+//!   BiTypeCheckerSynthesize.cpp)
 //!   - check/visit(): validate against an expected type top-down
 //! Three-pass approach over ProgramAST:
 //!   1) Register all type definitions (structs, enums, typeclasses, aliases)
@@ -61,7 +62,8 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
     if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
       if (fd->Prototype->is_generic())
-        monomorphizer.generic_funcs.register_def(fd->Prototype->functionName.mangled(), fd);
+        monomorphizer.generic_funcs.register_def(
+            fd->Prototype->functionName.mangled(), fd);
       else
         pre_register_function(fd->Prototype.get());
     } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
@@ -105,7 +107,8 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->accept_synthesis(this);
 
   if (ast->Prototype->is_generic()) {
-    monomorphizer.generic_funcs.register_def(ast->Prototype->functionName.mangled(), ast);
+    monomorphizer.generic_funcs.register_def(
+        ast->Prototype->functionName.mangled(), ast);
   } else {
     ast->Block->accept_vis(this);
   }
@@ -152,7 +155,6 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
     }
   }
 }
-
 
 void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   // Tuple destructuring: let (a, b) = expr;
@@ -205,7 +207,8 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Generic struct: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      monomorphizer.generic_structs.register_def(ast->struct_name.mangled(), ast);
+      monomorphizer.generic_structs.register_def(ast->struct_name.mangled(),
+                                                 ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -228,9 +231,8 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
     }
   }
 
-  auto struct_type =
-      Type::Struct(ast->struct_name, std::move(field_names),
-                   std::move(field_types));
+  auto struct_type = Type::Struct(ast->struct_name, std::move(field_names),
+                                  std::move(field_types));
   ast->set_type(struct_type);
   typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), struct_type);
 }
@@ -334,11 +336,16 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   if (ast->is_integer_backed) {
     auto backing = [&]() -> Type {
       switch (backing_type) {
-      case TypeKind::I32_t: return Type::I32_t();
-      case TypeKind::I64_t: return Type::I64_t();
-      case TypeKind::U32_t: return Type::U32_t();
-      case TypeKind::U64_t: return Type::U64_t();
-      default: return Type::I32_t();
+      case TypeKind::I32_t:
+        return Type::I32_t();
+      case TypeKind::I64_t:
+        return Type::I64_t();
+      case TypeKind::U32_t:
+        return Type::U32_t();
+      case TypeKind::U64_t:
+        return Type::U64_t();
+      default:
+        return Type::I32_t();
       }
     }();
     type_map_ordering.type_map[enum_type] = backing;
@@ -359,8 +366,9 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     auto angle_pos = last_part.find('<');
     if (angle_pos != std::string::npos) {
       base_parts.back() = last_part.substr(0, angle_pos);
-      auto base_key = sammine_util::QualifiedName::from_parts(base_parts).mangled()
-                      + "::" + vi.name;
+      auto base_key =
+          sammine_util::QualifiedName::from_parts(base_parts).mangled() +
+          "::" + vi.name;
       variant_constructors[base_key] = {enum_type, i};
     }
   }
@@ -374,10 +382,10 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
 
   auto resolved = resolve_type_expr(ast->type_expr.get());
   if (resolved.is_poisoned()) {
-    this->add_error(
-        ast->get_location(),
-        fmt::format("Cannot resolve type '{}' in type alias '{}'",
-                    ast->type_expr->to_string(), ast->alias_name.mangled()));
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot resolve type '{}' in type alias '{}'",
+                                ast->type_expr->to_string(),
+                                ast->alias_name.mangled()));
     ast->set_type(Type::Poisoned());
     return;
   }
@@ -386,52 +394,55 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   typename_to_type.registerNameT(ast->alias_name.mangled(), resolved);
 }
 
-void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
-  ast->accept_synthesis(this);
-  for (auto &arg : ast->arguments)
-    arg->accept_vis(this);
+bool BiTypeCheckerVisitor::handle_enum_or_typeclass_call(CallExprAST *ast,
+                                                         CallProps &cp) {
+  if (!cp.is_enum_constructor && !cp.is_typeclass_call)
+    return false;
+  // Fully resolved during synthesis; codegen reads resolved_name
+  return true;
+}
 
-  auto &cp = props_.call(ast->id());
+bool BiTypeCheckerVisitor::handle_generic_call(CallExprAST *ast,
+                                               CallProps &cp) {
+  auto *generic_def =
+      monomorphizer.generic_funcs.find(ast->functionName.mangled());
+  if (!generic_def)
+    return false;
 
-  // Enum constructors are fully resolved during synthesis
-  // Typeclass calls: nothing to do here — codegen reads resolved_name
-  if (cp.is_enum_constructor || cp.is_typeclass_call)
-    return;
-
-  // Generic calls: trigger monomorphization if synthesis succeeded
-  if (auto *generic_def =
-          monomorphizer.generic_funcs.find(ast->functionName.mangled())) {
-    if (cp.resolved_name.has_value()) {
-      auto key = MonomorphizedKey::from_bindings(
-          ast->functionName.mangled(),
-          generic_def->Prototype->type_params, cp.type_bindings);
-      if (auto *cloned = monomorphizer.try_instantiate_func(
-              generic_def, key, cp.type_bindings)) {
-        cloned->accept_vis(this);
-      }
+  if (cp.resolved_name.has_value()) {
+    auto key = MonomorphizedKey::from_bindings(
+        ast->functionName.mangled(), generic_def->Prototype->type_params,
+        cp.type_bindings);
+    if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
+                                                          cp.type_bindings)) {
+      cloned->accept_vis(this);
     }
-    return;
   }
+  return true;
+}
 
-  // Normal calls: check arg types now that args have been visited
+bool BiTypeCheckerVisitor::handle_normal_call_args(CallExprAST *ast,
+                                                   CallProps &cp) {
   if (!cp.callee_func_type.has_value() ||
       cp.callee_func_type->type_kind != TypeKind::Function)
-    return;
+    return true;
 
   auto func = std::get<FunctionType>(cp.callee_func_type->type_data);
   if (func.is_var_arg())
-    return;
+    return true;
 
   auto params = func.get_params_types();
   for (size_t i = 0; i < ast->arguments.size(); i++) {
-    if (!this->type_map_ordering.compatible_to_from(params[i],
-                                                    ast->arguments[i]->get_type())) {
+    if (!this->type_map_ordering.compatible_to_from(
+            params[i], ast->arguments[i]->get_type())) {
       this->add_error(ast->arguments[i]->get_location(),
                       fmt::format("Argument {} to '{}': expected {}, got {}",
-                                  i + 1, ast->functionName.with_alias().mangled(),
+                                  i + 1,
+                                  ast->functionName.with_alias().mangled(),
                                   params[i].to_string(),
                                   ast->arguments[i]->get_type().to_string()));
-      if (auto hint = incompatibility_hint(params[i], ast->arguments[i]->get_type()))
+      if (auto hint =
+              incompatibility_hint(params[i], ast->arguments[i]->get_type()))
         this->add_diagnostics(ast->arguments[i]->get_location(), *hint);
       this->add_diagnostics(
           ast->arguments[i]->get_location(),
@@ -441,6 +452,27 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     } else {
       resolve_literal_type(ast->arguments[i].get(), params[i]);
     }
+  }
+  return true;
+}
+
+void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
+  ast->accept_synthesis(this);
+  for (auto &arg : ast->arguments)
+    arg->accept_vis(this);
+
+  auto &cp = props_.call(ast->id());
+
+  using Handler = bool (BiTypeCheckerVisitor::*)(CallExprAST *, CallProps &);
+  static constexpr Handler handlers[] = {
+      &BiTypeCheckerVisitor::handle_enum_or_typeclass_call,
+      &BiTypeCheckerVisitor::handle_generic_call,
+      &BiTypeCheckerVisitor::handle_normal_call_args,
+  };
+
+  for (auto handler : handlers) {
+    if ((this->*handler)(ast, cp))
+      return;
   }
 }
 
@@ -582,17 +614,14 @@ void BiTypeCheckerVisitor::visit(CaseExprAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(WhileExprAST *ast) {
-  if (ast->condition)
-    ast->condition->accept_vis(this);
-  if (ast->body)
-    ast->body->accept_vis(this);
+  ast->condition->accept_vis(this);
+  ast->body->accept_vis(this);
   ast->accept_synthesis(this);
 }
 
 void BiTypeCheckerVisitor::visit(TupleLiteralExprAST *ast) {
   for (auto &elem : ast->elements)
-    if (elem)
-      elem->accept_vis(this);
+    elem->accept_vis(this);
   ast->accept_synthesis(this);
 }
 
@@ -654,38 +683,29 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
 void BiTypeCheckerVisitor::register_builtin_op_instances() {
   struct BuiltinEntry {
-    const char *class_name;
-    const char *method_name;
-    Type type;
+    std::string class_name;
+    std::vector<Type> types;
   };
 
   static const BuiltinEntry entries[] = {
-      {"Add", "Add", Type::I32_t()}, {"Add", "Add", Type::I64_t()},
-      {"Add", "Add", Type::U32_t()}, {"Add", "Add", Type::U64_t()},
-      {"Add", "Add", Type::F64_t()}, {"Add", "Add", Type::F32_t()},
-      {"Add", "Add", Type::Char()},
-      {"Sub", "Sub", Type::I32_t()}, {"Sub", "Sub", Type::I64_t()},
-      {"Sub", "Sub", Type::U32_t()}, {"Sub", "Sub", Type::U64_t()},
-      {"Sub", "Sub", Type::F64_t()}, {"Sub", "Sub", Type::F32_t()},
-      {"Mul", "Mul", Type::I32_t()},
-      {"Mul", "Mul", Type::I64_t()}, {"Mul", "Mul", Type::U32_t()},
-      {"Mul", "Mul", Type::U64_t()}, {"Mul", "Mul", Type::F64_t()},
-      {"Mul", "Mul", Type::F32_t()},
-      {"Div", "Div", Type::I32_t()}, {"Div", "Div", Type::I64_t()},
-      {"Div", "Div", Type::U32_t()}, {"Div", "Div", Type::U64_t()},
-      {"Div", "Div", Type::F64_t()}, {"Div", "Div", Type::F32_t()},
-      {"Mod", "Mod", Type::I32_t()},
-      {"Mod", "Mod", Type::I64_t()}, {"Mod", "Mod", Type::U32_t()},
-      {"Mod", "Mod", Type::U64_t()},
+      {"Add",
+       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
+        Type::F64_t(), Type::F32_t()}},
+      {"Sub",
+       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
+        Type::F64_t(), Type::F32_t()}},
+      {"Mul",
+       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
+        Type::F64_t(), Type::F32_t()}},
+      {"Div",
+       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
+        Type::F64_t(), Type::F32_t()}},
+      {"Mod", {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t()}},
   };
 
-  for (auto &e : entries) {
-    MonomorphizedKey tc_key{e.class_name, {e.type}};
-    if (type_class_instances.contains(tc_key))
-      continue;
-
-    type_class_instances.insert(tc_key);
-  }
+  for (auto &[name, types] : entries)
+    for (auto &t : types)
+      type_class_instances.insert(MonomorphizedKey{name, {t}});
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
@@ -700,7 +720,8 @@ void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {
-  // Kernel defs: CPU visitors see the prototype but don't recurse into kernel body
+  // Kernel defs: CPU visitors see the prototype but don't recurse into kernel
+  // body
   enter_new_scope();
   ctx().enclosing_kernel = ast;
   ast->Prototype->accept_vis(this);

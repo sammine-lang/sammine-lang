@@ -693,8 +693,7 @@ public:
       : ExprAST(NodeKind::ArrayLiteralExprAST),
         elements(std::move(elements)) {
     for (auto &e : this->elements)
-      if (e)
-        this->join_location(e.get());
+      this->join_location(e.get());
   }
   std::string to_string() const override;
   AST_NODE_METHODS("ArrayLiteralExprAST", NodeKind::ArrayLiteralExprAST)
@@ -885,8 +884,7 @@ public:
       : ExprAST(NodeKind::TupleLiteralExprAST),
         elements(std::move(elements)) {
     for (auto &e : this->elements)
-      if (e)
-        this->join_location(e.get());
+      this->join_location(e.get());
   }
   std::string to_string() const override;
   AST_NODE_METHODS("TupleLiteralExprAST", NodeKind::TupleLiteralExprAST)
