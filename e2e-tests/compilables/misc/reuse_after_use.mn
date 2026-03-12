@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full %O && %T/reuse_after_use.exe | %check %full
+// CHECK: 3.0
+
+import std;
+
+// Use the extern BEFORE it's declared — tests forward declaration in codegen
+let use_sqrt() -> f64 {
+  sqrt(9.0)
+}
+
+// Extern declared AFTER use_sqrt
+reuse sqrt(x: f64) -> f64;
+
+let main() -> i32 {
+  std::printf("%.1f\n", use_sqrt());
+  return 0;
+}

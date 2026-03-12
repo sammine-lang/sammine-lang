@@ -102,6 +102,8 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
                    llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
       for (auto &method : tci->methods)
         forwardDeclareFunc(method->Prototype.get());
+    } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
+      emitExtern(ext);
     } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
       if (!kd->Prototype->is_generic()) {
         auto publicName = mangleName(kd->Prototype->functionName);
