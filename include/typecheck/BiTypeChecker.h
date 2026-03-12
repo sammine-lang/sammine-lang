@@ -149,8 +149,27 @@ public:
         method_mangled_names;
   };
 
+  /// Structured key for typeclass instance lookup — hashes Type directly
+  /// instead of going through string construction.
+  struct TypeClassKey {
+    std::string class_name;
+    std::vector<Type> type_args;
+
+    bool operator==(const TypeClassKey &) const = default;
+  };
+  struct TypeClassKeyHash {
+    size_t operator()(const TypeClassKey &k) const {
+      size_t h = std::hash<std::string>{}(k.class_name);
+      std::hash<Type> th;
+      for (auto &t : k.type_args)
+        hash_combine(h, th(t));
+      return h;
+    }
+  };
+
   std::unordered_map<std::string, TypeClassInfo> type_class_defs;
-  std::unordered_map<std::string, TypeClassInstanceInfo> type_class_instances;
+  std::unordered_map<TypeClassKey, TypeClassInstanceInfo, TypeClassKeyHash>
+      type_class_instances;
   std::unordered_map<std::string, std::string> method_to_class;
 
   // Enum variant constructors: variant_name → (enum_type, variant_index)

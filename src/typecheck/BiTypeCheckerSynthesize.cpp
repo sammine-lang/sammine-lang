@@ -330,9 +330,11 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   auto &[tc_bindings, concrete_types_str] = *resolved_args;
 
-  std::string key = sammine_util::MonomorphizedName::typeclass(
-      class_name, concrete_types_str, "").instance_key();
-  auto inst_it = type_class_instances.find(key);
+  std::vector<Type> tc_type_args;
+  for (auto &tp : tc.type_params)
+    tc_type_args.push_back(tc_bindings.at(tp));
+  auto inst_it = type_class_instances.find(
+      TypeClassKey{class_name, tc_type_args});
   if (inst_it == type_class_instances.end()) {
     add_error(ast->get_location(),
               fmt::format("No instance of {}<{}>", class_name,
@@ -705,9 +707,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   auto it = op_to_class.find(ast->Op->tok_type);
   if (it != op_to_class.end()) {
     auto &[class_name, method_name] = it->second;
-    std::string key = sammine_util::MonomorphizedName::typeclass(
-        class_name, lhs_type.to_string(), "").instance_key();
-    auto inst_it = type_class_instances.find(key);
+    auto inst_it = type_class_instances.find(
+        TypeClassKey{class_name, {lhs_type}});
     if (inst_it == type_class_instances.end()) {
       add_error(ast->Op->get_location(),
                 fmt::format("No instance of {}<{}> — cannot use '{}' on this "
