@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      100
+// CHECK-NEXT: 200
+
+// Test: return tuple literal with polymorphic int → i64 resolution
+import std;
+
+let make_pair() -> (i64, i64) {
+  return (100, 200);
+}
+
+let main() -> i32 {
+  let (a, b) = make_pair();
+  std::printf("%ld\n", a);
+  std::printf("%ld\n", b);
+  return 0;
+}

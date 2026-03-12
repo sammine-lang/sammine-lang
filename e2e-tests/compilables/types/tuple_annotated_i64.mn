@@ -1,0 +1,14 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      42
+// CHECK-NEXT: 99
+
+// Test: tuple annotation resolves polymorphic int → i64
+import std;
+
+let main() -> i32 {
+  let t : (i64, i64) = (42, 99);
+  let (a, b) = t;
+  std::printf("%ld\n", a);
+  std::printf("%ld\n", b);
+  return 0;
+}

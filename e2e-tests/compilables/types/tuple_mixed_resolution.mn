@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      42
+// CHECK-NEXT: 3.140000
+
+// Test: tuple with mixed polymorphic resolution (int → i64, float → f64)
+import std;
+
+let make_pair() -> (i64, f64) {
+  return (42, 3.14);
+}
+
+let main() -> i32 {
+  let (a, b) = make_pair();
+  std::printf("%ld\n", a);
+  std::printf("%f\n", b);
+  return 0;
+}

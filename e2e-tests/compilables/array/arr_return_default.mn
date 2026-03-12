@@ -1,0 +1,15 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      10
+// CHECK-NEXT: 20
+// CHECK-NEXT: 30
+
+// Test: unannotated array literal defaults elements to i32
+import std;
+
+let main() -> i32 {
+  let a = [10, 20, 30];
+  std::printf("%d\n", a[0]);
+  std::printf("%d\n", a[1]);
+  std::printf("%d\n", a[2]);
+  return 0;
+}

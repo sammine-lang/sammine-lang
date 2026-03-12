@@ -1,0 +1,19 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      100
+// CHECK-NEXT: 200
+// CHECK-NEXT: 300
+
+// Test: return array literal with polymorphic int → i64 resolution
+import std;
+
+let make_array() -> [3]i64 {
+  return [100, 200, 300];
+}
+
+let main() -> i32 {
+  let a = make_array();
+  std::printf("%ld\n", a[0]);
+  std::printf("%ld\n", a[1]);
+  std::printf("%ld\n", a[2]);
+  return 0;
+}

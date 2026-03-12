@@ -1,0 +1,19 @@
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      1.000000
+// CHECK-NEXT: 2.000000
+// CHECK-NEXT: 3.000000
+
+// Test: return array literal with polymorphic float → f64 resolution
+import std;
+
+let make_array() -> [3]f64 {
+  return [1.0, 2.0, 3.0];
+}
+
+let main() -> i32 {
+  let a = make_array();
+  std::printf("%f\n", a[0]);
+  std::printf("%f\n", a[1]);
+  std::printf("%f\n", a[2]);
+  return 0;
+}
