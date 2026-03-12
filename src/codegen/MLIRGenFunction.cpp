@@ -386,6 +386,42 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
   return callOp.getResult();
 }
 
+mlir::Value MLIRGenImpl::emitDirectCall(
+    AST::CallExprAST *ast, const std::string &callee,
+    llvm::SmallVector<mlir::Value, 4> &operands, mlir::Location location) {
+  // sret: if call returns an array, allocate local buffer, pass as extra arg
+  if (ast->get_type().type_kind == TypeKind::Array) {
+    auto arrMlirType = convertType(ast->get_type());
+    auto localBuf = emitAllocaOne(arrMlirType, location);
+    operands.push_back(localBuf);
+    mlir::func::CallOp::create(builder, location, llvm::StringRef(callee),
+                               mlir::TypeRange{}, operands);
+    return localBuf;
+  }
+
+  llvm::SmallVector<mlir::Type, 1> resultTypes;
+  if (ast->get_type().type_kind != TypeKind::Unit)
+    resultTypes.push_back(convertType(ast->get_type()));
+
+  // If callee is an llvm.func (C function), use llvm.call
+  if (auto llvmFunc =
+          theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
+    auto llvmCallOp = mlir::LLVM::CallOp::create(builder, location,
+                                                  resultTypes, callee, operands);
+    if (llvmFunc.getFunctionType().isVarArg())
+      llvmCallOp.setVarCalleeType(llvmFunc.getFunctionType());
+    if (llvmCallOp.getNumResults() > 0)
+      return llvmCallOp.getResult();
+    return nullptr;
+  }
+
+  auto callOp = mlir::func::CallOp::create(
+      builder, location, llvm::StringRef(callee), resultTypes, operands);
+  if (callOp.getNumResults() > 0)
+    return callOp.getResult(0);
+  return nullptr;
+}
+
 mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // Enum constructor — handled separately
   auto *cp = props_.call(ast->id());
@@ -427,49 +463,13 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
     }
   }
 
-  // Path 1: Direct call (not partial) — callee found in module
-  if (theModule.lookupSymbol(callee) && !(cp && cp->is_partial)) {
-    // sret: if call returns an array, allocate local buffer, pass as extra arg
-    if (ast->get_type().type_kind == TypeKind::Array) {
-      auto arrMlirType = convertType(ast->get_type());
-      auto localBuf = emitAllocaOne(arrMlirType, location);
-      operands.push_back(localBuf);
-      mlir::func::CallOp::create(
-          builder, location, llvm::StringRef(callee),
-          mlir::TypeRange{}, operands);
-      return localBuf;
-    }
+  if (!theModule.lookupSymbol(callee))
+    return emitIndirectCall(ast, operands);
 
-    llvm::SmallVector<mlir::Type, 1> resultTypes;
-    if (ast->get_type().type_kind != TypeKind::Unit)
-      resultTypes.push_back(convertType(ast->get_type()));
-
-    // If callee is an llvm.func (C function), use llvm.call
-    if (auto llvmFunc =
-            theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
-      auto llvmCallOp = mlir::LLVM::CallOp::create(
-          builder, location, resultTypes, callee, operands);
-      // Only set var_callee_type for variadic functions
-      if (llvmFunc.getFunctionType().isVarArg())
-        llvmCallOp.setVarCalleeType(llvmFunc.getFunctionType());
-      if (llvmCallOp.getNumResults() > 0)
-        return llvmCallOp.getResult();
-      return nullptr;
-    }
-
-    auto callOp = mlir::func::CallOp::create(
-        builder, location, llvm::StringRef(callee), resultTypes, operands);
-    if (callOp.getNumResults() > 0)
-      return callOp.getResult(0);
-    return nullptr;
-  }
-
-  // Path 2: Partial application — callee found + is_partial
-  if (theModule.lookupSymbol(callee) && cp && cp->is_partial)
+  if (cp && cp->is_partial)
     return emitPartialApplication(ast, callee, operands);
 
-  // Path 3: Indirect call through closure variable
-  return emitIndirectCall(ast, operands);
+  return emitDirectCall(ast, callee, operands, location);
 }
 
 mlir::Value MLIRGenImpl::emitReturnStmt(AST::ReturnStmtAST *ast) {

@@ -1,4 +1,5 @@
 #include "ast/Ast.h"
+#include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
 
 using sammine_util::cautious_at;
@@ -171,217 +172,171 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
             ast->get_location());
 }
 
+mlir::Value MLIRGenImpl::emitBinaryAssign(AST::BinaryExprAST *ast,
+                                          mlir::Location location) {
+  auto ptr = emitLValue(ast->LHS.get());
+  auto rhs = emitRValue(ast->RHS.get());
+  if (!ptr || !rhs)
+    return nullptr;
+  mlir::LLVM::StoreOp::create(builder, location, rhs, ptr);
+  return rhs;
+}
+
+mlir::Value MLIRGenImpl::emitBinaryIntArith(AST::BinaryExprAST *ast,
+                                            mlir::Value lhs, mlir::Value rhs,
+                                            mlir::Location location) {
+  if (!isIntegerType(ast->get_type()))
+    return nullptr;
+  return emitIntArithOp(builder, location, lhs, rhs, ast->Op->tok_type,
+                        isUnsignedIntegerType(ast->get_type()));
+}
+
+mlir::Value MLIRGenImpl::emitBinaryFloatArith(AST::BinaryExprAST *ast,
+                                              mlir::Value lhs, mlir::Value rhs,
+                                              mlir::Location location) {
+  if (!isFloatType(ast->get_type()))
+    return nullptr;
+  return emitFloatArithOp(builder, location, lhs, rhs, ast->Op->tok_type);
+}
+
+mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
+                                              mlir::Value lhs, mlir::Value rhs,
+                                              mlir::Location location) {
+  if (!isBoolType(ast->get_type()))
+    return nullptr;
+
+  auto lhsType = ast->LHS->get_type();
+
+  if (isIntegerType(lhsType)) {
+    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
+    if (cmp) {
+      auto pred = isUnsignedIntegerType(lhsType) ? cmp->unsigned_int
+                                                  : cmp->signed_int;
+      return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
+          .getResult();
+    }
+    switch (ast->Op->tok_type) {
+    case TokAND:
+      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokOR:
+      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    default:
+      imm_error(
+          fmt::format("unsupported integer operator '{}'", ast->Op->lexeme),
+          ast->get_location());
+    }
+  }
+
+  if (isFloatType(lhsType)) {
+    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
+    if (!cmp)
+      imm_error(
+          fmt::format("unsupported float operator '{}'", ast->Op->lexeme),
+          ast->get_location());
+    return mlir::arith::CmpFOp::create(builder, location, cmp->flt, lhs, rhs)
+        .getResult();
+  }
+
+  if (lhsType.type_kind == TypeKind::Pointer) {
+    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
+    if (!cmp)
+      imm_error("only == and != supported for pointers", ast->get_location());
+    auto i64Ty = builder.getI64Type();
+    auto lhsInt =
+        mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, lhs);
+    auto rhsInt =
+        mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, rhs);
+    return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
+                                       lhsInt, rhsInt)
+        .getResult();
+  }
+
+  if (lhsType.type_kind == TypeKind::Array)
+    return emitArrayComparison(lhs, rhs, lhsType, ast->Op->tok_type, location);
+
+  if (isBoolType(lhsType)) {
+    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
+    if (cmp)
+      return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
+                                         lhs, rhs)
+          .getResult();
+    switch (ast->Op->tok_type) {
+    case TokAND:
+      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    case TokOR:
+      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
+          .getResult();
+    default:
+      imm_error(
+          fmt::format("unsupported bool operator '{}'", ast->Op->lexeme),
+          ast->get_location());
+    }
+  }
+
+  return nullptr;
+}
+
+mlir::Value MLIRGenImpl::emitBinaryEnumBitwise(AST::BinaryExprAST *ast,
+                                               mlir::Value lhs, mlir::Value rhs,
+                                               mlir::Location location) {
+  auto resultType = ast->get_type();
+  if (resultType.type_kind != TypeKind::Enum)
+    return nullptr;
+
+  auto &et = std::get<EnumType>(resultType.type_data);
+  if (!et.is_integer_backed() || !ast->Op->is_bitwise())
+    return nullptr;
+
+  return emitIntArithOp(builder, location, lhs, rhs, ast->Op->tok_type,
+                        et.get_backing_type() == TypeKind::U32_t ||
+                            et.get_backing_type() == TypeKind::U64_t);
+}
+
+mlir::Value MLIRGenImpl::emitBinaryTypeclassOp(AST::BinaryExprAST *ast,
+                                               mlir::Value lhs, mlir::Value rhs,
+                                               mlir::Location location) {
+  auto *bp = props_.binary(ast->id());
+  if (!bp || !bp->resolved_op_method.has_value())
+    return nullptr;
+
+  auto opName = bp->resolved_op_method->mangled();
+  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
+  if (!funcOp)
+    return nullptr;
+
+  return mlir::func::CallOp::create(builder, location, funcOp,
+                                    mlir::ValueRange{lhs, rhs})
+      .getResult(0);
+}
+
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
   auto location = loc(ast);
 
-  // Assignment: store RHS into LHS's address
-  if (ast->Op->is_assign()) {
-    auto ptr = emitLValue(ast->LHS.get());
-    auto rhs = emitRValue(ast->RHS.get());
-    if (!ptr || !rhs)
-      return nullptr;
-    mlir::LLVM::StoreOp::create(builder, location, rhs, ptr);
-    return rhs;
-  }
+  if (ast->Op->is_assign())
+    return emitBinaryAssign(ast, location);
 
   mlir::Value lhs = emitExpr(ast->LHS.get());
   mlir::Value rhs = emitExpr(ast->RHS.get());
   if (!lhs || !rhs)
     return nullptr;
-  auto resultType = ast->get_type();
 
-  // Integer arithmetic
-  if (isIntegerType(resultType)) {
-    switch (ast->Op->tok_type) {
-    case TokADD:
-      return mlir::arith::AddIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokSUB:
-      return mlir::arith::SubIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokMUL:
-      return mlir::arith::MulIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokDIV:
-      if (isUnsignedIntegerType(resultType))
-        return mlir::arith::DivUIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      return mlir::arith::DivSIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokMOD:
-      if (isUnsignedIntegerType(resultType))
-        return mlir::arith::RemUIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      return mlir::arith::RemSIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokAndLogical:
-      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokORLogical:
-      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokXOR:
-      return mlir::arith::XOrIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokSHL:
-      return mlir::arith::ShLIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokSHR:
-      if (isUnsignedIntegerType(resultType))
-        return mlir::arith::ShRUIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      return mlir::arith::ShRSIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    default:
-      break;
-    }
-  }
+  using Handler = mlir::Value (MLIRGenImpl::*)(AST::BinaryExprAST *,
+                                               mlir::Value, mlir::Value,
+                                               mlir::Location);
+  static constexpr Handler handlers[] = {
+      &MLIRGenImpl::emitBinaryIntArith,
+      &MLIRGenImpl::emitBinaryFloatArith,
+      &MLIRGenImpl::emitBinaryComparison,
+      &MLIRGenImpl::emitBinaryEnumBitwise,
+      &MLIRGenImpl::emitBinaryTypeclassOp,
+  };
 
-  // Float arithmetic
-  if (isFloatType(resultType)) {
-    switch (ast->Op->tok_type) {
-    case TokADD:
-      return mlir::arith::AddFOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokSUB:
-      return mlir::arith::SubFOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokMUL:
-      return mlir::arith::MulFOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokDIV:
-      return mlir::arith::DivFOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokMOD:
-      return mlir::arith::RemFOp::create(builder, location, lhs, rhs)
-          .getResult();
-    default:
-      break;
-    }
-  }
-
-  // Comparison operators — result type is Bool but operand types matter
-  if (isBoolType(resultType)) {
-    auto lhsType = ast->LHS->get_type();
-
-    if (isIntegerType(lhsType)) {
-      auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-      if (cmp) {
-        auto pred = isUnsignedIntegerType(lhsType) ? cmp->unsigned_int
-                                                    : cmp->signed_int;
-        return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
-            .getResult();
-      }
-      switch (ast->Op->tok_type) {
-      case TokAND:
-        return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokOR:
-        return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      default:
-        imm_error(
-            fmt::format("unsupported integer operator '{}'", ast->Op->lexeme),
-            ast->get_location());
-      }
-    }
-
-    if (isFloatType(lhsType)) {
-      auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-      if (!cmp)
-        imm_error(
-            fmt::format("unsupported float operator '{}'", ast->Op->lexeme),
-            ast->get_location());
-      return mlir::arith::CmpFOp::create(builder, location, cmp->flt, lhs, rhs)
-          .getResult();
-    }
-
-    // Pointer comparisons (== and !=)
-    if (lhsType.type_kind == TypeKind::Pointer) {
-      auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-      if (!cmp)
-        imm_error("only == and != supported for pointers", ast->get_location());
-      auto i64Ty = builder.getI64Type();
-      auto lhsInt =
-          mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, lhs);
-      auto rhsInt =
-          mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, rhs);
-      return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
-                                         lhsInt, rhsInt)
-          .getResult();
-    }
-
-    // Array comparisons (== and !=) — element-by-element
-    if (lhsType.type_kind == TypeKind::Array) {
-      return emitArrayComparison(lhs, rhs, lhsType, ast->Op->tok_type,
-                                 location);
-    }
-
-    // Bool comparisons (== and !=)
-    if (isBoolType(lhsType)) {
-      auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-      if (cmp)
-        return mlir::arith::CmpIOp::create(builder, location, cmp->signed_int,
-                                           lhs, rhs)
-            .getResult();
-      switch (ast->Op->tok_type) {
-      case TokAND:
-        return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokOR:
-        return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      default:
-        imm_error(
-            fmt::format("unsupported bool operator '{}'", ast->Op->lexeme),
-            ast->get_location());
-      }
-    }
-  }
-
-  // Integer-backed enum bitwise ops: values are bare integers
-  if (resultType.type_kind == TypeKind::Enum) {
-    auto &et = std::get<EnumType>(resultType.type_data);
-    if (et.is_integer_backed() && ast->Op->is_bitwise()) {
-      switch (ast->Op->tok_type) {
-      case TokAndLogical:
-        return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokORLogical:
-        return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokXOR:
-        return mlir::arith::XOrIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokSHL:
-        return mlir::arith::ShLIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      case TokSHR: {
-        auto bt = et.get_backing_type();
-        if (bt == TypeKind::U32_t || bt == TypeKind::U64_t)
-          return mlir::arith::ShRUIOp::create(builder, location, lhs, rhs)
-              .getResult();
-        return mlir::arith::ShRSIOp::create(builder, location, lhs, rhs)
-            .getResult();
-      }
-      default:
-        break;
-      }
-    }
-  }
-
-  // User-defined operator via typeclass instance — emit a function call
-  auto *bp = props_.binary(ast->id());
-  if (bp && bp->resolved_op_method.has_value()) {
-    auto opName = bp->resolved_op_method->mangled();
-    auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
-    if (!funcOp)
-      funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
-    if (funcOp) {
-      auto callOp = mlir::func::CallOp::create(builder, location, funcOp,
-                                               mlir::ValueRange{lhs, rhs});
-      return callOp.getResult(0);
-    }
+  for (auto handler : handlers) {
+    if (auto result = (this->*handler)(ast, lhs, rhs, location))
+      return result;
   }
 
   imm_error(fmt::format("unsupported binary operator '{}'", ast->Op->lexeme),
@@ -1042,29 +997,17 @@ mlir::Value MLIRGenImpl::emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast) {
   return agg;
 }
 
-mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
+mlir::Value MLIRGenImpl::emitPayloadCaseExpr(AST::CaseExprAST *ast,
+                                              mlir::Value scrutineeVal,
+                                              const EnumType &et) {
   auto location = loc(ast);
-
-  // 1. Emit scrutinee
-  auto scrutineeVal = emitExpr(ast->scrutinee.get());
-
-  // Dispatch: literal patterns use a separate path (no enum type)
-  if (ast->scrutinee->get_type().type_kind != TypeKind::Enum)
-    return emitLiteralCaseExpr(ast, scrutineeVal);
-
-  auto et = std::get<EnumType>(ast->scrutinee->get_type().type_data);
-
-  // Integer-backed enum: scrutinee IS the tag, no struct to decompose
-  if (et.is_integer_backed())
-    return emitIntegerBackedCaseExpr(ast, scrutineeVal, et);
-
   auto enumTy = cautious_at(enumTypes, ast->scrutinee->get_type(), "enumTypes");
 
   // Alloca the scrutinee so we can GEP into it
   auto scrutineeAlloca = emitAllocaOne(enumTy, location);
   mlir::LLVM::StoreOp::create(builder, location, scrutineeVal, scrutineeAlloca);
 
-  // 2. Extract the tag
+  // Extract the tag
   auto tagPtr = mlir::LLVM::GEPOp::create(
       builder, location, llvmPtrTy(), enumTy, scrutineeAlloca,
       llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
@@ -1077,7 +1020,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 
   auto *parentRegion = builder.getInsertionBlock()->getParent();
 
-  // 3. Create blocks for each arm + merge
+  // Create blocks for each arm + merge
   std::vector<mlir::Block *> armBlocks;
   mlir::Block *defaultBlock = nullptr;
 
@@ -1089,27 +1032,21 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
 
   auto *mergeBlock = new mlir::Block();
   if (hasResult) {
-    // Array expressions produce !llvm.ptr (alloca pointers), not LLVMArrayType
     auto mergeType = ast->get_type().type_kind == TypeKind::Array
                          ? mlir::Type(llvmPtrTy())
                          : convertType(ast->get_type());
     mergeBlock->addArgument(mergeType, location);
   }
 
-  // If no wildcard, create an unreachable default
   if (!defaultBlock) {
     defaultBlock = addBlockTo(parentRegion);
     builder.setInsertionPointToStart(defaultBlock);
     mlir::LLVM::UnreachableOp::create(builder, location);
   }
 
-  // 4. Emit switch via cascading cmpi + cond_br
-  // (LLVM::SwitchOp is not always available in LLVM dialect, so use cf
-  // branches)
+  // Emit switch via cascading cmpi + cond_br
   builder.setInsertionPointAfter(tag.getOperation());
 
-  // Build a chain: for each non-wildcard arm, compare tag and branch
-  // Final fallthrough goes to default block
   std::vector<size_t> nonWildcardIndices;
   for (size_t i = 0; i < ast->arms.size(); i++) {
     if (!ast->arms[i].pattern.is_wildcard)
@@ -1125,7 +1062,6 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
     auto cmp = mlir::arith::CmpIOp::create(
         builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);
 
-    // If this is the last non-wildcard, the false branch goes to default
     mlir::Block *falseTarget;
     if (ci + 1 < nonWildcardIndices.size()) {
       falseTarget = addBlockTo(parentRegion);
@@ -1136,17 +1072,14 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
     mlir::cf::CondBranchOp::create(builder, location, cmp, armBlocks[i], {},
                                    falseTarget, {});
 
-    if (ci + 1 < nonWildcardIndices.size()) {
+    if (ci + 1 < nonWildcardIndices.size())
       builder.setInsertionPointToStart(falseTarget);
-    }
   }
 
-  // If there are no non-wildcard arms, branch directly to default
-  if (nonWildcardIndices.empty()) {
+  if (nonWildcardIndices.empty())
     mlir::cf::BranchOp::create(builder, location, defaultBlock);
-  }
 
-  // 5. Emit each arm body
+  // Emit each arm body
   bool allTerminated = true;
 
   for (size_t i = 0; i < ast->arms.size(); i++) {
@@ -1179,15 +1112,12 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
         auto fieldVal = mlir::LLVM::LoadOp::create(builder, location,
                                                    fieldMlirTy, fieldPtr);
 
-        // Wrap in alloca+store to match uniform variable model
-        // (emitVariableExpr expects all !llvm.ptr values to be allocas)
         auto alloca = emitAllocaOne(fieldMlirTy, location);
         mlir::LLVM::StoreOp::create(builder, location, fieldVal, alloca);
         symbolTable.registerNameT(arm.pattern.bindings[j], alloca);
       }
     }
 
-    // Emit body
     auto armVal = emitBlock(arm.body.get());
 
     auto *armEnd = builder.getInsertionBlock();
@@ -1205,7 +1135,6 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
     }
   }
 
-  // 6. Merge block
   if (!allTerminated) {
     parentRegion->push_back(mergeBlock);
     builder.setInsertionPointToStart(mergeBlock);
@@ -1214,6 +1143,20 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
     delete mergeBlock;
     return nullptr;
   }
+}
+
+mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
+  auto scrutineeVal = emitExpr(ast->scrutinee.get());
+
+  if (ast->scrutinee->get_type().type_kind != TypeKind::Enum)
+    return emitLiteralCaseExpr(ast, scrutineeVal);
+
+  auto et = std::get<EnumType>(ast->scrutinee->get_type().type_data);
+
+  if (et.is_integer_backed())
+    return emitIntegerBackedCaseExpr(ast, scrutineeVal, et);
+
+  return emitPayloadCaseExpr(ast, scrutineeVal, et);
 }
 
 mlir::Value MLIRGenImpl::emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,

@@ -183,6 +183,9 @@ public:
   std::string getOrCreateClosureWrapper(const std::string &funcName,
                                         const FunctionType &ft);
   mlir::Value emitCallExpr(AST::CallExprAST *ast);
+  mlir::Value emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
+                             llvm::SmallVector<mlir::Value, 4> &operands,
+                             mlir::Location location);
   mlir::Value emitPartialApplication(AST::CallExprAST *ast,
                                      const std::string &calleeName,
                                      llvm::ArrayRef<mlir::Value> boundArgs);
@@ -199,6 +202,20 @@ public:
   mlir::Value emitUnitExpr(AST::UnitExprAST *ast);
   mlir::Value emitVariableExpr(AST::VariableExprAST *ast);
   mlir::Value emitBinaryExpr(AST::BinaryExprAST *ast);
+
+  // Binary expression handlers (return non-null = handled)
+  mlir::Value emitBinaryAssign(AST::BinaryExprAST *ast, mlir::Location location);
+  mlir::Value emitBinaryIntArith(AST::BinaryExprAST *ast, mlir::Value lhs,
+                                 mlir::Value rhs, mlir::Location location);
+  mlir::Value emitBinaryFloatArith(AST::BinaryExprAST *ast, mlir::Value lhs,
+                                   mlir::Value rhs, mlir::Location location);
+  mlir::Value emitBinaryComparison(AST::BinaryExprAST *ast, mlir::Value lhs,
+                                   mlir::Value rhs, mlir::Location location);
+  mlir::Value emitBinaryEnumBitwise(AST::BinaryExprAST *ast, mlir::Value lhs,
+                                    mlir::Value rhs, mlir::Location location);
+  mlir::Value emitBinaryTypeclassOp(AST::BinaryExprAST *ast, mlir::Value lhs,
+                                    mlir::Value rhs, mlir::Location location);
+
   mlir::Value emitUnaryNegExpr(AST::UnaryNegExprAST *ast);
   mlir::Value emitIfExpr(AST::IfExprAST *ast);
   mlir::Value emitWhileExpr(AST::WhileExprAST *ast);
@@ -228,6 +245,9 @@ public:
   mlir::Value emitEnumConstructor(AST::CallExprAST *ast);
   mlir::Value emitCaseExpr(AST::CaseExprAST *ast);
   mlir::Value emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast);
+  mlir::Value emitPayloadCaseExpr(AST::CaseExprAST *ast,
+                                  mlir::Value scrutineeVal,
+                                  const EnumType &et);
   mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
                                         mlir::Value scrutineeVal,
                                         const EnumType &et);
