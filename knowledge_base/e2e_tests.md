@@ -1,109 +1,45 @@
-# E2E Test Conventions
+# E2E Tests
 
-LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`.
-
-## Running Tests
-Always use cmake targets — never run test binaries directly:
-```bash
-cmake --build build -j --target unit-tests e2e-tests
-```
+LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build -j --target e2e-tests`
 
 ## Substitutions
 | Placeholder | Expands to |
-|-------------|------------|
-| `%sammine` / `%check` | `sammine` / `SammineCheck` binary paths |
-| `%full` / `%dir` / `%base` | Full `.mn` path / its directory / basename without `.mn` |
-| `%O` / `%I` | `-O %T` / `-I %T` — output dir / import search dir flags |
-| `%T` | (lit built-in) Per-test temp output dir |
-
-## CHECK Directives
-`# CHECK:` match line, `# CHECK-NEXT:` match next line, `# CHECK-ERR:` match error output, `# CHECK-NOT:` assert absence.
+|---|---|
+| `%sammine` / `%check` | sammine / SammineCheck binary paths |
+| `%full` / `%dir` / `%base` | Full .mn path / directory / basename without .mn |
+| `%O` / `%I` / `%T` | `-O %T` / `-I %T` / per-test temp dir |
 
 ## Test Patterns
+- **Success**: `# RUN: %sammine --file %full %O && %T/%base.exe | %check %full`
+- **Error**: `# RUN: ! %sammine --file %full %O 2>&1 | %check %full`
+- **IR check**: `# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full`
+- **Multi-file**: compile library first to `%T`, then main with `%I`
 
-**Success** — compile + run + check stdout:
-```
-# RUN: %sammine --file %full %O && %T/%base.exe | %check %full
-# CHECK: expected output line
-```
-
-**Error** — `!` → must fail, `2>&1` → capture stderr:
-```
-# RUN: ! %sammine --file %full %O 2>&1 | %check %full
-# CHECK: Expected error message substring
-```
-Variants: `--diagnostics` (semantic/type errors, `compilables/`), `--check` (ariadne pretty errors, `error_reporting/`), `--diagnostics=dev` (source file/line — debug only, not in tests).
-
-**Stderr diagnostic** — compiler succeeds but emits to stderr (e.g. `--llvm-ir pre/post/diff`):
-```
-# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
-```
-For invalid flag values, prefix with `!`.
-
-**Multi-file import** — compile library first → `.o` + `.mni` in `%T`:
-```
-# RUN: %sammine --file %dir/Inputs/math.mn %O && %sammine --file %full %O %I && %T/import_basic.exe | %check %full
-```
-Library sources in `Inputs/` (excluded from lit). `%dir` locates sibling files. Syntax: `import module_name as alias;`, C bindings: `reuse func(params) -> ret;`, exports: `export let`.
-
-## File Organization
-
-Tests in `e2e-tests/compilables/` by feature. Naming: `feature_variant.mn`.
-
-| Subfolder | Contents |
-|-----------|----------|
+## Feature Directories (`e2e-tests/compilables/`)
+| Dir | Focus |
+|---|---|
+| `arith/` | Arithmetic, integer types |
 | `array/` | Fixed-size arrays |
-| `ptr/` | Pointers & alloc/free |
-| `arith/` | Arithmetic & integer types |
+| `control/` | if/else, while |
+| `enums/` | Enum decls, case/match, payloads, generics, int-backed |
 | `func/` | Function calls, recursion |
-| `functions/` | First-class functions & partial application |
-| `control/` | Control flow (if, nested_if, if_expr_value) |
-| `types/` | Type system (var types, records, ...) |
-| `misc/` | General tests, compiler flags |
+| `functions/` | First-class functions, partial application, closures |
 | `generics/` | Monomorphized generics |
-| `enums/` | Enum decls, case/match, payloads, generics, unqualified variants |
-| `type_inference/` | Type inference, numeric literal resolution |
-| `import/` | Module imports; library sources in `Inputs/` |
+| `import/` | Module imports (library sources in `Inputs/`) |
+| `io/` | print, println, eprint, file I/O, linear file handles, stdin |
+| `kernel/` | map, reduce, 2-module codegen, kernel_no_malloc golden test |
+| `linear/` | ~59 tests: alloc/free, consumption, branches, loops, struct/array/enum fields. `break_` prefix = expected-failure |
+| `llvm_ir/` | LLVM IR patterns via `--llvm-ir pre/post` + FileCheck |
+| `misc/` | General tests, compiler flags, readme_demo |
+| `ptr/` | Pointers, alloc/free |
+| `type_inference/` | Numeric literal resolution |
 | `typeclass/` | Typeclass decls & instances |
-| `io/` | I/O operations: print, println, eprint, typed printing (print_i32, print_f64, etc.), file I/O (write_file, read_file), linear file handles, stdin (read_line) |
-| `kernel/` | Kernel functions: `map` (linalg.map), `reduce` (linalg.reduce), 2-module MLIR codegen, `kernel_no_malloc` golden test (asserts 0 malloc calls via `--llvm-ir pre`) |
-| `linear/` | Linear type system: ~59 tests covering alloc/free, consumption rules, move semantics, double-use detection, use-after-move, branch consumption (if/else, while), struct/array/enum consumption, nested linear fields, scope exit leak detection, reassignment/overwrite rules. Prefix `break_` = expected-failure tests, prefix `linear_` = positive + error tests |
-| `llvm_ir/` | LLVM IR optimization verification: extractvalue patterns for array params, const-folding (immutable & mutable arrays), global constant array emission. Uses `--llvm-ir pre` or `--llvm-ir post` flag with FileCheck on IR output |
-| `vec/` | Dynamic vector type: `Vec<T>` stdlib type via `import vec`, `vec::new`, `vec::push`, `vec::delete`, capacity growth, struct elements, linear ownership enforcement (must free) |
+| `types/` | Type system (records, etc.) |
+| `vec/` | Vec<T> stdlib: new, push, delete, linear ownership |
 
-Other dirs: `error_reporting/` — error message regression tests (39 tests). `euler/` — Project Euler integration tests.
-
-## Error Reporting Test Coverage (`error_reporting/`)
-
-39 tests covering error messages across compiler phases. Each test uses `# RUN: ! %sammine --file %full %O 2>&1 | %check %full` and checks error message substrings.
-
-| Category | Tests | Error paths covered |
-|----------|-------|---------------------|
-| Lexer | `single_invalid`, `double_invalid`, `multi_invalid_same_line`, `wide_invalid`, `unterminated_char` | Invalid tokens, unterminated char literal |
-| Type mismatches | `return_type_mismatch`, `if_branch_mismatch`, `if_cond_not_bool`, `case_arm_type_mismatch`, `var_init_mismatch`, `int_literal_to_float`, `signed_unsigned_mix` | Return type, if branches, if condition, case arms, variable init |
-| Function calls | `func_too_many_args`, `func_arg_type_mismatch`, `not_callable` | Arity, arg type, non-callable |
-| Immutability | `immutable_reassign`, `immutable_array_write` | Variable reassign, array index write |
-| Structs | `struct_missing_field`, `struct_field_access_non_struct`, `unknown_struct_type` | Field count, field on non-struct, unknown type |
-| Enums/case | `case_non_enum`, `case_non_exhaustive`, `case_multi_missing`, `case_wrong_bindings`, `case_zero_bindings`, `enum_wrong_variant`, `enum_variant_arg_count`, `invalid_backing_type`, `enum_discriminant_payload`, `int_enum_dup_discriminant`, `int_enum_mixed`, `int_enum_negative` | Exhaustiveness, variant errors, backing types |
-| Linear types | `linear_branch_mismatch` | Branch consumption inconsistency |
-| Generics | `generic_arg_count` | Wrong argument count for generic function |
-| Operators | `operator_no_instance`, `no_instance_compare`, `bitwise_on_float`, `negate_non_numeric`, `unsigned_neg` | Missing typeclass, bitwise on float, negation |
-| Scope/naming | `undeclared_variable`, `reserved_double_underscore` | Undefined var, reserved `__` |
-| Main signature | `main_bad_params`, `main_wrong_argc_type` | Wrong param count/type |
-
-Additional error tests live in `compilables/` subdirectories (ptr/, array/, linear/, generics/, func/, types/, typeclass/) — these test the same error paths with `--diagnostics` flag and are not duplicated in `error_reporting/`.
-
-### Still-untested error paths (future work)
-- Reassigning linear variable without consuming previous value
-- `'name' is not callable` for non-function types (partially covered)
-- Type parameter inference failure (`Type parameter 'T' could not be inferred`)
-- Typeclass method not found / wrong arg count
-- Variadic function arg count errors
-- Most parser syntax errors (~100 `imm_error` paths)
-
-## README Demo
-`e2e-tests/compilables/misc/readme_demo.mn` mirrors the README "Language Features" block. **Keep both in sync; verify compilation after changes.**
+Other: `error_reporting/` (39 error message regression tests), `euler/` (Project Euler integration tests)
 
 ## Gotchas
-- `if/else` as **statements** (not last expr in block) need trailing `;` — parser errors without it.
-- Auxiliary inputs in `Inputs/` dirs are excluded from lit discovery.
+- `if/else` as statements need trailing `;`
+- Auxiliary inputs in `Inputs/` dirs excluded from lit discovery
+- `readme_demo.mn` must stay in sync with README
