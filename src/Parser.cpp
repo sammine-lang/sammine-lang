@@ -1338,19 +1338,19 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
                 prefix_tok->get_location());
       return std::nullopt;
     }
-    // Build mangled name: Option<i32>
-    enum_prefix += "<";
+    // Build type_args string separately from enum_prefix
+    std::string ta = "<";
     for (size_t i = 0; i < type_args.size(); i++) {
-      if (i > 0) enum_prefix += ", ";
-      enum_prefix += type_args[i]->to_string();
+      if (i > 0) ta += ", ";
+      ta += type_args[i]->to_string();
     }
-    enum_prefix += ">";
+    ta += ">";
 
     // Generic patterns always require :: and variant name
     auto dcolon = expect(TokenType::TokDoubleColon);
     if (!dcolon) {
       imm_error(
-          fmt::format("Expected '::' after '{}' in case pattern", enum_prefix),
+          fmt::format("Expected '::' after '{}' in case pattern", enum_prefix + ta),
           prefix_tok->get_location());
       return std::nullopt;
     }
@@ -1360,7 +1360,8 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
       return std::nullopt;
     }
     pattern.variant_name = sammine_util::QualifiedName::from_parts(
-        {enum_prefix, variant_tok->lexeme});
+        std::vector<sammine_util::QualifiedName::Part>{
+            {enum_prefix, ta}, {variant_tok->lexeme, ""}});
     pattern.location =
         prefix_tok->get_location() | variant_tok->get_location();
   } else {
@@ -1370,19 +1371,20 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
     // For 3-segment module::enum::variant, resolve the module alias
     if (pqn.qn.depth() == 3) {
       auto &parts = pqn.qn.parts();
-      auto it = alias_to_module.find(parts[0]);
+      auto it = alias_to_module.find(parts[0].name);
       bool unresolved = (it == alias_to_module.end());
       std::optional<std::string> module_alias;
       std::string resolved_mod;
       if (unresolved) {
-        resolved_mod = parts[0];
+        resolved_mod = parts[0].name;
       } else {
-        module_alias = parts[0];
+        module_alias = parts[0].name;
         resolved_mod = it->second;
       }
       pqn.qn = sammine_util::QualifiedName::from_parts(
-          {resolved_mod, parts[1], parts[2]}, unresolved,
-          std::move(module_alias));
+          std::vector<sammine_util::QualifiedName::Part>{
+              {resolved_mod, ""}, parts[1], parts[2]},
+          unresolved, std::move(module_alias));
     }
     pattern.variant_name = pqn.qn;
     pattern.location = pqn.location;
@@ -2123,15 +2125,19 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
     tokStream->consume(); // consume ::
     auto member_id = expect(TokID);
     if (member_id) {
-      // Build mangled name with type args: e.g. "Option<i32>"
-      std::string mangled = qn.mangled() + "<";
+      // Build type_args separately, attach to existing parts
+      std::string type_args_str = "<";
       for (size_t i = 0; i < parsed_types.size(); i++) {
-        if (i > 0) mangled += ", ";
-        mangled += parsed_types[i]->to_string();
+        if (i > 0) type_args_str += ", ";
+        type_args_str += parsed_types[i]->to_string();
       }
-      mangled += ">";
-      qn = sammine_util::QualifiedName::from_parts(
-          {mangled, member_id->lexeme});
+      type_args_str += ">";
+      auto cur_parts = qn.parts();
+      std::vector<sammine_util::QualifiedName::Part> new_parts(
+          cur_parts.begin(), cur_parts.end());
+      new_parts.back().type_args = type_args_str;
+      new_parts.push_back({member_id->lexeme, ""});
+      qn = sammine_util::QualifiedName::from_parts(std::move(new_parts));
       qn_loc = qn_loc | member_id->get_location();
       return parsed_types;
     }

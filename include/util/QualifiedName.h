@@ -18,19 +18,22 @@ struct CasePattern;
 
 namespace sammine_util {
 
-struct MonomorphizedName;
-
 struct QualifiedName {
+  struct Part {
+    std::string name;
+    std::string type_args; // "<i32>" including brackets, or ""
+    std::string mangled() const { return name + type_args; }
+  };
+
 private:
-  std::vector<std::string> parts_; // ["math", "Color", "Red"]
+  std::vector<Part> parts_; // [{math,""}, {Color,""}, {Red,""}]
   std::optional<std::string> module_alias_; // original alias before resolution
   bool unresolved_ = false;
 
   // local() is restricted to parsing/AST construction only.
-  // After scope generation, use MonomorphizedName instead.
   static QualifiedName local(std::string name) {
     QualifiedName qn;
-    qn.parts_ = {std::move(name)};
+    qn.parts_ = {{std::move(name), ""}};
     return qn;
   }
 
@@ -40,26 +43,40 @@ private:
   friend class sammine_lang::AST::CallExprAST;
   friend class sammine_lang::AST::StructLiteralExprAST;
   friend struct sammine_lang::AST::CasePattern;
-  friend struct sammine_util::MonomorphizedName;
 
 public:
-  QualifiedName() : parts_{""} {}
+  QualifiedName() : parts_{{"", ""}} {}
 
   static QualifiedName qualified(std::string module, std::string name) {
     QualifiedName qn;
-    qn.parts_ = {std::move(module), std::move(name)};
+    qn.parts_ = {{std::move(module), ""}, {std::move(name), ""}};
     return qn;
   }
 
   static QualifiedName unresolved_qualified(std::string alias,
                                             std::string name) {
     QualifiedName qn;
-    qn.parts_ = {std::move(alias), std::move(name)};
+    qn.parts_ = {{std::move(alias), ""}, {std::move(name), ""}};
     qn.unresolved_ = true;
     return qn;
   }
 
-  static QualifiedName from_parts(std::vector<std::string> parts,
+  // Convenience: create from plain strings (no type args)
+  static QualifiedName from_parts(std::vector<std::string> names,
+                                  bool unresolved = false,
+                                  std::optional<std::string> module_alias = std::nullopt) {
+    QualifiedName qn;
+    qn.parts_.clear();
+    qn.parts_.reserve(names.size());
+    for (auto &n : names)
+      qn.parts_.push_back({std::move(n), ""});
+    qn.unresolved_ = unresolved;
+    qn.module_alias_ = std::move(module_alias);
+    return qn;
+  }
+
+  // Create from structured Parts (with type args)
+  static QualifiedName from_parts(std::vector<Part> parts,
                                   bool unresolved = false,
                                   std::optional<std::string> module_alias = std::nullopt) {
     QualifiedName qn;
@@ -69,31 +86,53 @@ public:
     return qn;
   }
 
+  // Return a copy with type_args set on the last part
+  QualifiedName with_type_args(std::string ta) const {
+    auto copy = *this;
+    copy.parts_.back().type_args = std::move(ta);
+    return copy;
+  }
+
+  // Return a copy with all type_args cleared
+  QualifiedName strip_type_args() const {
+    auto copy = *this;
+    for (auto &p : copy.parts_)
+      p.type_args.clear();
+    return copy;
+  }
+
+  // Return a copy with an additional part appended
+  QualifiedName with_appended(Part part) const {
+    auto copy = *this;
+    copy.parts_.push_back(std::move(part));
+    return copy;
+  }
+
   // Accessors
-  const std::string &get_name() const { return parts_.back(); }
+  const std::string &get_name() const { return parts_.back().name; }
   std::string get_module() const {
-    return parts_.size() > 1 ? parts_.front() : "";
+    return parts_.size() > 1 ? parts_.front().name : "";
   }
   std::string get_qualifier() const {
     if (parts_.size() <= 1)
       return "";
-    std::string result = parts_[0];
+    std::string result = parts_[0].mangled();
     for (size_t i = 1; i + 1 < parts_.size(); i++)
-      result += "::" + parts_[i];
+      result += "::" + parts_[i].mangled();
     return result;
   }
-  const std::vector<std::string> &parts() const { return parts_; }
+  const std::vector<Part> &parts() const { return parts_; }
   size_t depth() const { return parts_.size(); }
 
   // Query methods
   bool is_qualified() const { return parts_.size() > 1; }
   bool is_unresolved() const { return unresolved_; }
 
-  // String representation — single method
+  // String representation — includes type_args in each part
   std::string mangled() const {
-    std::string result = parts_[0];
+    std::string result = parts_[0].mangled();
     for (size_t i = 1; i < parts_.size(); i++)
-      result += "::" + parts_[i];
+      result += "::" + parts_[i].mangled();
     return result;
   }
 
@@ -101,7 +140,7 @@ public:
   QualifiedName with_alias() const {
     if (module_alias_) {
       auto copy = *this;
-      copy.parts_[0] = *module_alias_;
+      copy.parts_[0].name = *module_alias_;
       return copy;
     }
     return *this;
@@ -111,7 +150,9 @@ public:
   QualifiedName with_module(const std::string &mod) const {
     if (is_qualified() || mod.empty())
       return *this;
-    return qualified(mod, parts_.back());
+    QualifiedName qn;
+    qn.parts_ = {{mod, ""}, parts_.back()};
+    return qn;
   }
 };
 

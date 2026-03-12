@@ -257,8 +257,8 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
       }
       // Build qualified name: enum parts + variant name
       auto parts = enum_names[0].parts();
-      parts.push_back(ast->functionName.get_name());
-      ast->functionName = sammine_util::QualifiedName::from_parts(parts);
+      parts.push_back({ast->functionName.get_name(), ""});
+      ast->functionName = sammine_util::QualifiedName::from_parts(std::move(parts));
       return;
     }
   }
@@ -302,8 +302,8 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
     }
     // Rewrite to qualified form: e.g., "A" → "Color::A" or "dummy_enum::dummy::A"
     auto parts = enum_names[0].parts();
-    parts.push_back(var_name);
-    ast->variableName = sammine_util::QualifiedName::from_parts(parts).mangled();
+    parts.push_back({var_name, ""});
+    ast->variableName = sammine_util::QualifiedName::from_parts(std::move(parts)).mangled();
     return;
   }
 

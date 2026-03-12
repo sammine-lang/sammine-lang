@@ -1,5 +1,4 @@
 #pragma once
-#include "util/MonomorphizedName.h"
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include <array>
@@ -521,7 +520,7 @@ struct MonomorphizedKey {
   }
 
   /// "i32, f64" — comma-separated, no brackets. For error messages and
-  /// MonomorphizedName construction.
+  /// QualifiedName construction.
   std::string type_args_string() const {
     std::string result;
     for (size_t i = 0; i < type_args.size(); i++) {
@@ -531,18 +530,18 @@ struct MonomorphizedKey {
     return result;
   }
 
-  /// Produce a MonomorphizedName for generic functions/enums/structs.
-  sammine_util::MonomorphizedName
+  /// Produce a QualifiedName for generic functions/enums/structs.
+  sammine_util::QualifiedName
   to_generic_name(const sammine_util::QualifiedName &base) const {
-    return sammine_util::MonomorphizedName::generic(
-        base, "<" + type_args_string() + ">");
+    return base.with_type_args("<" + type_args_string() + ">");
   }
 
-  /// Produce a MonomorphizedName for typeclass instance methods.
-  sammine_util::MonomorphizedName
+  /// Produce a QualifiedName for typeclass instance methods.
+  sammine_util::QualifiedName
   to_typeclass_name(const std::string &method) const {
-    return sammine_util::MonomorphizedName::typeclass(
-        name, type_args_string(), method);
+    return sammine_util::QualifiedName::from_parts(
+        std::vector<sammine_util::QualifiedName::Part>{
+            {name, "<" + type_args_string() + ">"}, {method, ""}});
   }
 };
 struct MonomorphizedKeyHash {

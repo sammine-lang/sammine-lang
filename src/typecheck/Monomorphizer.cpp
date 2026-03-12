@@ -20,8 +20,7 @@ Monomorphizer::try_instantiate_func(
   if (instantiated_functions_.contains(key))
     return nullptr;
 
-  auto new_name = key.to_generic_name(generic->Prototype->functionName)
-                      .to_qualified_name();
+  auto new_name = key.to_generic_name(generic->Prototype->functionName);
   auto cloned = clone_func(generic, new_name, bindings);
   auto *ptr = cloned.get();
   instantiated_functions_.insert(key);
@@ -34,7 +33,7 @@ Monomorphizer::instantiate_enum(
     EnumDefAST *generic,
     const MonomorphizedKey &key,
     const TypeBindings &bindings) {
-  auto new_name = key.to_generic_name(generic->enum_name).to_qualified_name();
+  auto new_name = key.to_generic_name(generic->enum_name);
   auto cloned = clone_enum(generic, new_name, bindings);
   auto *ptr = cloned.get();
   monomorphized_enum_defs.push_back(std::move(cloned));
@@ -46,7 +45,7 @@ Monomorphizer::instantiate_struct(
     StructDefAST *generic,
     const MonomorphizedKey &key,
     const TypeBindings &bindings) {
-  auto new_name = key.to_generic_name(generic->struct_name).to_qualified_name();
+  auto new_name = key.to_generic_name(generic->struct_name);
   auto cloned = clone_struct(generic, new_name, bindings);
   auto *ptr = cloned.get();
   monomorphized_struct_defs.push_back(std::move(cloned));

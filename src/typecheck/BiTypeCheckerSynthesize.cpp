@@ -3,7 +3,6 @@
 #include "fmt/format.h"
 #include "typecheck/Types.h"
 #include "typecheck/UniSubst.h"
-#include "util/MonomorphizedName.h"
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -192,24 +191,19 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
 
     // If not found and we have explicit type args, try generic enum instantiation
     if (!enum_type_opt && !ast->explicit_type_args.empty()) {
-      // Extract base name (everything before '<')
-      auto module = ast->functionName.get_qualifier();
-      auto angle_pos = module.find('<');
-      if (angle_pos != std::string::npos) {
-        std::string base_name = module.substr(0, angle_pos);
-        auto *generic_def = monomorphizer.generic_enums.find(base_name);
-        if (generic_def) {
-          if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
-            auto resolved = resolve_explicit_type_args(
-                ast->explicit_type_args, generic_def->type_params);
-            if (resolved) {
-              auto &[bindings, type_args] = *resolved;
-              MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
-              monomorphizer.instantiate_enum(generic_def, key, bindings)
-                  ->accept_vis(this);
-              enum_type_opt = get_typename_type(
-                  key.to_generic_name(generic_def->enum_name).mangled());
-            }
+      auto base_name = ast->functionName.strip_type_args().get_qualifier();
+      auto *generic_def = monomorphizer.generic_enums.find(base_name);
+      if (generic_def) {
+        if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
+          auto resolved = resolve_explicit_type_args(
+              ast->explicit_type_args, generic_def->type_params);
+          if (resolved) {
+            auto &[bindings, type_args] = *resolved;
+            MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
+            monomorphizer.instantiate_enum(generic_def, key, bindings)
+                ->accept_vis(this);
+            enum_type_opt = get_typename_type(
+                key.to_generic_name(generic_def->enum_name).mangled());
           }
         }
       }
@@ -290,10 +284,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   if (ast->functionName.is_qualified()) {
     // Qualified syntax: Add<i32>::add — extract method from last part
     method_name = ast->functionName.get_name();
-    auto qualifier = ast->functionName.get_qualifier();
-    auto angle_pos = qualifier.find('<');
-    if (angle_pos != std::string::npos)
-      class_name = qualifier.substr(0, angle_pos);
+    class_name = ast->functionName.strip_type_args().get_qualifier();
   }
 
   if (class_name.empty()) {

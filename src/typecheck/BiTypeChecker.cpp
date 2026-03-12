@@ -1,7 +1,6 @@
 #include "typecheck/BiTypeChecker.h"
 #include "ast/Ast.h"
 #include "fmt/format.h"
-#include "util/MonomorphizedName.h"
 #include "util/Utilities.h"
 
 #define DEBUG_TYPE "typecheck"
@@ -356,21 +355,16 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   auto &et = std::get<EnumType>(enum_type.type_data);
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
-    auto qualified_key = ast->enum_name.mangled() + "::" + vi.name;
+    auto qualified_key =
+        ast->enum_name.with_appended({vi.name, ""}).mangled();
     variant_constructors[qualified_key] = {enum_type, i};
 
     // For generic enum instantiations (e.g., Option<i32>), also register with
     // the template base name (Option::Some) so scope-gen-rewritten names match
-    auto base_parts = ast->enum_name.parts();
-    auto &last_part = base_parts.back();
-    auto angle_pos = last_part.find('<');
-    if (angle_pos != std::string::npos) {
-      base_parts.back() = last_part.substr(0, angle_pos);
-      auto base_key =
-          sammine_util::QualifiedName::from_parts(base_parts).mangled() +
-          "::" + vi.name;
+    auto base_key =
+        ast->enum_name.strip_type_args().with_appended({vi.name, ""}).mangled();
+    if (base_key != qualified_key)
       variant_constructors[base_key] = {enum_type, i};
-    }
   }
 }
 
@@ -674,8 +668,7 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
-    auto mono = tc_key.to_typeclass_name(original_name);
-    method->Prototype->functionName = mono.to_qualified_name();
+    method->Prototype->functionName = tc_key.to_typeclass_name(original_name);
   }
 
   type_class_instances.insert(tc_key);
