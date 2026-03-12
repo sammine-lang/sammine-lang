@@ -992,134 +992,47 @@ mlir::Value MLIRGenImpl::emitPayloadCaseExpr(AST::CaseExprAST *ast,
   auto tag = mlir::LLVM::LoadOp::create(builder, location, builder.getI32Type(),
                                         tagPtr);
 
-  bool hasResult = ast->get_type().type_kind != TypeKind::Unit &&
-                   ast->get_type().type_kind != TypeKind::Never;
+  return emitScalarCaseExpr(
+      ast, tag,
+      // Comparison constant: variant tag index
+      [&](const AST::CaseArm &arm, mlir::Location loc) {
+        return mlir::arith::ConstantIntOp::create(
+            builder, loc, builder.getI32Type(),
+            static_cast<int64_t>(arm.pattern.variant_index));
+      },
+      // Per-arm preamble: extract payload bindings from the union
+      [&](const AST::CaseArm &arm, mlir::Location loc) {
+        if (arm.pattern.is_wildcard || arm.pattern.bindings.empty())
+          return;
+        auto &vi = et.get_variant(arm.pattern.variant_index);
+        auto payloadPtr = mlir::LLVM::GEPOp::create(
+            builder, loc, llvmPtrTy(), enumTy, scrutineeAlloca,
+            llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
+            mlir::LLVM::GEPNoWrapFlags::inbounds);
 
-  auto *parentRegion = builder.getInsertionBlock()->getParent();
+        int64_t byte_offset = 0;
+        for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
+          auto fieldMlirTy = convertType(vi.payload_types[j]);
+          int64_t field_offset =
+              advancePayloadOffset(byte_offset, vi.payload_types[j]);
+          mlir::Value fieldPtr;
+          if (field_offset == 0) {
+            fieldPtr = payloadPtr;
+          } else {
+            fieldPtr = mlir::LLVM::GEPOp::create(
+                builder, loc, llvmPtrTy(), builder.getI8Type(), payloadPtr,
+                llvm::ArrayRef<mlir::LLVM::GEPArg>{
+                    static_cast<int32_t>(field_offset)},
+                mlir::LLVM::GEPNoWrapFlags::inbounds);
+          }
+          auto fieldVal =
+              mlir::LLVM::LoadOp::create(builder, loc, fieldMlirTy, fieldPtr);
 
-  // Create blocks for each arm + merge
-  std::vector<mlir::Block *> armBlocks;
-  mlir::Block *defaultBlock = nullptr;
-
-  for (size_t i = 0; i < ast->arms.size(); i++) {
-    armBlocks.push_back(addBlockTo(parentRegion));
-    if (ast->arms[i].pattern.is_wildcard)
-      defaultBlock = armBlocks.back();
-  }
-
-  auto *mergeBlock = new mlir::Block();
-  if (hasResult) {
-    auto mergeType = ast->get_type().type_kind == TypeKind::Array
-                         ? mlir::Type(llvmPtrTy())
-                         : convertType(ast->get_type());
-    mergeBlock->addArgument(mergeType, location);
-  }
-
-  if (!defaultBlock) {
-    defaultBlock = addBlockTo(parentRegion);
-    builder.setInsertionPointToStart(defaultBlock);
-    mlir::LLVM::UnreachableOp::create(builder, location);
-  }
-
-  // Emit switch via cascading cmpi + cond_br
-  builder.setInsertionPointAfter(tag.getOperation());
-
-  std::vector<size_t> nonWildcardIndices;
-  for (size_t i = 0; i < ast->arms.size(); i++) {
-    if (!ast->arms[i].pattern.is_wildcard)
-      nonWildcardIndices.push_back(i);
-  }
-
-  for (size_t ci = 0; ci < nonWildcardIndices.size(); ci++) {
-    size_t i = nonWildcardIndices[ci];
-    auto &arm = ast->arms[i];
-    auto tagConst = mlir::arith::ConstantIntOp::create(
-        builder, location, builder.getI32Type(),
-        static_cast<int64_t>(arm.pattern.variant_index));
-    auto cmp = mlir::arith::CmpIOp::create(
-        builder, location, mlir::arith::CmpIPredicate::eq, tag, tagConst);
-
-    mlir::Block *falseTarget;
-    if (ci + 1 < nonWildcardIndices.size()) {
-      falseTarget = addBlockTo(parentRegion);
-    } else {
-      falseTarget = defaultBlock;
-    }
-
-    mlir::cf::CondBranchOp::create(builder, location, cmp, armBlocks[i], {},
-                                   falseTarget, {});
-
-    if (ci + 1 < nonWildcardIndices.size())
-      builder.setInsertionPointToStart(falseTarget);
-  }
-
-  if (nonWildcardIndices.empty())
-    mlir::cf::BranchOp::create(builder, location, defaultBlock);
-
-  // Emit each arm body
-  bool allTerminated = true;
-
-  for (size_t i = 0; i < ast->arms.size(); i++) {
-    auto &arm = ast->arms[i];
-    builder.setInsertionPointToStart(armBlocks[i]);
-
-    // Extract payload bindings
-    if (!arm.pattern.is_wildcard && !arm.pattern.bindings.empty()) {
-      auto &vi = et.get_variant(arm.pattern.variant_index);
-      auto payloadPtr = mlir::LLVM::GEPOp::create(
-          builder, location, llvmPtrTy(), enumTy, scrutineeAlloca,
-          llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
-          mlir::LLVM::GEPNoWrapFlags::inbounds);
-
-      int64_t byte_offset = 0;
-      for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
-        auto fieldMlirTy = convertType(vi.payload_types[j]);
-        int64_t field_offset =
-            advancePayloadOffset(byte_offset, vi.payload_types[j]);
-        mlir::Value fieldPtr;
-        if (field_offset == 0) {
-          fieldPtr = payloadPtr;
-        } else {
-          fieldPtr = mlir::LLVM::GEPOp::create(
-              builder, location, llvmPtrTy(), builder.getI8Type(), payloadPtr,
-              llvm::ArrayRef<mlir::LLVM::GEPArg>{
-                  static_cast<int32_t>(field_offset)},
-              mlir::LLVM::GEPNoWrapFlags::inbounds);
+          auto alloca = emitAllocaOne(fieldMlirTy, loc);
+          mlir::LLVM::StoreOp::create(builder, loc, fieldVal, alloca);
+          symbolTable.registerNameT(arm.pattern.bindings[j], alloca);
         }
-        auto fieldVal = mlir::LLVM::LoadOp::create(builder, location,
-                                                   fieldMlirTy, fieldPtr);
-
-        auto alloca = emitAllocaOne(fieldMlirTy, location);
-        mlir::LLVM::StoreOp::create(builder, location, fieldVal, alloca);
-        symbolTable.registerNameT(arm.pattern.bindings[j], alloca);
-      }
-    }
-
-    auto armVal = emitBlock(arm.body.get());
-
-    auto *armEnd = builder.getInsertionBlock();
-    bool armTerminated = !armEnd->empty() &&
-                         armEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
-    if (!armTerminated) {
-      if (hasResult)
-        mlir::cf::BranchOp::create(builder, location, mergeBlock,
-                                   mlir::ValueRange{armVal});
-      else
-        mlir::cf::BranchOp::create(builder, location, mergeBlock);
-      allTerminated = false;
-    } else {
-      allTerminated = allTerminated && true;
-    }
-  }
-
-  if (!allTerminated) {
-    parentRegion->push_back(mergeBlock);
-    builder.setInsertionPointToStart(mergeBlock);
-    return hasResult ? mergeBlock->getArgument(0) : nullptr;
-  } else {
-    delete mergeBlock;
-    return nullptr;
-  }
+      });
 }
 
 mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
