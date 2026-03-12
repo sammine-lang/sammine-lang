@@ -61,7 +61,7 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
     if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
       if (fd->Prototype->is_generic())
-        monomorphizer.register_generic_func(fd->Prototype->functionName.mangled(), fd);
+        monomorphizer.generic_funcs.register_def(fd->Prototype->functionName.mangled(), fd);
       else
         pre_register_function(fd->Prototype.get());
     } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
@@ -105,7 +105,7 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->accept_synthesis(this);
 
   if (ast->Prototype->is_generic()) {
-    monomorphizer.register_generic_func(ast->Prototype->functionName.mangled(), ast);
+    monomorphizer.generic_funcs.register_def(ast->Prototype->functionName.mangled(), ast);
   } else {
     ast->Block->accept_vis(this);
   }
@@ -262,7 +262,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Generic struct: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      monomorphizer.register_generic_struct(ast->struct_name.mangled(), ast);
+      monomorphizer.generic_structs.register_def(ast->struct_name.mangled(), ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -296,7 +296,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Generic enum: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      monomorphizer.register_generic_enum(ast->enum_name.mangled(), ast);
+      monomorphizer.generic_enums.register_def(ast->enum_name.mangled(), ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -456,7 +456,7 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
 
   // Generic calls: trigger monomorphization if synthesis succeeded
   if (auto *generic_def =
-          monomorphizer.find_generic_func(ast->functionName.mangled())) {
+          monomorphizer.generic_funcs.find(ast->functionName.mangled())) {
     if (cp.resolved_name.has_value()) {
       auto key = MonomorphizedKey::from_bindings(
           ast->functionName.mangled(),

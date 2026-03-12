@@ -155,8 +155,8 @@ public:
 
   // Call expression synthesis helpers
   std::optional<Type> synthesize_typeclass_call(CallExprAST *ast);
-  Type synthesize_generic_call(CallExprAST *ast);
-  Type synthesize_normal_call(CallExprAST *ast);
+  std::optional<Type> synthesize_generic_call(CallExprAST *ast);
+  std::optional<Type> synthesize_normal_call(CallExprAST *ast);
 
   /// Resolve explicit type args against type params, producing bindings and
   /// the resolved types in order. Returns nullopt if any type arg resolves
@@ -289,8 +289,8 @@ public:
       auto base_mangled = gen->base_name.mangled();
 
       // Determine if this is a generic enum or generic struct
-      auto *enum_def = monomorphizer.find_generic_enum(base_mangled);
-      auto *struct_def = monomorphizer.find_generic_struct(base_mangled);
+      auto *enum_def = monomorphizer.generic_enums.find(base_mangled);
+      auto *struct_def = monomorphizer.generic_structs.find(base_mangled);
       bool is_enum = (enum_def != nullptr);
       bool is_struct = (struct_def != nullptr);
 

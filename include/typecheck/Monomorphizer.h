@@ -9,18 +9,23 @@
 
 namespace sammine_lang::AST {
 
+template <typename T>
+struct GenericRegistry {
+  std::unordered_map<std::string, T *> defs;
+  void register_def(const std::string &mangled, T *def) { defs[mangled] = def; }
+  T *find(const std::string &mangled) const {
+    auto it = defs.find(mangled);
+    return it != defs.end() ? it->second : nullptr;
+  }
+};
+
 class Monomorphizer {
 public:
 
-  // --- Registration (called during type-check passes 1-2) ---
-  void register_generic_func(const std::string &mangled, FuncDefAST *def);
-  void register_generic_enum(const std::string &mangled, EnumDefAST *def);
-  void register_generic_struct(const std::string &mangled, StructDefAST *def);
-
-  // --- Lookup ---
-  FuncDefAST *find_generic_func(const std::string &mangled);
-  EnumDefAST *find_generic_enum(const std::string &mangled);
-  StructDefAST *find_generic_struct(const std::string &mangled);
+  // --- Registration & Lookup ---
+  GenericRegistry<FuncDefAST> generic_funcs;
+  GenericRegistry<EnumDefAST> generic_enums;
+  GenericRegistry<StructDefAST> generic_structs;
 
   // --- Instantiate ---
   // Functions: dedup'd via internal set, returns nullptr if already done.
@@ -41,11 +46,6 @@ public:
   std::vector<std::unique_ptr<StructDefAST>> monomorphized_struct_defs;
 
 private:
-  // Registration maps
-  std::unordered_map<std::string, FuncDefAST *> generic_func_defs_;
-  std::unordered_map<std::string, EnumDefAST *> generic_enum_defs_;
-  std::unordered_map<std::string, StructDefAST *> generic_struct_defs_;
-
   // Dedup set (functions only — enum/struct dedup via get_typename_type
   // at call sites, which works because they register at root scope)
   std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash> instantiated_functions_;

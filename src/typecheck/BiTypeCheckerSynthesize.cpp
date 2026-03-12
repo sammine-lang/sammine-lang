@@ -197,7 +197,7 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
       auto angle_pos = module.find('<');
       if (angle_pos != std::string::npos) {
         std::string base_name = module.substr(0, angle_pos);
-        auto *generic_def = monomorphizer.find_generic_enum(base_name);
+        auto *generic_def = monomorphizer.generic_enums.find(base_name);
         if (generic_def) {
           if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
             auto resolved = resolve_explicit_type_args(
@@ -269,19 +269,14 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
     }
   }
 
-  // Try typeclass dispatch first (requires explicit type args)
-  if (!ast->explicit_type_args.empty()) {
-    auto result = synthesize_typeclass_call(ast);
-    if (result.has_value())
+  // Try each call resolution strategy in order
+  for (auto synth : {&BiTypeCheckerVisitor::synthesize_typeclass_call,
+                     &BiTypeCheckerVisitor::synthesize_generic_call,
+                     &BiTypeCheckerVisitor::synthesize_normal_call}) {
+    if (auto result = (this->*synth)(ast))
       return *result;
   }
-
-  // Try generic function instantiation
-  if (monomorphizer.find_generic_func(ast->functionName.mangled()))
-    return synthesize_generic_call(ast);
-
-  // Normal function call
-  return synthesize_normal_call(ast);
+  return ast->set_type(Type::Poisoned());
 }
 
 std::optional<Type>
@@ -367,8 +362,10 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   return ast->set_type(substitute(return_type, tc_bindings));
 }
 
-Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
-  auto *generic_def = monomorphizer.find_generic_func(ast->functionName.mangled());
+std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
+  auto *generic_def = monomorphizer.generic_funcs.find(ast->functionName.mangled());
+  if (!generic_def)
+    return std::nullopt;
   auto generic_type = generic_def->get_type();
   auto func = std::get<FunctionType>(generic_type.type_data);
   auto params = func.get_params_types();
@@ -510,7 +507,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
   return ast->set_type(substitute(func.get_return_type(), bindings));
 }
 
-Type BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
+std::optional<Type> BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
   auto ty = try_get_callee_type(ast->functionName.mangled());
   if (!ty.has_value()) {
     this->add_error(ast->get_location(),
@@ -1182,7 +1179,7 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   // If not found and we have explicit type args, try generic struct instantiation
   if (!type_opt.has_value() && !ast->explicit_type_args.empty()) {
     auto base_name = ast->struct_name.mangled();
-    auto *generic_def = monomorphizer.find_generic_struct(base_name);
+    auto *generic_def = monomorphizer.generic_structs.find(base_name);
     if (generic_def) {
 
       if (ast->explicit_type_args.size() != generic_def->type_params.size()) {

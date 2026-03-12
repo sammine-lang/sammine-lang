@@ -10,40 +10,6 @@ static std::shared_ptr<Token> make_tok(const std::string &lexeme) {
                                  sammine_util::Location{});
 }
 
-// --- Registration ---
-
-void Monomorphizer::register_generic_func(const std::string &mangled,
-                                           FuncDefAST *def) {
-  generic_func_defs_[mangled] = def;
-}
-
-void Monomorphizer::register_generic_enum(const std::string &mangled,
-                                           EnumDefAST *def) {
-  generic_enum_defs_[mangled] = def;
-}
-
-void Monomorphizer::register_generic_struct(const std::string &mangled,
-                                             StructDefAST *def) {
-  generic_struct_defs_[mangled] = def;
-}
-
-// --- Lookup ---
-
-FuncDefAST *Monomorphizer::find_generic_func(const std::string &mangled) {
-  auto it = generic_func_defs_.find(mangled);
-  return it != generic_func_defs_.end() ? it->second : nullptr;
-}
-
-EnumDefAST *Monomorphizer::find_generic_enum(const std::string &mangled) {
-  auto it = generic_enum_defs_.find(mangled);
-  return it != generic_enum_defs_.end() ? it->second : nullptr;
-}
-
-StructDefAST *Monomorphizer::find_generic_struct(const std::string &mangled) {
-  auto it = generic_struct_defs_.find(mangled);
-  return it != generic_struct_defs_.end() ? it->second : nullptr;
-}
-
 // --- Instantiate ---
 
 FuncDefAST *
