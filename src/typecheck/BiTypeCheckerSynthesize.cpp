@@ -508,7 +508,7 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
 }
 
 std::optional<Type> BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
-  auto ty = try_get_callee_type(ast->functionName.mangled());
+  auto ty = id_to_type.recursive_try_get(ast->functionName.mangled());
   if (!ty.has_value()) {
     this->add_error(ast->get_location(),
                     fmt::format("Function '{}' not found",

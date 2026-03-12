@@ -2,6 +2,7 @@
 #include "util/Utilities.h"
 #include <functional>
 #include <memory>
+#include <optional>
 #include <ostream>
 #include <set>
 
@@ -54,5 +55,18 @@ public:
       return nameNotFound;
     } else
       return parent_scope->recursiveQueryName(name);
+  }
+
+  std::optional<T> try_get(const std::string &name) const {
+    auto it = symbols_to_t.find(name);
+    return it != symbols_to_t.end() ? std::optional<T>(it->second)
+                                    : std::nullopt;
+  }
+
+  std::optional<T> recursive_try_get(const std::string &name) const {
+    auto it = symbols_to_t.find(name);
+    if (it != symbols_to_t.end())
+      return it->second;
+    return parent_scope ? parent_scope->recursive_try_get(name) : std::nullopt;
   }
 };

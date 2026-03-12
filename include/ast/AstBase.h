@@ -320,6 +320,14 @@ public:
     return this->top().recursive_get_from_name(name);
   }
 
+  std::optional<T> try_get(const std::string &name) const {
+    return this->top().try_get(name);
+  }
+
+  std::optional<T> recursive_try_get(const std::string &name) const {
+    return this->top().recursive_try_get(name);
+  }
+
   const LexicalContext<T> *parent_scope() const {
     return this->top().parent_scope;
   }

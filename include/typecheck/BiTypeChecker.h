@@ -62,38 +62,8 @@ public:
     type_map_ordering.populate();
   }
 
-  std::optional<Type> get_type_from_id(const std::string &str) const {
-    const auto &id_name_top = id_to_type.top();
-    if (id_name_top.queryName(str) == nameNotFound) {
-      sammine_util::abort(
-          fmt::format("Name '{}' not found, this should not happen", str));
-    }
-    return id_name_top.get_from_name(str);
-  }
-
-  std::optional<Type> get_type_from_id_parent(const std::string &str) const {
-    const auto &id_name_top = *id_to_type.top().parent_scope;
-    if (id_name_top.queryName(str) == nameNotFound) {
-      sammine_util::abort(
-          fmt::format("Name '{}' not found, this should not happen", str));
-    }
-    return id_name_top.get_from_name(str);
-  }
-
   std::optional<Type> get_typename_type(const std::string &str) const {
-    const auto &typename_top = typename_to_type.top();
-    if (typename_top.recursiveQueryName(str) == nameNotFound) {
-      return std::nullopt;
-    }
-    return typename_top.recursive_get_from_name(str);
-  }
-
-  /// Try to find a name in current scope + parent scopes (non-aborting)
-  std::optional<Type> try_get_callee_type(const std::string &str) const {
-    const auto &top = id_to_type.top();
-    if (top.recursiveQueryName(str) == nameFound)
-      return top.recursive_get_from_name(str);
-    return std::nullopt;
+    return typename_to_type.recursive_try_get(str);
   }
 
   // visit overrides
