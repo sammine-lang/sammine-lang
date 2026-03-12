@@ -451,7 +451,8 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   auto &cp = props_.call(ast->id());
 
   // Enum constructors are fully resolved during synthesis
-  if (cp.is_enum_constructor)
+  // Typeclass calls: nothing to do here — codegen reads resolved_name
+  if (cp.is_enum_constructor || cp.is_typeclass_call)
     return;
 
   // Generic calls: trigger monomorphization if synthesis succeeded
@@ -468,10 +469,6 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
     }
     return;
   }
-
-  // Typeclass calls: nothing to do here — codegen reads resolved_name
-  if (cp.is_typeclass_call)
-    return;
 
   // Normal calls: check arg types now that args have been visited
   if (!cp.callee_func_type.has_value() ||
