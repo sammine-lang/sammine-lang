@@ -112,7 +112,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     }
 
     // Tagged union: build { tag, undef_payload }
-    auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
+    auto enumTy = cautious_at(enumTypes, ast->get_type(), "enumTypes");
 
     auto alloca = emitAllocaOne(enumTy, location);
 
@@ -800,8 +800,8 @@ mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
 // ===--- Struct emission ---===
 
 mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
+  auto structTy = cautious_at(structTypes, ast->get_type(), "structTypes");
   auto st = std::get<StructType>(ast->get_type().type_data);
-  auto structTy = cautious_at(structTypes, st.get_name().mangled(), "structTypes");
   auto location = loc(ast);
 
   // Start with poison (all fields will be filled by InsertValueOp)
@@ -845,7 +845,7 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
         .getResult();
   }
 
-  auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
+  auto enumTy = cautious_at(enumTypes, ast->get_type(), "enumTypes");
 
   // Alloca the enum struct
   auto alloca = emitAllocaOne(enumTy, location);
@@ -1058,7 +1058,7 @@ mlir::Value MLIRGenImpl::emitCaseExpr(AST::CaseExprAST *ast) {
   if (et.is_integer_backed())
     return emitIntegerBackedCaseExpr(ast, scrutineeVal, et);
 
-  auto enumTy = cautious_at(enumTypes, et.get_name().mangled(), "enumTypes");
+  auto enumTy = cautious_at(enumTypes, ast->scrutinee->get_type(), "enumTypes");
 
   // Alloca the scrutinee so we can GEP into it
   auto scrutineeAlloca = emitAllocaOne(enumTy, location);

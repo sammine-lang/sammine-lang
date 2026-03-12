@@ -2,11 +2,10 @@
 
 #include "ast/Ast.h"
 #include "typecheck/Types.h"
-#include "util/MonomorphizedName.h"
 #include <memory>
-#include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace sammine_lang::AST {
 
@@ -27,13 +26,13 @@ public:
   // Functions: dedup'd via internal set, returns nullptr if already done.
   // Enums/Structs: always clone (callers dedup via get_typename_type).
   FuncDefAST *try_instantiate_func(FuncDefAST *generic,
-                                   const sammine_util::MonomorphizedName &mono,
+                                   const MonomorphizedKey &key,
                                    const TypeBindings &bindings);
   EnumDefAST *instantiate_enum(EnumDefAST *generic,
-                               const sammine_util::MonomorphizedName &mono,
+                               const MonomorphizedKey &key,
                                const TypeBindings &bindings);
   StructDefAST *instantiate_struct(StructDefAST *generic,
-                                   const sammine_util::MonomorphizedName &mono,
+                                   const MonomorphizedKey &key,
                                    const TypeBindings &bindings);
 
   // --- Output (accessed by Compiler.cpp after type-checking) ---
@@ -49,7 +48,7 @@ private:
 
   // Dedup set (functions only — enum/struct dedup via get_typename_type
   // at call sites, which works because they register at root scope)
-  std::set<std::string> instantiated_functions_;
+  std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash> instantiated_functions_;
 
   // Cloning internals
   const TypeBindings *bindings_ = nullptr;
@@ -58,7 +57,7 @@ private:
   std::unique_ptr<TypedVarAST> clone_typed_var(TypedVarAST *var);
   std::unique_ptr<PrototypeAST>
   clone_prototype(PrototypeAST *proto,
-                  const sammine_util::MonomorphizedName &mono_name);
+                  const sammine_util::QualifiedName &new_name);
   std::unique_ptr<BlockAST> clone_block(BlockAST *block);
   std::unique_ptr<ExprAST> clone_expr(ExprAST *expr);
   std::vector<std::unique_ptr<ExprAST>>
@@ -67,15 +66,15 @@ private:
   // Internal clone helpers that set bindings_ for the duration
   std::unique_ptr<FuncDefAST>
   clone_func(FuncDefAST *generic,
-             const sammine_util::MonomorphizedName &mono_name,
+             const sammine_util::QualifiedName &new_name,
              const TypeBindings &bindings);
   std::unique_ptr<EnumDefAST>
   clone_enum(EnumDefAST *generic,
-             const sammine_util::MonomorphizedName &mono_name,
+             const sammine_util::QualifiedName &new_name,
              const TypeBindings &bindings);
   std::unique_ptr<StructDefAST>
   clone_struct(StructDefAST *generic,
-               const sammine_util::MonomorphizedName &mono_name,
+               const sammine_util::QualifiedName &new_name,
                const TypeBindings &bindings);
 };
 

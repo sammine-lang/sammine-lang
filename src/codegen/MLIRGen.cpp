@@ -65,7 +65,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
             builder.getContext(),
             kStructTypePrefix.str() + st.get_name().mangled());
         (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
-        structTypes[st.get_name().mangled()] = structTy;
+        structTypes[sd->get_type()] = structTy;
       }
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (ed->get_type().type_kind == TypeKind::Enum) {
@@ -88,7 +88,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         auto enumTy = mlir::LLVM::LLVMStructType::getIdentified(
             builder.getContext(), "sammine.enum." + name);
         (void)enumTy.setBody(fields, /*isPacked=*/false);
-        enumTypes[name] = enumTy;
+        enumTypes[ed->get_type()] = enumTy;
       }
     }
   }
@@ -285,17 +285,13 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     auto elemMlirType = convertType(arrType.get_element());
     return mlir::LLVM::LLVMArrayType::get(elemMlirType, arrType.get_size());
   }
-  case TypeKind::Struct: {
-    auto &st = std::get<StructType>(type.type_data);
-    return cautious_at(structTypes, st.get_name().mangled(),
-                                      "structTypes");
-  }
+  case TypeKind::Struct:
+    return cautious_at(structTypes, type, "structTypes");
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
     if (et.is_integer_backed())
       return getEnumBackingMLIRType(et);
-    return cautious_at(enumTypes, et.get_name().mangled(),
-                                      "enumTypes");
+    return cautious_at(enumTypes, type, "enumTypes");
   }
   case TypeKind::Tuple: {
     auto &tt = std::get<TupleType>(type.type_data);

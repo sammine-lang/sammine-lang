@@ -31,9 +31,6 @@ struct MonomorphizedName {
             std::move(method_name)};
   }
 
-  /// Typeclass instance lookup key: "Add<i32>"
-  std::string instance_key() const { return base.mangled() + type_args; }
-
   /// Full mangled string for lookups and codegen symbol names.
   ///   generic:   "math::identity<i32>"
   ///   typeclass: "Add<i32>::add"

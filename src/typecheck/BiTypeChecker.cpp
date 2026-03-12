@@ -458,8 +458,11 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
   if (auto *generic_def =
           monomorphizer.find_generic_func(ast->functionName.mangled())) {
     if (cp.resolved_name.has_value()) {
+      auto key = MonomorphizedKey::from_bindings(
+          ast->functionName.mangled(),
+          generic_def->Prototype->type_params, cp.type_bindings);
       if (auto *cloned = monomorphizer.try_instantiate_func(
-              generic_def, *cp.resolved_name, cp.type_bindings)) {
+              generic_def, key, cp.type_bindings)) {
         cloned->accept_vis(this);
       }
     }
@@ -676,22 +679,17 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   if (type_class_defs.contains(ast->class_name))
     return;
 
-  TypeClassInfo info;
-  info.name = ast->class_name;
-  info.type_params = ast->type_params;
-
   enter_new_scope();
   for (auto &param : ast->type_params)
     typename_to_type.registerNameT(param, Type::TypeParam(param));
 
   for (auto &proto : ast->methods) {
     proto->accept_synthesis(this);
-    info.methods.push_back(proto.get());
     method_to_class[proto->functionName.mangled()] = ast->class_name;
   }
 
   exit_new_scope();
-  type_class_defs[ast->class_name] = std::move(info);
+  type_class_defs[ast->class_name] = ast;
 }
 
 void BiTypeCheckerVisitor::register_typeclass_instance(
@@ -712,38 +710,25 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     return;
   }
 
-  auto &tc = it->second;
-  if (tcip.concrete_types.size() != tc.type_params.size()) {
+  auto *tc = it->second;
+  if (tcip.concrete_types.size() != tc->type_params.size()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Type class '{}' expects {} type argument(s), got {}",
-                    ast->class_name, tc.type_params.size(),
+                    ast->class_name, tc->type_params.size(),
                     tcip.concrete_types.size()));
     return;
   }
 
-  // Build comma-joined type string for instance key
-  std::string concrete_types_str;
-  for (size_t i = 0; i < tcip.concrete_types.size(); i++) {
-    if (i > 0)
-      concrete_types_str += ", ";
-    concrete_types_str += tcip.concrete_types[i].to_string();
-  }
-
-  TypeClassInstanceInfo inst_info;
-  inst_info.class_name = ast->class_name;
-  inst_info.concrete_types = tcip.concrete_types;
+  MonomorphizedKey tc_key{ast->class_name, tcip.concrete_types};
 
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
-    auto mono = sammine_util::MonomorphizedName::typeclass(
-        ast->class_name, concrete_types_str, original_name);
+    auto mono = tc_key.to_typeclass_name(original_name);
     method->Prototype->functionName = mono.to_qualified_name();
-    inst_info.method_mangled_names[original_name] = mono;
   }
 
-  type_class_instances[TypeClassKey{ast->class_name, tcip.concrete_types}] =
-      std::move(inst_info);
+  type_class_instances.insert(tc_key);
 }
 
 void BiTypeCheckerVisitor::register_builtin_op_instances() {
@@ -774,17 +759,11 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
   };
 
   for (auto &e : entries) {
-    TypeClassKey tc_key{e.class_name, {e.type}};
+    MonomorphizedKey tc_key{e.class_name, {e.type}};
     if (type_class_instances.contains(tc_key))
       continue;
 
-    auto mono = sammine_util::MonomorphizedName::typeclass(
-        e.class_name, e.type.to_string(), e.method_name);
-    TypeClassInstanceInfo info;
-    info.class_name = e.class_name;
-    info.concrete_types = {e.type};
-    info.method_mangled_names[e.method_name] = mono;
-    type_class_instances[tc_key] = std::move(info);
+    type_class_instances.insert(tc_key);
   }
 }
 

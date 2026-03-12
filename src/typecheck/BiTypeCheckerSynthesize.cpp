@@ -28,21 +28,20 @@ format_generic_call_name(const sammine_util::QualifiedName &fn_name,
   return result + ">";
 }
 
-std::optional<std::pair<TypeBindings, std::string>>
+std::optional<std::pair<TypeBindings, std::vector<Type>>>
 BiTypeCheckerVisitor::resolve_explicit_type_args(
     const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
     const std::vector<std::string> &type_params) {
   TypeBindings bindings;
-  std::string type_args_str;
+  std::vector<Type> type_args;
   for (size_t i = 0; i < explicit_type_args.size(); i++) {
     auto resolved = resolve_type_expr(explicit_type_args[i].get());
     if (resolved.type_kind == TypeKind::Poisoned)
       return std::nullopt;
     bindings[type_params[i]] = resolved;
-    if (i > 0) type_args_str += ", ";
-    type_args_str += resolved.to_string();
+    type_args.push_back(resolved);
   }
-  return std::make_pair(std::move(bindings), std::move(type_args_str));
+  return std::make_pair(std::move(bindings), std::move(type_args));
 }
 
 Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
@@ -204,12 +203,12 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
             auto resolved = resolve_explicit_type_args(
                 ast->explicit_type_args, generic_def->type_params);
             if (resolved) {
-              auto &[bindings, type_args_str] = *resolved;
-              auto mono = sammine_util::MonomorphizedName::generic(
-                  generic_def->enum_name, "<" + type_args_str + ">");
-              monomorphizer.instantiate_enum(generic_def, mono, bindings)
+              auto &[bindings, type_args] = *resolved;
+              MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
+              monomorphizer.instantiate_enum(generic_def, key, bindings)
                   ->accept_vis(this);
-              enum_type_opt = get_typename_type(mono.mangled());
+              enum_type_opt = get_typename_type(
+                  key.to_generic_name(generic_def->enum_name).mangled());
             }
           }
         }
@@ -314,38 +313,34 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   auto tc_it = type_class_defs.find(class_name);
   if (tc_it == type_class_defs.end())
     return std::nullopt;
-  auto &tc = tc_it->second;
+  auto *tc = tc_it->second;
 
-  if (ast->explicit_type_args.size() != tc.type_params.size()) {
+  if (ast->explicit_type_args.size() != tc->type_params.size()) {
     add_error(ast->get_location(),
               fmt::format("Type class '{}' expects {} type argument(s), got {}",
-                          class_name, tc.type_params.size(),
+                          class_name, tc->type_params.size(),
                           ast->explicit_type_args.size()));
     return ast->set_type(Type::Poisoned());
   }
 
   auto resolved_args = resolve_explicit_type_args(
-      ast->explicit_type_args, tc.type_params);
+      ast->explicit_type_args, tc->type_params);
   if (!resolved_args)
     return ast->set_type(Type::Poisoned());
-  auto &[tc_bindings, concrete_types_str] = *resolved_args;
+  auto &[tc_bindings, tc_type_args] = *resolved_args;
 
-  std::vector<Type> tc_type_args;
-  for (auto &tp : tc.type_params)
-    tc_type_args.push_back(tc_bindings.at(tp));
-  auto inst_it = type_class_instances.find(
-      TypeClassKey{class_name, tc_type_args});
-  if (inst_it == type_class_instances.end()) {
+  MonomorphizedKey tc_key{class_name, tc_type_args};
+  if (!type_class_instances.contains(tc_key)) {
     add_error(ast->get_location(),
               fmt::format("No instance of {}<{}>", class_name,
-                          concrete_types_str));
+                          tc_key.type_args_string()));
     return ast->set_type(Type::Poisoned());
   }
 
   PrototypeAST *method_proto = nullptr;
-  for (auto *p : tc.methods) {
+  for (auto &p : tc->methods) {
     if (p->functionName.mangled() == method_name) {
-      method_proto = p;
+      method_proto = p.get();
       break;
     }
   }
@@ -365,8 +360,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
-  props_.call(ast->id()).resolved_name =
-      inst_it->second.method_mangled_names[method_name];
+  props_.call(ast->id()).resolved_name = tc_key.to_typeclass_name(method_name);
   props_.call(ast->id()).is_typeclass_call = true;
 
   auto return_type = func_type.get_return_type();
@@ -492,15 +486,12 @@ Type BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
     }
   }
 
-  std::string type_args = "<";
-  for (size_t i = 0; i < generic_def->Prototype->type_params.size(); i++) {
-    if (i > 0) type_args += ", ";
-    type_args += bindings[generic_def->Prototype->type_params[i]].to_string();
-  }
-  type_args += ">";
+  auto key = MonomorphizedKey::from_bindings(
+      ast->functionName.mangled(),
+      generic_def->Prototype->type_params, bindings);
 
   props_.call(ast->id()).resolved_name =
-      sammine_util::MonomorphizedName::generic(ast->functionName, type_args);
+      key.to_generic_name(ast->functionName);
   props_.call(ast->id()).type_bindings = bindings;
   props_.call(ast->id()).callee_func_type = generic_type;
 
@@ -707,9 +698,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   auto it = op_to_class.find(ast->Op->tok_type);
   if (it != op_to_class.end()) {
     auto &[class_name, method_name] = it->second;
-    auto inst_it = type_class_instances.find(
-        TypeClassKey{class_name, {lhs_type}});
-    if (inst_it == type_class_instances.end()) {
+    MonomorphizedKey tc_key{class_name, {lhs_type}};
+    if (!type_class_instances.contains(tc_key)) {
       add_error(ast->Op->get_location(),
                 fmt::format("No instance of {}<{}> — cannot use '{}' on this "
                             "type",
@@ -717,9 +707,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                             ast->Op->lexeme));
       return ast->set_type(Type::Poisoned());
     }
-    auto method_it = inst_it->second.method_mangled_names.find(method_name);
-    if (method_it != inst_it->second.method_mangled_names.end())
-      props_.binary(ast->id()).resolved_op_method = method_it->second;
+    props_.binary(ast->id()).resolved_op_method =
+        tc_key.to_typeclass_name(method_name);
     return ast->set_type(lhs_type);
   }
 
@@ -1205,26 +1194,15 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
         return ast->set_type(Type::Poisoned());
       }
 
-      TypeBindings bindings;
-      std::string type_args_str = "<";
-      bool ok = true;
-      for (size_t i = 0; i < ast->explicit_type_args.size(); i++) {
-        auto resolved = resolve_type_expr(ast->explicit_type_args[i].get());
-        if (resolved.is_poisoned()) { ok = false; break; }
-        bindings[generic_def->type_params[i]] = resolved;
-        if (i > 0) type_args_str += ", ";
-        type_args_str += resolved.to_string();
-      }
-      type_args_str += ">";
-
-      auto mono = sammine_util::MonomorphizedName::generic(
-          generic_def->struct_name, type_args_str);
-      auto mangled = mono.mangled();
-
-      if (ok) {
-        monomorphizer.instantiate_struct(generic_def, mono, bindings)
+      auto resolved = resolve_explicit_type_args(
+          ast->explicit_type_args, generic_def->type_params);
+      if (resolved) {
+        auto &[bindings, type_args] = *resolved;
+        MonomorphizedKey key{generic_def->struct_name.mangled(), type_args};
+        monomorphizer.instantiate_struct(generic_def, key, bindings)
             ->accept_vis(this);
-        type_opt = get_typename_type(mangled);
+        type_opt = get_typename_type(
+            key.to_generic_name(generic_def->struct_name).mangled());
       }
     }
   }

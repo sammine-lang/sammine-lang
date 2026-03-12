@@ -49,15 +49,16 @@ StructDefAST *Monomorphizer::find_generic_struct(const std::string &mangled) {
 FuncDefAST *
 Monomorphizer::try_instantiate_func(
     FuncDefAST *generic,
-    const sammine_util::MonomorphizedName &mono,
+    const MonomorphizedKey &key,
     const TypeBindings &bindings) {
-  auto mangled = mono.mangled();
-  if (instantiated_functions_.contains(mangled))
+  if (instantiated_functions_.contains(key))
     return nullptr;
 
-  auto cloned = clone_func(generic, mono, bindings);
+  auto new_name = key.to_generic_name(generic->Prototype->functionName)
+                      .to_qualified_name();
+  auto cloned = clone_func(generic, new_name, bindings);
   auto *ptr = cloned.get();
-  instantiated_functions_.insert(mangled);
+  instantiated_functions_.insert(key);
   monomorphized_defs.push_back(std::move(cloned));
   return ptr;
 }
@@ -65,9 +66,10 @@ Monomorphizer::try_instantiate_func(
 EnumDefAST *
 Monomorphizer::instantiate_enum(
     EnumDefAST *generic,
-    const sammine_util::MonomorphizedName &mono,
+    const MonomorphizedKey &key,
     const TypeBindings &bindings) {
-  auto cloned = clone_enum(generic, mono, bindings);
+  auto new_name = key.to_generic_name(generic->enum_name).to_qualified_name();
+  auto cloned = clone_enum(generic, new_name, bindings);
   auto *ptr = cloned.get();
   monomorphized_enum_defs.push_back(std::move(cloned));
   return ptr;
@@ -76,9 +78,10 @@ Monomorphizer::instantiate_enum(
 StructDefAST *
 Monomorphizer::instantiate_struct(
     StructDefAST *generic,
-    const sammine_util::MonomorphizedName &mono,
+    const MonomorphizedKey &key,
     const TypeBindings &bindings) {
-  auto cloned = clone_struct(generic, mono, bindings);
+  auto new_name = key.to_generic_name(generic->struct_name).to_qualified_name();
+  auto cloned = clone_struct(generic, new_name, bindings);
   auto *ptr = cloned.get();
   monomorphized_struct_defs.push_back(std::move(cloned));
   return ptr;
@@ -152,13 +155,13 @@ std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
 std::unique_ptr<PrototypeAST>
 Monomorphizer::clone_prototype(
     PrototypeAST *proto,
-    const sammine_util::MonomorphizedName &mono_name) {
+    const sammine_util::QualifiedName &new_name) {
   std::vector<std::unique_ptr<TypedVarAST>> params;
   for (auto &p : proto->parameterVectors)
     params.push_back(clone_typed_var(p.get()));
 
   auto result = std::make_unique<PrototypeAST>(
-      mono_name.to_qualified_name(), proto->get_location(),
+      new_name, proto->get_location(),
       clone_type_expr(proto->return_type_expr.get()), std::move(params));
   // type_params left empty — this is a concrete instantiation
   return result;
@@ -396,10 +399,10 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
 std::unique_ptr<FuncDefAST>
 Monomorphizer::clone_func(
     FuncDefAST *generic,
-    const sammine_util::MonomorphizedName &mono_name,
+    const sammine_util::QualifiedName &new_name,
     const TypeBindings &bindings) {
   bindings_ = &bindings;
-  auto proto = clone_prototype(generic->Prototype.get(), mono_name);
+  auto proto = clone_prototype(generic->Prototype.get(), new_name);
   auto block = clone_block(generic->Block.get());
   auto result = std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
   result->set_location(generic->get_location());
@@ -410,7 +413,7 @@ Monomorphizer::clone_func(
 std::unique_ptr<EnumDefAST>
 Monomorphizer::clone_enum(
     EnumDefAST *generic,
-    const sammine_util::MonomorphizedName &mono_name,
+    const sammine_util::QualifiedName &new_name,
     const TypeBindings &bindings) {
   bindings_ = &bindings;
 
@@ -427,7 +430,7 @@ Monomorphizer::clone_enum(
   }
 
   auto result = std::make_unique<EnumDefAST>(
-      mono_name.to_qualified_name(), generic->get_location(),
+      new_name, generic->get_location(),
       std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
@@ -439,7 +442,7 @@ Monomorphizer::clone_enum(
 std::unique_ptr<StructDefAST>
 Monomorphizer::clone_struct(
     StructDefAST *generic,
-    const sammine_util::MonomorphizedName &mono_name,
+    const sammine_util::QualifiedName &new_name,
     const TypeBindings &bindings) {
   bindings_ = &bindings;
 
@@ -449,7 +452,7 @@ Monomorphizer::clone_struct(
     cloned_members.push_back(clone_typed_var(member.get()));
 
   auto result = std::make_unique<StructDefAST>(
-      mono_name.to_qualified_name(), generic->get_location(),
+      new_name, generic->get_location(),
       std::move(cloned_members));
   // type_params left empty — this is a concrete instantiation
   bindings_ = nullptr;

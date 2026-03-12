@@ -7,6 +7,7 @@
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
 #include <unordered_map>
+#include <unordered_set>
 
 //! \file BiTypeChecker.h
 //! \brief Defines the BiTypeCheckerVisitor, consist of the flow for
@@ -136,39 +137,8 @@ public:
   virtual void visit(KernelDefAST *ast) override;
 
   // Type class data structures
-  struct TypeClassInfo {
-    std::string name;
-    std::vector<std::string> type_params;
-    std::vector<PrototypeAST *> methods;
-  };
-
-  struct TypeClassInstanceInfo {
-    std::string class_name;
-    std::vector<Type> concrete_types;
-    std::unordered_map<std::string, sammine_util::MonomorphizedName>
-        method_mangled_names;
-  };
-
-  /// Structured key for typeclass instance lookup — hashes Type directly
-  /// instead of going through string construction.
-  struct TypeClassKey {
-    std::string class_name;
-    std::vector<Type> type_args;
-
-    bool operator==(const TypeClassKey &) const = default;
-  };
-  struct TypeClassKeyHash {
-    size_t operator()(const TypeClassKey &k) const {
-      size_t h = std::hash<std::string>{}(k.class_name);
-      std::hash<Type> th;
-      for (auto &t : k.type_args)
-        hash_combine(h, th(t));
-      return h;
-    }
-  };
-
-  std::unordered_map<std::string, TypeClassInfo> type_class_defs;
-  std::unordered_map<TypeClassKey, TypeClassInstanceInfo, TypeClassKeyHash>
+  std::unordered_map<std::string, TypeClassDeclAST *> type_class_defs;
+  std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash>
       type_class_instances;
   std::unordered_map<std::string, std::string> method_to_class;
 
@@ -188,10 +158,10 @@ public:
   Type synthesize_generic_call(CallExprAST *ast);
   Type synthesize_normal_call(CallExprAST *ast);
 
-  /// Resolve explicit type args against type params, producing bindings and a
-  /// comma-separated string (without angle brackets). Returns nullopt if any
-  /// type arg resolves to Poisoned. Caller must check size equality beforehand.
-  std::optional<std::pair<TypeBindings, std::string>>
+  /// Resolve explicit type args against type params, producing bindings and
+  /// the resolved types in order. Returns nullopt if any type arg resolves
+  /// to Poisoned. Caller must check size equality beforehand.
+  std::optional<std::pair<TypeBindings, std::vector<Type>>>
   resolve_explicit_type_args(
       const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
       const std::vector<std::string> &type_params);
@@ -347,7 +317,7 @@ public:
 
       // Resolve type arguments
       TypeBindings bindings;
-      std::string type_args = "<";
+      std::vector<Type> resolved_type_args;
       bool has_unresolved_type_param = false;
       for (size_t i = 0; i < gen->type_args.size(); i++) {
         auto resolved = resolve_type_expr(gen->type_args[i].get());
@@ -356,13 +326,10 @@ public:
         if (resolved.type_kind == TypeKind::TypeParam)
           has_unresolved_type_param = true;
         bindings[param_names[i]] = resolved;
-        if (i > 0)
-          type_args += ", ";
-        type_args += resolved.to_string();
+        resolved_type_args.push_back(resolved);
       }
-      type_args += ">";
-      auto mono =
-          sammine_util::MonomorphizedName::generic(gen->base_name, type_args);
+      MonomorphizedKey key{gen->base_name.mangled(), resolved_type_args};
+      auto mono = key.to_generic_name(gen->base_name);
       auto mangled = mono.mangled();
 
       // If type args contain unresolved type params (e.g. Vec<T> inside
@@ -404,10 +371,10 @@ public:
 
       // Not yet instantiated — clone + type-check
       if (is_enum)
-        monomorphizer.instantiate_enum(enum_def, mono, bindings)
+        monomorphizer.instantiate_enum(enum_def, key, bindings)
             ->accept_vis(this);
       else
-        monomorphizer.instantiate_struct(struct_def, mono, bindings)
+        monomorphizer.instantiate_struct(struct_def, key, bindings)
             ->accept_vis(this);
 
       auto result = this->get_typename_type(mangled);

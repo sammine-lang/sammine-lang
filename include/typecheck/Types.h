@@ -1,4 +1,5 @@
 #pragma once
+#include "util/MonomorphizedName.h"
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include <array>
@@ -462,11 +463,72 @@ inline void hash_combine(size_t &seed, size_t h) {
   seed ^= h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
+/// Hashes TypeKind + TypeData only, consistent with operator==.
+/// Mutability and linearity are intentionally excluded: they are qualifiers on
+/// bindings/pointers, not part of type identity. There is no "mut i32" type —
+/// mutability lives on the variable. Linear vs non-linear pointers generate
+/// identical code structurally, so e.g. identity<ptr<i32>> and
+/// identity<'ptr<i32>> are the same monomorphization.
 namespace std {
 template <> struct hash<Type> {
   size_t operator()(const Type &t) const;
 };
 } // namespace std
+
+/// Structured key for maps that associate a name with concrete type arguments.
+/// Used for typeclass instance lookup, monomorphization dedup, etc.
+/// Provides methods to produce strings (for codegen symbols / error messages)
+/// so that all type-to-string formatting goes through one place.
+struct MonomorphizedKey {
+  std::string name;
+  std::vector<Type> type_args;
+  bool operator==(const MonomorphizedKey &) const = default;
+
+  /// Build from type param names + bindings (extracts concrete types in order).
+  static MonomorphizedKey from_bindings(
+      const std::string &name,
+      const std::vector<std::string> &type_params,
+      const std::unordered_map<std::string, Type> &bindings) {
+    std::vector<Type> args;
+    for (auto &tp : type_params)
+      args.push_back(bindings.at(tp));
+    return {name, std::move(args)};
+  }
+
+  /// "i32, f64" — comma-separated, no brackets. For error messages and
+  /// MonomorphizedName construction.
+  std::string type_args_string() const {
+    std::string result;
+    for (size_t i = 0; i < type_args.size(); i++) {
+      if (i > 0) result += ", ";
+      result += type_args[i].to_string();
+    }
+    return result;
+  }
+
+  /// Produce a MonomorphizedName for generic functions/enums/structs.
+  sammine_util::MonomorphizedName
+  to_generic_name(const sammine_util::QualifiedName &base) const {
+    return sammine_util::MonomorphizedName::generic(
+        base, "<" + type_args_string() + ">");
+  }
+
+  /// Produce a MonomorphizedName for typeclass instance methods.
+  sammine_util::MonomorphizedName
+  to_typeclass_name(const std::string &method) const {
+    return sammine_util::MonomorphizedName::typeclass(
+        name, type_args_string(), method);
+  }
+};
+struct MonomorphizedKeyHash {
+  size_t operator()(const MonomorphizedKey &k) const {
+    size_t h = std::hash<std::string>{}(k.name);
+    std::hash<Type> th;
+    for (auto &t : k.type_args)
+      hash_combine(h, th(t));
+    return h;
+  }
+};
 
 using TypeBindings = std::unordered_map<std::string, Type>;
 

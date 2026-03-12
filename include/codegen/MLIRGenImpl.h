@@ -71,8 +71,10 @@ public:
   int strCounter = 0;
   int constArrayCounter = 0;
 
-  std::map<std::string, mlir::LLVM::LLVMStructType> structTypes;
-  std::map<std::string, mlir::LLVM::LLVMStructType> enumTypes;
+  std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
+      structTypes;
+  std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
+      enumTypes;
 
   mlir::LLVM::LLVMStructType closureType;
   std::map<std::string, std::string> closureWrappers;
