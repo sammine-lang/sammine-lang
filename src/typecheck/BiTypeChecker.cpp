@@ -438,7 +438,7 @@ void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
           fmt::format("note: '{}' has signature: {}",
                       ast->functionName.with_alias().mangled(),
                       cp.callee_func_type->to_string()));
-    } else if (ast->arguments[i]->get_type().is_polymorphic_numeric()) {
+    } else {
       resolve_literal_type(ast->arguments[i].get(), params[i]);
     }
   }

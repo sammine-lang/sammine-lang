@@ -409,6 +409,19 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
     }
     return;
   }
+  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(expr)) {
+    if (target.type_kind == TypeKind::Struct) {
+      auto &st = std::get<StructType>(target.type_data);
+      for (size_t i = 0; i < sl->field_names.size(); i++) {
+        auto idx = st.get_field_index(sl->field_names[i]);
+        if (idx.has_value())
+          resolve_literal_type(sl->field_values[i].get(),
+                               st.get_field_type(idx.value()));
+      }
+      expr->set_type(target);
+    }
+    return;
+  }
 
   // Scalar polymorphic literals
   if (!expr->get_type().is_polymorphic_numeric())

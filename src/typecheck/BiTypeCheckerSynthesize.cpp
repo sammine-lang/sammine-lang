@@ -434,9 +434,7 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
                           call_name, mono_sig.to_string()));
           return ast->set_type(Type::Poisoned());
         }
-        if (arg_type.is_polymorphic_numeric()) {
-          resolve_literal_type(ast->arguments[i].get(), expected);
-        }
+        resolve_literal_type(ast->arguments[i].get(), expected);
       }
     }
   } else {
@@ -446,10 +444,8 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
       if (arg_type.type_kind == TypeKind::Poisoned)
         return ast->set_type(Type::Poisoned());
       // Default polymorphic literals before generic unification
-      if (arg_type.is_polymorphic_numeric()) {
-        arg_type = default_polymorphic_type(arg_type);
-        resolve_literal_type(ast->arguments[i].get(), arg_type);
-      }
+      arg_type = default_polymorphic_type(arg_type);
+      resolve_literal_type(ast->arguments[i].get(), arg_type);
       if (!unify(params[i], arg_type, bindings)) {
         auto call_name = format_generic_call_name(
             ast->functionName.with_alias(),
@@ -1220,6 +1216,7 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
         this->add_diagnostics(ast->field_values[i]->get_location(), *hint);
       return ast->set_type(Type::Poisoned());
     }
+    resolve_literal_type(ast->field_values[i].get(), expected);
   }
 
   return ast->set_type(struct_type);
