@@ -164,6 +164,15 @@ public:
   mlir::Value emitBlock(AST::BlockAST *ast);
   mlir::Value emitVarDef(AST::VarDefAST *ast);
 
+  // VarDef handlers (return non-null = handled)
+  mlir::Value emitVarDefTupleDestructure(AST::VarDefAST *ast,
+                                         mlir::Value initVal,
+                                         mlir::Location location);
+  mlir::Value emitVarDefArray(AST::VarDefAST *ast, mlir::Value initVal,
+                              mlir::Location location);
+  mlir::Value emitVarDefScalar(AST::VarDefAST *ast, mlir::Value initVal,
+                               mlir::Location location);
+
   // --- Functions/externs/closures/calls (MLIRGenFunction.cpp) ---
   void forwardDeclareFunc(AST::PrototypeAST *proto);
   void emitFunction(AST::FuncDefAST *ast);

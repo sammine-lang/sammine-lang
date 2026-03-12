@@ -891,73 +891,99 @@ mlir::Value MLIRGenImpl::emitBlock(AST::BlockAST *ast) {
   return lastVal;
 }
 
+mlir::Value MLIRGenImpl::emitVarDefTupleDestructure(AST::VarDefAST *ast,
+                                                    mlir::Value initVal,
+                                                    mlir::Location location) {
+  if (!ast->is_tuple_destructure)
+    return nullptr;
+
+  for (size_t i = 0; i < ast->destructure_vars.size(); i++) {
+    auto elemVal = mlir::LLVM::ExtractValueOp::create(
+        builder, location, initVal,
+        llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+    auto elemType = convertType(ast->destructure_vars[i]->get_type());
+    auto alloca = emitAllocaOne(elemType, location);
+    mlir::LLVM::StoreOp::create(builder, location, elemVal, alloca);
+    symbolTable.registerNameT(ast->destructure_vars[i]->name, alloca);
+  }
+  return initVal;
+}
+
+mlir::Value MLIRGenImpl::emitVarDefArray(AST::VarDefAST *ast,
+                                         mlir::Value initVal,
+                                         mlir::Location location) {
+  if (ast->get_type().type_kind != TypeKind::Array)
+    return nullptr;
+
+  // For immutable arrays with all-constant elements, emit as global constant
+  if (!ast->is_mutable) {
+    if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(
+            ast->Expression.get())) {
+      bool allConst = std::all_of(
+          arrLit->elements.begin(), arrLit->elements.end(),
+          [](const auto &e) {
+            return llvm::isa<AST::NumberExprAST>(e.get()) ||
+                   llvm::isa<AST::BoolExprAST>(e.get()) ||
+                   llvm::isa<AST::CharExprAST>(e.get());
+          });
+      if (allConst) {
+        auto globalPtr =
+            emitGlobalConstArray(arrLit, ast->get_type(), location);
+        symbolTable.registerNameT(ast->TypedVar->name, globalPtr);
+        return globalPtr;
+      }
+    }
+  }
+
+  // Mutable arrays need their own copy (alloca + load/store) so writes
+  // don't alias the source (which may be a global constant or another var).
+  if (ast->is_mutable) {
+    auto llvmArrayType =
+        mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->get_type()));
+    auto alloca = emitAllocaOne(llvmArrayType, location);
+    auto loaded =
+        mlir::LLVM::LoadOp::create(builder, location, llvmArrayType, initVal);
+    mlir::LLVM::StoreOp::create(builder, location, loaded, alloca);
+    symbolTable.registerNameT(ast->TypedVar->name, alloca);
+    return alloca;
+  }
+
+  symbolTable.registerNameT(ast->TypedVar->name, initVal);
+  return initVal;
+}
+
+mlir::Value MLIRGenImpl::emitVarDefScalar(AST::VarDefAST *ast,
+                                          mlir::Value initVal,
+                                          mlir::Location location) {
+  auto alloca = emitAllocaOne(convertType(ast->get_type()), location);
+  mlir::LLVM::StoreOp::create(builder, location, initVal, alloca);
+  symbolTable.registerNameT(ast->TypedVar->name, alloca);
+  return initVal;
+}
+
 mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
   if (in_kernel_lambda_body)
-    imm_error("Variable definitions (let bindings) not allowed in kernel lambdas",
-              ast->get_location());
+    imm_error(
+        "Variable definitions (let bindings) not allowed in kernel lambdas",
+        ast->get_location());
   auto location = loc(ast);
   mlir::Value initVal = emitExpr(ast->Expression.get());
   if (!initVal)
     return nullptr;
 
-  // Tuple destructuring: let (a, b) = expr;
-  if (ast->is_tuple_destructure) {
-    for (size_t i = 0; i < ast->destructure_vars.size(); i++) {
-      auto elemVal = mlir::LLVM::ExtractValueOp::create(
-          builder, location, initVal,
-          llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
-      auto elemType = convertType(ast->destructure_vars[i]->get_type());
-      auto alloca = emitAllocaOne(elemType, location);
-      mlir::LLVM::StoreOp::create(builder, location, elemVal, alloca);
-      symbolTable.registerNameT(ast->destructure_vars[i]->name, alloca);
-    }
-    return initVal;
+  using Handler = mlir::Value (MLIRGenImpl::*)(AST::VarDefAST *, mlir::Value,
+                                               mlir::Location);
+  static constexpr Handler handlers[] = {
+      &MLIRGenImpl::emitVarDefTupleDestructure,
+      &MLIRGenImpl::emitVarDefArray,
+      &MLIRGenImpl::emitVarDefScalar,
+  };
+
+  for (auto handler : handlers) {
+    if (auto result = (this->*handler)(ast, initVal, location))
+      return result;
   }
-
-  // Arrays: initVal is an !llvm.ptr to the source array data.
-  if (ast->get_type().type_kind == TypeKind::Array) {
-    // For immutable arrays with all-constant elements, emit as global constant
-    if (!ast->is_mutable) {
-      if (auto *arrLit = llvm::dyn_cast<AST::ArrayLiteralExprAST>(
-              ast->Expression.get())) {
-        bool allConst = std::all_of(
-            arrLit->elements.begin(), arrLit->elements.end(),
-            [](const auto &e) {
-              return llvm::isa<AST::NumberExprAST>(e.get()) ||
-                     llvm::isa<AST::BoolExprAST>(e.get()) ||
-                     llvm::isa<AST::CharExprAST>(e.get());
-            });
-        if (allConst) {
-          auto globalPtr =
-              emitGlobalConstArray(arrLit, ast->get_type(), location);
-          symbolTable.registerNameT(ast->TypedVar->name, globalPtr);
-          return globalPtr;
-        }
-      }
-    }
-
-    // Mutable arrays need their own copy (alloca + load/store) so writes
-    // don't alias the source (which may be a global constant or another var).
-    if (ast->is_mutable) {
-      auto llvmArrayType = mlir::cast<mlir::LLVM::LLVMArrayType>(
-          convertType(ast->get_type()));
-      auto alloca = emitAllocaOne(llvmArrayType, location);
-      auto loaded =
-          mlir::LLVM::LoadOp::create(builder, location, llvmArrayType, initVal);
-      mlir::LLVM::StoreOp::create(builder, location, loaded, alloca);
-      symbolTable.registerNameT(ast->TypedVar->name, alloca);
-      return alloca;
-    }
-
-    symbolTable.registerNameT(ast->TypedVar->name, initVal);
-    return initVal;
-  }
-
-  // All non-array variables: llvm.alloca + llvm.store (uniform model)
-  auto alloca = emitAllocaOne(convertType(ast->get_type()), location);
-  mlir::LLVM::StoreOp::create(builder, location, initVal, alloca);
-  symbolTable.registerNameT(ast->TypedVar->name, alloca);
-  return initVal;
+  return nullptr;
 }
 
 // ===--- Helpers ---===
