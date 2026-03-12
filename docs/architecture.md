@@ -59,7 +59,7 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `src/compiler/` | `Compiler.cpp` | Pipeline orchestration (the `Compiler` class is defined and implemented entirely in this file). |
 | `include/compiler/` | `Compiler.h` | `CompilerRunner`, `compiler_option_enum`, and `LibFormat`. |
 | `src/util/` | `Utilities.cpp`, `Logging.cpp` | File I/O, `abort()`, reporter rendering, debug logging. |
-| `include/util/` | `Utilities.h`, `LexicalContext.h`, `QualifiedName.h`, `MonomorphizedName.h`, `Logging.h`, `FileRAII.h` | Location, Reportee, Reporter, scoped symbol tables, qualified names. |
+| `include/util/` | `Utilities.h`, `LexicalContext.h`, `QualifiedName.h`, `Logging.h`, `FileRAII.h` | Location, Reportee, Reporter, scoped symbol tables, qualified names with per-part type args. |
 | `src/` | `sammine.cpp` | `main()` entry point: CLI argument parsing, invokes `CompilerRunner::run()`. |
 
 ### Test and Support Directories

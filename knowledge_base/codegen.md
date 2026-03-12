@@ -77,9 +77,9 @@ Eliminates definition-ordering constraints. Typeclass methods use mangled names 
 MLIR backend receives `const ASTProperties&` (stored as `props_` member). Node-specific decorated data is read from the side table, NOT from AST node fields:
 - `props_.call(ast->id())->callee_func_type` — resolved function type for calls
 - `props_.call(ast->id())->is_partial` — partial application detection
-- `props_.call(ast->id())->resolved_name` — `optional<MonomorphizedName>` for monomorphized/typeclass call target; use `->mangled()` for name
+- `props_.call(ast->id())->resolved_name` — `optional<QualifiedName>` for monomorphized/typeclass call target; use `->mangled()` for name
 - `props_.variable(ast->id())->is_enum_unit_variant` — enum unit variant detection
-- `props_.binary(ast->id())->resolved_op_method` — `optional<MonomorphizedName>` for operator overload target; use `->mangled()` for name
+- `props_.binary(ast->id())->resolved_op_method` — `optional<QualifiedName>` for operator overload target; use `->mangled()` for name
 - `ast->get_type()` — node type (reads from ASTProperties via static pointer)
 
 ## Operator Overloading (`resolved_op_method`)
