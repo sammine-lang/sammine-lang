@@ -192,7 +192,7 @@ std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
     if (it == type_map.end())
       break;
 
-    if (visited.find(it->second) != visited.end()) {
+    if (visited.contains(it->second)) {
       sammine_util::abort("Cycle detected in type map, ping a dev to turn this "
                           "into dedicated error");
     }
@@ -210,7 +210,7 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
       std::set(list_ancestors_of_b.begin(), list_ancestors_of_b.end());
 
   for (auto &ancestor : list_ancestors_of_a) {
-    if (set_ancestors_of_b.find(ancestor) != set_ancestors_of_b.end()) {
+    if (set_ancestors_of_b.contains(ancestor)) {
       return ancestor;
     }
   }
@@ -246,16 +246,8 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
   }
 
   // Signed/unsigned mismatch
-  bool expected_signed = expected.type_kind == TypeKind::I32_t ||
-                         expected.type_kind == TypeKind::I64_t;
-  bool expected_unsigned = expected.type_kind == TypeKind::U32_t ||
-                           expected.type_kind == TypeKind::U64_t;
-  bool actual_signed =
-      actual.type_kind == TypeKind::I32_t || actual.type_kind == TypeKind::I64_t;
-  bool actual_unsigned =
-      actual.type_kind == TypeKind::U32_t || actual.type_kind == TypeKind::U64_t;
-  if ((expected_signed && actual_unsigned) ||
-      (expected_unsigned && actual_signed)) {
+  if ((expected.is_signed() && actual.is_unsigned()) ||
+      (expected.is_unsigned() && actual.is_signed())) {
     return "note: signed and unsigned integer types cannot be mixed";
   }
 
@@ -300,7 +292,7 @@ bool TypeMapOrdering::qualifier_compatible(const Type &to,
 bool TypeMapOrdering::structurally_compatible(const Type &to,
                                                const Type &from) const {
   // Never is compatible with any type (bottom type subtyping rule)
-  if (from.type_kind == TypeKind::Never)
+  if (from.is_never())
     return true;
 
   if (to.type_kind == TypeKind::NonExistent &&

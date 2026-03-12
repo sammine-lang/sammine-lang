@@ -364,9 +364,19 @@ struct Type {
     return type_kind == TypeKind::U32_t || type_kind == TypeKind::U64_t;
   }
 
+  bool is_signed() const {
+    return type_kind == TypeKind::I32_t || type_kind == TypeKind::I64_t;
+  }
+
+  bool is_float() const {
+    return type_kind == TypeKind::F32_t || type_kind == TypeKind::F64_t ||
+           type_kind == TypeKind::Flt;
+  }
+
+  bool is_never() const { return type_kind == TypeKind::Never; }
+
   bool is_numeric() const {
-    return is_integer() || type_kind == TypeKind::F32_t ||
-           type_kind == TypeKind::F64_t || type_kind == TypeKind::Flt;
+    return is_integer() || is_float();
   }
 
   /// True for concrete scalar types valid as literal case-expression scrutinees.

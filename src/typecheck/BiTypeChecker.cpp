@@ -222,7 +222,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
     auto ft = resolve_type_expr(member->type_expr.get());
     field_names.push_back(member->name);
     field_types.push_back(ft);
-    if (ft.type_kind == TypeKind::Poisoned) {
+    if (ft.is_poisoned()) {
       ast->set_type(Type::Poisoned());
       return;
     }
@@ -316,7 +316,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     info.discriminant_value = variant.discriminant_value;
     for (auto &type_expr : variant.payload_types) {
       auto resolved = resolve_type_expr(type_expr.get());
-      if (resolved.type_kind == TypeKind::Poisoned) {
+      if (resolved.is_poisoned()) {
         ast->set_type(Type::Poisoned());
         return;
       }
@@ -373,7 +373,7 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
     return;
 
   auto resolved = resolve_type_expr(ast->type_expr.get());
-  if (resolved.type_kind == TypeKind::Poisoned) {
+  if (resolved.is_poisoned()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Cannot resolve type '{}' in type alias '{}'",

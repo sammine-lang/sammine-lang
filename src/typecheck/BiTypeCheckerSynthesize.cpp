@@ -36,7 +36,7 @@ BiTypeCheckerVisitor::resolve_explicit_type_args(
   std::vector<Type> type_args;
   for (size_t i = 0; i < explicit_type_args.size(); i++) {
     auto resolved = resolve_type_expr(explicit_type_args[i].get());
-    if (resolved.type_kind == TypeKind::Poisoned)
+    if (resolved.is_poisoned())
       return std::nullopt;
     bindings[type_params[i]] = resolved;
     type_args.push_back(resolved);
@@ -408,7 +408,7 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
 
       for (size_t i = 0; i < ast->arguments.size(); i++) {
         auto arg_type = ast->arguments[i]->accept_synthesis(this);
-        if (arg_type.type_kind == TypeKind::Poisoned) {
+        if (arg_type.is_poisoned()) {
           return ast->set_type(Type::Poisoned());
         }
         // Resolve expected type from the parameter AST with concrete bindings,
@@ -441,7 +441,7 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
     // Infer type arguments from call arguments
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto arg_type = ast->arguments[i]->accept_synthesis(this);
-      if (arg_type.type_kind == TypeKind::Poisoned)
+      if (arg_type.is_poisoned())
         return ast->set_type(Type::Poisoned());
       // Default polymorphic literals before generic unification
       arg_type = default_polymorphic_type(arg_type);
@@ -468,7 +468,7 @@ std::optional<Type> BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *a
 
     // Check all type params resolved
     for (auto &tp : generic_def->Prototype->type_params) {
-      if (bindings.find(tp) == bindings.end()) {
+      if (!bindings.contains(tp)) {
         this->add_error(
             ast->get_location(),
             fmt::format(
@@ -570,12 +570,12 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
-  if (ast->LHS->get_type().type_kind == TypeKind::Poisoned ||
-      ast->RHS->get_type().type_kind == TypeKind::Poisoned)
+  if (ast->LHS->get_type().is_poisoned() ||
+      ast->RHS->get_type().is_poisoned())
     return ast->set_type(Type::Poisoned());
 
-  if (ast->LHS->get_type().type_kind == TypeKind::Never ||
-      ast->RHS->get_type().type_kind == TypeKind::Never)
+  if (ast->LHS->get_type().is_never() ||
+      ast->RHS->get_type().is_never())
     return ast->set_type(Type::Never());
 
   // Both operands polymorphic and same kind: keep polymorphic, skip typeclass
@@ -764,10 +764,8 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->set_type(Type::Char());
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  // Check if the name exists in type scope before looking it up
-  // (recursive_get_from_name aborts on not-found)
-  if (id_to_type.recursiveQueryName(ast->variableName) == nameFound) {
-    ast->set_type(id_to_type.recursive_get_from_name(ast->variableName));
+  if (auto ty = id_to_type.recursive_try_get(ast->variableName)) {
+    ast->set_type(*ty);
   } else {
     // Try zero-payload enum variant (e.g., None, Red)
     auto it = variant_constructors.find(ast->variableName);
@@ -804,7 +802,7 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
 
   for (auto &stmt : ast->Statements) {
     auto stmt_type = stmt->accept_synthesis(this);
-    if (stmt_type.type_kind == TypeKind::Never) {
+    if (stmt_type.is_never()) {
       return ast->set_type(Type::Never());
     }
   }
@@ -835,16 +833,15 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
   auto else_type = ast->elseBlockAST->accept_synthesis(this);
 
   // If both branches have type Never, the if has type Never
-  if (then_type.type_kind == TypeKind::Never &&
-      else_type.type_kind == TypeKind::Never) {
+  if (then_type.is_never() && else_type.is_never()) {
     return ast->set_type(Type::Never());
   }
 
   // If one branch has type Never, the if has the type of the other branch
-  if (then_type.type_kind == TypeKind::Never) {
+  if (then_type.is_never()) {
     return ast->set_type(else_type);
   }
-  if (else_type.type_kind == TypeKind::Never) {
+  if (else_type.is_never()) {
     return ast->set_type(then_type);
   }
 
@@ -912,7 +909,7 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
 
   // Resolve the element type from alloc<T>
   auto element_type = resolve_type_expr(ast->type_arg.get());
-  if (element_type.type_kind == TypeKind::Poisoned)
+  if (element_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
   // The count operand must be an integer
@@ -1227,7 +1224,7 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
     return ast->get_type();
 
   auto obj_type = ast->object_expr->accept_synthesis(this);
-  if (obj_type.type_kind == TypeKind::Poisoned)
+  if (obj_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
   if (obj_type.type_kind != TypeKind::Struct) {
@@ -1340,14 +1337,14 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
 Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
                                                  KernelMapExprAST *map_expr) {
   // 1. Look up input array in scope
-  if (id_to_type.top().recursiveQueryName(map_expr->input_name) == nameNotFound) {
+  auto input_type_opt = id_to_type.recursive_try_get(map_expr->input_name);
+  if (!input_type_opt) {
     this->add_error(map_expr->get_location(),
                     fmt::format("Unknown variable '{}' in kernel map",
                                 map_expr->input_name));
     return Type::Poisoned();
   }
-  auto input_type =
-      id_to_type.top().recursive_get_from_name(map_expr->input_name);
+  auto input_type = *input_type_opt;
 
   // 2. Verify it's an Array type
   if (input_type.type_kind != TypeKind::Array) {
@@ -1435,15 +1432,14 @@ Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
 Type BiTypeCheckerVisitor::synthesize_kernel_reduce(
     KernelDefAST *kd, KernelReduceExprAST *reduce_expr) {
   // 1. Look up input array in scope
-  if (id_to_type.top().recursiveQueryName(reduce_expr->input_name) ==
-      nameNotFound) {
+  auto input_type_opt = id_to_type.recursive_try_get(reduce_expr->input_name);
+  if (!input_type_opt) {
     this->add_error(reduce_expr->get_location(),
                     fmt::format("Unknown variable '{}' in kernel reduce",
                                 reduce_expr->input_name));
     return Type::Poisoned();
   }
-  auto input_type =
-      id_to_type.top().recursive_get_from_name(reduce_expr->input_name);
+  auto input_type = *input_type_opt;
 
   // 2. Verify Array type and extract element type
   if (input_type.type_kind != TypeKind::Array) {
@@ -1469,16 +1465,8 @@ Type BiTypeCheckerVisitor::synthesize_kernel_reduce(
     return Type::Poisoned();
   }
 
-  // 4. Verify element type is numeric
-  switch (elem_type.type_kind) {
-  case TypeKind::I32_t:
-  case TypeKind::I64_t:
-  case TypeKind::U32_t:
-  case TypeKind::U64_t:
-  case TypeKind::F64_t:
-  case TypeKind::F32_t:
-    break;
-  default:
+  // 4. Verify element type is numeric (concrete, not polymorphic)
+  if (!elem_type.is_numeric() || elem_type.is_polymorphic_numeric()) {
     this->add_error(
         reduce_expr->get_location(),
         fmt::format("Kernel reduce requires a numeric array element type, "
@@ -1523,7 +1511,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
 
   // 1. Synthesize scrutinee
   auto scrutinee_type = ast->scrutinee->accept_synthesis(this);
-  if (scrutinee_type.type_kind == TypeKind::Poisoned)
+  if (scrutinee_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
   // 2. Detect mode: literal vs enum
@@ -1552,9 +1540,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     }
 
     // Reject float scrutinees
-    if (scrutinee_type.type_kind == TypeKind::F32_t ||
-        scrutinee_type.type_kind == TypeKind::F64_t ||
-        scrutinee_type.type_kind == TypeKind::Flt) {
+    if (scrutinee_type.is_float()) {
       this->add_error(ast->scrutinee->get_location(),
                       fmt::format("Float types cannot be used in literal case "
                                   "patterns (float equality is unreliable), got {}",
@@ -1748,9 +1734,9 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     exit_new_scope();
 
     // Unify with result type
-    if (result_type.type_kind == TypeKind::Never) {
+    if (result_type.is_never()) {
       result_type = arm_type;
-    } else if (arm_type.type_kind != TypeKind::Never &&
+    } else if (!arm_type.is_never() &&
                arm_type != result_type) {
       if (type_map_ordering.structurally_compatible(result_type, arm_type)) {
         // arm_type is compatible with result_type, keep result_type
