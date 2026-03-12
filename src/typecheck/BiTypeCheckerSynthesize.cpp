@@ -666,11 +666,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
 
   // Bitwise operators: valid on integer types and integer-backed enums
   if (ast->Op->is_bitwise()) {
-    bool valid = lhs_type.type_kind == TypeKind::I32_t ||
-                 lhs_type.type_kind == TypeKind::I64_t ||
-                 lhs_type.type_kind == TypeKind::U32_t ||
-                 lhs_type.type_kind == TypeKind::U64_t ||
-                 lhs_type.type_kind == TypeKind::Integer;
+    bool valid = lhs_type.is_integer();
     if (!valid && lhs_type.type_kind == TypeKind::Enum) {
       auto &et = std::get<EnumType>(lhs_type.type_data);
       valid = et.is_integer_backed();
@@ -925,11 +921,7 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
 
   // The count operand must be an integer
   auto count_type = ast->operand->accept_synthesis(this);
-  if (count_type.type_kind != TypeKind::I32_t &&
-      count_type.type_kind != TypeKind::I64_t &&
-      count_type.type_kind != TypeKind::U32_t &&
-      count_type.type_kind != TypeKind::U64_t &&
-      count_type.type_kind != TypeKind::Integer) {
+  if (!count_type.is_integer()) {
     this->add_error(ast->operand->get_location(),
                     fmt::format("alloc count must be an integer, got '{}'",
                                 count_type.to_string()));
@@ -987,20 +979,13 @@ Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
   auto end_type = ast->end->accept_synthesis(this);
 
   // Check that both sides are integer types or polymorphic Integer
-  // Valid TypeKinds: I32_t, I64_t, U32_t, U64_t, Integer (polymorphic)
-  auto is_int = [](const Type &t) {
-    return t.type_kind == TypeKind::I32_t || t.type_kind == TypeKind::I64_t ||
-           t.type_kind == TypeKind::U32_t || t.type_kind == TypeKind::U64_t ||
-           t.type_kind == TypeKind::Integer;
-  };
-
-  if (!is_int(start_type)) {
+  if (!start_type.is_integer()) {
     this->add_error(ast->start->get_location(),
                     fmt::format("Range start must be an integer type, got {}",
                                 start_type.to_string()));
     return ast->set_type(Type::Poisoned());
   }
-  if (!is_int(end_type)) {
+  if (!end_type.is_integer()) {
     this->add_error(ast->end->get_location(),
                     fmt::format("Range end must be an integer type, got {}",
                                 end_type.to_string()));
@@ -1049,10 +1034,7 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     resolve_literal_type(ast->index_expr.get(), Type::I32_t());
     idx_type = Type::I32_t();
   }
-  if (idx_type.type_kind != TypeKind::I32_t &&
-      idx_type.type_kind != TypeKind::I64_t &&
-      idx_type.type_kind != TypeKind::U32_t &&
-      idx_type.type_kind != TypeKind::U64_t) {
+  if (!idx_type.is_integer()) {
     this->add_error(ast->get_location(),
                     fmt::format("Index must be integer type, got '{}'",
                                 idx_type.to_string()));
@@ -1133,20 +1115,14 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
     return ast->get_type();
 
   auto operand_type = ast->operand->accept_synthesis(this);
-  if (operand_type.type_kind == TypeKind::U32_t ||
-      operand_type.type_kind == TypeKind::U64_t) {
+  if (operand_type.is_unsigned()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Cannot negate unsigned type '{}'",
                     operand_type.to_string()));
     return ast->set_type(Type::Poisoned());
   }
-  if (operand_type.type_kind != TypeKind::I32_t &&
-      operand_type.type_kind != TypeKind::I64_t &&
-      operand_type.type_kind != TypeKind::F64_t &&
-      operand_type.type_kind != TypeKind::F32_t &&
-      operand_type.type_kind != TypeKind::Integer &&
-      operand_type.type_kind != TypeKind::Flt) {
+  if (!operand_type.is_numeric()) {
     this->add_error(ast->get_location(),
                     fmt::format("Cannot negate non-numeric type '{}'",
                                 operand_type.to_string()));

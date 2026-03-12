@@ -354,6 +354,21 @@ struct Type {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
 
+  bool is_integer() const {
+    return type_kind == TypeKind::I32_t || type_kind == TypeKind::I64_t ||
+           type_kind == TypeKind::U32_t || type_kind == TypeKind::U64_t ||
+           type_kind == TypeKind::Integer;
+  }
+
+  bool is_unsigned() const {
+    return type_kind == TypeKind::U32_t || type_kind == TypeKind::U64_t;
+  }
+
+  bool is_numeric() const {
+    return is_integer() || type_kind == TypeKind::F32_t ||
+           type_kind == TypeKind::F64_t || type_kind == TypeKind::Flt;
+  }
+
   /// True for concrete scalar types valid as literal case-expression scrutinees.
   /// Excludes floats (equality is unreliable) and polymorphic types (must be
   /// resolved first).
