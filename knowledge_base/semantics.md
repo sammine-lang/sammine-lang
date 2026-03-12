@@ -17,13 +17,21 @@ First semantic pass — builds lexical symbol table, validates all referenced na
 
 ### Key Methods
 
-**`preorder_walk(ProgramAST*)`** — Registers top-level defs (functions, externs, structs, enums). Detects duplicate names with `[SCOPE]` error pointing to both locations; import conflicts name the source module. For each enum variant not yet in scope, registers it and adds to `variant_to_enum`. Skips `TypeClassDeclAST`/`TypeClassInstanceAST`.
+**`preorder_walk(ProgramAST*)`** — Registers top-level defs (functions, externs, structs, enums, type aliases, kernels). Detects duplicate names with `[SCOPE]` error pointing to both locations; import conflicts name the source module. For each enum variant, always adds to `variant_to_enum`; only registers in scope if not already there. Skips `TypeClassDeclAST`/`TypeClassInstanceAST`.
 
 **`preorder_walk(VarDefAST*)`** — Registers local variable; errors on redefinition. For tuple destructuring (`is_tuple_destructure`), registers each var in `destructure_vars` instead. Allows shadowing in destructuring (needed for linear deref rebinding patterns).
 
 **`preorder_walk(PrototypeAST*)`** — Registers function name in **parent** scope (via `register_name_parent()`/`can_see_parent()`) so it's visible at call-site level, not inside its own body. Registers each parameter in current scope; errors on duplicate params.
 
 **`visit(ExternAST*)`** — Custom override: uses `enter_new_scope()`/`exit_new_scope()` (pushes ASTContext + scope stack), walks extern, visits prototype.
+
+**`preorder_walk(CallExprAST*)`** — Qualifies explicit type args for imported generic bodies via `qualify_type_expr()`. Runs before `postorder_walk(CallExprAST*)`.
+
+**`preorder_walk(AllocExprAST*)`** — Qualifies the `type_arg` of alloc expressions in imported definitions via `qualify_type_expr()`.
+
+**`preorder_walk(TypedVarAST*)`** — Qualifies the `type_expr` of typed variables in imported definitions via `qualify_type_expr()`.
+
+**`postorder_walk(StructLiteralExprAST*)`** — Qualifies `struct_name` in imported definitions: if unqualified but the module-qualified version exists in scope, rewrites to qualified form.
 
 **`postorder_walk(CallExprAST*)`** — Skips calls with `explicit_type_args` (typeclass calls like `sizeof<i32>()` — resolved by type checker). Unresolved qualified names (e.g. `mod::func`): checks if module prefix (`get_module()`) is in scope, else emits "Module 'X' is not imported". **Unqualified enum variant rewrite**: looks up `functionName.get_name()` in `variant_to_enum`; if found, rewrites to qualified form (e.g. `Red(1)` → `Color::Red(1)`). Normal lookup via `can_see()` (recursive, includes current scope) — finds both top-level functions and function-typed params. Qualified names with known qualifier prefix (`get_qualifier()`) are allowed through (deferred to type checker). For 3-part names like `module::enum::variant`, `get_qualifier()` returns `"module::enum"` which is the registered enum name in scope.
 
@@ -52,7 +60,7 @@ Second semantic pass — enforces reserved identifier rules, inserts implicit re
 
 **`check_reserved_identifier(name, loc)`** — Rejects names containing `__` (reserved for C interop mangling); suggests single `_`.
 
-Checked in `preorder_walk` for: `FuncDefAST` (function name), `VarDefAST` (variable name — handles destructuring vars individually), `StructDefAST` (struct name), `EnumDefAST` (enum name).
+Checked in `preorder_walk` for: `FuncDefAST` (function name), `VarDefAST` (variable name — handles destructuring vars individually), `StructDefAST` (struct name), `EnumDefAST` (enum name), `TypeAliasDefAST` (alias name).
 
 ### Implicit Return Insertion
 

@@ -95,11 +95,34 @@ Post-parse semantic attributes (types, resolution flags) live in an external `AS
 - **Unit variants** (`synthesize(VariableExprAST*)`): name not in `id_to_type` → try `variant_constructors`; empty payload → `is_enum_unit_variant`; has payload → abort
 - **Generic enums**: `generic_enum_defs` → instantiated via `Monomorphizer::instantiate_enum()` → tracked in `instantiated_enums`/`monomorphized_enum_defs`
 
+### Integer-Backed Enums
+Integer-backed enums have an explicit backing integer type and explicit discriminant values for all variants.
+
+- **Backing type validation**: only `i32`, `i64`, `u32`, `u64` are accepted. Other types → error. Default is `i32`.
+- **Discriminant uniqueness**: every variant must have a `discriminant_value`; duplicates → error (`"duplicate discriminant value N on variant 'V'"`).
+- **No mixing with payloads**: a variant with a discriminant value cannot also have type payloads → error (`"cannot have both a discriminant value and type payloads"`).
+- **Type lattice**: `visit(EnumDefAST*)` adds an edge `enum_type → backing_type` in `type_map_ordering.type_map`, enabling implicit conversion from the enum to its backing integer type.
+- **Bitwise operators**: integer-backed enums support bitwise operators (`&`, `|`, `^`, `<<`, `>>`) — see Bitwise Operators section below.
+
 ## Case Expressions / Pattern Matching
+
+### Enum Mode
 - Scrutinee must be enum. Each arm opens new scope with payload bindings in `id_to_type`.
 - Wildcard `_` matches any variant; non-wildcard: `et.get_variant_index()` → validate binding count → set `variant_index`
 - **Arm type unification**: starts `Never`; adopt first non-Never; skip Never arms; `compatible_to_from` bidirectional (same as `IfExprAST`)
 - **Exhaustiveness**: all variants covered or wildcard present; reports missing names
+
+### Literal Mode
+Literal case expressions match integer, bool, or char values against literal patterns.
+
+- **Supported scrutinee types**: integer (`i32`/`i64`/`u32`/`u64`), `bool`, `char`. Polymorphic `Integer` is defaulted to `i32`.
+- **Float rejection**: float scrutinees (`f32`/`f64`) are rejected with `"float equality is unreliable"` error.
+- **Pattern-scrutinee agreement**: each literal pattern's `LiteralKind` must match the scrutinee type (e.g. `Bool` patterns for `bool` scrutinee, `Integer` patterns for integer scrutinee, `Char` patterns for `char` scrutinee).
+- **Duplicate detection**: literal values tracked in a `set<string>`; duplicate → error (`"Duplicate literal pattern 'V'"`).
+- **Exhaustiveness rules**:
+  - `bool`: exhaustive if both `true` and `false` are covered, OR a wildcard `_` is present.
+  - `i32`/`i64`/`u32`/`u64`/`char`: a wildcard `_` pattern is always required (finite enumeration impractical).
+- **No mixing**: literal and enum variant patterns cannot coexist in the same case expression.
 
 ## While Expressions
 Condition must be `bool` (skip if `Poisoned`), result always `unit`.
@@ -108,13 +131,84 @@ Condition must be `bool` (skip if `Poisoned`), result always `unit`.
 
 | Op | Method | Built-in instances |
 |---|---|---|
-| `+` | `Add::add` | i32, i64, u32, u64, f64, f32, char |
+| `+` | `Add::add` | i32, i64, u32, u64, f64, f32 |
 | `-` | `Sub::sub` | i32, i64, u32, u64, f64, f32 |
 | `*` | `Mul::mul` | i32, i64, u32, u64, f64, f32 |
 | `/` | `Div::div` | i32, i64, u32, u64, f64, f32 |
 | `%` | `Mod::mod` | i32, i64, u32, u64 |
 
 `synthesize_binary_operator()`: lookup instance key `ClassName<lhs_type>` (e.g. `Add<i32>`) in `type_class_instances` → set `resolved_op_method` as `QualifiedName` (e.g. `Add<i32>::add`) → return `lhs_type`. Built-in instances have no source bodies — codegen emits inline ops.
+
+## Comparison Operators
+- Comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) always return `Bool`.
+- **Array/Pointer restriction**: only `==` and `!=` are allowed on `Array` and `Pointer` types; other comparison operators (`<`, `>`, etc.) → error + `Poisoned`.
+
+## Assignment Operator (`=`)
+- Returns `Unit` type (not the assigned value).
+- Checks mutability on the LHS:
+  - `VariableExprAST`: variable must be mutable (`is_mutable_v()`) — otherwise error `"Cannot reassign immutable variable"`.
+  - `IndexExprAST`: the underlying array variable must be mutable — otherwise error `"Cannot write to index of immutable array"`.
+
+## Logical Operators (`&&`, `||`)
+- Return the LHS type (NOT `Bool`). This is the current behavior in `synthesize_binary_operator()`.
+- No typeclass dispatch; handled as a special case before arithmetic dispatch.
+
+## Bitwise Operators (`&`, `|`, `^`, `<<`, `>>`)
+- Valid on integer types (`i32`, `i64`, `u32`, `u64`) and integer-backed enums.
+- Validation: `lhs_type.is_integer()` OR `lhs_type` is `Enum` with `is_integer_backed()`.
+- Invalid types → error `"Bitwise operator 'OP' is not valid on type 'T'"`.
+- Return type: the operand type (LHS type).
+
+## Unary Negation (`-`)
+- Rejects unsigned types (`u32`, `u64`) — `is_unsigned()` → error `"Cannot negate unsigned type"`.
+- Rejects non-numeric types → error `"Cannot negate non-numeric type"`.
+- Returns the operand type.
+
+## Indexing and Array Operations
+
+### Array Indexing (`arr[i]`)
+- Index must be an integer type. Polymorphic `Integer` literals are resolved to `i32`.
+- Returns the array element type.
+- **Static bounds checking**: if the index is a `NumberExprAST` (compile-time constant), validates `0 <= idx < size`; out-of-bounds → error.
+
+### Pointer Indexing (`ptr<T>[i]`)
+- Index must be an integer type.
+- Returns the pointee type `T` (i.e. `ptr<T>[i] → T`).
+- No bounds checking (pointers have no static size).
+
+### `len(arr)` → `i32`
+- Operand must be an `Array` type.
+- Returns `i32` (the static array size as a constant).
+
+### `dim(arr)` → `(i32, i32, ...)`
+- Operand must be an `Array` type.
+- Walks nested array types to collect all dimensions.
+- Returns a `Tuple` of `i32` values, one per nesting level (e.g. `dim([[i32; 3]; 2])` → `(i32, i32)`).
+
+## Variadic Function Support
+- Marked via `is_var_arg` flag on `PrototypeAST` / `FunctionType`.
+- **Extern only**: variadic arguments (`...`) are only supported on `extern` declarations for C interop. Using `is_var_arg` on a `FuncDefAST` → error `"Variadic arguments ('...') are only supported on extern declarations"`.
+- **Minimum args**: variadic calls require at least N fixed parameters (where N = `params.size()`); fewer → error.
+- **No per-arg checking beyond fixed params**: `handle_normal_call_args()` skips argument type checking entirely when `func.is_var_arg()` is true.
+- Return type is taken from the function's declared return type.
+
+## Kernel Type Checking
+
+### `synthesize_kernel_map(KernelDefAST*, KernelMapExprAST*)`
+1. Look up input array in scope; must be `Array` type.
+2. Lambda must have exactly 1 parameter.
+3. Lambda parameter type must be compatible with the array element type (`compatible_to_from(param_type, elem_type)`).
+4. Lambda body is visited in a new scope with the parameter registered.
+5. Body type must match the lambda's declared return type (polymorphic numerics resolved).
+6. Result type: `Array(lambda_return_type, input_array_size)`.
+
+### `synthesize_kernel_reduce(KernelDefAST*, KernelReduceExprAST*)`
+1. Look up input array in scope; must be `Array` type.
+2. Operator must be `+`, `-`, `*`, or `/` — others rejected.
+3. Element type must be concrete numeric (not polymorphic) — `is_numeric() && !is_polymorphic_numeric()`.
+4. Identity expression is synthesized; polymorphic literals resolved to the element type.
+5. Identity type must be compatible with the element type.
+6. Result type: the array element type (scalar — the array is collapsed).
 
 ## Three-Pass Registration (`visit(ProgramAST*)`)
 1. **Types + typeclasses**: structs, enums, **type aliases**, typeclass decls/instances, builtin ops → type maps, `variant_constructors`, typeclass data. Type aliases: `resolve_type_expr()` on the alias's type expr, register result in `typename_to_type`.
@@ -183,6 +277,7 @@ Called at every `compatible_to_from` failure site in `BiTypeChecker.cpp` (5 site
 ## Edge Cases
 - **Polymorphic literal binops**: both operands polymorphic + same kind → skip dispatch, keep polymorphic. Excluded for comparison/logical ops (must return `Bool`).
 - **Compound comparison guards**: Array/Pointer only allow `==`/`!=`; others → error + `Poisoned`.
+- **String literals**: `StringExprAST` synthesizes to `ptr<char>` (pointer to char, not a `String` type).
 
 ## Adding a New Type Checklist
 1. Add to `TypeKind` enum in `Types.h`

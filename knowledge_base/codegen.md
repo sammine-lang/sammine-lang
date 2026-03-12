@@ -106,6 +106,55 @@ Binary ops (`+`,`-`,`*`,`/`,`%`) check `props_.binary(ast->id())->resolved_op_me
 - Monomorphized defs injected at **front** of `DefinitionVec` — codegen'd before call sites
 - Monomorphizer deep-clones AST with type substitution; must handle all ExprAST subtypes
 
+## Handler Dispatch Pattern
+
+Two chains use a unified `optional`-style dispatch: each handler returns non-null if it handled the case, nullptr (= "not my job") to fall through to the next.
+
+### `emitVarDef` chain (`MLIRGen.cpp`)
+```
+emitVarDefTupleDestructure → emitVarDefArray → emitVarDefScalar
+```
+- `emitVarDefTupleDestructure`: returns nullptr unless `ast->is_tuple_destructure`; extracts elements via `ExtractValueOp` into individual allocas
+- `emitVarDefArray`: returns nullptr unless `TypeKind::Array`; handles immutable const-array promotion (via `emitGlobalConstArray`), mutable copy (alloca + load/store), and immutable alias
+- `emitVarDefScalar`: unconditional fallback; alloca + store for all other types
+
+Uses `static constexpr Handler handlers[]` + loop over member function pointers.
+
+### `emitBinaryExpr` chain (`MLIRGenExpr.cpp`)
+```
+emitBinaryIntArith → emitBinaryFloatArith → emitBinaryComparison → emitBinaryEnumBitwise → emitBinaryTypeclassOp
+```
+- `emitBinaryIntArith`: returns nullptr unless `isIntegerType(ast->get_type())`; delegates to free function `emitIntArithOp` in `MLIRGenBinaryOps.cpp`
+- `emitBinaryFloatArith`: returns nullptr unless `isFloatType(ast->get_type())`; delegates to `emitFloatArithOp` in `MLIRGenBinaryOps.cpp`
+- `emitBinaryComparison`: returns nullptr unless `isBoolType(ast->get_type())`; handles int/float/bool/char/pointer/enum/array comparisons
+- `emitBinaryEnumBitwise`: returns nullptr unless result is integer-backed enum + bitwise op
+- `emitBinaryTypeclassOp`: returns nullptr unless `resolved_op_method` has value; emits `func::CallOp` to typeclass method
+
+Same `static constexpr Handler handlers[]` + loop pattern. Assignment (`TokASSIGN`) short-circuits before the chain.
+
+## `emitScalarCaseExpr` Abstraction
+
+Shared codegen for case expressions where every arm compares the scrutinee against an integer constant. Emits a cascading chain of `cmpi eq` + `cf::CondBranchOp` → arm blocks, with a merge block carrying block arguments for the result.
+
+Parameterized by a caller-supplied lambda (`ArmToComparisonConst`):
+- `emitIntegerBackedCaseExpr` passes a lambda that looks up the enum variant's discriminant value
+- `emitLiteralCaseExpr` passes a lambda that parses the source literal (e.g. `"42"` → 42, `"true"` → 1)
+
+Wildcard arms route to a default block; if no wildcard, a synthetic default emits `llvm.unreachable`.
+
+## `emitArrayComparison`
+
+Loop-based element-by-element comparison for `==` and `!=` on arrays (`MLIRGenExpr.cpp`). Uses three blocks:
+- **Header**: loop counter (index type), checks `i < size`, branches to body or exit
+- **Body**: loads `lhs[i]` and `rhs[i]` via `emitPtrArrayLoad`, compares elements (CmpIOp for int/bool, CmpFOp for float, PtrToInt for pointers), if not equal → exit(false), else increment and branch to header
+- **Exit**: block argument carries the i1 result (true = all equal)
+
+For `!=`, the result is inverted with `xori ... 1`.
+
+## `emitGlobalConstArray`
+
+Immutable arrays where all elements are literals (`NumberExprAST`, `BoolExprAST`, `CharExprAST`) are promoted to `llvm.mlir.global` constants instead of stack allocations. Uses `kConstArrayPrefix` (`.const_arr.`) + incrementing counter for names. The global's initializer region builds the array value via `PoisonOp` + `InsertValueOp` per element. Called from `emitVarDefArray` when `!is_mutable && allConst`.
+
 ## 4 Visitors to Update per New AST Node
 1. `AstPrinterVisitor` (`src/ast/AstPrinterVisitor.cpp`) — visit + pre/post stubs
 2. `BiTypeCheckerVisitor` (`src/typecheck/BiTypeChecker.cpp`) — synthesize + pre/post
@@ -118,19 +167,21 @@ Plus add `emitXxxExpr()` to `MLIRGenExpr.cpp` and `dynamic_cast` dispatch in `em
 
 ### Architecture & Files
 - Direct recursive dispatch (`emitExpr` → `dynamic_cast`), NOT visitor pattern
-- API: `mlirGen(MLIRContext&, ProgramAST*, moduleName, fileName, sourceText)` → `OwningOpRef<ModuleOp>`
+- API: `mlirGen(MLIRContext&, ProgramAST*, moduleName, fileName, sourceText, ASTProperties&)` → `MLIRGenResult{cpuModule, kernelModule}` (kernel module null if no kernel defs)
 - Lowering: `lowerMLIRToLLVMIR(ModuleOp, LLVMContext&)` → `unique_ptr<llvm::Module>`
 
 | File | Contents |
 |---|---|
 | `MLIRGenImpl.h` | Class declaration, inline helpers (`llvmPtrTy()`, `llvmVoidTy()`), named constants |
-| `MLIRGen.cpp` | `generate()`, `convertType()`, `emitVarDef()`, `emitBlock()`, `getTypeSize()`, `getOrCreateGlobalString()`, `emitAllocaOne()` |
+| `MLIRGen.cpp` | `generate()`, `convertType()`, `convertTypeForKernel()`, `emitVarDef()`, `emitBlock()`, `getTypeSize()`, `getOrCreateGlobalString()`, `emitGlobalConstArray()`, `emitAllocaOne()`, `buildMemrefFromPtr()`, kernel codegen (`emitKernelDef`, `emitKernelMapExpr`, `emitKernelReduceExpr`, `emitKernelWrapper`) |
 | `MLIRGenFunction.cpp` | `emitFunction()`, `emitExtern()`, closures, partial application, `emitCallExpr()`, `emitFuncCallAndLLVMReturn()` |
-| `MLIRGenExpr.cpp` | All expression emission (number, bool, char, string, binary, unary, if, while, array, pointer, struct, field, enum, case, tuple) |
+| `MLIRGenExpr.cpp` | All expression emission (number, bool, char, string, binary, unary, if, while, array, pointer, struct, field, enum, case, tuple, `emitScalarCaseExpr`, `emitArrayComparison`) |
+| `MLIRGenBinaryOps.h` | Free function declarations: `emitIntArithOp`, `emitFloatArithOp` |
+| `MLIRGenBinaryOps.cpp` | Free function implementations for integer arithmetic/bitwise ops (handles signed/unsigned div, rem, shifts) and float arithmetic ops; returns nullptr if token not recognized |
 | `MLIRLowering.cpp` | `lowerMLIRToLLVMIR()` pipeline |
 
 ### Named Constants (`MLIRGenImpl.h`)
-`kClosureTypeName = "sammine.closure"`, `kStructTypePrefix = "sammine.struct."`, `kWrapperPrefix = "__wrap_"`, `kPartialPrefix = "__partial_"`, `kStringPrefix = ".str."`, `kMallocFunc = "malloc"`, `kFreeFunc = "free"`, `kExitFunc = "exit"`
+`kClosureTypeName = "sammine.closure"`, `kStructTypePrefix = "sammine.struct."`, `kWrapperPrefix = "__wrap_"`, `kPartialPrefix = "__partial_"`, `kStringPrefix = ".str."`, `kConstArrayPrefix = ".const_arr."`, `kKernelPrefix = "__kernel_"`, `kMallocFunc = "malloc"`, `kFreeFunc = "free"`, `kExitFunc = "exit"`
 
 ### Dialect Mapping
 
@@ -142,6 +193,7 @@ Plus add `emitXxxExpr()` to `MLIRGenExpr.cpp` and `dynamic_cast` dispatch in `em
 | Bounds checks | `scf` (scf.if + exit) |
 | Arrays | `memref` |
 | Closures, structs, enums, strings, pointers | `llvm` |
+| Kernel tensor ops, map, reduce | `linalg`, `tensor` |
 
 ### Variable Model
 - All non-array variables: `llvm.alloca` + `llvm.store` (uniform, mutable and immutable)
@@ -181,10 +233,42 @@ Order matters: SCF → CF before CF → LLVM. (memref removed — arrays use LLV
 ### CMake
 - MLIR found via `-DMLIR_DIR=...`; Compiler.cpp loads 5 dialects: `arith`, `func`, `LLVM`, `scf`, `cf`
 - `MLIRBackend` links: `MLIRIR`, `MLIRParser`, `MLIRSupport`, `MLIRPass`, dialect + conversion libraries
+- Source files: `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenExpr.cpp`, `MLIRGenBinaryOps.cpp`, `MLIRLowering.cpp`
 
 ### Known Limitations
 - `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not yet supported
 - MLIR does not yet support module imports (IFunc creation happens at Compiler level on lowered LLVM IR)
+
+## Kernel Codegen (2-Module Architecture)
+
+### `in_kernel_lambda_body` Guard Flag
+Boolean flag on `MLIRGenImpl`, set to `true` when emitting inside a `linalg.map`/`linalg.reduce` body builder. Guards against emitting LLVM ops (`alloca`, `malloc`, `free`, `let` bindings) that are invalid inside linalg body regions — only `arith`/`math` ops are valid there. Checked in `emitAllocaOne`, `emitVarDef`, and any path that would emit LLVM dialect ops.
+
+### Kernel Type Conversion (`convertTypeForKernel`)
+Converts sammine types to MLIR types for the kernel context:
+- `Array` → `RankedTensorType` (default, `asMemref=false`) or `MemRefType` (`asMemref=true`)
+- Scalar types (`I32_t`, `I64_t`, `F32_t`, `F64_t`, `Bool`, `Char`, etc.) → same as `convertType()`
+- **Rejected types**: `Pointer`, `Function`, `String`, `Struct`, `Enum`, `Tuple` — these abort with an error ("not valid in kernel context")
+- Nested arrays not yet supported
+
+`buildKernelFuncType(proto, asMemref)` builds the full `func::FunctionType` for a kernel function using `convertTypeForKernel` for each parameter. DPS: if the return type is an array, an extra parameter is appended (tensor or memref depending on `asMemref`), and the function returns void.
+
+### Kernel Wrapper (`emitKernelWrapper`)
+The public wrapper function bridges CPU ABI types to kernel memref types:
+
+1. **Input marshalling**: For each array parameter, the wrapper receives `!llvm.ptr` (pass-by-reference). `buildMemrefFromPtr` constructs a memref descriptor (`{ allocated_ptr, aligned_ptr, offset, sizes[1], strides[1] }`) and casts it to `memref<NxT>` via `unrealized_conversion_cast`.
+2. **DPS output**: If the kernel returns an array, the sret pointer (last block argument) is wrapped as a memref and passed as the DPS output parameter. The kernel writes directly into sret — zero alloc, zero copy.
+3. **Call**: Calls `__kernel_<name>` with memref-typed arguments.
+4. **Return**: For array returns, the kernel wrote into sret; the wrapper just returns void. For scalar returns, the call result is forwarded.
+
+The wrapper is marked with `sammine.kernel_wrapper` attribute so `emitCallExpr` knows to pass array arguments as `!llvm.ptr` instead of loading by value.
+
+### `buildMemrefFromPtr`
+Constructs the LLVM struct that is the memref descriptor from a raw pointer:
+```
+{ ptr allocated, ptr aligned, i64 offset=0, [1 x i64] sizes={N}, [1 x i64] strides={1} }
+```
+Returns a `memref<NxelemType>` via `unrealized_conversion_cast` from the descriptor struct.
 
 ## Build & Test
 ```bash

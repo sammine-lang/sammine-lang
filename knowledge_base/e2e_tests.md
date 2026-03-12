@@ -65,6 +65,11 @@ Tests in `e2e-tests/compilables/` by feature. Naming: `feature_variant.mn`.
 | `type_inference/` | Type inference, numeric literal resolution |
 | `import/` | Module imports; library sources in `Inputs/` |
 | `typeclass/` | Typeclass decls & instances |
+| `io/` | I/O operations: print, println, eprint, typed printing (print_i32, print_f64, etc.), file I/O (write_file, read_file), linear file handles, stdin (read_line) |
+| `kernel/` | Kernel functions: `map` (linalg.map), `reduce` (linalg.reduce), 2-module MLIR codegen, `kernel_no_malloc` golden test (asserts 0 malloc calls via `--llvm-ir pre`) |
+| `linear/` | Linear type system: ~59 tests covering alloc/free, consumption rules, move semantics, double-use detection, use-after-move, branch consumption (if/else, while), struct/array/enum consumption, nested linear fields, scope exit leak detection, reassignment/overwrite rules. Prefix `break_` = expected-failure tests, prefix `linear_` = positive + error tests |
+| `llvm_ir/` | LLVM IR optimization verification: extractvalue patterns for array params, const-folding (immutable & mutable arrays), global constant array emission. Uses `--llvm-ir pre` or `--llvm-ir post` flag with FileCheck on IR output |
+| `vec/` | Dynamic vector type: `Vec<T>` stdlib type via `import vec`, `vec::new`, `vec::push`, `vec::delete`, capacity growth, struct elements, linear ownership enforcement (must free) |
 
 Other dirs: `error_reporting/` — error message regression tests (39 tests). `euler/` — Project Euler integration tests.
 
