@@ -742,9 +742,8 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     inst_info.method_mangled_names[original_name] = mono;
   }
 
-  auto inst_key = sammine_util::MonomorphizedName::typeclass(
-      ast->class_name, concrete_types_str, "");
-  type_class_instances[inst_key.instance_key()] = std::move(inst_info);
+  type_class_instances[TypeClassKey{ast->class_name, tcip.concrete_types}] =
+      std::move(inst_info);
 }
 
 void BiTypeCheckerVisitor::register_builtin_op_instances() {
@@ -775,17 +774,17 @@ void BiTypeCheckerVisitor::register_builtin_op_instances() {
   };
 
   for (auto &e : entries) {
-    auto mono = sammine_util::MonomorphizedName::typeclass(
-        e.class_name, e.type.to_string(), e.method_name);
-    auto key = mono.instance_key();
-    if (type_class_instances.contains(key))
+    TypeClassKey tc_key{e.class_name, {e.type}};
+    if (type_class_instances.contains(tc_key))
       continue;
 
+    auto mono = sammine_util::MonomorphizedName::typeclass(
+        e.class_name, e.type.to_string(), e.method_name);
     TypeClassInstanceInfo info;
     info.class_name = e.class_name;
     info.concrete_types = {e.type};
     info.method_mangled_names[e.method_name] = mono;
-    type_class_instances[key] = std::move(info);
+    type_class_instances[tc_key] = std::move(info);
   }
 }
 

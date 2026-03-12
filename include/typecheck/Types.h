@@ -457,6 +457,17 @@ struct Type {
 };
 
 
+/// Utility for combining hash values (boost-style).
+inline void hash_combine(size_t &seed, size_t h) {
+  seed ^= h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+
+namespace std {
+template <> struct hash<Type> {
+  size_t operator()(const Type &t) const;
+};
+} // namespace std
+
 using TypeBindings = std::unordered_map<std::string, Type>;
 
 std::optional<std::string> incompatibility_hint(const Type &expected,

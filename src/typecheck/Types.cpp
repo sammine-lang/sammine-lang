@@ -125,6 +125,65 @@ bool Type::operator==(const Type &other) const {
   return true;
 }
 
+size_t std::hash<Type>::operator()(const Type &t) const {
+  size_t h = std::hash<int>{}(static_cast<int>(t.type_kind));
+  switch (t.type_kind) {
+  // Scalars + pseudo-types: discriminant is sufficient
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+  case TypeKind::Unit:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::Never:
+  case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+  case TypeKind::Generic:
+    break;
+  case TypeKind::String:
+  case TypeKind::TypeParam:
+    hash_combine(h, std::hash<std::string>{}(std::get<std::string>(t.type_data)));
+    break;
+  case TypeKind::Pointer:
+    hash_combine(h, (*this)(std::get<PointerType>(t.type_data).get_pointee()));
+    break;
+  case TypeKind::Array: {
+    auto &at = std::get<ArrayType>(t.type_data);
+    hash_combine(h, (*this)(at.get_element()));
+    hash_combine(h, std::hash<size_t>{}(at.get_size()));
+    break;
+  }
+  // Nominal types: identity is the name
+  case TypeKind::Struct:
+    hash_combine(h, std::hash<std::string>{}(
+                        std::get<StructType>(t.type_data).get_name().mangled()));
+    break;
+  case TypeKind::Enum:
+    hash_combine(h, std::hash<std::string>{}(
+                        std::get<EnumType>(t.type_data).get_name().mangled()));
+    break;
+  case TypeKind::Function: {
+    auto &fn = std::get<FunctionType>(t.type_data);
+    for (auto &p : fn.get_params_types())
+      hash_combine(h, (*this)(p));
+    hash_combine(h, (*this)(fn.get_return_type()));
+    break;
+  }
+  case TypeKind::Tuple: {
+    auto &tt = std::get<TupleType>(t.type_data);
+    for (auto &e : tt.get_element_types())
+      hash_combine(h, (*this)(e));
+    break;
+  }
+  }
+  return h;
+}
+
 std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
   std::vector<Type> result{t};
   std::set<Type> visited{t};
