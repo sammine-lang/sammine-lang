@@ -201,8 +201,8 @@ public:
 
   /// Parse <T, U, ...> type parameter list. Returns empty if no '<' found.
   /// On parse error, returns the params parsed so far and sets \p had_error.
-  [[nodiscard]] auto parseTypeParams(Location err_loc, bool &had_error)
-      -> std::vector<std::string>;
+  [[nodiscard]] auto parseTypeParams(Location err_loc)
+      -> std::pair<std::vector<std::string>, bool>;
 
   int pending_deref = 0;
   std::shared_ptr<Token> pending_deref_tok;

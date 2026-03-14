@@ -74,12 +74,13 @@ TEST_CASE("Variable definition parsing", "[Parser]") {
   }
 
   SECTION("Variable definition with string literal expression") {
-    auto lexer = sammine_lang::Lexer("let b : blablabla = \"how aboutthis\" ");
+    auto lexer = sammine_lang::Lexer("let b : blablabla = \"how aboutthis\"; ");
     auto tokStreamPtr = lexer.getTokenStream();
     auto pg = sammine_lang::Parser(tokStreamPtr);
 
     auto programAST = pg.ParseVarDef();
 
+    REQUIRE_FALSE(pg.has_errors());
     auto varDef =
         static_cast<sammine_lang::AST::VarDefAST *>(programAST.node.get());
     REQUIRE(varDef->TypedVar->name == "b");
