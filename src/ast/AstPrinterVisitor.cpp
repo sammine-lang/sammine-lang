@@ -290,22 +290,14 @@ void AstPrinterVisitor::visit(BlockAST *ast) {
 
 void AstPrinterVisitor::generic_preprintln(AstBase *ast) {
   trim_rep();
-  if (ast->pe)
-    add_to_rep(fmt::format("{} {} \n", tabs(),
-                           ast->getTreeName() + " - !!ParserError!!"));
-  else
-    add_to_rep(fmt::format("{} {} - {}\n", tabs(), ast->getTreeName(),
-                           ast->get_type().to_string()));
+  add_to_rep(fmt::format("{} {} - {}\n", tabs(), ast->getTreeName(),
+                         ast->get_type().to_string()));
   current_tabs += tab;
 }
 void AstPrinterVisitor::generic_preprint(AstBase *ast) {
   trim_rep();
-  if (ast->pe)
-    add_to_rep(fmt::format("{} {} : ", tabs(),
-                           ast->getTreeName() + " - !!ParserError!!"));
-  else
-    add_to_rep(fmt::format("{} {} - {} : ", tabs(), ast->getTreeName(),
-                           ast->get_type().to_string()));
+  add_to_rep(fmt::format("{} {} - {} : ", tabs(), ast->getTreeName(),
+                         ast->get_type().to_string()));
   current_tabs += tab;
 }
 void AstPrinterVisitor::add_to_rep(const std::string &s) {

@@ -134,8 +134,6 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
   if (is_exported && result.node)
     result.node->is_exported = true;
 
-  if (result.failed() && result.node)
-    result.node->pe = true;
   return result;
 }
 

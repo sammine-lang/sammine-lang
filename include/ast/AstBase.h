@@ -450,23 +450,15 @@ public:
   static void reset_id_counter() { next_id_ = 0; }
   static void set_properties(ASTProperties *p) { current_props_ = p; }
   NodeKind getKind() const { return kind; }
-  bool pe = false; // parser error: set when a child is null (failed parse)
   AstBase *join_location(AstBase *ast) {
-    if (!ast)
-      pe = true;
-    else
+    if (ast)
       change_location(ast->get_location());
-
     return this;
   }
 
   AstBase *join_location(std::shared_ptr<Token> tok) {
-
-    if (!tok)
-      pe = true;
-    else
+    if (tok)
       change_location(tok->get_location());
-
     return this;
   }
 
