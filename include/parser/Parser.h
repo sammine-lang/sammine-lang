@@ -30,17 +30,6 @@ template <typename T> struct ParseResult {
   bool failed() const { return status == FAILED; }
   bool uncommitted() const { return status == NONCOMMITTED; }
 };
-#define PARSER_UNREACHABLE()                                                   \
-  do {                                                                         \
-    sammine_util::abort("Unreachable");                                        \
-    std::unreachable();                                                        \
-  } while (0)
-#define REQUIRE(var, tokType, msg, loc, ...)                                   \
-  auto var = expect(tokType);                                                  \
-  if (!(var)) {                                                                \
-    imm_error(msg, loc);                                                       \
-    return __VA_ARGS__;                                                        \
-  }
 using namespace AST;
 using namespace sammine_util;
 class Parser : public Reportee {
@@ -78,6 +67,18 @@ class Parser : public Reportee {
       imm_error(msg, loc, src);
   }
 
+  /// expect() + imm_error() in one call. Returns the token on success,
+  /// nullptr (with error reported) on failure.
+  auto expectOrError(TokenType tokType, const std::string &msg, Location loc,
+                     std::source_location src =
+                         std::source_location::current())
+      -> std::shared_ptr<Token> {
+    auto tok = expect(tokType);
+    if (!tok)
+      imm_error(msg, loc, src);
+    return tok;
+  }
+
 public:
   template <class T> using p = ParseResult<T>;
   template <class T> using u = std::unique_ptr<T>;
@@ -95,10 +96,25 @@ private:
                                           const std::string &opStr)
       -> p<ExprAST>;
 
+  /// Try each parser in order until one commits (returns non-NONCOMMITTED).
+  /// Accepts member function pointers and any callable taking no args.
   template <typename T, typename... Fns> auto tryParsers(Fns... fns) -> p<T> {
     p<T> result{nullptr, NONCOMMITTED};
-    (void)((result = (this->*fns)(), result.status != NONCOMMITTED) || ...);
+    (void)((result = invokeParseFn<T>(fns),
+            result.status != NONCOMMITTED) || ...);
     return result;
+  }
+
+  /// Dispatch helper: member function pointer → call on this
+  template <typename T, typename R>
+  auto invokeParseFn(R (Parser::*fn)()) -> p<T> {
+    return (this->*fn)();
+  }
+  /// Dispatch helper: callable (lambda, etc.) → call directly
+  template <typename T, typename F>
+    requires(!std::is_member_pointer_v<F>)
+  auto invokeParseFn(F &fn) -> p<T> {
+    return fn();
   }
 
 public:
@@ -111,6 +127,8 @@ public:
   // Parse definition
   [[nodiscard]] auto ParseDefinition() -> p<DefinitionAST>;
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
+  [[nodiscard]] auto ParsePrototypeWithSemi(const std::string &semi_msg)
+      -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseReuseDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
@@ -131,16 +149,9 @@ public:
   [[nodiscard]] auto parsePostfixOps(u<ExprAST> expr) -> p<ExprAST>;
   [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS)
       -> p<ExprAST>;
-  [[nodiscard]] auto ParseBoolExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseCharExpr() -> p<ExprAST>;
 
-  [[nodiscard]] auto ParseUnaryNegExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseAddrOfExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseAllocExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseFreeExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseLenExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseDimExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIdentifierExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructLiteralExpr(
@@ -153,9 +164,6 @@ public:
   [[nodiscard]] auto ParseCaseExpr() -> p<ExprAST>;
   [[nodiscard]] auto parseCasePattern() -> std::optional<CasePattern>;
   [[nodiscard]] auto ParseWhileExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseNumberExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseStringExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParseVariableExpr() -> p<ExprAST>;
 
   // Parse block
   [[nodiscard]] auto ParseBlock() -> p<BlockAST>;

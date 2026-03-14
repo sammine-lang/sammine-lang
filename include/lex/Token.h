@@ -237,7 +237,6 @@ class TokenStream {
 
   TokenList TokStream;
   Iterator cursor;
-  Iterator rollback_cursor;
   bool error;
   std::function<void()> tokenProducer;
 
@@ -246,7 +245,12 @@ class TokenStream {
     std::shared_ptr<Token> original;
   };
   std::vector<SplitRecord> pending_splits;
-  size_t splits_at_mark = 0;
+
+  struct RollbackPoint {
+    Iterator cursor;
+    size_t splits_at_mark;
+  };
+  std::vector<RollbackPoint> rollback_stack;
 
   void ensureToken() {
     while (cursor == TokStream.end() && tokenProducer)
@@ -256,9 +260,7 @@ class TokenStream {
 public:
   std::vector<std::shared_ptr<Token>> ErrStream;
 
-  TokenStream()
-      : cursor(TokStream.end()), rollback_cursor(TokStream.end()),
-        error(false) {}
+  TokenStream() : cursor(TokStream.end()), error(false) {}
 
   void setTokenProducer(std::function<void()> producer) {
     tokenProducer = std::move(producer);
@@ -282,19 +284,30 @@ public:
     this->push_back(std::make_shared<Token>(token));
   }
 
+  /// Push a rollback point onto the stack.
   void mark_rollback() {
-    rollback_cursor = cursor;
-    splits_at_mark = pending_splits.size();
+    rollback_stack.push_back({cursor, pending_splits.size()});
   }
 
+  /// Pop the rollback stack and restore cursor + undo splits since the mark.
   void rollback() {
-    while (pending_splits.size() > splits_at_mark) {
+    assert(!rollback_stack.empty() && "rollback() without mark_rollback()");
+    auto &rp = rollback_stack.back();
+    while (pending_splits.size() > rp.splits_at_mark) {
       auto &r = pending_splits.back();
       *std::prev(r.inserted) = r.original;
       TokStream.erase(r.inserted);
       pending_splits.pop_back();
     }
-    cursor = rollback_cursor;
+    cursor = rp.cursor;
+    rollback_stack.pop_back();
+  }
+
+  /// Pop the rollback stack WITHOUT restoring (commit the speculative parse).
+  void commit_rollback() {
+    assert(!rollback_stack.empty() &&
+           "commit_rollback() without mark_rollback()");
+    rollback_stack.pop_back();
   }
 
   void rollback(size_t rollback_count) {
