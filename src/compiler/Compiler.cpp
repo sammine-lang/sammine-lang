@@ -344,12 +344,12 @@ void Compiler::resolve_imports() {
         } else {
           // Non-generic exported → extern
           auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
-          ext->is_exposed = fd->is_exported;
+          ext->is_exported = fd->is_exported;
           programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
                                            std::move(ext));
         }
       } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
-        if (is_transitive || !ext->is_exposed)
+        if (is_transitive || !ext->is_exported)
           continue;
         ext->Prototype->functionName =
             ext->Prototype->functionName.with_module(name);

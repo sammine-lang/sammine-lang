@@ -131,18 +131,8 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
     result.status = FAILED;
   }
 
-  if (is_exported && result.node) {
-    if (auto *fd = llvm::dyn_cast<FuncDefAST>(result.node.get()))
-      fd->is_exported = true;
-    else if (auto *sd = llvm::dyn_cast<StructDefAST>(result.node.get()))
-      sd->is_exported = true;
-    else if (auto *ed = llvm::dyn_cast<EnumDefAST>(result.node.get()))
-      ed->is_exported = true;
-    else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(result.node.get()))
-      ta->is_exported = true;
-    else if (auto *ext = llvm::dyn_cast<ExternAST>(result.node.get()))
-      ext->is_exposed = true;
-  }
+  if (is_exported && result.node)
+    result.node->is_exported = true;
 
   if (result.failed() && result.node)
     result.node->pe = true;

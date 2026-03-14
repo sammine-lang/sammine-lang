@@ -191,6 +191,8 @@ public:
 
 class DefinitionAST : public AstBase, public Printable {
 public:
+  bool is_exported = false;
+
   DefinitionAST(NodeKind kind) : AstBase(kind) {}
   static bool classof(const AstBase *node) {
     return node->getKind() >= NodeKind::FirstDef &&
@@ -301,8 +303,6 @@ public:
 class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
-  bool is_exposed =
-      false; // true when declared with `reuse` (re-exported to importers)
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype)
       : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype)) {
@@ -342,7 +342,6 @@ public:
   ~FuncDefAST() = default;
   std::unique_ptr<PrototypeAST> Prototype;
   std::unique_ptr<BlockAST> Block;
-  bool is_exported = false;
 
   FuncDefAST(std::unique_ptr<PrototypeAST> Prototype,
              std::unique_ptr<BlockAST> Block)
@@ -369,7 +368,6 @@ public:
   sammine_util::QualifiedName struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
   std::vector<std::string> type_params;
-  bool is_exported = false;
 
   explicit StructDefAST(sammine_util::QualifiedName name,
                         sammine_util::Location name_loc,
@@ -397,7 +395,6 @@ public:
   std::vector<EnumVariantDef> variants;
   std::vector<std::string> type_params;
   bool is_integer_backed = false;
-  bool is_exported = false;
   std::optional<std::string> backing_type_name;
 
   explicit EnumDefAST(sammine_util::QualifiedName name,
@@ -417,7 +414,6 @@ class TypeAliasDefAST : public DefinitionAST {
 public:
   sammine_util::QualifiedName alias_name;
   std::unique_ptr<TypeExprAST> type_expr;
-  bool is_exported = false;
 
   explicit TypeAliasDefAST(std::shared_ptr<Token> name_tok,
                            std::unique_ptr<TypeExprAST> type_expr)
