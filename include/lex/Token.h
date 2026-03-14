@@ -225,6 +225,7 @@ public:
            tok_type == TokXOR || tok_type == TokSHL || tok_type == TokSHR;
   }
   Location get_location() const { return this->location; }
+  operator Location() const { return location; }
 };
 
 //! A helper class for Lexer to simplify the process of getting a token.
