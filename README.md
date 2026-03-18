@@ -131,19 +131,44 @@ let main() -> i32 {
 
 ## Dev
 
+### Prerequisites: Build LLVM from submodule
+
+LLVM is included as a git submodule at `externals/llvm-project`. After cloning, initialize it:
+
+```bash
+git submodule update --init --recursive
+```
+
+Then build LLVM with roughly these arguments
+
+```bash
+cmake -S externals/llvm-project/llvm -B externals/llvm-project/build -G Ninja \
+  -DLLVM_ENABLE_ASSERTIONS=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DLLVM_TARGETS_TO_BUILD="X86;AArch64" \
+  -DLLVM_CCACHE_BUILD=true \
+  -DLLVM_USE_LINKER=lld \
+  -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+  -DLLVM_ENABLE_PROJECTS="mlir;llvm" \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ 
+
+cmake --build externals/llvm-project/build -j
+```
+
 ### MacOS Configurations
 
-We need [LLVM & MLIR](https://llvm.org/) and [lit](https://pypi.org/project/lit/).
+We need [lit](https://pypi.org/project/lit/).
 
 Point `LLVM_DIR` and `MLIR_DIR` to your local LLVM build:
 
 ```bash
 cmake -S . -B build \
-  -DLLVM_DIR=/path/to/llvm-project/build/lib/cmake/llvm \
-  -DMLIR_DIR=/path/to/llvm-project/build/lib/cmake/mlir \
+  -DLLVM_DIR=externals/llvm-project/build/lib/cmake/llvm \
+  -DMLIR_DIR=externals/llvm-project/build/lib/cmake/mlir \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_BUILD_TYPE=Debug \
-  [-DSAMMINE_TEST=ON/OFF] [-DCMAKE_LINKER_TYPE=MOLD]
+  [-DSAMMINE_TEST=ON/OFF]
 ```
 
 Run
