@@ -1,19 +1,32 @@
 include(FetchContent)
 
-# Save main project build type
-# set(MAIN_PROJECT_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
-#
-# # Force dependencies to be built in Release
-# set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Set build type for dependencies" FORCE)
-# message("Setting external dependencies build type to: ${CMAKE_BUILD_TYPE}")
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF CACHE BOOL "" FORCE)
 
-# Fetch and build dependencies
+# Force a target to be compiled with Release flags regardless of CMAKE_BUILD_TYPE.
+# With single-config generators, FetchContent targets inherit the global build type.
+# We override per-target by stripping debug flags and adding -O2 -DNDEBUG.
+function(target_force_release target)
+  if(NOT TARGET ${target})
+    return()
+  endif()
+  get_target_property(_type ${target} TYPE)
+  if(_type STREQUAL "INTERFACE_LIBRARY")
+    return()
+  endif()
+  target_compile_options(${target} PRIVATE -O2 -g0)
+  target_compile_definitions(${target} PRIVATE NDEBUG)
+endfunction()
+
+# --- Fetch and build dependencies ---
+
 FetchContent_Declare(
   cpptrace
   GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
   GIT_TAG        v1.0.0
   SYSTEM
 )
+# Disable C++20 modules detection — Unix Makefiles doesn't support them
+set(CPPTRACE_DISABLE_CXX_20_MODULES ON)
 FetchContent_MakeAvailable(cpptrace)
 
 FetchContent_Declare(
@@ -32,6 +45,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(CLI11)
 
-# Restore main project build type
-# set(CMAKE_BUILD_TYPE "${MAIN_PROJECT_BUILD_TYPE}" CACHE STRING "Restore main project build type" FORCE)
-# message("Restoring main project build type to: ${CMAKE_BUILD_TYPE}")
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG        v3.7.1
+    SYSTEM
+)
+FetchContent_MakeAvailable(Catch2)
+
+# Force all dependency targets to Release optimization.
+# Last -O flag wins with GCC/Clang, so -O2 overrides -O0 from Debug mode.
+foreach(_dep cpptrace-lib dwarf libzstd_static fmt Catch2 Catch2WithMain)
+  target_force_release(${_dep})
+endforeach()

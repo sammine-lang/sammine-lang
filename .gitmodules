@@ -2,3 +2,4 @@
 	path = externals/llvm-project
 	url = https://github.com/llvm/llvm-project.git
 	branch = main
+	shallow = true

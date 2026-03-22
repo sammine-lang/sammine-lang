@@ -98,8 +98,8 @@ public:
   // Default constructor
   Location() : source_start(0), source_end(0) {}
   static Location NonPrintable() { return Location(-1, -1); }
-  Location(int64_t source_start, int64_t source_end)
-      : source_start(source_start), source_end(source_end) {}
+  Location(int64_t start, int64_t end)
+      : source_start(start), source_end(end) {}
 
   // Advance column position
   inline void advance() { source_end++; }
@@ -325,10 +325,10 @@ public:
     }
   }
   Reporter() {}
-  Reporter(std::string file_name, std::string input, int64_t context_radius,
-           bool dev_mode = false)
-      : file_name(file_name), input(input),
+  Reporter(std::string name, std::string src, int64_t radius,
+           bool dev = false)
+      : file_name(std::move(name)), input(std::move(src)),
         diagnostic_data(get_diagnostic_data(this->input)),
-        context_radius(context_radius), dev_mode(dev_mode) {}
+        context_radius(radius), dev_mode(dev) {}
 };
 } // namespace sammine_util

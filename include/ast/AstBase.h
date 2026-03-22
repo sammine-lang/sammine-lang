@@ -343,6 +343,8 @@ class ScopedASTVisitor : public ASTVisitor {
   std::vector<ASTContext> ast_ctx_stack_{1}; // start with one empty context
 
 public:
+  using ASTVisitor::visit;
+
   virtual void enter_new_scope() = 0;
   virtual void exit_new_scope() = 0;
 

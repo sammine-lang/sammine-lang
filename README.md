@@ -139,7 +139,7 @@ LLVM is included as a git submodule at `externals/llvm-project`. After cloning, 
 git submodule update --init --recursive
 ```
 
-Then build LLVM with roughly these arguments
+Then configure LLVM with roughly these arguments
 
 ```bash
 cmake -S externals/llvm-project/llvm -B externals/llvm-project/build -G Ninja \
@@ -152,11 +152,9 @@ cmake -S externals/llvm-project/llvm -B externals/llvm-project/build -G Ninja \
   -DLLVM_ENABLE_PROJECTS="mlir;llvm" \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_COMPILER=clang++ 
-
-cmake --build externals/llvm-project/build -j
 ```
 
-### MacOS Configurations
+### Configurations
 
 We need [lit](https://pypi.org/project/lit/).
 
@@ -168,13 +166,13 @@ cmake -S . -B build \
   -DMLIR_DIR=externals/llvm-project/build/lib/cmake/mlir \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_BUILD_TYPE=Debug \
-  [-DSAMMINE_TEST=ON/OFF]
+  -DSAMMINE_TEST=ON
 ```
 
 Run
 
 ```bash
-cmake --build build -j
+cmake --build externals/llvm-project/build -j && cmake --build build -j
 ```
 
 and

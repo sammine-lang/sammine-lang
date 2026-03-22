@@ -3,6 +3,11 @@ add_executable(SammineCheck SammineCheck.cpp)
 # No dependencies - standalone tool
 target_compile_features(SammineCheck PRIVATE cxx_std_17)
 
+# Always build SammineCheck optimized — it's a test tool, not what we debug.
+# Last -O flag wins with GCC/Clang, so this overrides -O0 from Debug mode.
+target_compile_options(SammineCheck PRIVATE -O2 -g0)
+target_compile_definitions(SammineCheck PRIVATE NDEBUG)
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(SammineCheck PRIVATE
         -Wall -Wextra -Werror -Wpedantic
