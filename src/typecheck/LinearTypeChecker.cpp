@@ -457,6 +457,8 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
   case TypeKind::TypeParam:
   case TypeKind::Generic:
     return std::nullopt;
+  default:
+    return std::nullopt;
   }
 }
 

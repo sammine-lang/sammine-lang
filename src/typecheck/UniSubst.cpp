@@ -98,6 +98,8 @@ Type substitute(const Type &type, const TypeBindings &bindings) {
   case TypeKind::Flt:
   case TypeKind::Generic:
     return type;
+  default:
+    return type;
   }
 }
 
@@ -206,6 +208,8 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
   case TypeKind::TypeParam:
   case TypeKind::Generic:
     return true;
+  default:
+    return false;
   }
 }
 

@@ -325,6 +325,9 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
     imm_error("'never' type reached codegen — "
               "this is a compiler bug: a diverging expression's "
               "type was not handled before codegen");
+  default:
+    imm_error(fmt::format("unhandled type kind in convertType: {}",
+                          type.to_string()));
   }
 }
 
@@ -1213,6 +1216,9 @@ int64_t MLIRGenImpl::getTypeSize(const Type &type) {
     imm_error("getTypeSize: 'never' type reached codegen — "
               "this is a compiler bug: a diverging expression's "
               "type was not handled before codegen");
+  default:
+    imm_error(fmt::format("getTypeSize: unhandled type kind: {}",
+                          type.to_string()));
   }
 }
 

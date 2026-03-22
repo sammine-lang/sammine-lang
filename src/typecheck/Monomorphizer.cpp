@@ -98,6 +98,8 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
       cloned_elements.push_back(clone_type_expr(elem.get()));
     return std::make_unique<TupleTypeExprAST>(std::move(cloned_elements));
   }
+  default:
+    return nullptr;
   }
 }
 
