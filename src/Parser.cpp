@@ -844,8 +844,15 @@ auto Parser::parsePostfixOps(u<ExprAST> expr) -> p<ExprAST> {
               lb->get_location());
       expr = std::make_unique<IndexExprAST>(std::move(expr), std::move(idx));
     } else if (auto dot = expect(TokenType::TokDot)) {
-      REQUIRE(field_tok, TokID, "Expected field name after '.'",
-              dot->get_location());
+      // .field for structs, .0/.1/... for tuples
+      auto field_tok = expect(TokID);
+      if (!field_tok)
+        field_tok = expect(TokNum);
+      if (!field_tok) {
+        imm_error("Expected field name or tuple index after '.'",
+                  dot->get_location());
+        return {nullptr, FAILED};
+      }
       expr = std::make_unique<FieldAccessExprAST>(std::move(expr), field_tok);
     } else {
       break;

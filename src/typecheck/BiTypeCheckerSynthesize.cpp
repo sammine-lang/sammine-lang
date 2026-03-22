@@ -1214,6 +1214,28 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   if (obj_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
+  // Tuple indexing: t.0, t.1, ...
+  if (obj_type.type_kind == TypeKind::Tuple) {
+    auto &tup = std::get<TupleType>(obj_type.type_data);
+    size_t idx;
+    try {
+      idx = std::stoul(ast->field_name);
+    } catch (...) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Tuple index must be a number, got '{}'",
+                                  ast->field_name));
+      return ast->set_type(Type::Poisoned());
+    }
+    if (idx >= tup.size()) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Tuple index {} out of bounds for tuple of size {}",
+                      idx, tup.size()));
+      return ast->set_type(Type::Poisoned());
+    }
+    return ast->set_type(tup.get_element(idx));
+  }
+
   if (obj_type.type_kind != TypeKind::Struct) {
     this->add_error(
         ast->get_location(),

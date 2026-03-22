@@ -829,7 +829,18 @@ mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
 
 mlir::Value MLIRGenImpl::emitFieldAccessExpr(AST::FieldAccessExprAST *ast) {
   auto objVal = emitExpr(ast->object_expr.get());
-  auto st = std::get<StructType>(ast->object_expr->get_type().type_data);
+  auto objType = ast->object_expr->get_type();
+
+  // Tuple indexing: t.0, t.1, ...
+  if (objType.type_kind == TypeKind::Tuple) {
+    size_t idx = std::stoul(ast->field_name);
+    auto elemType = convertType(ast->get_type());
+    return mlir::LLVM::ExtractValueOp::create(builder, loc(ast), elemType,
+                                              objVal, static_cast<int64_t>(idx));
+  }
+
+  // Struct field access
+  auto st = std::get<StructType>(objType.type_data);
   auto fieldIdx = st.get_field_index(ast->field_name);
   auto idx = cautious_value(fieldIdx, "struct field index");
   auto fieldType = convertType(st.get_field_type(idx));

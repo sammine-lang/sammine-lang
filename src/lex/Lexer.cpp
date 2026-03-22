@@ -261,20 +261,9 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
       return i;
     }
 
-    auto i_0 = i;
-    NumStr += input[i];
+    // Just a dot — field access or tuple indexing (e.g., a.field, t.0)
     i = advance(i);
-
-    while (i < input.length() - 1 && isdigit(input[i])) {
-      NumStr += input[i];
-      i = advance(i);
-    }
-
-    if (i - 1 == i_0) {
-      tokStream->push_back(Token(TokDot, ".", location));
-    } else {
-      tokStream->push_back(Token(TokNum, NumStr, location));
-    }
+    tokStream->push_back(Token(TokDot, ".", location));
   }
   return i;
 }
