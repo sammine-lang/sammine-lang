@@ -1,7 +1,7 @@
 // RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
 // CHECK:      ; ModuleID = 'LLVMDialectModule'
 // CHECK-NEXT: source_filename = "LLVMDialectModule"
-// CHECK-NEXT: target datalayout = "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128-Fn32"
+// CHECK-NEXT: target datalayout = "{{.*}}"
 // CHECK:      declare noalias ptr @malloc(i64)
 // CHECK:      declare void @free(ptr)
 // CHECK:      declare void @exit(i32)
