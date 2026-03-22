@@ -36,6 +36,11 @@ if(SAMMINE_SANITIZE)
         -fsanitize=address,undefined)
 endif()
 
+if(SAMMINE_TRACY)
+    target_link_libraries(project_options INTERFACE TracyClient)
+    target_compile_definitions(project_options INTERFACE TRACY_ENABLE TRACY_ON_DEMAND)
+endif()
+
 # Function to add a library with common settings
 function(add_project_library name)
     add_library(${name} OBJECT ${CMAKE_CURRENT_LIST_DIR}/${name}.cpp)

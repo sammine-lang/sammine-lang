@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(SAMMINE_SANITIZE "Enable ASan + UBSan (debug builds)" OFF)
+option(SAMMINE_TRACY "Enable Tracy profiler instrumentation" OFF)
 add_subdirectory(externals/)
 
 # LLVM-STUFF

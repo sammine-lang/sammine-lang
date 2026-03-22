@@ -3,6 +3,7 @@
 //
 
 #include "compiler/Compiler.h"
+#include "util/Tracy.h"
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
@@ -202,6 +203,7 @@ Compiler::Compiler(
 
 // Stage 1: Tokenize source into a TokenStream.
 void Compiler::lex() {
+  SAMMINE_ZONE_NAMED("lex");
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start lexing stage...\n");
@@ -213,6 +215,7 @@ void Compiler::lex() {
 // Stage 2: Parse tokens into AST. Also detects whether `main` exists (→
 // executable vs library).
 void Compiler::parse() {
+  SAMMINE_ZONE_NAMED("parse");
   LOG({
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start parsing stage...\n");
@@ -240,6 +243,7 @@ void Compiler::parse() {
 // name. Exported defs become ExternASTs; generic defs are inlined for
 // monomorphization.
 void Compiler::resolve_imports() {
+  SAMMINE_ZONE_NAMED("imports");
   if (has_error() || programAST->imports.empty())
     return;
 
@@ -431,6 +435,7 @@ void Compiler::resolve_imports() {
 
 // Stage 4: Load stdlib/definitions.mn (builtin type defs). Executables only.
 void Compiler::load_definitions() {
+  SAMMINE_ZONE_NAMED("definitions");
   if (has_error() || !has_main)
     return;
 
@@ -470,6 +475,7 @@ void Compiler::load_definitions() {
 // 1) ScopeGenerator: builds scopes, resolves names, qualifies enum variants
 // 2) GeneralSemantics: general validation checks
 void Compiler::semantics() {
+  SAMMINE_ZONE_NAMED("semantics");
   {
     if (has_error()) {
       return;
@@ -507,6 +513,7 @@ void Compiler::semantics() {
 // Infers types bottom-up, checks assignments/calls, instantiates generics.
 // Monomorphized defs are injected at the front of DefinitionVec for codegen.
 void Compiler::typecheck() {
+  SAMMINE_ZONE_NAMED("typecheck");
   if (has_error()) {
     return;
   }
@@ -548,6 +555,7 @@ void Compiler::typecheck() {
 // Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly
 // once.
 void Compiler::linear_check() {
+  SAMMINE_ZONE_NAMED("linear_check");
   if (has_error())
     return;
   LOG({
@@ -578,6 +586,7 @@ void Compiler::dump_ast() {
   }
 }
 void Compiler::codegen() {
+  SAMMINE_ZONE_NAMED("codegen");
   if (has_error()) {
     return;
   }
@@ -708,6 +717,7 @@ void Compiler::codegen_mlir() {
 // Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff
 // modes.
 void Compiler::optimize() {
+  SAMMINE_ZONE_NAMED("optimize");
   if (has_error()) {
     return;
   }
@@ -788,6 +798,7 @@ void Compiler::optimize() {
 // JIT execute: when --jit is set and main() exists, run the program directly
 // via ORC JIT instead of emitting object files and linking.
 void Compiler::jit_execute() {
+  SAMMINE_ZONE_NAMED("jit_execute");
   if (has_error())
     return;
   if (compiler_options[compiler_option_enum::JIT] != "true")
@@ -834,6 +845,7 @@ void Compiler::jit_execute() {
 
 // Stage 10: Emit .o object file via LLVM TargetMachine.
 void Compiler::emit_object() {
+  SAMMINE_ZONE_NAMED("emit_object");
   if (has_error()) {
     return;
   }
@@ -1003,6 +1015,7 @@ void Compiler::emit_library() {
 // Stage 12: Link .o files into executable via clang++ (fallback: g++).
 // Executables only.
 void Compiler::link() {
+  SAMMINE_ZONE_NAMED("link");
   if (has_error() || this->from_string) {
     return;
   }
@@ -1056,6 +1069,7 @@ void Compiler::print_timing_table(
 // Main entry point: runs all pipeline stages sequentially with optional timing.
 // Returns 0 on success, 1 on error.
 int Compiler::start() {
+  SAMMINE_ZONE_NAMED("compiler_pipeline");
   if (has_error())
     return 1;
   struct Stage {

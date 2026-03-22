@@ -61,6 +61,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
+# --- Tracy profiler (opt-in) ---
+if(SAMMINE_TRACY)
+  FetchContent_Declare(
+    tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.11.1
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
+    SYSTEM
+  )
+  FetchContent_MakeAvailable(tracy)
+endif()
+
 # Force all dependency targets to Release optimization.
 # Last -O flag wins with GCC/Clang, so -O2 overrides -O0 from Debug mode.
 foreach(_dep cpptrace-lib dwarf libzstd_static fmt Catch2 Catch2WithMain)
