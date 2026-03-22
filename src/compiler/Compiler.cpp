@@ -611,32 +611,47 @@ void Compiler::codegen() {
 // from AST via mlirGen(), then lowers MLIR→LLVM IR. Transfers data
 // layout/triple from the template LLVMRes module to the newly lowered module.
 void Compiler::codegen_mlir() {
+  // Check if any kernel definitions exist in the AST.
+  bool has_kernel_defs = std::any_of(
+      programAST->DefinitionVec.begin(), programAST->DefinitionVec.end(),
+      [](const auto &def) {
+        return llvm::isa<AST::KernelDefAST>(def.get());
+      });
+
   mlir::MLIRContext mlirCtx;
+  // Core dialects — always needed.
   mlirCtx.getOrLoadDialect<mlir::arith::ArithDialect>();
   mlirCtx.getOrLoadDialect<mlir::func::FuncDialect>();
   mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
   mlirCtx.getOrLoadDialect<mlir::cf::ControlFlowDialect>();
-  mlirCtx.getOrLoadDialect<mlir::linalg::LinalgDialect>();
-  mlirCtx.getOrLoadDialect<mlir::tensor::TensorDialect>();
-  mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
-  mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
-  mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
 
-  // Register bufferization interface extensions for each dialect so
-  // one-shot-bufferize knows how to bufferize their ops.
+  // Kernel dialects — only needed when kernel defs exist.
+  if (has_kernel_defs) {
+    mlirCtx.getOrLoadDialect<mlir::linalg::LinalgDialect>();
+    mlirCtx.getOrLoadDialect<mlir::tensor::TensorDialect>();
+    mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
+    mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
+    mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
+  }
+
   mlir::DialectRegistry registry;
+  // Core bufferization interfaces — always needed.
   mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
   mlir::arith::registerBufferDeallocationOpInterfaceExternalModels(registry);
   mlir::bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(
       registry);
   mlir::cf::registerBufferizableOpInterfaceExternalModels(registry);
   mlir::cf::registerBufferDeallocationOpInterfaceExternalModels(registry);
-  mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
   mlir::scf::registerBufferizableOpInterfaceExternalModels(registry);
   mlir::scf::registerBufferDeallocationOpInterfaceExternalModels(registry);
-  mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
-  mlir::memref::registerAllocationOpInterfaceExternalModels(registry);
+
+  // Kernel bufferization interfaces — only when needed.
+  if (has_kernel_defs) {
+    mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
+    mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
+    mlir::memref::registerAllocationOpInterfaceExternalModels(registry);
+  }
   mlirCtx.appendDialectRegistry(registry);
 
   std::string stem = std::filesystem::path(this->file_name).stem().string();
