@@ -39,6 +39,7 @@ public:
     pop_ast_context();
   }
   // Only non-empty overrides
+  using ScopedASTVisitor::preorder_walk;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(BlockAST *ast) override;
   virtual void preorder_walk(ReturnStmtAST *ast) override;
@@ -47,6 +48,7 @@ public:
   virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(TypeAliasDefAST *ast) override;
 
+  using ScopedASTVisitor::postorder_walk;
   virtual void postorder_walk(BlockAST *ast) override;
 
   using ScopedASTVisitor::visit;

@@ -42,6 +42,7 @@ public:
     pop_ast_context();
   }
 
+  using ScopedASTVisitor::visit;
   virtual void visit(ProgramAST *ast) override;
   virtual void visit(VarDefAST *ast) override;
   virtual void visit(ExternAST *ast) override;

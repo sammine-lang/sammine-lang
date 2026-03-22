@@ -60,6 +60,7 @@ public:
   virtual void visit(ExternAST *ast) override;
 
   // pre order — only non-empty overrides
+  using ScopedASTVisitor::preorder_walk;
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
@@ -70,6 +71,7 @@ public:
   virtual void preorder_walk(AllocExprAST *ast) override;
 
   // post order — only non-empty overrides
+  using ScopedASTVisitor::postorder_walk;
   virtual void postorder_walk(CallExprAST *ast) override;
   virtual void postorder_walk(VariableExprAST *ast) override;
   virtual void postorder_walk(StructLiteralExprAST *ast) override;
