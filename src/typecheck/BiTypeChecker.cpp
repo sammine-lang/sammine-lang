@@ -384,6 +384,22 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   tap.resolved_type = resolved;
   ast->set_type(resolved);
   typename_to_type.registerNameT(ast->alias_name.mangled(), resolved);
+
+  // If the alias resolves to an enum, register variant constructors
+  if (resolved.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(resolved.type_data);
+    for (size_t i = 0; i < et.variant_count(); i++) {
+      auto &vi = et.get_variant(i);
+      auto qualified_key =
+          ast->alias_name.with_appended({vi.name, ""}).mangled();
+      variant_constructors[qualified_key] = {resolved, i};
+
+      auto base_key =
+          ast->alias_name.strip_type_args().with_appended({vi.name, ""}).mangled();
+      if (base_key != qualified_key)
+        variant_constructors[base_key] = {resolved, i};
+    }
+  }
 }
 
 bool BiTypeCheckerVisitor::handle_enum_or_typeclass_call(CallExprAST *ast,
