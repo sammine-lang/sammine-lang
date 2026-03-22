@@ -10,7 +10,7 @@ struct Point {
 };
 
 let main() -> i32 {
-  let mut p : 'ptr<Point> = alloc<Point>(2);
+  let p : 'ptr<Point> = alloc<Point>(2);
   p[0] = Point { x: 10, y: 11 };
   p[1] = Point { x: 20, y: 21 };
   std::printf("%d\n", p[0].x);

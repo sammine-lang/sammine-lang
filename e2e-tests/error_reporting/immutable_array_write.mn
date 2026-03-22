@@ -4,7 +4,7 @@
 // CHECK-NEXT:    5|  let a: [3]i32 = [1, 2, 3];
 // CHECK-NEXT:    6|  a[0] = 99;
 // CHECK-NEXT:     |       ┬
-// CHECK-NEXT:     |       ╰─ Cannot write to index of immutable array 'a'. Use 'let mut' to declare it as mutable
+// CHECK-NEXT:     |       ╰─ Cannot write to array element. Arrays are immutable values
 // CHECK-NEXT:    7|  return 0;
 // CHECK-NEXT:    8|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

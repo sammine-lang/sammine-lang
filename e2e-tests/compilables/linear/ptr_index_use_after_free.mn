@@ -2,7 +2,7 @@
 // CHECK: Cannot index 'p' — it was already freed previously
 
 let main() -> i32 {
-  let mut p : 'ptr<i32> = alloc<i32>(3);
+  let p : 'ptr<i32> = alloc<i32>(3);
   p[0] = 10;
   free(p);
   p[1] = 20;

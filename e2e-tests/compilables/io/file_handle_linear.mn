@@ -7,11 +7,11 @@ let main() -> i32 {
   let content: ptr<char> = "line written ok\n";
   io::write_file("/tmp/sammine_test_handle.txt", content, 16);
 
-  let mut f: 'ptr<char> = io::open("/tmp/sammine_test_handle.txt", "r");
-  let mut buf: ptr<char> = "";
-  let mut line_len: i64 = 0;
+  let f: 'ptr<char> = io::open("/tmp/sammine_test_handle.txt", "r");
+  let buf: ptr<char> = "";
+  let line_len: i64 = 0;
 
-  f = io::file_read_line(f, &buf, &line_len);
+  let f = io::file_read_line(f, &buf, &line_len);
   io::println(buf);
 
   io::close(f);

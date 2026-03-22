@@ -1,11 +1,11 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK:      99
+// CHECK:      3.14
 
 import std;
 
 let main() -> i32 {
-  let mut a : [3]i32 = [10, 20, 30];
-  a[1] = 99;
-  std::printf("%d\n", a[1]);
+  let x: i32 = 5;
+  let x: f64 = 3.14;
+  std::printf("%.2f\n", x);
   return 0;
 }

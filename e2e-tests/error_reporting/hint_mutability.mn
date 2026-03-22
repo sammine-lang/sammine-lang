@@ -1,8 +1,0 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-
-let main() -> i32 {
-  let x : i32 = 42;
-  let p : ptr<i32> = &x;
-  let mut q : ptr<i32> = p;
-  return 0;
-}

@@ -4,7 +4,7 @@
 // CHECK-NEXT:    5|  let x: i32 = 5;
 // CHECK-NEXT:    6|  x = 10;
 // CHECK-NEXT:     |    ┬
-// CHECK-NEXT:     |    ╰─ Cannot reassign immutable variable 'x'. Use 'let mut' or 'mut' to declare it as mutable
+// CHECK-NEXT:     |    ╰─ Cannot reassign variable 'x'. All bindings are immutable; use 'let x = ...' to shadow
 // CHECK-NEXT:    7|  return x;
 // CHECK-NEXT:    8|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

@@ -1,12 +1,12 @@
 // RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |break_scope_alloc_in_while.mn:13:4
-// CHECK-NEXT:   11|  let mut i : i32 = 0;
-// CHECK-NEXT:   12|  while (i < 1) {
-// CHECK-NEXT:   13|    let q = alloc<i32>(1);
+// CHECK:          |break_scope_alloc_in_while.mn:24:4
+// CHECK-NEXT:   22|  *ip = 0;
+// CHECK-NEXT:   23|  while (*ip < 1) {
+// CHECK-NEXT:   24|    let q = alloc<i32>(1);
 // CHECK-NEXT:     |    ───────────────────┬
 // CHECK-NEXT:     |                       ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:   14|    *q = 42;
-// CHECK-NEXT:   15|    i = i + 1;
+// CHECK-NEXT:   25|    *q = 42;
+// CHECK-NEXT:   26|    *ip = *ip + 1;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -18,12 +18,14 @@
 import std;
 
 let main() -> i32 {
-  let mut i : i32 = 0;
-  while (i < 1) {
+  let ip: 'ptr<i32> = alloc<i32>(1);
+  *ip = 0;
+  while (*ip < 1) {
     let q = alloc<i32>(1);
     *q = 42;
-    i = i + 1;
+    *ip = *ip + 1;
   };
+  free(ip);
   std::printf("done\n");
   return 0;
 }

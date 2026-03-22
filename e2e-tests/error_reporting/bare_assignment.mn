@@ -1,0 +1,8 @@
+// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// CHECK: Cannot reassign variable 'x'. All bindings are immutable; use 'let x = ...' to shadow
+
+let main() -> i32 {
+  let x: i32 = 5;
+  x = 10;
+  return x;
+}

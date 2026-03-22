@@ -3,38 +3,61 @@
 
 // Project Euler Problem 20: Factorial digit sum
 // Find the sum of the digits in 100!
-// Uses base-10^9 bignum arithmetic with array of i64 chunks.
+// Uses base-10^9 bignum arithmetic with pointer-based array of i64 chunks.
 
 import std;
 
 let main() -> i32 {
   let base: i64 = 1000000000;
-  let mut d: [20]i64 = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let dp: 'ptr<i64> = alloc<i64>(20);
 
-  let mut k: i64 = 2;
-  while k <= 100 {
-    let mut carry: i64 = 0;
-    let mut i: i32 = 0;
-    while i < 20 {
-      let val: i64 = d[i] * k + carry;
-      d[i] = val % base;
-      carry = val / base;
-      i = i + 1;
-    };
-    k = k + 1;
+  // Initialize array to zero
+  let init_p: 'ptr<i32> = alloc<i32>(1);
+  *init_p = 0;
+  while *init_p < 20 {
+    dp[*init_p] = 0i64;
+    *init_p = *init_p + 1;
   };
+  free(init_p);
+  dp[0] = 1i64;
 
-  let mut sum: i64 = 0;
-  let mut j: i32 = 0;
-  while j < 20 {
-    let mut chunk: i64 = d[j];
-    while chunk > 0 {
-      sum = sum + chunk % 10;
-      chunk = chunk / 10;
+  let kp: 'ptr<i64> = alloc<i64>(1);
+  *kp = 2i64;
+  while *kp <= 100 {
+    let carry_p: 'ptr<i64> = alloc<i64>(1);
+    *carry_p = 0i64;
+    let ip: 'ptr<i32> = alloc<i32>(1);
+    *ip = 0;
+    while *ip < 20 {
+      let val: i64 = dp[*ip] * *kp + *carry_p;
+      dp[*ip] = val % base;
+      *carry_p = val / base;
+      *ip = *ip + 1;
     };
-    j = j + 1;
+    free(ip);
+    free(carry_p);
+    *kp = *kp + 1i64;
   };
+  free(kp);
 
-  std::printf("%lld\n", sum);
+  let sum_p: 'ptr<i64> = alloc<i64>(1);
+  *sum_p = 0i64;
+  let jp: 'ptr<i32> = alloc<i32>(1);
+  *jp = 0;
+  while *jp < 20 {
+    let chunk_p: 'ptr<i64> = alloc<i64>(1);
+    *chunk_p = dp[*jp];
+    while *chunk_p > 0 {
+      *sum_p = *sum_p + *chunk_p % 10;
+      *chunk_p = *chunk_p / 10;
+    };
+    free(chunk_p);
+    *jp = *jp + 1;
+  };
+  free(jp);
+
+  std::printf("%lld\n", *sum_p);
+  free(sum_p);
+  free(dp);
   return 0;
 }

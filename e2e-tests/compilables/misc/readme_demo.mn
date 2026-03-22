@@ -47,9 +47,6 @@ let main() -> i32 {
   // --- Variables ---
   let x: Int = 5;                            // using type alias
   let y = 10;                                // type inference
-  let mut counter: i32 = 0;                  // mutable binding
-  counter = counter + 1;                     // assignment (mut only)
-
   // --- Control flow ---
   let sign = if x > 0 { 1 }                 // if/else is an expression
              else if x == 0 { 0 }           // comparison: < <= > >= == !=

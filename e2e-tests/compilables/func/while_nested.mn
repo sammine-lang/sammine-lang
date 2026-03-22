@@ -7,14 +7,18 @@
 import std;
 
 let main() -> i32 {
-  let mut i: i32 = 1;
-  while i <= 2 {
-    let mut j: i32 = 1;
-    while j <= 2 {
-      std::printf("%d %d\n", i, j);
-      j = j + 1;
+  let ip: 'ptr<i32> = alloc<i32>(1);
+  *ip = 1;
+  while *ip <= 2 {
+    let jp: 'ptr<i32> = alloc<i32>(1);
+    *jp = 1;
+    while *jp <= 2 {
+      std::printf("%d %d\n", *ip, *jp);
+      *jp = *jp + 1;
     };
-    i = i + 1;
+    free(jp);
+    *ip = *ip + 1;
   };
+  free(ip);
   return 0;
 }

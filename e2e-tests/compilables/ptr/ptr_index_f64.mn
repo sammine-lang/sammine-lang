@@ -5,7 +5,7 @@
 import std;
 
 let main() -> i32 {
-  let mut p : 'ptr<f64> = alloc<f64>(2);
+  let p : 'ptr<f64> = alloc<f64>(2);
   p[0] = 3.14;
   p[1] = 2.72;
   std::printf("%.2f\n", p[0]);

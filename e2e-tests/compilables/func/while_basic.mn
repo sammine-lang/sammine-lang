@@ -8,10 +8,12 @@
 import std;
 
 let main() -> i32 {
-  let mut i: i32 = 5;
-  while i > 0 {
-    std::printf("%d\n", i);
-    i = i - 1;
+  let ip: 'ptr<i32> = alloc<i32>(1);
+  *ip = 5;
+  while *ip > 0 {
+    std::printf("%d\n", *ip);
+    *ip = *ip - 1;
   };
+  free(ip);
   return 0;
 }

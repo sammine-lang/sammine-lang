@@ -3,38 +3,61 @@
 
 // Project Euler Problem 16: Power digit sum
 // What is the sum of the digits of the number 2^1000?
-// Uses base-10^9 bignum arithmetic with array of i64 chunks.
+// Uses base-10^9 bignum arithmetic with pointer-based array of i64 chunks.
 
 import std;
 
 let main() -> i32 {
   let base: i64 = 1000000000;
-  let mut d: [40]i64 = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let dp: 'ptr<i64> = alloc<i64>(40);
 
-  let mut step: i32 = 0;
-  while step < 1000 {
-    let mut carry: i64 = 0;
-    let mut i: i32 = 0;
-    while i < 40 {
-      let val: i64 = d[i] * 2 + carry;
-      d[i] = val % base;
-      carry = val / base;
-      i = i + 1;
-    };
-    step = step + 1;
+  // Initialize array to zero
+  let init_p: 'ptr<i32> = alloc<i32>(1);
+  *init_p = 0;
+  while *init_p < 40 {
+    dp[*init_p] = 0i64;
+    *init_p = *init_p + 1;
   };
+  free(init_p);
+  dp[0] = 1i64;
 
-  let mut sum: i64 = 0;
-  let mut j: i32 = 0;
-  while j < 40 {
-    let mut chunk: i64 = d[j];
-    while chunk > 0 {
-      sum = sum + chunk % 10;
-      chunk = chunk / 10;
+  let step_p: 'ptr<i32> = alloc<i32>(1);
+  *step_p = 0;
+  while *step_p < 1000 {
+    let carry_p: 'ptr<i64> = alloc<i64>(1);
+    *carry_p = 0i64;
+    let ip: 'ptr<i32> = alloc<i32>(1);
+    *ip = 0;
+    while *ip < 40 {
+      let val: i64 = dp[*ip] * 2 + *carry_p;
+      dp[*ip] = val % base;
+      *carry_p = val / base;
+      *ip = *ip + 1;
     };
-    j = j + 1;
+    free(ip);
+    free(carry_p);
+    *step_p = *step_p + 1;
   };
+  free(step_p);
 
-  std::printf("%lld\n", sum);
+  let sum_p: 'ptr<i64> = alloc<i64>(1);
+  *sum_p = 0i64;
+  let jp: 'ptr<i32> = alloc<i32>(1);
+  *jp = 0;
+  while *jp < 40 {
+    let chunk_p: 'ptr<i64> = alloc<i64>(1);
+    *chunk_p = dp[*jp];
+    while *chunk_p > 0 {
+      *sum_p = *sum_p + *chunk_p % 10;
+      *chunk_p = *chunk_p / 10;
+    };
+    free(chunk_p);
+    *jp = *jp + 1;
+  };
+  free(jp);
+
+  std::printf("%lld\n", *sum_p);
+  free(sum_p);
+  free(dp);
   return 0;
 }

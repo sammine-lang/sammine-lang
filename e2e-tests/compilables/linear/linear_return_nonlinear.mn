@@ -1,6 +1,6 @@
 // RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
 // CHECK:          |linear_return_nonlinear.mn:8:2
-// CHECK-NEXT:    6|  let mut x : i32 = 42;
+// CHECK-NEXT:    6|  let x : i32 = 42;
 // CHECK-NEXT:    7|  let p : ptr<i32> = &x;
 // CHECK-NEXT:    8|  return p;
 // CHECK-NEXT:     |  ───────┬
@@ -13,7 +13,7 @@
 
 // Test: returning a stack pointer (non-linear) is an error — may dangle
 let bad() -> ptr<i32> {
-  let mut x : i32 = 42;
+  let x : i32 = 42;
   let p : ptr<i32> = &x;
   return p;
 }
