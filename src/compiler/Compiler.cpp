@@ -806,10 +806,24 @@ void Compiler::jit_execute() {
                "Start JIT execution stage...\n");
   });
 
+  // Parse semicolon-joined JIT args.
+  std::vector<std::string> jit_args;
+  {
+    std::string args_str =
+        compiler_options[compiler_option_enum::JIT_ARGS];
+    if (!args_str.empty()) {
+      std::istringstream ss(args_str);
+      std::string arg;
+      while (std::getline(ss, arg, ';'))
+        if (!arg.empty())
+          jit_args.push_back(arg);
+    }
+  }
+
   auto &jit = resPtr->sammineJIT;
   jit_exit_code_ = jit->execute_main(std::move(resPtr->Module),
                                      std::move(resPtr->Context),
-                                     extra_object_files);
+                                     extra_object_files, jit_args);
   reporter.report(*jit);
 
   if (jit->has_errors())

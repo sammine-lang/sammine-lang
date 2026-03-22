@@ -63,7 +63,8 @@ llvm::Error SammineJIT::addModule(llvm::orc::ThreadSafeModule TSM,
 
 int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
                              std::unique_ptr<llvm::LLVMContext> context,
-                             const std::vector<std::string> &libraries) {
+                             const std::vector<std::string> &libraries,
+                             const std::vector<std::string> &program_args) {
   using sammine_util::Location;
 
   // Load imported module libraries into the JIT.
@@ -105,9 +106,19 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
   }
 
   auto *mainFn = mainSym->getAddress().toPtr<int (*)(int, char **)>();
-  char arg0[] = "sammine";
-  char *argv[] = {arg0, nullptr};
-  exit_code_ = mainFn(1, argv);
+
+  // Build argc/argv from program_args.
+  std::vector<std::string> args_storage;
+  args_storage.push_back("sammine");
+  for (auto &a : program_args)
+    args_storage.push_back(a);
+
+  std::vector<char *> argv;
+  for (auto &a : args_storage)
+    argv.push_back(a.data());
+  argv.push_back(nullptr);
+
+  exit_code_ = mainFn(static_cast<int>(args_storage.size()), argv.data());
   return exit_code_;
 }
 

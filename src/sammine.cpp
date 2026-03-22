@@ -43,6 +43,10 @@ int main(int argc, char *argv[]) {
   app.add_flag("--jit", jit,
                "JIT execute the program directly (only effective with main function)");
 
+  std::vector<std::string> jit_args;
+  app.add_option("--jit-args", jit_args,
+                 "Arguments to pass to the JIT-executed program (repeatable).");
+
   std::string llvm_ir;
   app.add_option("--llvm-ir", llvm_ir,
                  "Emit LLVM IR. Required value: pre, post, or diff")
@@ -107,6 +111,15 @@ int main(int argc, char *argv[]) {
   }
   compiler_options[co::LIB_FORMAT] = lib_format;
   compiler_options[co::JIT] = jit ? "true" : "false";
+  {
+    std::string joined;
+    for (size_t i = 0; i < jit_args.size(); i++) {
+      if (i > 0)
+        joined += ";";
+      joined += jit_args[i];
+    }
+    compiler_options[co::JIT_ARGS] = joined;
+  }
 
   return sammine_lang::CompilerRunner::run(compiler_options);
 }

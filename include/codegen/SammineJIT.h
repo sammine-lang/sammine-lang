@@ -61,7 +61,8 @@ public:
 
   int execute_main(std::unique_ptr<llvm::Module> module,
                    std::unique_ptr<llvm::LLVMContext> context,
-                   const std::vector<std::string> &libraries);
+                   const std::vector<std::string> &libraries,
+                   const std::vector<std::string> &program_args = {});
 
   [[nodiscard]] int get_exit_code() const { return exit_code_; }
 };
