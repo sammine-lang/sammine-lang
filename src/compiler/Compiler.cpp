@@ -135,8 +135,8 @@ int CompilerRunner::run(
 }
 
 Compiler::Compiler(
-    std::map<compiler_option_enum, std::string> &compiler_options)
-    : compiler_options(compiler_options) {
+    std::map<compiler_option_enum, std::string> &compiler_options_)
+    : compiler_options(compiler_options_) {
   this->state_ = State::Running;
   this->file_name = compiler_options[compiler_option_enum::FILE];
   this->input = compiler_options[compiler_option_enum::STR];
@@ -889,9 +889,13 @@ void Compiler::emit_shared_impl() {
   std::string extra;
   for (auto &obj : extra_link_objs_)
     extra += " " + obj;
+  std::string platform_flags;
+#ifdef __APPLE__
+  platform_flags = " -undefined dynamic_lookup";
+#endif
   std::string command =
-      fmt::format("clang++ -shared -undefined dynamic_lookup -o {} {}{}",
-                  lib_file, obj_file, extra);
+      fmt::format("clang++ -shared{} -o {} {}{}",
+                  platform_flags, lib_file, obj_file, extra);
   int result = std::system(command.c_str());
   if (result != 0) {
     fmt::print(stderr, "Failed to create shared library {}\n", lib_file);

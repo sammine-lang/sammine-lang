@@ -8,15 +8,15 @@
 bool FunctionType::operator==(const FunctionType &t) const {
   return param_types == t.param_types && *return_type == *t.return_type;
 }
-FunctionType::FunctionType(std::vector<Type> param_types, Type return_type,
-                           bool var_arg)
-    : param_types(std::move(param_types)),
-      return_type(std::make_shared<Type>(std::move(return_type))),
-      var_arg(var_arg) {}
-FunctionType::FunctionType(const std::vector<Type> &total_types, bool var_arg)
+FunctionType::FunctionType(std::vector<Type> param_types_, Type return_type_,
+                           bool var_arg_)
+    : param_types(std::move(param_types_)),
+      return_type(std::make_shared<Type>(std::move(return_type_))),
+      var_arg(var_arg_) {}
+FunctionType::FunctionType(const std::vector<Type> &total_types, bool var_arg_)
     : param_types(total_types.begin(), total_types.end() - 1),
       return_type(std::make_shared<Type>(total_types.back())),
-      var_arg(var_arg) {}
+      var_arg(var_arg_) {}
 
 std::span<const Type> FunctionType::get_params_types() const {
   return std::span<const Type>(param_types);
@@ -24,26 +24,26 @@ std::span<const Type> FunctionType::get_params_types() const {
 
 Type FunctionType::get_return_type() const { return *return_type; }
 
-PointerType::PointerType(Type pointee)
-    : pointee(std::make_shared<Type>(std::move(pointee))) {}
+PointerType::PointerType(Type pointee_)
+    : pointee(std::make_shared<Type>(std::move(pointee_))) {}
 bool PointerType::operator==(const PointerType &t) const {
   return *pointee == *t.pointee;
 }
 Type PointerType::get_pointee() const { return *pointee; }
 
-ArrayType::ArrayType(Type element, size_t size)
-    : element(std::make_shared<Type>(std::move(element))), size(size) {}
+ArrayType::ArrayType(Type element_, size_t size_)
+    : element(std::make_shared<Type>(std::move(element_))), size(size_) {}
 bool ArrayType::operator==(const ArrayType &t) const {
   return *element == *t.element && size == t.size;
 }
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
-StructType::StructType(sammine_util::QualifiedName name,
-                       std::vector<std::string> field_names,
-                       std::vector<Type> field_types)
-    : name(std::move(name)), field_names(std::move(field_names)),
-      field_types(std::move(field_types)) {}
+StructType::StructType(sammine_util::QualifiedName name_,
+                       std::vector<std::string> field_names_,
+                       std::vector<Type> field_types_)
+    : name(std::move(name_)), field_names(std::move(field_names_)),
+      field_types(std::move(field_types_)) {}
 bool StructType::operator==(const StructType &t) const {
   return name.mangled() == t.name.mangled(); // nominal typing
 }
@@ -57,10 +57,10 @@ StructType::get_field_index(const std::string &field) const {
 }
 Type StructType::get_field_type(size_t idx) const { return field_types[idx]; }
 
-EnumType::EnumType(sammine_util::QualifiedName name,
-                   std::vector<VariantInfo> variants, bool integer_backed,
+EnumType::EnumType(sammine_util::QualifiedName name_,
+                   std::vector<VariantInfo> variants_, bool integer_backed,
                    TypeKind backing_type)
-    : name(std::move(name)), variants(std::move(variants)),
+    : name(std::move(name_)), variants(std::move(variants_)),
       integer_backed_(integer_backed), backing_type_(backing_type) {}
 bool EnumType::operator==(const EnumType &t) const {
   return name.mangled() == t.name.mangled(); // nominal typing
@@ -74,9 +74,9 @@ EnumType::get_variant_index(const std::string &variant_name) const {
   return std::nullopt;
 }
 
-TupleType::TupleType(std::vector<Type> element_types)
+TupleType::TupleType(std::vector<Type> element_types_)
     : element_types(
-          std::make_shared<std::vector<Type>>(std::move(element_types))) {}
+          std::make_shared<std::vector<Type>>(std::move(element_types_))) {}
 bool TupleType::operator==(const TupleType &t) const {
   return *element_types == *t.element_types;
 }

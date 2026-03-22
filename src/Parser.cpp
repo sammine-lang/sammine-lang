@@ -1377,7 +1377,7 @@ auto Parser::ParsePrototypeWithSemi(const std::string &semi_msg)
 }
 
 auto Parser::ParseBlock() -> p<BlockAST> {
-  bool error = false;
+  bool block_error = false;
   EXPECT(leftCurly, TokLeftCurly);
 
   auto blockAST = std::make_unique<BlockAST>();
@@ -1406,7 +1406,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
       if (a)
         blockAST->Statements.push_back(std::move(a));
       (void)expect(TokenType::TokSemiColon, /*exhausts=*/true);
-      error = true;
+      block_error = true;
       (void)expect(TokSemiColon);
       continue;
     }
@@ -1418,7 +1418,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
       if (node)
         blockAST->Statements.push_back(std::move(node));
       if (result != SUCCESS)
-        error = true;
+        block_error = true;
       return true;
     };
 
@@ -1432,7 +1432,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
   auto rightCurly = expect(TokRightCurly, true, TokEOF,
                            "Expected '}' to close statement block");
 
-  return {std::move(blockAST), (!rightCurly || error) ? FAILED : SUCCESS};
+  return {std::move(blockAST), (!rightCurly || block_error) ? FAILED : SUCCESS};
 }
 
 auto Parser::ParseParenExpr() -> p<ExprAST> {
@@ -1495,7 +1495,7 @@ auto Parser::ParseParams() -> ParamsResult {
   }
 
   bool var_arg = false;
-  auto [vec, error] = comma_sep_recover<TypedVarAST>(
+  auto [vec, parse_error] = comma_sep_recover<TypedVarAST>(
       *this, [&var_arg, this]() -> p<TypedVarAST> {
         // Trailing ellipsis after comma: (x: i32, ...)
         if (tokStream->peek()->tok_type == TokEllipsis) {
@@ -1511,7 +1511,7 @@ auto Parser::ParseParams() -> ParamsResult {
     imm_error("Expected ')' after parameters", leftParen->get_location());
     return {std::move(vec), FAILED, var_arg};
   }
-  return {std::move(vec), error ? FAILED : SUCCESS, var_arg};
+  return {std::move(vec), parse_error ? FAILED : SUCCESS, var_arg};
 }
 
 auto Parser::ParseArguments() -> ListResult<ExprAST> {
@@ -1519,7 +1519,7 @@ auto Parser::ParseArguments() -> ListResult<ExprAST> {
   if (!leftParen)
     return {{}, NONCOMMITTED};
 
-  auto [vec, error] =
+  auto [vec, parse_error] =
       comma_sep_recover<ExprAST>(*this, [&]() { return ParseExpr(); });
 
   auto rightParen = expect(TokRightParen, true);
@@ -1527,7 +1527,7 @@ auto Parser::ParseArguments() -> ListResult<ExprAST> {
     imm_error("Expected ')' after arguments", leftParen->get_location());
     return {std::move(vec), FAILED};
   }
-  return {std::move(vec), error ? FAILED : SUCCESS};
+  return {std::move(vec), parse_error ? FAILED : SUCCESS};
 }
 
 auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {

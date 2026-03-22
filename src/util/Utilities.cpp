@@ -49,10 +49,10 @@ class Locator {
   }
 
 public:
-  Locator(IndexPair source_start_end, int64_t context_radius,
-          const Reporter::DiagnosticData &data)
-      : source_start_end(source_start_end), context_radius(context_radius),
-        data(data) {}
+  Locator(IndexPair source_start_end_, int64_t context_radius_,
+          const Reporter::DiagnosticData &data_)
+      : source_start_end(source_start_end_), context_radius(context_radius_),
+        data(data_) {}
 
   IndexPair get_lines_indices() const {
     auto [start, end] = source_start_end;

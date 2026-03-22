@@ -447,7 +447,7 @@ protected:
   sammine_util::Location location;
 
 public:
-  AstBase(NodeKind kind) : kind(kind), node_id_(next_id_++) {}
+  AstBase(NodeKind kind_) : kind(kind_), node_id_(next_id_++) {}
   NodeId id() const { return node_id_; }
   static void reset_id_counter() { next_id_ = 0; }
   static void set_properties(ASTProperties *p) { current_props_ = p; }

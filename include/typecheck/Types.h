@@ -232,8 +232,8 @@ struct Type {
     return this->type_kind != TypeKind::Poisoned;
   }
   bool synthesized() const { return this->type_kind != TypeKind::NonExistent; }
-  Type(TypeKind type_kind, TypeData type_data)
-      : type_kind(type_kind), type_data(type_data) {}
+  Type(TypeKind type_kind_, TypeData type_data_)
+      : type_kind(type_kind_), type_data(type_data_) {}
 
   Type(const Type &other);
   Type(Type &&other) noexcept;

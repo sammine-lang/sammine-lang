@@ -211,8 +211,8 @@ public:
   std::string lexeme;
   Location location;
   Token() = delete;
-  Token(TokenType type, std::string lexeme, Location location)
-      : tok_type(type), lexeme(std::move(lexeme)), location(location) {}
+  Token(TokenType type, std::string lexeme_, Location location_)
+      : tok_type(type), lexeme(std::move(lexeme_)), location(location_) {}
   bool is_comparison() const {
     return tok_type == TokLESS || tok_type == TokGreaterEqual ||
            tok_type == TokLessEqual || tok_type == TokGREATER ||

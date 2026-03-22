@@ -61,7 +61,7 @@ class TypeExprAST {
 public:
   ParseKind getKind() const { return kind; }
   sammine_util::Location location;
-  TypeExprAST(ParseKind kind) : kind(kind) {}
+  TypeExprAST(ParseKind kind_) : kind(kind_) {}
   virtual ~TypeExprAST() = default;
   virtual std::string to_string() const = 0;
 };
@@ -90,10 +90,10 @@ class PointerTypeExprAST : public TypeExprAST {
 public:
   std::unique_ptr<TypeExprAST> pointee;
   bool is_linear = false;
-  explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee,
-                              bool is_linear = false)
-      : TypeExprAST(ParseKind::Pointer), pointee(std::move(pointee)),
-        is_linear(is_linear) {}
+  explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee_,
+                              bool is_linear_ = false)
+      : TypeExprAST(ParseKind::Pointer), pointee(std::move(pointee_)),
+        is_linear(is_linear_) {}
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Pointer;
   }
@@ -107,8 +107,8 @@ class ArrayTypeExprAST : public TypeExprAST {
 public:
   std::unique_ptr<TypeExprAST> element;
   size_t size;
-  ArrayTypeExprAST(std::unique_ptr<TypeExprAST> element, size_t size)
-      : TypeExprAST(ParseKind::Array), element(std::move(element)), size(size) {
+  ArrayTypeExprAST(std::unique_ptr<TypeExprAST> element_, size_t size_)
+      : TypeExprAST(ParseKind::Array), element(std::move(element_)), size(size_) {
   }
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Array;
@@ -122,10 +122,10 @@ class FunctionTypeExprAST : public TypeExprAST {
 public:
   std::vector<std::unique_ptr<TypeExprAST>> paramTypes;
   std::unique_ptr<TypeExprAST> returnType;
-  FunctionTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> paramTypes,
-                      std::unique_ptr<TypeExprAST> returnType)
-      : TypeExprAST(ParseKind::Function), paramTypes(std::move(paramTypes)),
-        returnType(std::move(returnType)) {}
+  FunctionTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> paramTypes_,
+                      std::unique_ptr<TypeExprAST> returnType_)
+      : TypeExprAST(ParseKind::Function), paramTypes(std::move(paramTypes_)),
+        returnType(std::move(returnType_)) {}
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Function;
   }
@@ -146,11 +146,11 @@ class GenericTypeExprAST : public TypeExprAST {
 public:
   sammine_util::QualifiedName base_name;
   std::vector<std::unique_ptr<TypeExprAST>> type_args;
-  GenericTypeExprAST(sammine_util::QualifiedName base_name,
-                     std::vector<std::unique_ptr<TypeExprAST>> type_args,
+  GenericTypeExprAST(sammine_util::QualifiedName base_name_,
+                     std::vector<std::unique_ptr<TypeExprAST>> type_args_,
                      sammine_util::Location loc)
-      : TypeExprAST(ParseKind::Generic), base_name(std::move(base_name)),
-        type_args(std::move(type_args)) {
+      : TypeExprAST(ParseKind::Generic), base_name(std::move(base_name_)),
+        type_args(std::move(type_args_)) {
     location = loc;
   }
   static bool classof(const TypeExprAST *node) {
@@ -171,8 +171,8 @@ public:
 class TupleTypeExprAST : public TypeExprAST {
 public:
   std::vector<std::unique_ptr<TypeExprAST>> element_types;
-  TupleTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> element_types)
-      : TypeExprAST(ParseKind::Tuple), element_types(std::move(element_types)) {
+  TupleTypeExprAST(std::vector<std::unique_ptr<TypeExprAST>> element_types_)
+      : TypeExprAST(ParseKind::Tuple), element_types(std::move(element_types_)) {
   }
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Tuple;
@@ -193,7 +193,7 @@ class DefinitionAST : public AstBase, public Printable {
 public:
   bool is_exported = false;
 
-  DefinitionAST(NodeKind kind) : AstBase(kind) {}
+  DefinitionAST(NodeKind kind_) : AstBase(kind_) {}
   static bool classof(const AstBase *node) {
     return node->getKind() >= NodeKind::FirstDef &&
            node->getKind() <= NodeKind::LastDef;
@@ -220,22 +220,22 @@ public:
   bool is_mutable = false;
   std::unique_ptr<TypeExprAST> type_expr;
 
-  explicit TypedVarAST(std::shared_ptr<Token> name,
-                       std::unique_ptr<TypeExprAST> type_expr,
-                       bool is_mutable = false)
-      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable),
-        type_expr(std::move(type_expr)) {
-    this->join_location(name);
-    if (name)
-      this->name = name->lexeme;
+  explicit TypedVarAST(std::shared_ptr<Token> name_,
+                       std::unique_ptr<TypeExprAST> type_expr_,
+                       bool is_mutable_ = false)
+      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable_),
+        type_expr(std::move(type_expr_)) {
+    this->join_location(name_);
+    if (name_)
+      this->name = name_->lexeme;
     if (this->type_expr)
       this->join_location(this->type_expr->location);
   }
-  explicit TypedVarAST(std::shared_ptr<Token> name, bool is_mutable = false)
-      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable) {
-    this->join_location(name);
-    if (name)
-      this->name = name->lexeme;
+  explicit TypedVarAST(std::shared_ptr<Token> name_, bool is_mutable_ = false)
+      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable_) {
+    this->join_location(name_);
+    if (name_)
+      this->name = name_->lexeme;
   }
   std::string to_string() const;
   AST_NODE_METHODS("TypedVarAST", NodeKind::TypedVarAST)
@@ -257,17 +257,17 @@ public:
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(
-      sammine_util::QualifiedName functionName, sammine_util::Location name_loc,
-      std::unique_ptr<TypeExprAST> return_type_expr,
-      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
+      sammine_util::QualifiedName functionName_, sammine_util::Location name_loc,
+      std::unique_ptr<TypeExprAST> return_type_expr_,
+      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors_)
       : AstBase(NodeKind::PrototypeAST),
-        return_type_expr(std::move(return_type_expr)) {
-    this->functionName = std::move(functionName);
+        return_type_expr(std::move(return_type_expr_)) {
+    this->functionName = std::move(functionName_);
     this->join_location(name_loc);
     if (this->return_type_expr)
       this->join_location(this->return_type_expr->location);
 
-    this->parameterVectors = std::move(parameterVectors);
+    this->parameterVectors = std::move(parameterVectors_);
 
     for (size_t i = 0; i < this->parameterVectors.size(); i++)
       assert(this->parameterVectors[i]);
@@ -276,13 +276,13 @@ public:
   }
 
   explicit PrototypeAST(
-      sammine_util::QualifiedName functionName, sammine_util::Location name_loc,
-      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors)
+      sammine_util::QualifiedName functionName_, sammine_util::Location name_loc,
+      std::vector<std::unique_ptr<AST::TypedVarAST>> parameterVectors_)
       : AstBase(NodeKind::PrototypeAST) {
-    this->functionName = std::move(functionName);
+    this->functionName = std::move(functionName_);
     this->join_location(name_loc);
 
-    this->parameterVectors = std::move(parameterVectors);
+    this->parameterVectors = std::move(parameterVectors_);
 
     for (size_t i = 0; i < this->parameterVectors.size(); i++)
       assert(this->parameterVectors[i]);
@@ -304,8 +304,8 @@ class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
 
-  ExternAST(std::unique_ptr<PrototypeAST> Prototype)
-      : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype)) {
+  ExternAST(std::unique_ptr<PrototypeAST> Prototype_)
+      : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype_)) {
     this->join_location(this->Prototype.get());
   }
   AST_NODE_METHODS("ExternAST", NodeKind::ExternAST)
@@ -316,7 +316,7 @@ class ExprAST : public AstBase, public Printable {
 public:
   bool is_statement =
       true; // false when used as value (e.g. last expr in block)
-  ExprAST(NodeKind kind) : AstBase(kind) {}
+  ExprAST(NodeKind kind_) : AstBase(kind_) {}
   ~ExprAST() = default;
   static bool classof(const AstBase *node) {
     return node->getKind() >= NodeKind::FirstExpr &&
@@ -343,10 +343,10 @@ public:
   std::unique_ptr<PrototypeAST> Prototype;
   std::unique_ptr<BlockAST> Block;
 
-  FuncDefAST(std::unique_ptr<PrototypeAST> Prototype,
-             std::unique_ptr<BlockAST> Block)
-      : DefinitionAST(NodeKind::FuncDefAST), Prototype(std::move(Prototype)),
-        Block(std::move(Block)) {
+  FuncDefAST(std::unique_ptr<PrototypeAST> Prototype_,
+             std::unique_ptr<BlockAST> Block_)
+      : DefinitionAST(NodeKind::FuncDefAST), Prototype(std::move(Prototype_)),
+        Block(std::move(Block_)) {
     this->join_location(this->Prototype.get())
         ->join_location(this->Block.get());
   }
@@ -371,11 +371,11 @@ public:
 
   explicit StructDefAST(sammine_util::QualifiedName name,
                         sammine_util::Location name_loc,
-                        decltype(struct_members) struct_members)
+                        decltype(struct_members) struct_members_)
       : DefinitionAST(NodeKind::StructDefAST), struct_name(std::move(name)),
-        struct_members(std::move(struct_members)) {
+        struct_members(std::move(struct_members_)) {
     this->join_location(name_loc);
-    for (auto &m : struct_members)
+    for (auto &m : this->struct_members)
       this->join_location(m.get());
   }
   AST_NODE_METHODS("StructDefAST", NodeKind::StructDefAST)
@@ -399,9 +399,9 @@ public:
 
   explicit EnumDefAST(sammine_util::QualifiedName name,
                       sammine_util::Location name_loc,
-                      std::vector<EnumVariantDef> variants)
+                      std::vector<EnumVariantDef> variants_)
       : DefinitionAST(NodeKind::EnumDefAST), enum_name(std::move(name)),
-        variants(std::move(variants)) {
+        variants(std::move(variants_)) {
     this->join_location(name_loc);
     for (auto &v : this->variants)
       this->join_location(v.location);
@@ -416,9 +416,9 @@ public:
   std::unique_ptr<TypeExprAST> type_expr;
 
   explicit TypeAliasDefAST(std::shared_ptr<Token> name_tok,
-                           std::unique_ptr<TypeExprAST> type_expr)
+                           std::unique_ptr<TypeExprAST> type_expr_)
       : DefinitionAST(NodeKind::TypeAliasDefAST),
-        type_expr(std::move(type_expr)) {
+        type_expr(std::move(type_expr_)) {
     if (name_tok)
       alias_name = sammine_util::QualifiedName::local(name_tok->lexeme);
     this->join_location(name_tok);
@@ -438,11 +438,11 @@ public:
   std::unique_ptr<ExprAST> Expression;
 
   explicit VarDefAST(std::shared_ptr<Token> let,
-                     std::unique_ptr<TypedVarAST> TypedVar,
-                     std::unique_ptr<ExprAST> Expression,
-                     bool is_mutable = false)
-      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable),
-        TypedVar(std::move(TypedVar)), Expression(std::move(Expression)) {
+                     std::unique_ptr<TypedVarAST> TypedVar_,
+                     std::unique_ptr<ExprAST> Expression_,
+                     bool is_mutable_ = false)
+      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable_),
+        TypedVar(std::move(TypedVar_)), Expression(std::move(Expression_)) {
 
     this->join_location(let)
         ->join_location(this->TypedVar.get())
@@ -451,13 +451,13 @@ public:
 
   // Destructuring constructor: let (a, b) = expr;
   explicit VarDefAST(std::shared_ptr<Token> let,
-                     std::vector<std::unique_ptr<TypedVarAST>> destructure_vars,
-                     std::unique_ptr<ExprAST> Expression,
-                     bool is_mutable = false)
-      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable),
+                     std::vector<std::unique_ptr<TypedVarAST>> destructure_vars_,
+                     std::unique_ptr<ExprAST> Expression_,
+                     bool is_mutable_ = false)
+      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable_),
         is_tuple_destructure(true),
-        destructure_vars(std::move(destructure_vars)),
-        Expression(std::move(Expression)) {
+        destructure_vars(std::move(destructure_vars_)),
+        Expression(std::move(Expression_)) {
     this->join_location(let);
     for (auto &v : this->destructure_vars)
       this->join_location(v.get());
@@ -497,8 +497,8 @@ public:
 class BoolExprAST : public ExprAST {
 public:
   bool b;
-  BoolExprAST(bool b, sammine_util::Location loc)
-      : ExprAST(NodeKind::BoolExprAST), b(b) {
+  BoolExprAST(bool b_, sammine_util::Location loc)
+      : ExprAST(NodeKind::BoolExprAST), b(b_) {
     this->location = loc;
   }
   std::string to_string() const override;
@@ -507,8 +507,8 @@ public:
 class CharExprAST : public ExprAST {
 public:
   char value;
-  CharExprAST(char value, sammine_util::Location loc)
-      : ExprAST(NodeKind::CharExprAST), value(value) {
+  CharExprAST(char value_, sammine_util::Location loc)
+      : ExprAST(NodeKind::CharExprAST), value(value_) {
     this->location = loc;
   }
   std::string to_string() const override;
@@ -518,10 +518,10 @@ class BinaryExprAST : public ExprAST {
 public:
   std::shared_ptr<Token> Op;
   std::unique_ptr<ExprAST> LHS, RHS;
-  BinaryExprAST(std::shared_ptr<Token> op, std::unique_ptr<ExprAST> LHS,
-                std::unique_ptr<ExprAST> RHS)
-      : ExprAST(NodeKind::BinaryExprAST), Op(op), LHS(std::move(LHS)),
-        RHS(std::move(RHS)) {
+  BinaryExprAST(std::shared_ptr<Token> op, std::unique_ptr<ExprAST> LHS_,
+                std::unique_ptr<ExprAST> RHS_)
+      : ExprAST(NodeKind::BinaryExprAST), Op(op), LHS(std::move(LHS_)),
+        RHS(std::move(RHS_)) {
     this->join_location(this->Op)
         ->join_location(this->LHS.get())
         ->join_location(this->RHS.get());
@@ -537,9 +537,9 @@ public:
                     // `return` keyword)
   std::unique_ptr<ExprAST> return_expr;
   ReturnStmtAST(std::shared_ptr<Token> return_tok,
-                std::unique_ptr<ExprAST> return_expr)
+                std::unique_ptr<ExprAST> return_expr_)
       : ExprAST(NodeKind::ReturnStmtAST), is_implicit(false),
-        return_expr(std::move(return_expr)) {
+        return_expr(std::move(return_expr_)) {
     if (this->return_expr == nullptr) {
       this->join_location(return_tok);
     } else if (return_tok == nullptr) {
@@ -549,9 +549,9 @@ public:
     }
   }
 
-  ReturnStmtAST(std::unique_ptr<ExprAST> return_expr)
+  ReturnStmtAST(std::unique_ptr<ExprAST> return_expr_)
       : ExprAST(NodeKind::ReturnStmtAST), is_implicit(true),
-        return_expr(std::move(return_expr)) {
+        return_expr(std::move(return_expr_)) {
     this->join_location(this->return_expr.get());
   }
 
@@ -566,25 +566,25 @@ public:
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   explicit CallExprAST(
       std::shared_ptr<Token> tok,
-      std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
+      std::vector<std::unique_ptr<AST::ExprAST>> arguments_ = {})
       : ExprAST(NodeKind::CallExprAST),
         functionName(
             sammine_util::QualifiedName::local(tok ? tok->lexeme : "")) {
     join_location(tok);
-    for (auto &arg : arguments)
+    for (auto &arg : arguments_)
       if (arg)
         this->join_location(arg.get());
-    this->arguments = std::move(arguments);
+    this->arguments = std::move(arguments_);
   }
   explicit CallExprAST(
       sammine_util::QualifiedName qn, sammine_util::Location loc,
-      std::vector<std::unique_ptr<AST::ExprAST>> arguments = {})
+      std::vector<std::unique_ptr<AST::ExprAST>> arguments_ = {})
       : ExprAST(NodeKind::CallExprAST), functionName(std::move(qn)) {
     this->location = loc;
-    for (auto &arg : arguments)
+    for (auto &arg : arguments_)
       if (arg)
         this->join_location(arg.get());
-    this->arguments = std::move(arguments);
+    this->arguments = std::move(arguments_);
   }
 
   std::string to_string() const override;
@@ -612,12 +612,12 @@ class IfExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> bool_expr;
   std::unique_ptr<BlockAST> thenBlockAST, elseBlockAST;
-  explicit IfExprAST(std::unique_ptr<ExprAST> bool_expr,
-                     std::unique_ptr<BlockAST> thenBlockAST,
-                     std::unique_ptr<BlockAST> elseBlockAST)
-      : ExprAST(NodeKind::IfExprAST), bool_expr(std::move(bool_expr)),
-        thenBlockAST(std::move(thenBlockAST)),
-        elseBlockAST(std::move(elseBlockAST)) {
+  explicit IfExprAST(std::unique_ptr<ExprAST> bool_expr_,
+                     std::unique_ptr<BlockAST> thenBlockAST_,
+                     std::unique_ptr<BlockAST> elseBlockAST_)
+      : ExprAST(NodeKind::IfExprAST), bool_expr(std::move(bool_expr_)),
+        thenBlockAST(std::move(thenBlockAST_)),
+        elseBlockAST(std::move(elseBlockAST_)) {
     this->join_location(this->bool_expr.get())
         ->join_location(this->thenBlockAST.get())
         ->join_location(this->elseBlockAST.get());
@@ -643,8 +643,8 @@ class DerefExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit DerefExprAST(std::shared_ptr<Token> star_tok,
-                        std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::DerefExprAST), operand(std::move(operand)) {
+                        std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::DerefExprAST), operand(std::move(operand_)) {
     this->join_location(star_tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -655,8 +655,8 @@ class AddrOfExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit AddrOfExprAST(std::shared_ptr<Token> amp_tok,
-                         std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::AddrOfExprAST), operand(std::move(operand)) {
+                         std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::AddrOfExprAST), operand(std::move(operand_)) {
     this->join_location(amp_tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -667,10 +667,10 @@ public:
   std::unique_ptr<TypeExprAST> type_arg; // the T in alloc<T>(count)
   std::unique_ptr<ExprAST> operand;      // the count expression
   explicit AllocExprAST(std::shared_ptr<Token> tok,
-                        std::unique_ptr<TypeExprAST> type_arg,
-                        std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::AllocExprAST), type_arg(std::move(type_arg)),
-        operand(std::move(operand)) {
+                        std::unique_ptr<TypeExprAST> type_arg_,
+                        std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::AllocExprAST), type_arg(std::move(type_arg_)),
+        operand(std::move(operand_)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -681,8 +681,8 @@ class FreeExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit FreeExprAST(std::shared_ptr<Token> tok,
-                       std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::FreeExprAST), operand(std::move(operand)) {
+                       std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::FreeExprAST), operand(std::move(operand_)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -691,8 +691,8 @@ public:
 class ArrayLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;
-  explicit ArrayLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
-      : ExprAST(NodeKind::ArrayLiteralExprAST), elements(std::move(elements)) {
+  explicit ArrayLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements_)
+      : ExprAST(NodeKind::ArrayLiteralExprAST), elements(std::move(elements_)) {
     for (auto &e : this->elements)
       this->join_location(e.get());
   }
@@ -704,10 +704,10 @@ class RangeExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> start;
   std::unique_ptr<ExprAST> end;
-  explicit RangeExprAST(std::unique_ptr<ExprAST> start,
-                        std::unique_ptr<ExprAST> end)
-      : ExprAST(NodeKind::RangeExprAST), start(std::move(start)),
-        end(std::move(end)) {
+  explicit RangeExprAST(std::unique_ptr<ExprAST> start_,
+                        std::unique_ptr<ExprAST> end_)
+      : ExprAST(NodeKind::RangeExprAST), start(std::move(start_)),
+        end(std::move(end_)) {
     this->join_location(this->start.get())->join_location(this->end.get());
   }
   std::string to_string() const override;
@@ -718,10 +718,10 @@ class IndexExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> array_expr;
   std::unique_ptr<ExprAST> index_expr;
-  explicit IndexExprAST(std::unique_ptr<ExprAST> array_expr,
-                        std::unique_ptr<ExprAST> index_expr)
-      : ExprAST(NodeKind::IndexExprAST), array_expr(std::move(array_expr)),
-        index_expr(std::move(index_expr)) {
+  explicit IndexExprAST(std::unique_ptr<ExprAST> array_expr_,
+                        std::unique_ptr<ExprAST> index_expr_)
+      : ExprAST(NodeKind::IndexExprAST), array_expr(std::move(array_expr_)),
+        index_expr(std::move(index_expr_)) {
     this->join_location(this->array_expr.get())
         ->join_location(this->index_expr.get());
   }
@@ -733,8 +733,8 @@ class LenExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit LenExprAST(std::shared_ptr<Token> tok,
-                      std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::LenExprAST), operand(std::move(operand)) {
+                      std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::LenExprAST), operand(std::move(operand_)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -745,8 +745,8 @@ class DimExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit DimExprAST(std::shared_ptr<Token> tok,
-                      std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::DimExprAST), operand(std::move(operand)) {
+                      std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::DimExprAST), operand(std::move(operand_)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -757,8 +757,8 @@ class UnaryNegExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
   explicit UnaryNegExprAST(std::shared_ptr<Token> op_tok,
-                           std::unique_ptr<ExprAST> operand)
-      : ExprAST(NodeKind::UnaryNegExprAST), operand(std::move(operand)) {
+                           std::unique_ptr<ExprAST> operand_)
+      : ExprAST(NodeKind::UnaryNegExprAST), operand(std::move(operand_)) {
     this->join_location(op_tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
@@ -772,13 +772,13 @@ public:
   std::vector<std::unique_ptr<ExprAST>> field_values;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   explicit StructLiteralExprAST(
-      std::shared_ptr<Token> name_tok, std::vector<std::string> field_names,
-      std::vector<std::unique_ptr<ExprAST>> field_values)
+      std::shared_ptr<Token> name_tok, std::vector<std::string> field_names_,
+      std::vector<std::unique_ptr<ExprAST>> field_values_)
       : ExprAST(NodeKind::StructLiteralExprAST),
         struct_name(sammine_util::QualifiedName::local(
             name_tok ? name_tok->lexeme : "")),
-        field_names(std::move(field_names)),
-        field_values(std::move(field_values)) {
+        field_names(std::move(field_names_)),
+        field_values(std::move(field_values_)) {
     this->join_location(name_tok);
     for (auto &v : this->field_values)
       if (v)
@@ -786,11 +786,11 @@ public:
   }
   explicit StructLiteralExprAST(
       sammine_util::QualifiedName qn, sammine_util::Location loc,
-      std::vector<std::string> field_names,
-      std::vector<std::unique_ptr<ExprAST>> field_values)
+      std::vector<std::string> field_names_,
+      std::vector<std::unique_ptr<ExprAST>> field_values_)
       : ExprAST(NodeKind::StructLiteralExprAST), struct_name(std::move(qn)),
-        field_names(std::move(field_names)),
-        field_values(std::move(field_values)) {
+        field_names(std::move(field_names_)),
+        field_values(std::move(field_values_)) {
     this->location = loc;
     for (auto &v : this->field_values)
       if (v)
@@ -804,10 +804,10 @@ class FieldAccessExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> object_expr;
   std::string field_name;
-  explicit FieldAccessExprAST(std::unique_ptr<ExprAST> object_expr,
+  explicit FieldAccessExprAST(std::unique_ptr<ExprAST> object_expr_,
                               std::shared_ptr<Token> field_tok)
       : ExprAST(NodeKind::FieldAccessExprAST),
-        object_expr(std::move(object_expr)) {
+        object_expr(std::move(object_expr_)) {
     this->join_location(this->object_expr.get());
     this->join_location(field_tok);
     if (field_tok)
@@ -846,10 +846,10 @@ public:
   std::vector<CaseArm> arms;
 
   explicit CaseExprAST(std::shared_ptr<Token> case_tok,
-                       std::unique_ptr<ExprAST> scrutinee,
-                       std::vector<CaseArm> arms)
-      : ExprAST(NodeKind::CaseExprAST), scrutinee(std::move(scrutinee)),
-        arms(std::move(arms)) {
+                       std::unique_ptr<ExprAST> scrutinee_,
+                       std::vector<CaseArm> arms_)
+      : ExprAST(NodeKind::CaseExprAST), scrutinee(std::move(scrutinee_)),
+        arms(std::move(arms_)) {
     this->join_location(case_tok)->join_location(this->scrutinee.get());
     for (auto &arm : this->arms) {
       if (arm.body)
@@ -865,10 +865,10 @@ class WhileExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> condition;
   std::unique_ptr<BlockAST> body;
-  explicit WhileExprAST(std::unique_ptr<ExprAST> condition,
-                        std::unique_ptr<BlockAST> body)
-      : ExprAST(NodeKind::WhileExprAST), condition(std::move(condition)),
-        body(std::move(body)) {
+  explicit WhileExprAST(std::unique_ptr<ExprAST> condition_,
+                        std::unique_ptr<BlockAST> body_)
+      : ExprAST(NodeKind::WhileExprAST), condition(std::move(condition_)),
+        body(std::move(body_)) {
     this->join_location(this->condition.get())->join_location(this->body.get());
   }
   std::string to_string() const override;
@@ -878,8 +878,8 @@ public:
 class TupleLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;
-  explicit TupleLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements)
-      : ExprAST(NodeKind::TupleLiteralExprAST), elements(std::move(elements)) {
+  explicit TupleLiteralExprAST(std::vector<std::unique_ptr<ExprAST>> elements_)
+      : ExprAST(NodeKind::TupleLiteralExprAST), elements(std::move(elements_)) {
     for (auto &e : this->elements)
       this->join_location(e.get());
   }
@@ -895,9 +895,9 @@ public:
   std::vector<std::unique_ptr<PrototypeAST>> methods;
   explicit TypeClassDeclAST(std::shared_ptr<Token> tok, std::string name,
                             std::vector<std::string> params,
-                            std::vector<std::unique_ptr<PrototypeAST>> methods)
+                            std::vector<std::unique_ptr<PrototypeAST>> methods_)
       : DefinitionAST(NodeKind::TypeClassDeclAST), class_name(std::move(name)),
-        type_params(std::move(params)), methods(std::move(methods)) {
+        type_params(std::move(params)), methods(std::move(methods_)) {
     this->join_location(tok);
   }
   AST_NODE_METHODS("TypeClassDeclAST", NodeKind::TypeClassDeclAST)
@@ -911,13 +911,13 @@ public:
   std::vector<std::unique_ptr<TypeExprAST>> concrete_type_exprs;
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(
-      std::shared_ptr<Token> tok, std::string class_name,
+      std::shared_ptr<Token> tok, std::string class_name_,
       std::vector<std::unique_ptr<TypeExprAST>> type_exprs,
-      std::vector<std::unique_ptr<FuncDefAST>> methods)
+      std::vector<std::unique_ptr<FuncDefAST>> methods_)
       : DefinitionAST(NodeKind::TypeClassInstanceAST),
-        class_name(std::move(class_name)),
+        class_name(std::move(class_name_)),
         concrete_type_exprs(std::move(type_exprs)),
-        methods(std::move(methods)) {
+        methods(std::move(methods_)) {
     this->join_location(tok);
   }
   AST_NODE_METHODS("TypeClassInstanceAST", NodeKind::TypeClassInstanceAST)
@@ -928,7 +928,7 @@ public:
 /// provided here.
 class KernelExprAST : public AstBase, public Printable {
 public:
-  KernelExprAST(NodeKind kind) : AstBase(kind) {}
+  KernelExprAST(NodeKind kind_) : AstBase(kind_) {}
   ~KernelExprAST() = default;
   static bool classof(const AstBase *node) {
     return node->getKind() >= NodeKind::FirstKernelExpr &&
@@ -970,11 +970,11 @@ public:
   std::unique_ptr<PrototypeAST> lambda_proto;
   std::unique_ptr<BlockAST> lambda_body;
 
-  KernelMapExprAST(std::shared_ptr<Token> map_tok, std::string input_name,
+  KernelMapExprAST(std::shared_ptr<Token> map_tok, std::string input_name_,
                    std::unique_ptr<PrototypeAST> proto,
                    std::unique_ptr<BlockAST> body)
       : KernelExprAST(NodeKind::KernelMapExprAST),
-        input_name(std::move(input_name)), lambda_proto(std::move(proto)),
+        input_name(std::move(input_name_)), lambda_proto(std::move(proto)),
         lambda_body(std::move(body)) {
     join_location(map_tok);
     join_location(lambda_proto.get());
@@ -994,12 +994,12 @@ public:
   std::shared_ptr<Token> op_tok;
   std::unique_ptr<ExprAST> identity;
 
-  KernelReduceExprAST(std::shared_ptr<Token> reduce_tok, std::string input_name,
-                      std::shared_ptr<Token> op_tok,
-                      std::unique_ptr<ExprAST> identity)
+  KernelReduceExprAST(std::shared_ptr<Token> reduce_tok, std::string input_name_,
+                      std::shared_ptr<Token> op_tok_,
+                      std::unique_ptr<ExprAST> identity_)
       : KernelExprAST(NodeKind::KernelReduceExprAST),
-        input_name(std::move(input_name)), op_tok(std::move(op_tok)),
-        identity(std::move(identity)) {
+        input_name(std::move(input_name_)), op_tok(std::move(op_tok_)),
+        identity(std::move(identity_)) {
     join_location(reduce_tok);
     join_location(this->op_tok);
     if (this->identity)

@@ -34,12 +34,12 @@ static constexpr llvm::StringLiteral kExitFunc = "exit";
 /// MLIRGen.cpp, MLIRGenFunction.cpp, and MLIRGenExpr.cpp.
 class MLIRGenImpl {
 public:
-  MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName,
-              const std::string &fileName, const std::string &sourceText,
+  MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName_,
+              const std::string &fileName_, const std::string &sourceText,
               const AST::ASTProperties &props)
-      : builder(&context), moduleName(moduleName), fileName(fileName),
+      : builder(&context), moduleName(moduleName_), fileName(fileName_),
         diagnosticData(sammine_util::Reporter::get_diagnostic_data(sourceText)),
-        reporter(fileName, sourceText, 3), props_(props) {}
+        reporter(fileName_, sourceText, 3), props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 

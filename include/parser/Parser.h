@@ -208,14 +208,14 @@ public:
   std::shared_ptr<Token> pending_deref_tok;
 
   [[nodiscard]] Parser(
-      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt,
+      std::optional<std::reference_wrapper<Reporter>> reporter_ = std::nullopt,
       const std::string &default_namespace = "")
-      : reporter(reporter) {}
+      : reporter(reporter_) {}
   [[nodiscard]] Parser(
-      std::shared_ptr<TokenStream> tokStream,
-      std::optional<std::reference_wrapper<Reporter>> reporter = std::nullopt,
+      std::shared_ptr<TokenStream> tokStream_,
+      std::optional<std::reference_wrapper<Reporter>> reporter_ = std::nullopt,
       const std::string &default_namespace = "")
-      : reporter(reporter), tokStream(tokStream) {}
+      : reporter(reporter_), tokStream(tokStream_) {}
 
   [[nodiscard]] auto Parse() -> u<ProgramAST>;
 };

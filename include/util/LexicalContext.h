@@ -25,8 +25,8 @@ public:
   LexicalContext *parent_scope;
 
   explicit LexicalContext() : symbols(), symbols_to_t(), parent_scope() {}
-  LexicalContext(LexicalContext *parent_scope)
-      : symbols(), symbols_to_t(), parent_scope(parent_scope) {}
+  LexicalContext(LexicalContext *parent_scope_)
+      : symbols(), symbols_to_t(), parent_scope(parent_scope_) {}
 
   void registerNameT(const std::string &name, T l) {
     symbols.insert(name);

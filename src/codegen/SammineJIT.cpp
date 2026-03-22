@@ -12,10 +12,10 @@
 //! \brief The Implementation for SammineJIT
 namespace sammine_lang {
 
-SammineJIT::SammineJIT(std::unique_ptr<llvm::orc::ExecutionSession> ES,
+SammineJIT::SammineJIT(std::unique_ptr<llvm::orc::ExecutionSession> ES_,
                        llvm::orc::JITTargetMachineBuilder JTMB,
-                       llvm::DataLayout DL)
-    : ES(std::move(ES)),
+                       llvm::DataLayout DL_)
+    : ES(std::move(ES_)),
       ObjectLayer(*this->ES,
                   [](const llvm::MemoryBuffer &) {
                     return std::make_unique<llvm::SectionMemoryManager>();
@@ -23,7 +23,7 @@ SammineJIT::SammineJIT(std::unique_ptr<llvm::orc::ExecutionSession> ES,
       CompileLayer(
           *this->ES, ObjectLayer,
           std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(JTMB))),
-      DL(std::move(DL)), Mangle(*this->ES, this->DL),
+      DL(std::move(DL_)), Mangle(*this->ES, this->DL),
       MainJD(this->ES->createBareJITDylib("<main>")) {
   MainJD.addGenerator(
       cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
