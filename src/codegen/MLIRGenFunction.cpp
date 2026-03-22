@@ -396,10 +396,20 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
 
   // If callee is an llvm.func (C function), use llvm.call
   if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
+    // C default argument promotion: float → double for variadic args
+    auto fnTy = llvmFunc.getFunctionType();
+    if (fnTy.isVarArg()) {
+      unsigned fixedCount = fnTy.getNumParams();
+      for (unsigned i = fixedCount; i < operands.size(); i++) {
+        if (operands[i].getType().isF32())
+          operands[i] = mlir::LLVM::FPExtOp::create(
+              builder, location, builder.getF64Type(), operands[i]);
+      }
+    }
     auto llvmCallOp = mlir::LLVM::CallOp::create(builder, location, resultTypes,
                                                  callee, operands);
-    if (llvmFunc.getFunctionType().isVarArg())
-      llvmCallOp.setVarCalleeType(llvmFunc.getFunctionType());
+    if (fnTy.isVarArg())
+      llvmCallOp.setVarCalleeType(fnTy);
     if (llvmCallOp.getNumResults() > 0)
       return llvmCallOp.getResult();
     return nullptr;
