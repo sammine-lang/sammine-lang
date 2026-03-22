@@ -935,40 +935,18 @@ mlir::Value MLIRGenImpl::emitVarDefArray(AST::VarDefAST *ast,
   if (ast->get_type().type_kind != TypeKind::Array)
     return nullptr;
 
-  // For immutable arrays with all-constant elements, emit as global constant
-  if (!ast->is_mutable) {
-    if (auto *arrLit =
-            llvm::dyn_cast<AST::ArrayLiteralExprAST>(ast->Expression.get())) {
-      bool allConst = std::all_of(
-          arrLit->elements.begin(), arrLit->elements.end(), [](const auto &e) {
-            return llvm::isa<AST::NumberExprAST>(e.get()) ||
-                   llvm::isa<AST::BoolExprAST>(e.get()) ||
-                   llvm::isa<AST::CharExprAST>(e.get());
-          });
-      if (allConst) {
-        auto globalPtr =
-            emitGlobalConstArray(arrLit, ast->get_type(), location);
-        symbolTable.registerNameT(ast->TypedVar->name, globalPtr);
-        return globalPtr;
-      }
-    }
-  }
-
-  // Mutable arrays need their own copy (alloca + load/store) so writes
-  // don't alias the source (which may be a global constant or another var).
-  if (ast->is_mutable) {
-    auto llvmArrayType =
-        mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->get_type()));
-    auto alloca = emitAllocaOne(llvmArrayType, location);
-    auto loaded =
-        mlir::LLVM::LoadOp::create(builder, location, llvmArrayType, initVal);
-    mlir::LLVM::StoreOp::create(builder, location, loaded, alloca);
-    symbolTable.registerNameT(ast->TypedVar->name, alloca);
-    return alloca;
-  }
-
-  symbolTable.registerNameT(ast->TypedVar->name, initVal);
-  return initVal;
+  // Always alloca + copy so that &a returns a writable stack address.
+  // Without this, immutable const arrays would be backed by read-only
+  // global memory, causing UB when their address is taken and written
+  // through (e.g. write_elem(&a, 1, 99)).
+  auto llvmArrayType =
+      mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->get_type()));
+  auto alloca = emitAllocaOne(llvmArrayType, location);
+  auto loaded =
+      mlir::LLVM::LoadOp::create(builder, location, llvmArrayType, initVal);
+  mlir::LLVM::StoreOp::create(builder, location, loaded, alloca);
+  symbolTable.registerNameT(ast->TypedVar->name, alloca);
+  return alloca;
 }
 
 mlir::Value MLIRGenImpl::emitVarDefScalar(AST::VarDefAST *ast,
