@@ -53,6 +53,16 @@ public:
     ast->scrutinee->accept_vis(this);
   }
 
+  // For-range: register loop var in a new scope around the body
+  virtual void visit(ForExprAST *ast) override {
+    ast->start->accept_vis(this);
+    ast->end->accept_vis(this);
+    enter_new_scope();
+    register_name(ast->loop_var, ast->get_location());
+    ast->body->accept_vis(this);
+    exit_new_scope();
+  }
+
   // Type class decls/instances: skip scope checking for their methods
   virtual void visit(TypeClassDeclAST *ast) override {}
   virtual void visit(TypeClassInstanceAST *ast) override {}

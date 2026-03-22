@@ -1,0 +1,20 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      sum: 10
+
+import std;
+
+let compute(n: i64) -> i64 {
+  let result = alloc<i64>(1);
+  *result = 0i64;
+  for i in 0i64..n {
+    *result = *result + i;
+  };
+  let r = *result;
+  free(result);
+  r
+}
+
+let main() -> i32 {
+  std::printf("sum: %ld\n", compute(5i64));
+  return 0;
+}

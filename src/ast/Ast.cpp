@@ -229,6 +229,13 @@ void ASTVisitor::visit(WhileExprAST *ast) {
     ast->body->accept_vis(this);
   ast->walk_with_postorder(this);
 }
+void ASTVisitor::visit(ForExprAST *ast) {
+  ast->walk_with_preorder(this);
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
+  ast->body->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
 void ASTVisitor::visit(TupleLiteralExprAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &elem : ast->elements)

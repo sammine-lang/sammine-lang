@@ -44,6 +44,7 @@ class StructLiteralExprAST;
 class FieldAccessExprAST;
 class CaseExprAST;
 class WhileExprAST;
+class ForExprAST;
 class TupleLiteralExprAST;
 class EnumDefAST;
 class TypeAliasDefAST;

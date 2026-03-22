@@ -61,6 +61,7 @@ enum class NodeKind {
   FieldAccessExprAST,
   CaseExprAST,
   WhileExprAST,
+  ForExprAST,
   TupleLiteralExprAST,
   LastExpr = TupleLiteralExprAST,
 
@@ -244,6 +245,10 @@ public:
   virtual void preorder_walk(WhileExprAST *ast) {}
   virtual void postorder_walk(WhileExprAST *ast) {}
 
+  virtual void visit(ForExprAST *ast);
+  virtual void preorder_walk(ForExprAST *ast) {}
+  virtual void postorder_walk(ForExprAST *ast) {}
+
   virtual void visit(TupleLiteralExprAST *ast);
   virtual void preorder_walk(TupleLiteralExprAST *ast) {}
   virtual void postorder_walk(TupleLiteralExprAST *ast) {}
@@ -401,6 +406,7 @@ public:
   virtual Type synthesize(FieldAccessExprAST *ast) = 0;
   virtual Type synthesize(CaseExprAST *ast) = 0;
   virtual Type synthesize(WhileExprAST *ast) = 0;
+  virtual Type synthesize(ForExprAST *ast) = 0;
   virtual Type synthesize(TupleLiteralExprAST *ast) = 0;
   virtual Type synthesize(TypeClassDeclAST *ast) = 0;
   virtual Type synthesize(TypeClassInstanceAST *ast) = 0;

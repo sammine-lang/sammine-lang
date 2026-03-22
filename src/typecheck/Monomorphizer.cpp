@@ -339,6 +339,14 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
                                             clone_block(wh->body.get()));
     break;
   }
+  case NodeKind::ForExprAST: {
+    auto *fe = llvm::cast<ForExprAST>(expr);
+    result = std::make_unique<ForExprAST>(make_tok("for"), fe->loop_var,
+                                          clone_expr(fe->start.get()),
+                                          clone_expr(fe->end.get()),
+                                          clone_block(fe->body.get()));
+    break;
+  }
   case NodeKind::TupleLiteralExprAST: {
     auto *tup = llvm::cast<TupleLiteralExprAST>(expr);
     result =

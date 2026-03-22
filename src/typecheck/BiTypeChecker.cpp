@@ -608,6 +608,16 @@ void BiTypeCheckerVisitor::visit(WhileExprAST *ast) {
   ast->accept_synthesis(this);
 }
 
+void BiTypeCheckerVisitor::visit(ForExprAST *ast) {
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
+
+  enter_new_scope();
+  ast->accept_synthesis(this);
+  ast->body->accept_vis(this);
+  exit_new_scope();
+}
+
 void BiTypeCheckerVisitor::visit(TupleLiteralExprAST *ast) {
   for (auto &elem : ast->elements)
     elem->accept_vis(this);

@@ -870,6 +870,30 @@ public:
   AST_NODE_METHODS("WhileExprAST", NodeKind::WhileExprAST)
 };
 
+class ForExprAST : public ExprAST {
+public:
+  std::string loop_var;
+  std::unique_ptr<ExprAST> start;
+  std::unique_ptr<ExprAST> end;
+  std::unique_ptr<BlockAST> body;
+
+  explicit ForExprAST(std::shared_ptr<Token> for_tok, std::string loop_var_,
+                      std::unique_ptr<ExprAST> start_,
+                      std::unique_ptr<ExprAST> end_,
+                      std::unique_ptr<BlockAST> body_)
+      : ExprAST(NodeKind::ForExprAST), loop_var(std::move(loop_var_)),
+        start(std::move(start_)), end(std::move(end_)),
+        body(std::move(body_)) {
+    this->join_location(for_tok);
+    if (this->end)
+      this->join_location(this->end.get());
+    if (this->body)
+      this->join_location(this->body.get());
+  }
+  std::string to_string() const override;
+  AST_NODE_METHODS("ForExprAST", NodeKind::ForExprAST)
+};
+
 class TupleLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;

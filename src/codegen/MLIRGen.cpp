@@ -855,6 +855,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitIfExpr(llvm::cast<AST::IfExprAST>(ast));
   case NK::WhileExprAST:
     return emitWhileExpr(llvm::cast<AST::WhileExprAST>(ast));
+  case NK::ForExprAST:
+    return emitForExpr(llvm::cast<AST::ForExprAST>(ast));
   case NK::UnaryNegExprAST:
     return emitUnaryNegExpr(llvm::cast<AST::UnaryNegExprAST>(ast));
   case NK::StringExprAST:

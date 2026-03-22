@@ -202,6 +202,8 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
         {"typeclass", TokTypeclass},
         {"instance", TokInstance},
         {"while", TokWhile},
+        {"for", TokFor},
+        {"in", TokIn},
         {"case", TokCase},
         {"kernel", TokKernel},
     };
@@ -248,6 +250,14 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
       i = advance(i);
       i = advance(i);
       tokStream->push_back(Token(TokEllipsis, "...", location));
+      return i;
+    }
+
+    // Check for dot-dot (..) — range operator
+    if (i + 1 < input.length() && input[i + 1] == '.') {
+      i = advance(i);
+      i = advance(i);
+      tokStream->push_back(Token(TokDotDot, "..", location));
       return i;
     }
 

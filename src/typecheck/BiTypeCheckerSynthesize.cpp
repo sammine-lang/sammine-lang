@@ -1246,6 +1246,70 @@ Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
   return ast->set_type(Type::Unit());
 }
 
+Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  auto start_type = ast->start->accept_synthesis(this);
+  auto end_type = ast->end->accept_synthesis(this);
+
+  if (start_type.type_kind == TypeKind::Poisoned ||
+      end_type.type_kind == TypeKind::Poisoned)
+    return ast->set_type(Type::Poisoned());
+
+  if (!start_type.is_integer()) {
+    this->add_error(ast->start->get_location(),
+                    fmt::format("for-range start must be an integer type, got {}",
+                                start_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+  if (!end_type.is_integer()) {
+    this->add_error(ast->end->get_location(),
+                    fmt::format("for-range end must be an integer type, got {}",
+                                end_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  // Resolve polymorphic Integer → concrete via default_polymorphic_type,
+  // then check both sides match.
+  auto resolved = default_polymorphic_type(start_type);
+  if (resolved.type_kind == TypeKind::Integer)
+    resolved = default_polymorphic_type(end_type);
+  if (resolved.type_kind == TypeKind::Integer)
+    resolved = Type::I32_t();
+
+  if (!type_map_ordering.compatible_to_from(resolved, start_type) ||
+      !type_map_ordering.compatible_to_from(resolved, end_type)) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("for-range start and end must be the same type, got {} and {}",
+                    start_type.to_string(), end_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  resolve_literal_type(ast->start.get(), resolved);
+  resolve_literal_type(ast->end.get(), resolved);
+
+  // Compile-time empty range check
+  auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
+  auto *end_num = llvm::dyn_cast<NumberExprAST>(ast->end.get());
+  if (start_num && end_num) {
+    int64_t start_val = std::stoll(start_num->number);
+    int64_t end_val = std::stoll(end_num->number);
+    if (start_val >= end_val) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("for-range is empty: start ({}) >= end ({})",
+                      start_val, end_val));
+      return ast->set_type(Type::Poisoned());
+    }
+  }
+
+  id_to_type.registerNameT(ast->loop_var, resolved);
+
+  return ast->set_type(Type::Unit());
+}
+
 Type BiTypeCheckerVisitor::synthesize(TupleLiteralExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();

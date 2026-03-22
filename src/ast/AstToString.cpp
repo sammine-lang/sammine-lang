@@ -299,6 +299,11 @@ std::string WhileExprAST::to_string() const {
   return "while " + condition->to_string() + " {\n" + body->to_string() + "\n}";
 }
 
+std::string ForExprAST::to_string() const {
+  return "for " + loop_var + " in " + start->to_string() + ".." +
+         end->to_string() + " {\n" + body->to_string() + "\n}";
+}
+
 std::string TupleLiteralExprAST::to_string() const {
   std::string result = "(";
   for (size_t i = 0; i < elements.size(); i++) {

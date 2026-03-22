@@ -99,6 +99,10 @@ enum TokenType {
   TokIf,    // if
   TokElse,  // else
   TokWhile, // while
+  TokFor,   // for
+  TokIn,    // in
+
+  TokDotDot, // ..
 
   TokType, // type
 
@@ -189,6 +193,10 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokIf, "if"},
     {TokElse, "else"},
     {TokWhile, "while"},
+    {TokFor, "for"},
+    {TokIn, "in"},
+
+    {TokDotDot, ".."},
 
     // TokCOMMENTS
     {TokSingleComment, "//"},

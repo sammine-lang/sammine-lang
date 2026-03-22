@@ -263,6 +263,9 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
   case NK::WhileExprAST:
     check_while(llvm::cast<WhileExprAST>(stmt));
     break;
+  case NK::ForExprAST:
+    check_for(llvm::cast<ForExprAST>(stmt));
+    break;
   case NK::CaseExprAST:
     check_case(llvm::cast<CaseExprAST>(stmt));
     break;
@@ -847,14 +850,13 @@ void LinearTypeChecker::check_if(IfExprAST *ast) {
   check_branch_consistency(before, branches, ast->get_location());
 }
 
-// ── check_while ─────────────────────────────────────────────────────
+// ── check_loop_body ─────────────────────────────────────────────────
 
-void LinearTypeChecker::check_while(WhileExprAST *ast) {
+void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
   auto before = snapshot();
   loop_depth++;
 
-  check_stmt(ast->condition.get());
-  check_block(ast->body.get());
+  check_body();
 
   auto after = snapshot();
   loop_depth--;
@@ -875,6 +877,25 @@ void LinearTypeChecker::check_while(WhileExprAST *ast) {
 
   // Restore state (loop might run 0 times, so outer state is unchanged)
   restore(before);
+}
+
+// ── check_while ─────────────────────────────────────────────────────
+
+void LinearTypeChecker::check_while(WhileExprAST *ast) {
+  check_loop_body([&] {
+    check_stmt(ast->condition.get());
+    check_block(ast->body.get());
+  });
+}
+
+// ── check_for ───────────────────────────────────────────────────────
+
+void LinearTypeChecker::check_for(ForExprAST *ast) {
+  check_loop_body([&] {
+    check_stmt(ast->start.get());
+    check_stmt(ast->end.get());
+    check_block(ast->body.get());
+  });
 }
 
 // ── check_case ──────────────────────────────────────────────────────

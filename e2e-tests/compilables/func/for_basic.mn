@@ -1,0 +1,15 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      0
+// CHECK-NEXT: 1
+// CHECK-NEXT: 2
+// CHECK-NEXT: 3
+// CHECK-NEXT: 4
+
+import std;
+
+let main() -> i32 {
+  for i in 0i64..5 {
+    std::printf("%ld\n", i);
+  };
+  return 0;
+}

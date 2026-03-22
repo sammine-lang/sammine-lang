@@ -164,6 +164,7 @@ public:
   [[nodiscard]] auto ParseCaseExpr() -> p<ExprAST>;
   [[nodiscard]] auto parseCasePattern() -> std::optional<CasePattern>;
   [[nodiscard]] auto ParseWhileExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseForExpr() -> p<ExprAST>;
 
   // Parse block
   [[nodiscard]] auto ParseBlock() -> p<BlockAST>;

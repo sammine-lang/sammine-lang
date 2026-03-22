@@ -131,8 +131,8 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   }
 
   // If the variable is in the symbol table, handle it normally
-  if (symbolTable.queryName(ast->variableName) != nameNotFound) {
-    auto val = symbolTable.get_from_name(ast->variableName);
+  if (symbolTable.recursiveQueryName(ast->variableName) != nameNotFound) {
+    auto val = symbolTable.recursive_get_from_name(ast->variableName);
 
     // Array vars are !llvm.ptr (alloca to LLVMArrayType) — return the
     // pointer directly; downstream consumers use GEP to index into it.
@@ -437,6 +437,83 @@ mlir::Value MLIRGenImpl::emitWhileExpr(AST::WhileExprAST *ast) {
   builder.setInsertionPointToStart(exitBlock);
 
   // While loops always evaluate to unit
+  return nullptr;
+}
+
+// TODO: Migrate to iterator protocol desugaring. Currently emits a direct
+// counter loop. The plan is to desugar `for i in start..end { body }` into
+// recursive Iterator<Range, i64>::next() calls with TCO, making for-range
+// work with any iterable type, not just integer ranges.
+mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
+  auto location = loc(ast);
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+
+  auto counterType = convertType(ast->start->get_type());
+
+  auto startVal = emitRValue(ast->start.get());
+  auto endVal = emitRValue(ast->end.get());
+  if (!startVal || !endVal)
+    return nullptr;
+
+  // Mutable counter alloca (internal, not user-visible)
+  auto counterAlloca = emitAllocaOne(counterType, location);
+  mlir::LLVM::StoreOp::create(builder, location, startVal, counterAlloca);
+
+  // Branch to header
+  auto *headerBlock = new mlir::Block();
+  mlir::cf::BranchOp::create(builder, location, headerBlock);
+
+  // --- Header: load counter, compare < end ---
+  parentRegion->push_back(headerBlock);
+  builder.setInsertionPointToStart(headerBlock);
+  auto counterVal =
+      mlir::LLVM::LoadOp::create(builder, location, counterType, counterAlloca);
+
+  bool is_unsigned = ast->start->get_type().is_unsigned();
+  auto predicate = is_unsigned ? mlir::arith::CmpIPredicate::ult
+                               : mlir::arith::CmpIPredicate::slt;
+  auto cond =
+      mlir::arith::CmpIOp::create(builder, location, predicate, counterVal, endVal);
+
+  auto *bodyBlock = new mlir::Block();
+  auto *exitBlock = new mlir::Block();
+  mlir::cf::CondBranchOp::create(builder, location, cond, bodyBlock,
+                                 /*trueArgs=*/{}, exitBlock,
+                                 /*falseArgs=*/{});
+
+  // --- Body ---
+  parentRegion->push_back(bodyBlock);
+  builder.setInsertionPointToStart(bodyBlock);
+
+  {
+    decltype(symbolTable)::Guard scope(symbolTable);
+
+    // Bind loop var to current counter value (immutable to user)
+    auto loopVarAlloca = emitAllocaOne(counterType, location);
+    mlir::LLVM::StoreOp::create(builder, location, counterVal, loopVarAlloca);
+    symbolTable.registerNameT(ast->loop_var, loopVarAlloca);
+
+    emitBlock(ast->body.get());
+  }
+
+  // Increment counter, branch back to header
+  auto *bodyEnd = builder.getInsertionBlock();
+  bool bodyTerminated = !bodyEnd->empty() &&
+                        bodyEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
+  if (!bodyTerminated) {
+    auto cur = mlir::LLVM::LoadOp::create(builder, location, counterType,
+                                          counterAlloca);
+    auto one =
+        mlir::arith::ConstantIntOp::create(builder, location, counterType, 1);
+    auto next = mlir::arith::AddIOp::create(builder, location, cur, one);
+    mlir::LLVM::StoreOp::create(builder, location, next, counterAlloca);
+    mlir::cf::BranchOp::create(builder, location, headerBlock);
+  }
+
+  // --- Exit ---
+  parentRegion->push_back(exitBlock);
+  builder.setInsertionPointToStart(exitBlock);
+
   return nullptr;
 }
 

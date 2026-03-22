@@ -101,6 +101,7 @@ public:
   virtual void visit(FieldAccessExprAST *ast) override;
   virtual void visit(CaseExprAST *ast) override;
   virtual void visit(WhileExprAST *ast) override;
+  virtual void visit(ForExprAST *ast) override;
   virtual void visit(TupleLiteralExprAST *ast) override;
   virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
@@ -196,6 +197,7 @@ public:
   virtual Type synthesize(FieldAccessExprAST *ast) override;
   virtual Type synthesize(CaseExprAST *ast) override;
   virtual Type synthesize(WhileExprAST *ast) override;
+  virtual Type synthesize(ForExprAST *ast) override;
   virtual Type synthesize(TupleLiteralExprAST *ast) override;
   virtual Type synthesize(TypeClassDeclAST *ast) override;
   virtual Type synthesize(TypeClassInstanceAST *ast) override;

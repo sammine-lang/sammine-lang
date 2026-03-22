@@ -216,6 +216,7 @@ public:
   mlir::Value emitUnaryNegExpr(AST::UnaryNegExprAST *ast);
   mlir::Value emitIfExpr(AST::IfExprAST *ast);
   mlir::Value emitWhileExpr(AST::WhileExprAST *ast);
+  mlir::Value emitForExpr(AST::ForExprAST *ast);
   mlir::Value emitStringExpr(AST::StringExprAST *ast);
   mlir::Value emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast);
   mlir::Value emitRangeExpr(AST::RangeExprAST *ast);

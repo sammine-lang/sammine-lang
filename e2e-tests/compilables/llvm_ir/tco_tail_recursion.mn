@@ -1,0 +1,19 @@
+// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// Verify LLVM's tailcallelim pass transforms self-recursive tail calls.
+// After optimization, count() should not contain a recursive call to itself.
+
+import std;
+
+let count(n: i64, acc: i64) -> i64 {
+  if n == 0i64 { acc }
+  else { count(n - 1i64, acc + 1i64) }
+}
+
+let main() -> i32 {
+  std::printf("%ld\n", count(10i64, 0i64));
+  return 0;
+}
+
+// CHECK:      define i64 @count(i64 %0, i64 %1) local_unnamed_addr
+// CHECK-NOT:  call{{.*}}@count
+// CHECK:      }

@@ -823,7 +823,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
       neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr, free_, len,
       dim, &Parser::ParseArrayLiteralExpr, &Parser::ParseIdentifierExpr,
       &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
-      &Parser::ParseWhileExpr, num, bool_, chr, str);
+      &Parser::ParseWhileExpr, &Parser::ParseForExpr, num, bool_, chr, str);
   if (!result.ok())
     return result;
   return parsePostfixOps(std::move(result.node));
@@ -1332,6 +1332,45 @@ auto Parser::ParseWhileExpr() -> p<ExprAST> {
       std::make_unique<WhileExprAST>(std::move(cond), std::move(body));
   result->join_location(while_tok);
   return {std::move(result), SUCCESS};
+}
+
+auto Parser::ParseForExpr() -> p<ExprAST> {
+  EXPECT(for_tok, TokenType::TokFor);
+
+  REQUIRE(id, TokID, "Expected loop variable name after 'for'",
+          for_tok->get_location());
+
+  REQUIRE(in_tok, TokIn, "Expected 'in' after loop variable",
+          id->get_location());
+
+  auto [start_expr, start_result] = ParseExpr();
+  if (start_result != SUCCESS) {
+    emit_if_uncommitted(start_result, "Expected range start expression",
+                        in_tok->get_location());
+    return {nullptr, FAILED};
+  }
+
+  REQUIRE(dotdot, TokDotDot, "Expected '..' in for-range expression",
+          start_expr->get_location());
+
+  auto [end_expr, end_result] = ParseExpr();
+  if (end_result != SUCCESS) {
+    emit_if_uncommitted(end_result, "Expected range end expression",
+                        dotdot->get_location());
+    return {nullptr, FAILED};
+  }
+
+  auto [body, body_result] = ParseBlock();
+  if (body_result != SUCCESS) {
+    emit_if_uncommitted(body_result, "Expected block after for-range",
+                        end_expr->get_location());
+    return {nullptr, FAILED};
+  }
+
+  return {std::make_unique<ForExprAST>(for_tok, id->lexeme,
+                                       std::move(start_expr),
+                                       std::move(end_expr), std::move(body)),
+          SUCCESS};
 }
 
 auto Parser::ParsePrototype() -> p<PrototypeAST> {
