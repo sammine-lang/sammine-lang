@@ -76,7 +76,6 @@ enum TokenType {
   TokDim,       // dim
   TokArrow,     // ->
   TokLet,       // let
-  TokMUT,       // mut
   TokReuse,     // reuse
   TokExport,    // export
   TokImport,    // import
@@ -163,7 +162,6 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokFunc, "fn"},
     {TokArrow, "->"},
     {TokLet, "let"},
-    {TokMUT, "mut"},
     {TokStruct, "struct"},
     {TokPtr, "ptr"},
     {TokAlloc, "alloc"},

@@ -217,13 +217,11 @@ public:
 class TypedVarAST : public AstBase, public Printable {
 public:
   std::string name;
-  bool is_mutable = false;
   std::unique_ptr<TypeExprAST> type_expr;
 
   explicit TypedVarAST(std::shared_ptr<Token> name_,
-                       std::unique_ptr<TypeExprAST> type_expr_,
-                       bool is_mutable_ = false)
-      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable_),
+                       std::unique_ptr<TypeExprAST> type_expr_)
+      : AstBase(NodeKind::TypedVarAST),
         type_expr(std::move(type_expr_)) {
     this->join_location(name_);
     if (name_)
@@ -231,8 +229,8 @@ public:
     if (this->type_expr)
       this->join_location(this->type_expr->location);
   }
-  explicit TypedVarAST(std::shared_ptr<Token> name_, bool is_mutable_ = false)
-      : AstBase(NodeKind::TypedVarAST), is_mutable(is_mutable_) {
+  explicit TypedVarAST(std::shared_ptr<Token> name_)
+      : AstBase(NodeKind::TypedVarAST) {
     this->join_location(name_);
     if (name_)
       this->name = name_->lexeme;
@@ -431,7 +429,6 @@ public:
 //! \brief A variable definition: "var x = expression;" or "let (a, b) = expr;"
 class VarDefAST : public ExprAST {
 public:
-  bool is_mutable = false;
   bool is_tuple_destructure = false;
   std::unique_ptr<TypedVarAST> TypedVar; // single var (existing)
   std::vector<std::unique_ptr<TypedVarAST>> destructure_vars; // tuple (new)
@@ -439,9 +436,8 @@ public:
 
   explicit VarDefAST(std::shared_ptr<Token> let,
                      std::unique_ptr<TypedVarAST> TypedVar_,
-                     std::unique_ptr<ExprAST> Expression_,
-                     bool is_mutable_ = false)
-      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable_),
+                     std::unique_ptr<ExprAST> Expression_)
+      : ExprAST(NodeKind::VarDefAST),
         TypedVar(std::move(TypedVar_)), Expression(std::move(Expression_)) {
 
     this->join_location(let)
@@ -452,9 +448,8 @@ public:
   // Destructuring constructor: let (a, b) = expr;
   explicit VarDefAST(std::shared_ptr<Token> let,
                      std::vector<std::unique_ptr<TypedVarAST>> destructure_vars_,
-                     std::unique_ptr<ExprAST> Expression_,
-                     bool is_mutable_ = false)
-      : ExprAST(NodeKind::VarDefAST), is_mutable(is_mutable_),
+                     std::unique_ptr<ExprAST> Expression_)
+      : ExprAST(NodeKind::VarDefAST),
         is_tuple_destructure(true),
         destructure_vars(std::move(destructure_vars_)),
         Expression(std::move(Expression_)) {

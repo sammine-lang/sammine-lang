@@ -92,16 +92,7 @@ void ScopeGeneratorVisitor::preorder_walk(VarDefAST *ast) {
   }
 
   auto var_name = ast->TypedVar->name;
-  if (can_see(var_name) == nameNotFound) {
-    register_name(var_name, ast->TypedVar->get_location());
-  } else if (can_see(var_name) == nameFound) {
-    add_error(ast->TypedVar->get_location(),
-              fmt::format("[SCOPE]: The name `{}` has been introduced before",
-                          var_name));
-    add_error(
-        this->scope_stack.recursive_get_from_name(var_name),
-        fmt::format("[SCOPE]: The firstly defined `{}` is here", var_name));
-  }
+  register_name(var_name, ast->TypedVar->get_location());
 }
 void ScopeGeneratorVisitor::visit(ExternAST *ast) {
   enter_new_scope();

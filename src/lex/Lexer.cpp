@@ -188,7 +188,6 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
         {"if", TokIf},
         {"else", TokElse},
         {"let", TokLet},
-        {"mut", TokMUT},
         {"true", TokTrue},
         {"false", TokFalse},
         {"reuse", TokReuse},

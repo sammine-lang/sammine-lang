@@ -179,8 +179,6 @@ std::string CallExprAST::to_string() const {
 
 std::string VarDefAST::to_string() const {
   std::string result = "let ";
-  if (is_mutable)
-    result += "mut ";
   if (is_tuple_destructure) {
     result += "(";
     for (size_t i = 0; i < destructure_vars.size(); i++) {

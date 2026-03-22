@@ -239,12 +239,6 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
     }
   }
 
-  // Mutability mismatch
-  if (expected.mutability == Mutability::Mutable &&
-      actual.mutability != Mutability::Mutable && !actual.is_literal()) {
-    return "note: expected a mutable value, but got an immutable one";
-  }
-
   // Signed/unsigned mismatch
   if ((expected.is_signed() && actual.is_unsigned()) ||
       (expected.is_unsigned() && actual.is_signed())) {
@@ -342,8 +336,8 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
 }
 
 // Full assignment compatibility: structural match + qualifier checks
-// (mutability, linearity). Used for variable initialization, function
-// arguments, and return type validation.
+// (linearity). Used for variable initialization, function arguments,
+// and return type validation.
 bool TypeMapOrdering::compatible_to_from(const Type &to,
                                          const Type &from) const {
   if (!qualifier_compatible(to, from))

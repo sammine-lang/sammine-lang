@@ -157,7 +157,6 @@ public:
 using TypeData = std::variant<FunctionType, PointerType, ArrayType, StructType,
                               EnumType, TupleType, std::string, std::monostate>;
 
-enum class Mutability : uint8_t { Immutable = 0, Mutable = 1 };
 enum class Linearity : uint8_t {
   NonLinear = 0,
   Linear = 1
@@ -169,11 +168,8 @@ enum class Linearity : uint8_t {
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
-  Mutability mutability = Mutability::Immutable;
   Linearity linearity = Linearity::NonLinear;
 
-  // Compat accessors for migration
-  bool is_mutable_v() const { return mutability == Mutability::Mutable; }
   bool is_linear_v() const { return linearity == Linearity::Linear; }
   // Constructors
   Type() : type_kind(TypeKind::NonExistent), type_data(std::monostate()) {}
@@ -492,9 +488,8 @@ inline void hash_combine(size_t &seed, size_t h) {
 }
 
 /// Hashes TypeKind + TypeData only, consistent with operator==.
-/// Mutability and linearity are intentionally excluded: they are qualifiers on
-/// bindings/pointers, not part of type identity. There is no "mut i32" type —
-/// mutability lives on the variable. Linear vs non-linear pointers generate
+/// Linearity is intentionally excluded: it is a qualifier on pointers,
+/// not part of type identity. Linear vs non-linear pointers generate
 /// identical code structurally, so e.g. identity<ptr<i32>> and
 /// identity<'ptr<i32>> are the same monomorphization.
 namespace std {
@@ -590,10 +585,9 @@ struct TypeMapOrdering {
   /// Full check: structure + qualifiers (use for assignments, args, returns)
   bool compatible_to_from(const Type &to, const Type &from) const;
 
-  /// Structure only: ignores mutability/linearity (use for if/case arm
-  /// unification)
+  /// Structure only: ignores linearity (use for if/case arm unification)
   bool structurally_compatible(const Type &to, const Type &from) const;
 
-  /// Qualifier check only: mutability + linearity
+  /// Qualifier check only: linearity
   bool qualifier_compatible(const Type &to, const Type &from) const;
 };

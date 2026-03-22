@@ -107,8 +107,7 @@ std::unique_ptr<TypedVarAST> Monomorphizer::clone_typed_var(TypedVarAST *var) {
   if (!var)
     return nullptr;
   auto result = std::make_unique<TypedVarAST>(
-      make_tok(var->name), clone_type_expr(var->type_expr.get()),
-      var->is_mutable);
+      make_tok(var->name), clone_type_expr(var->type_expr.get()));
   result->set_location(var->get_location());
   return result;
 }
@@ -220,12 +219,11 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
       for (auto &v : vd->destructure_vars)
         vars.push_back(clone_typed_var(v.get()));
       result = std::make_unique<VarDefAST>(make_tok("let"), std::move(vars),
-                                           clone_expr(vd->Expression.get()),
-                                           vd->is_mutable);
+                                           clone_expr(vd->Expression.get()));
     } else {
       result = std::make_unique<VarDefAST>(
           make_tok("let"), clone_typed_var(vd->TypedVar.get()),
-          clone_expr(vd->Expression.get()), vd->is_mutable);
+          clone_expr(vd->Expression.get()));
     }
     break;
   }

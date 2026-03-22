@@ -127,18 +127,10 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
     ast->set_type(Type::Poisoned());
   }
 
-  {
-    auto t = ast->get_type();
-    t.mutability =
-        ast->is_mutable ? Mutability::Mutable : Mutability::Immutable;
-    ast->set_type(t);
-  }
-
   id_to_type.registerNameT(ast->TypedVar->name, ast->get_type());
   LOG({
-    fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} ({}{})\n",
+    fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} (immutable{})\n",
                ast->TypedVar->name, ast->get_type().to_string(),
-               ast->is_mutable ? "mutable" : "immutable",
                ast->get_type().is_linear_v() ? ", linear" : "");
   });
   return ast->get_type();
@@ -625,25 +617,23 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
 
   if (ast->Op->is_assign()) {
     if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-      if (!var->get_type().is_mutable_v()) {
+      this->add_error(
+          ast->Op->get_location(),
+          fmt::format("Cannot reassign variable '{}'. "
+                      "All bindings are immutable; use 'let {} = ...' to shadow",
+                      var->variableName, var->variableName));
+      return ast->set_type(Type::Poisoned());
+    } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
+      auto base_type = idx->array_expr->get_type();
+      // Reject writes to array elements (arrays are immutable values),
+      // but allow writes through dereferenced pointers to arrays
+      // e.g. (*arr_ptr)[i] = val is a pointer write-through, which is valid
+      if (base_type.type_kind == TypeKind::Array &&
+          !llvm::isa<DerefExprAST>(idx->array_expr.get())) {
         this->add_error(
             ast->Op->get_location(),
-            fmt::format("Cannot reassign immutable variable '{}'. "
-                        "Use 'let mut' or 'mut' to declare it as mutable",
-                        var->variableName));
+            "Cannot write to array element. Arrays are immutable values");
         return ast->set_type(Type::Poisoned());
-      }
-    } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
-      if (auto *arr_var =
-              llvm::dyn_cast<VariableExprAST>(idx->array_expr.get())) {
-        if (!arr_var->get_type().is_mutable_v()) {
-          this->add_error(
-              ast->Op->get_location(),
-              fmt::format("Cannot write to index of immutable array '{}'. "
-                          "Use 'let mut' to declare it as mutable",
-                          arr_var->variableName));
-          return ast->set_type(Type::Poisoned());
-        }
       }
     }
     return ast->set_type(Type::Unit());
@@ -866,8 +856,6 @@ Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
     return ast->get_type();
   auto ast_type = resolve_type_expr(ast->type_expr.get());
 
-  ast_type.mutability =
-      ast->is_mutable ? Mutability::Mutable : Mutability::Immutable;
   id_to_type.registerNameT(ast->name, ast_type);
   return ast->set_type(ast_type);
 }

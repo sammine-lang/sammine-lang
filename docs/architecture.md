@@ -191,7 +191,6 @@ The `Type` struct has four fields:
 struct Type {
   TypeKind type_kind;
   TypeData type_data;
-  Mutability mutability;  // Immutable or Mutable
   Linearity linearity;    // NonLinear or Linear
 };
 ```
@@ -226,9 +225,9 @@ Type::TypeParam("T")       // generic parameter
 
 `TypeMapOrdering` defines a type lattice for subtyping relationships. Its `populate()` method registers built-in edges (e.g., `Integer` is the parent of `I32_t`, `I64_t`, `U32_t`, `U64_t`; `Flt` is the parent of `F64_t`, `F32_t`). Four key methods provide compatibility checks:
 
-- `compatible_to_from(to, from)` -- full check including structure, mutability, and linearity. Used for assignments, function arguments, and return values.
+- `compatible_to_from(to, from)` -- full check including structure and linearity. Used for assignments, function arguments, and return values.
 - `structurally_compatible(to, from)` -- checks structural type equivalence (polymorphic numerics, tuples, enums). Does not check qualifiers.
-- `qualifier_compatible(to, from)` -- checks mutability and linearity qualifiers (e.g., linear pointer types must match exactly).
+- `qualifier_compatible(to, from)` -- checks linearity qualifiers (e.g., linear pointer types must match exactly).
 - `lowest_common_type(a, b)` -- finds the lowest common ancestor in the type lattice, used for unifying branch types.
 
 ---

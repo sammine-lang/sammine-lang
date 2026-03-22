@@ -369,8 +369,12 @@ auto Parser::ParseFuncDef() -> p<DefinitionAST> {
 //! possible). If a `let` is not found then return a nullptr.
 auto Parser::ParseVarDef() -> p<ExprAST> {
   EXPECT(let, TokenType::TokLet);
-  auto mut_tok = expect(TokenType::TokMUT);
-  bool is_mutable = mut_tok != nullptr;
+  // Migration diagnostic: mut keyword has been removed
+  if (tokStream->peek()->tok_type == TokID && tokStream->peek()->lexeme == "mut") {
+    imm_error("The 'mut' keyword has been removed; all bindings are immutable",
+              tokStream->peek()->get_location());
+    tokStream->consume(); // skip the "mut" identifier
+  }
 
   // Check for destructuring: let (a, b) = expr;
   if (auto lparen = expect(TokenType::TokLeftParen)) {
@@ -411,8 +415,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
                 tokStream->currentLocation());
       return {nullptr, FAILED};
     }
-    return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr),
-                                        is_mutable),
+    return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr)),
             SUCCESS};
   }
 
@@ -440,7 +443,7 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   auto semicolon = expect(TokenType::TokSemiColon, true);
   if (semicolon)
     return {std::make_unique<VarDefAST>(let, std::move(typedVar),
-                                        std::move(expr), is_mutable),
+                                        std::move(expr)),
             SUCCESS};
   imm_error("Missing ';' after variable definition",
             tokStream->currentLocation());
@@ -605,12 +608,17 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
 }
 
 auto Parser::ParseTypedVar() -> p<TypedVarAST> {
-  auto mut_tok = expect(TokenType::TokMUT);
-  bool is_mutable = mut_tok != nullptr;
+  // Migration diagnostic: mut keyword has been removed
+  bool saw_mut = false;
+  if (tokStream->peek()->tok_type == TokID && tokStream->peek()->lexeme == "mut") {
+    imm_error("The 'mut' keyword has been removed; all bindings are immutable",
+              tokStream->peek()->get_location());
+    tokStream->consume(); // skip the "mut" identifier
+    saw_mut = true;
+  }
   auto name = expect(TokenType::TokID);
   if (!name) {
-    if (is_mutable) {
-      imm_error("Expected identifier after 'mut'", mut_tok->get_location());
+    if (saw_mut) {
       return {nullptr, FAILED};
     }
     return {std::make_unique<TypedVarAST>(nullptr, nullptr), NONCOMMITTED};
@@ -618,13 +626,13 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
 
   auto colon = expect(TokenType::TokColon);
   if (!colon)
-    return {std::make_unique<TypedVarAST>(name, is_mutable), SUCCESS};
+    return {std::make_unique<TypedVarAST>(name), SUCCESS};
   auto type_expr = ParseTypeExprTopLevel();
   if (!type_expr) {
     imm_error("Expected type name after token `:`", colon->get_location());
     return {nullptr, FAILED};
   }
-  return {std::make_unique<TypedVarAST>(name, std::move(type_expr), is_mutable),
+  return {std::make_unique<TypedVarAST>(name, std::move(type_expr)),
           SUCCESS};
 }
 template <typename NodeT>
