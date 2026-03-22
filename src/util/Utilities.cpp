@@ -452,11 +452,23 @@ void Reporter::report(const Reportee &reports) const {
 
   auto groups = group_reports(reports);
 
+  // Render NonPrintable-location reports without source context.
+  std::vector<GroupedReport> printable_groups;
+  for (auto &g : groups) {
+    if (g.loc == Location::NonPrintable()) {
+      print_fmt(LINE_COLOR, "    |");
+      print_fmt(fmt::terminal_color::blue, "In {}\n", file_name);
+      report_singular_line(g.kind, g.msgs, 0, 0);
+    } else {
+      printable_groups.push_back(std::move(g));
+    }
+  }
+
   // Partition groups by source_info pointer so that errors from different
   // files are clustered independently (they have different diagnostic_data).
   std::map<SourceInfo *, std::vector<size_t>> partitions;
-  for (size_t i = 0; i < groups.size(); i++)
-    partitions[groups[i].loc.source_info.get()].push_back(i);
+  for (size_t i = 0; i < printable_groups.size(); i++)
+    partitions[printable_groups[i].loc.source_info.get()].push_back(i);
 
   bool first = true;
 
@@ -465,7 +477,7 @@ void Reporter::report(const Reportee &reports) const {
     std::vector<GroupedReport> sub_groups;
     sub_groups.reserve(indices.size());
     for (size_t idx : indices)
-      sub_groups.push_back(groups[idx]);
+      sub_groups.push_back(printable_groups[idx]);
 
     const DiagnosticData &diag_data =
         si_ptr ? get_diagnostic_data(si_ptr->source_text) : diagnostic_data;

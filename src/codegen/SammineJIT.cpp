@@ -4,6 +4,7 @@
 
 #include "codegen/SammineJIT.h"
 
+#include "fmt/core.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h" // Provides the SimpleCompiler class.
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h" // Provides the DynamicLibrarySearchGenerator class.
 #include "llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h" // Provides SelfExecutorProcessControl
@@ -58,6 +59,46 @@ llvm::Error SammineJIT::addModule(llvm::orc::ThreadSafeModule TSM,
   if (!RT)
     RT = MainJD.getDefaultResourceTracker();
   return CompileLayer.add(RT, std::move(TSM));
+}
+
+int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
+                             std::unique_ptr<llvm::LLVMContext> context,
+                             const std::vector<std::string> &libraries) {
+  using sammine_util::Location;
+
+  // Load imported module libraries into the JIT.
+  for (auto &lib : libraries) {
+    if (auto err = loadLibrary(lib)) {
+      add_error(Location::NonPrintable(),
+                fmt::format("JIT failed to load library '{}': {}", lib,
+                            toString(std::move(err))));
+      return 1;
+    }
+  }
+
+  // Add the compiled module to the JIT.
+  auto TSCtx = llvm::orc::ThreadSafeContext(std::move(context));
+  auto TSM = llvm::orc::ThreadSafeModule(std::move(module), TSCtx);
+
+  if (auto err = addModule(std::move(TSM))) {
+    add_error(Location::NonPrintable(),
+              fmt::format("JIT addModule failed: {}",
+                          toString(std::move(err))));
+    return 1;
+  }
+
+  // Look up and call main().
+  auto mainSym = lookup("main");
+  if (!mainSym) {
+    add_error(Location::NonPrintable(),
+              fmt::format("JIT lookup of 'main' failed: {}",
+                          toString(mainSym.takeError())));
+    return 1;
+  }
+
+  auto *mainFn = mainSym->getAddress().toPtr<int (*)()>();
+  exit_code_ = mainFn();
+  return exit_code_;
 }
 
 } // namespace sammine_lang

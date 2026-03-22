@@ -39,6 +39,10 @@ int main(int argc, char *argv[]) {
   bool check = false;
   app.add_flag("--check", check, "Performs compiler check only, no codegen");
 
+  bool jit = false;
+  app.add_flag("--jit", jit,
+               "JIT execute the program directly (only effective with main function)");
+
   std::string llvm_ir;
   app.add_option("--llvm-ir", llvm_ir,
                  "Emit LLVM IR. Required value: pre, post, or diff")
@@ -102,6 +106,7 @@ int main(int argc, char *argv[]) {
     compiler_options[co::IMPORT_PATHS] = joined;
   }
   compiler_options[co::LIB_FORMAT] = lib_format;
+  compiler_options[co::JIT] = jit ? "true" : "false";
 
   return sammine_lang::CompilerRunner::run(compiler_options);
 }

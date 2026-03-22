@@ -79,10 +79,12 @@ class Compiler {
   enum class State { Running, Finished, Error };
 
   sammine_util::Reporter reporter;
+  sammine_util::Reportee reportee;
   int64_t context_radius = 2;
   State state_ = State::Running;
   bool has_main = false;
   bool from_string = false;
+  int jit_exit_code_ = 0;
 
   void lex();
   void parse();
@@ -100,6 +102,7 @@ class Compiler {
   void emit_archive_impl();
   void emit_shared_impl();
   void link();
+  void jit_execute();
 
   static LibFormat parse_lib_format(const std::string &s) {
     if (s == "static")
@@ -782,6 +785,39 @@ void Compiler::optimize() {
   }
 }
 
+// JIT execute: when --jit is set and main() exists, run the program directly
+// via ORC JIT instead of emitting object files and linking.
+void Compiler::jit_execute() {
+  if (has_error())
+    return;
+  if (compiler_options[compiler_option_enum::JIT] != "true")
+    return;
+
+  if (!has_main) {
+    reportee.add_diagnostics(
+        Location::NonPrintable(),
+        "--jit flag ignored: no main function found. "
+        "JIT execution requires a main function.");
+    return;
+  }
+
+  LOG({
+    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
+               "Start JIT execution stage...\n");
+  });
+
+  auto &jit = resPtr->sammineJIT;
+  jit_exit_code_ = jit->execute_main(std::move(resPtr->Module),
+                                     std::move(resPtr->Context),
+                                     extra_object_files);
+  reporter.report(*jit);
+
+  if (jit->has_errors())
+    set_error();
+  else
+    state_ = State::Finished;
+}
+
 // Stage 10: Emit .o object file via LLVM TargetMachine.
 void Compiler::emit_object() {
   if (has_error()) {
@@ -789,7 +825,8 @@ void Compiler::emit_object() {
   }
 
   if (this->from_string) {
-    reporter.immediate_diag(
+    reportee.add_diagnostics(
+        Location::NonPrintable(),
         "Skipping object file and executable emission: input was provided "
         "via --str. Use -f to compile from a file.");
     return;
@@ -1022,6 +1059,7 @@ int Compiler::start() {
       {"dump_ast", &Compiler::dump_ast},
       {"codegen", &Compiler::codegen},
       {"optimize", &Compiler::optimize},
+      {"jit_execute", &Compiler::jit_execute},
       {"emit_obj", &Compiler::emit_object},
       {"emit_library", &Compiler::emit_library},
       {"link", &Compiler::link},
@@ -1059,7 +1097,14 @@ int Compiler::start() {
     }
   }
 
-  return has_error() ? 1 : 0;
+  if (reportee.has_message())
+    reporter.report(reportee);
+
+  if (has_error())
+    return 1;
+  if (compiler_options[compiler_option_enum::JIT] == "true" && has_main)
+    return jit_exit_code_;
+  return 0;
 }
 
 } // namespace sammine_lang
