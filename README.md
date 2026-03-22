@@ -169,6 +169,10 @@ cmake -S . -B build \
   -DSAMMINE_TEST=ON
 ```
 
+Optional flags:
+- `-DSAMMINE_SANITIZE=ON` — Enable ASan + UBSan
+- `-DSAMMINE_TRACY=ON` — Enable [Tracy](https://github.com/wolfpld/tracy) profiler instrumentation (uses `TRACY_ON_DEMAND`, no overhead until the Tracy GUI connects)
+
 Run
 
 ```bash
@@ -191,22 +195,17 @@ to erase the build folder (similar to make clean).
 ## Compiler CLI
 
 ```
-./build/bin/sammine --help
-
-Usage: sammine [--help] [--version] [[--file VAR]|[--str VAR]] [--check] [--llvm-ir] [--ast-ir] [--diagnostics VAR]
-
-Optional arguments:
-  -h, --help      shows help message and exits
-  -v, --version   prints version information and exits
   -f, --file      An input file for compiler to scan over.
   -s, --str       An input string for compiler to scan over.
   --check         Performs compiler check only, no codegen
-
-Diagnostics related options (detailed usage):
-   --llvm-ir      sammine compiler spits out LLVM-IR to stdout
-   --ast-ir       sammine compiler spits out the internal AST to stdout
-   --diagnostics  sammine compiler spits out diagnostics for sammine-lang developers.
-                  Use with value for logging: --diagnostics=stages;lexer;parser. Default value is none
-   --time         Print compilation timing. Also accepts: sparse (per-phase table), coarse (per-phase + all LLVM passes)
-   --dev          Show compiler source locations in error messages (for developers)
+  --jit           JIT execute the program directly (only effective with main function)
+  --jit-args      Arguments to pass to the JIT-executed program (repeatable)
+  -O              Output directory for build artifacts (.so, .a, .exe)
+  -I              Add directory to import search path (repeatable)
+  --lib           Emit library output. Values: static (.a) or shared (.so)
+  --llvm-ir       Emit LLVM IR. Values: pre, post, or diff
+  --mlir-ir       Dump MLIR before lowering to LLVM IR
+  --ast-ir        Dump the internal AST to stdout
+  --diagnostics   Developer diagnostics. Values: stages;lexer;parser or 'dev'
+  --time          Print compilation timing. Values: simple, sparse, coarse
 ```
