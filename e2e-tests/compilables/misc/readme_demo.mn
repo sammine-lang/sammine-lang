@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/readme_demo.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK:      34
 // CHECK-NEXT: (30, 40)
 // CHECK-NEXT: sizeof i32 = 4

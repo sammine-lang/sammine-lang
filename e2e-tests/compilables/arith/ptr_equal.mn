@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK:      same ptr equal: 1
 // CHECK-NEXT: same ptr not-equal: 0
 // CHECK-NEXT: diff ptr equal: 0

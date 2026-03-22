@@ -1,4 +1,4 @@
-// RUN: %sammine --file %dir/Inputs/has_generic_ptr.mn %O && %sammine --diagnostics=dev --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
+// RUN: %sammine --file %dir/Inputs/has_generic_ptr.mn %O && %sammine_jit --diagnostics=dev --file %full %I -I %dir/Inputs | %check %full
 // CHECK:      99
 import has_generic_ptr;
 import std;

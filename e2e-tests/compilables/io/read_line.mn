@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && echo "hello stdin" | %T/%base.exe | %check %full
+// RUN: echo "hello stdin" | %sammine_jit --file %full | %check %full
 // CHECK:      got: hello stdin
 
 import io;

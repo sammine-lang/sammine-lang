@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK:      5537376230
 
 // Project Euler Problem 13: First 10 digits of the sum of 100 fifty-digit numbers

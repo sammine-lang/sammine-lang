@@ -68,6 +68,14 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
 
   // Load imported module libraries into the JIT.
   for (auto &lib : libraries) {
+    if (lib.ends_with(".a")) {
+      add_error(Location::NonPrintable(),
+                fmt::format("JIT does not support static archives: '{}'. "
+                            "Recompile the dependency as a shared library "
+                            "(--lib=shared) or run without --jit.",
+                            lib));
+      return 1;
+    }
     if (auto err = loadLibrary(lib)) {
       add_error(Location::NonPrintable(),
                 fmt::format("JIT failed to load library '{}': {}", lib,
@@ -96,8 +104,10 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
     return 1;
   }
 
-  auto *mainFn = mainSym->getAddress().toPtr<int (*)()>();
-  exit_code_ = mainFn();
+  auto *mainFn = mainSym->getAddress().toPtr<int (*)(int, char **)>();
+  char arg0[] = "sammine";
+  char *argv[] = {arg0, nullptr};
+  exit_code_ = mainFn(1, argv);
   return exit_code_;
 }
 

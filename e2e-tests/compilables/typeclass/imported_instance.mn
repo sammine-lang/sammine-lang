@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O -I %dir/Inputs && %T/%base.exe | %check %full
+// RUN: %sammine_jit --file %full -I %dir/Inputs | %check %full
 // CHECK:      32
 // CHECK-NEXT: 64
 

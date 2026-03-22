@@ -12,6 +12,7 @@ config.test_format = lit.formats.ShTest(True)
 # Per-test output directory to avoid parallel races.
 # lit's %t is a unique temp path per test; we use %t.d as a directory.
 # ShTest preamble_commands run before every RUN line, ensuring the dir exists.
+config.substitutions.append(('%sammine_jit', sammine_exe + ' --jit'))
 config.substitutions.append(('%sammine', sammine_exe))
 config.substitutions.append(('%check', sammine_check))
 config.substitutions.append(('%dir', '$(dirname %s)'))

@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/%base.exe 2>&1 | %check %full
+// RUN: %sammine_jit --file %full 2>&1 | %check %full
 // CHECK:      error: something went wrong
 
 import io;

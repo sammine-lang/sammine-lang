@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK:      1
 // CHECK-NEXT: 2
 // CHECK-NEXT: 3

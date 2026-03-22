@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/reuse_after_use.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK: 3.0
 
 import std;

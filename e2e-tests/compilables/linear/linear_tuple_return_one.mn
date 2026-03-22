@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // CHECK:      42
 
 // Destructure a tuple containing linear pointers, return one, free the other.

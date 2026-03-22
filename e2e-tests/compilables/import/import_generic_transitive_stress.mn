@@ -1,4 +1,4 @@
-// RUN: %sammine --file %dir/Inputs/generic_base.mn %O && %sammine --file %dir/Inputs/generic_mid.mn %O %I -I %dir/Inputs && %sammine --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
+// RUN: %sammine --file %dir/Inputs/generic_base.mn %O && %sammine --file %dir/Inputs/generic_mid.mn %O %I -I %dir/Inputs && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
 // CHECK: 10 3.14 99
 
 import generic_mid;
