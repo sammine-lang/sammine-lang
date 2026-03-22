@@ -23,6 +23,8 @@ FetchContent_Declare(
   cpptrace
   GIT_REPOSITORY https://github.com/jeremy-rifkin/cpptrace.git
   GIT_TAG        v1.0.0
+  GIT_SHALLOW    TRUE
+  GIT_PROGRESS   TRUE
   SYSTEM
 )
 # Disable C++20 modules detection — Unix Makefiles doesn't support them
@@ -33,6 +35,8 @@ FetchContent_Declare(
   fmt
   GIT_REPOSITORY https://github.com/fmtlib/fmt
   GIT_TAG        11.2.0
+  GIT_SHALLOW    TRUE
+  GIT_PROGRESS   TRUE
   SYSTEM
 )
 FetchContent_MakeAvailable(fmt)
@@ -41,6 +45,8 @@ FetchContent_Declare(
     CLI11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
     GIT_TAG        v2.4.2
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
     SYSTEM
 )
 FetchContent_MakeAvailable(CLI11)
@@ -49,6 +55,8 @@ FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
     GIT_TAG        v3.7.1
+    GIT_SHALLOW    TRUE
+    GIT_PROGRESS   TRUE
     SYSTEM
 )
 FetchContent_MakeAvailable(Catch2)
