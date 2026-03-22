@@ -66,36 +66,62 @@ add_subdirectory(src)
 add_subdirectory(tools)
 
 # --- Standard library ---
-# Compile stdlib modules using the freshly-built sammine binary. Each module
-# produces a .so in build/lib/sammine/. The .mn source is also copied so that
-# `import` can parse it directly (no .mni files).
+# Each compiled module produces .so, .a, and a copied .mn source in
+# build/lib/sammine/.  Modules with a C runtime (e.g. io) list their
+# .c file in STDLIB_C_RUNTIME_<mod>.
 set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
-set(STDLIB_COMPILED std str)
+set(STDLIB_COMPILED std str io)
 set(STDLIB_COPIED definitions.mn vec.mn)
+set(STDLIB_C_RUNTIME_io io_runtime.c)
 
-foreach(mod ${STDLIB_COMPILED})
+# Helper: compile a C runtime file to a PIC object in STDLIB_DIR.
+function(stdlib_compile_c_runtime src out_var)
+  get_filename_component(stem ${src} NAME_WE)
+  set(obj ${STDLIB_DIR}/${stem}.o)
+  add_custom_command(
+    OUTPUT ${obj}
+    COMMAND ${CMAKE_C_COMPILER} -fPIC -c ${CMAKE_SOURCE_DIR}/stdlib/${src} -o ${obj}
+    DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${src}
+    COMMENT "Compiling stdlib/${src}"
+  )
+  set(${out_var} ${obj} PARENT_SCOPE)
+endfunction()
+
+# Helper: compile a .mn module to .so + .a and copy the source.
+function(stdlib_add_module mod extra_deps)
+  set(src ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn)
   add_custom_command(
     OUTPUT ${STDLIB_DIR}/${mod}.so
-    COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR}
-    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
-    COMMENT "Compiling stdlib/${mod}.mn → ${mod}.so"
+    COMMAND $<TARGET_FILE:sammine> -f ${src} -O ${STDLIB_DIR}
+    DEPENDS sammine ${src} ${extra_deps}
+    COMMENT "Compiling stdlib/${mod}.mn -> ${mod}.so"
   )
   add_custom_command(
     OUTPUT ${STDLIB_DIR}/${mod}.a
-    COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn -O ${STDLIB_DIR} --lib=static
-    DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn ${STDLIB_DIR}/${mod}.so
-    COMMENT "Compiling stdlib/${mod}.mn → ${mod}.a"
+    COMMAND $<TARGET_FILE:sammine> -f ${src} -O ${STDLIB_DIR} --lib=static
+    DEPENDS sammine ${src} ${extra_deps} ${STDLIB_DIR}/${mod}.so
+    COMMENT "Compiling stdlib/${mod}.mn -> ${mod}.a"
   )
-  # Copy .mn source for import resolution
   add_custom_command(
     OUTPUT ${STDLIB_DIR}/${mod}.mn
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn ${STDLIB_DIR}/${mod}.mn
-    DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${mod}.mn
+    COMMAND ${CMAKE_COMMAND} -E copy ${src} ${STDLIB_DIR}/${mod}.mn
+    DEPENDS ${src}
     COMMENT "Copying stdlib/${mod}.mn"
   )
-  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${mod}.so ${STDLIB_DIR}/${mod}.a ${STDLIB_DIR}/${mod}.mn)
+  set(STDLIB_OUTPUTS ${STDLIB_OUTPUTS}
+      ${STDLIB_DIR}/${mod}.so ${STDLIB_DIR}/${mod}.a ${STDLIB_DIR}/${mod}.mn
+      PARENT_SCOPE)
+endfunction()
+
+foreach(mod ${STDLIB_COMPILED})
+  set(_extra_deps "")
+  if(STDLIB_C_RUNTIME_${mod})
+    stdlib_compile_c_runtime(${STDLIB_C_RUNTIME_${mod}} _obj)
+    list(APPEND _extra_deps ${_obj})
+  endif()
+  stdlib_add_module(${mod} "${_extra_deps}")
 endforeach()
 
 foreach(file ${STDLIB_COPIED})
@@ -107,42 +133,6 @@ foreach(file ${STDLIB_COPIED})
   )
   list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
 endforeach()
-
-# --- io module: sammine wrapper + C runtime (auto-detected) ---
-# Compile io_runtime.c → io_runtime.o
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io_runtime.o
-  COMMAND ${CMAKE_C_COMPILER} -c ${CMAKE_SOURCE_DIR}/stdlib/io_runtime.c
-          -o ${STDLIB_DIR}/io_runtime.o
-  DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/io_runtime.c
-  COMMENT "Compiling stdlib/io_runtime.c"
-)
-
-# Compile io.mn → io.so (auto-detects io_runtime.o in -O dir)
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io.so
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
-          -O ${STDLIB_DIR}
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o
-  COMMENT "Compiling stdlib/io.mn → io.so (with C runtime)"
-)
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io.a
-  COMMAND $<TARGET_FILE:sammine> -f ${CMAKE_SOURCE_DIR}/stdlib/io.mn
-          -O ${STDLIB_DIR} --lib=static
-  DEPENDS sammine ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io_runtime.o ${STDLIB_DIR}/io.so
-  COMMENT "Compiling stdlib/io.mn → io.a (with C runtime)"
-)
-
-# Copy io.mn source for import resolution
-add_custom_command(
-  OUTPUT ${STDLIB_DIR}/io.mn
-  COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/io.mn ${STDLIB_DIR}/io.mn
-  DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/io.mn
-  COMMENT "Copying stdlib/io.mn"
-)
-
-list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/io.so ${STDLIB_DIR}/io.a ${STDLIB_DIR}/io.mn)
 
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
 
