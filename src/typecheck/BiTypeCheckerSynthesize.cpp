@@ -760,7 +760,8 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
         return ast->set_type(enum_type);
       }
     }
-    // Not found anywhere — use the original abort path for proper error
+    // TODO: Emit a proper diagnostic instead of ICE when a variable name
+    // (e.g. unqualified enum variant like `None`) is not found in scope.
     ast->set_type(id_to_type.recursive_get_from_name(ast->variableName));
   }
   LOG({
