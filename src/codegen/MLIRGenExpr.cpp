@@ -440,10 +440,20 @@ mlir::Value MLIRGenImpl::emitWhileExpr(AST::WhileExprAST *ast) {
   return nullptr;
 }
 
-// TODO: Migrate to iterator protocol desugaring. Currently emits a direct
-// counter loop. The plan is to desugar `for i in start..end { body }` into
-// recursive Iterator<Range, i64>::next() calls with TCO, making for-range
-// work with any iterable type, not just integer ranges.
+// Desugars `for i in start..end { body }` into Iterator<Range, i64>::next()
+// calls using CFG blocks with the Range state as a block argument:
+//
+//   entry:  range = Range { current: start, end_val: end }
+//           br ^header(range)
+//   header(iter): result = next(iter)  →  Option<(Range, i64)>
+//           tag = extract discriminant
+//           cond_br tag==0, ^some, ^none
+//   some:   payload = extract (Range, i64) from result
+//           new_iter = payload.0,  elem = payload.1
+//           bind loop_var = elem;  emit body
+//           br ^header(new_iter)
+//   none:   br ^exit
+//   exit:   (unit)
 mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   auto location = loc(ast);
   auto *parentRegion = builder.getInsertionBlock()->getParent();
@@ -455,62 +465,119 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   if (!startVal || !endVal)
     return nullptr;
 
-  // Mutable counter alloca (internal, not user-visible)
-  auto counterAlloca = emitAllocaOne(counterType, location);
-  mlir::LLVM::StoreOp::create(builder, location, startVal, counterAlloca);
+  // --- Build the Range struct type and initial value ---
+  // Range { current: i64, end_val: i64 }
+  auto rangeType = Type::Struct(
+      sammine_util::QualifiedName::from_parts({"Range"}), {"current", "end_val"},
+      {ast->start->get_type(), ast->end->get_type()});
+  auto rangeMlirTy = convertType(rangeType);
 
-  // Branch to header
+  mlir::Value rangeVal =
+      mlir::LLVM::PoisonOp::create(builder, location, rangeMlirTy);
+  rangeVal = mlir::LLVM::InsertValueOp::create(builder, location, rangeVal,
+                                               startVal, int64_t(0));
+  rangeVal = mlir::LLVM::InsertValueOp::create(builder, location, rangeVal,
+                                               endVal, int64_t(1));
+
+  // --- Resolve the Option<(Range, i64)> enum type ---
+  auto tupleType = Type::Tuple({rangeType, ast->start->get_type()});
+  auto optionType =
+      Type::Enum(sammine_util::QualifiedName::from_parts(
+                     {"Option<(Range, " + ast->start->get_type().to_string() +
+                      ")>"}),
+                 {{/*name=*/"Some",
+                   /*payload=*/{tupleType},
+                   /*discriminant=*/std::nullopt},
+                  {/*name=*/"None",
+                   /*payload=*/{},
+                   /*discriminant=*/std::nullopt}});
+  auto optionMlirTy = convertType(optionType);
+
+  // --- Header block: takes Range as block argument ---
   auto *headerBlock = new mlir::Block();
-  mlir::cf::BranchOp::create(builder, location, headerBlock);
+  headerBlock->addArgument(rangeMlirTy, location);
+  mlir::cf::BranchOp::create(builder, location, headerBlock,
+                             mlir::ValueRange{rangeVal});
 
-  // --- Header: load counter, compare < end ---
   parentRegion->push_back(headerBlock);
   builder.setInsertionPointToStart(headerBlock);
-  auto counterVal =
-      mlir::LLVM::LoadOp::create(builder, location, counterType, counterAlloca);
+  auto iterArg = headerBlock->getArgument(0);
 
-  bool is_unsigned = ast->start->get_type().is_unsigned();
-  auto predicate = is_unsigned ? mlir::arith::CmpIPredicate::ult
-                               : mlir::arith::CmpIPredicate::slt;
-  auto cond =
-      mlir::arith::CmpIOp::create(builder, location, predicate, counterVal, endVal);
+  // --- Call Iterator<Range, i64>::next(iter) ---
+  std::string nextFn = "Iterator<Range, " +
+                        ast->start->get_type().to_string() + ">::next";
+  llvm::SmallVector<mlir::Type, 1> resultTypes{optionMlirTy};
+  auto callOp = mlir::func::CallOp::create(
+      builder, location, llvm::StringRef(nextFn), resultTypes,
+      mlir::ValueRange{iterArg});
+  auto resultVal = callOp.getResult(0);
 
-  auto *bodyBlock = new mlir::Block();
+  // --- Extract tag (discriminant) from Option result ---
+  auto resultAlloca = emitAllocaOne(optionMlirTy, location);
+  mlir::LLVM::StoreOp::create(builder, location, resultVal, resultAlloca);
+
+  auto tagPtr = mlir::LLVM::GEPOp::create(
+      builder, location, llvmPtrTy(), optionMlirTy, resultAlloca,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
+      mlir::LLVM::GEPNoWrapFlags::inbounds);
+  auto tag = mlir::LLVM::LoadOp::create(builder, location,
+                                        builder.getI32Type(), tagPtr);
+
+  // tag == 0 means Some, tag == 1 means None
+  auto zero =
+      mlir::arith::ConstantIntOp::create(builder, location,
+                                         builder.getI32Type(), 0);
+  auto isSome = mlir::arith::CmpIOp::create(
+      builder, location, mlir::arith::CmpIPredicate::eq, tag, zero);
+
+  auto *someBlock = new mlir::Block();
   auto *exitBlock = new mlir::Block();
-  mlir::cf::CondBranchOp::create(builder, location, cond, bodyBlock,
+  mlir::cf::CondBranchOp::create(builder, location, isSome, someBlock,
                                  /*trueArgs=*/{}, exitBlock,
                                  /*falseArgs=*/{});
 
-  // --- Body ---
-  parentRegion->push_back(bodyBlock);
-  builder.setInsertionPointToStart(bodyBlock);
+  // --- Some block: extract payload, bind loop var, emit body ---
+  parentRegion->push_back(someBlock);
+  builder.setInsertionPointToStart(someBlock);
 
   {
     decltype(symbolTable)::Guard scope(symbolTable);
 
-    // Bind loop var to current counter value (immutable to user)
+    // Extract the (Range, i64) tuple payload from the Option enum's union
+    auto payloadPtr = mlir::LLVM::GEPOp::create(
+        builder, location, llvmPtrTy(), optionMlirTy, resultAlloca,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+
+    auto tupleMlirTy = convertType(tupleType);
+    auto tupleVal = mlir::LLVM::LoadOp::create(builder, location,
+                                               tupleMlirTy, payloadPtr);
+
+    // Extract new_iter (tuple.0 = Range) and elem (tuple.1 = i64)
+    auto newIterVal = mlir::LLVM::ExtractValueOp::create(
+        builder, location, rangeMlirTy, tupleVal, int64_t(0));
+    auto elemVal = mlir::LLVM::ExtractValueOp::create(
+        builder, location, counterType, tupleVal, int64_t(1));
+
+    // Bind loop variable
     auto loopVarAlloca = emitAllocaOne(counterType, location);
-    mlir::LLVM::StoreOp::create(builder, location, counterVal, loopVarAlloca);
+    mlir::LLVM::StoreOp::create(builder, location, elemVal, loopVarAlloca);
     symbolTable.registerNameT(ast->loop_var, loopVarAlloca);
 
     emitBlock(ast->body.get());
+
+    // Branch back to header with new iterator state
+    auto *bodyEnd = builder.getInsertionBlock();
+    bool bodyTerminated =
+        !bodyEnd->empty() &&
+        bodyEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
+    if (!bodyTerminated) {
+      mlir::cf::BranchOp::create(builder, location, headerBlock,
+                                 mlir::ValueRange{newIterVal});
+    }
   }
 
-  // Increment counter, branch back to header
-  auto *bodyEnd = builder.getInsertionBlock();
-  bool bodyTerminated = !bodyEnd->empty() &&
-                        bodyEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
-  if (!bodyTerminated) {
-    auto cur = mlir::LLVM::LoadOp::create(builder, location, counterType,
-                                          counterAlloca);
-    auto one =
-        mlir::arith::ConstantIntOp::create(builder, location, counterType, 1);
-    auto next = mlir::arith::AddIOp::create(builder, location, cur, one);
-    mlir::LLVM::StoreOp::create(builder, location, next, counterAlloca);
-    mlir::cf::BranchOp::create(builder, location, headerBlock);
-  }
-
-  // --- Exit ---
+  // --- Exit block ---
   parentRegion->push_back(exitBlock);
   builder.setInsertionPointToStart(exitBlock);
 

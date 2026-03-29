@@ -628,7 +628,8 @@ void BiTypeCheckerVisitor::visit(ForExprAST *ast) {
 
   enter_new_scope();
   ast->accept_synthesis(this);
-  ast->body->accept_vis(this);
+  if (!ast->get_type().is_poisoned())
+    ast->body->accept_vis(this);
   exit_new_scope();
 }
 

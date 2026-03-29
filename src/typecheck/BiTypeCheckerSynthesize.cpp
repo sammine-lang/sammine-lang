@@ -1331,6 +1331,19 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
   resolve_literal_type(ast->start.get(), resolved);
   resolve_literal_type(ast->end.get(), resolved);
 
+  // Verify that Iterator<Range, element_type> instance exists
+  auto range_type = Type::Struct(
+      sammine_util::QualifiedName::from_parts({"Range"}),
+      {"current", "end_val"}, {resolved, resolved});
+  MonomorphizedKey iter_key{"Iterator", {range_type, resolved}};
+  if (!type_class_instances.contains(iter_key)) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("No Iterator instance for Range with element type {}",
+                    resolved.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
   // Compile-time empty range check
   auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
   auto *end_num = llvm::dyn_cast<NumberExprAST>(ast->end.get());
