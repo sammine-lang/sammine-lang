@@ -808,6 +808,9 @@ mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {
 
 // ===--- Struct emission ---===
 
+// TODO: Idris-style single-field struct erasure. If a struct has exactly one
+// field, erase the wrapper and emit the inner value directly (zero-cost
+// newtype). This makes `struct Age { val: i64 }` compile identically to i64.
 mlir::Value MLIRGenImpl::emitStructLiteralExpr(AST::StructLiteralExprAST *ast) {
   auto structTy = cautious_at(structTypes, ast->get_type(), "structTypes");
   auto st = std::get<StructType>(ast->get_type().type_data);
