@@ -348,8 +348,19 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
   props_.call(ast->id()).resolved_name = tc_key.to_typeclass_name(method_name);
   props_.call(ast->id()).is_typeclass_call = true;
 
-  auto return_type = func_type.get_return_type();
-  return ast->set_type(substitute(return_type, tc_bindings));
+  // Resolve return type by re-evaluating the prototype's return type AST with
+  // concrete bindings in scope, rather than using substitute(). This ensures
+  // generic return types (e.g. Option<(I, T)> → Option<(Range, i64)>) get
+  // properly monomorphized with the correct name.
+  auto *ret_type_ast = method_proto->return_type_expr.get();
+  if (ret_type_ast) {
+    decltype(typename_to_type)::Guard scope(typename_to_type);
+    for (auto &[pname, ptype] : tc_bindings)
+      typename_to_type.registerNameT(pname, ptype);
+    return ast->set_type(resolve_type_expr(ret_type_ast));
+  }
+  return ast->set_type(
+      substitute(func_type.get_return_type(), tc_bindings));
 }
 
 std::optional<Type>
@@ -556,6 +567,13 @@ Type BiTypeCheckerVisitor::synthesize(ReturnStmtAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  // Ensure children are visited — synthesis may be called directly (e.g.
+  // from enum constructor args) without a prior visit(BinaryExprAST*).
+  if (!ast->LHS->synthesized())
+    ast->LHS->accept_vis(this);
+  if (!ast->RHS->synthesized())
+    ast->RHS->accept_vis(this);
 
   if (ast->LHS->get_type().is_poisoned() || ast->RHS->get_type().is_poisoned())
     return ast->set_type(Type::Poisoned());

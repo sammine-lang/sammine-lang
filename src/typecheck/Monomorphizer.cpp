@@ -62,8 +62,17 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   switch (expr->getKind()) {
   case ParseKind::Simple: {
     auto *simple = llvm::cast<SimpleTypeExprAST>(expr);
-    auto resolved = resolve_type_name(simple->name.mangled());
-    return std::make_unique<SimpleTypeExprAST>(make_tok(resolved));
+    auto it = bindings_->find(simple->name.mangled());
+    if (it != bindings_->end()) {
+      // Attach the resolved Type directly — avoids round-tripping compound
+      // types (tuples, etc.) through a string that can't be re-parsed.
+      auto node = std::make_unique<SimpleTypeExprAST>(
+          make_tok(it->second.to_string()));
+      node->resolved_type = it->second;
+      return node;
+    }
+    return std::make_unique<SimpleTypeExprAST>(
+        make_tok(simple->name.mangled()));
   }
   case ParseKind::Pointer: {
     auto *ptr = llvm::cast<PointerTypeExprAST>(expr);

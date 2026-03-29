@@ -61,6 +61,12 @@ class TypeExprAST {
 public:
   ParseKind getKind() const { return kind; }
   sammine_util::Location location;
+
+  /// When set, resolve_type_expr returns this directly instead of resolving
+  /// the AST node. Used by the monomorphizer to attach pre-resolved types
+  /// (e.g. when substituting a type param with a compound type like a tuple).
+  std::optional<Type> resolved_type;
+
   TypeExprAST(ParseKind kind_) : kind(kind_) {}
   virtual ~TypeExprAST() = default;
   virtual std::string to_string() const = 0;

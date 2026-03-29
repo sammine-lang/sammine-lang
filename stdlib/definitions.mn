@@ -51,3 +51,22 @@ typeclass Indexer<T, E> {
 }
 
 type Option<T> = Some(T) | None;
+
+typeclass Iterator<I, T> {
+  next(iter : I) -> Option<(I, T)>;
+}
+
+struct Range {
+  current: i64,
+  end_val: i64,
+};
+
+instance Iterator<Range, i64> {
+  let next(iter: Range) -> Option<(Range, i64)> {
+    if iter.current < iter.end_val {
+      Option<(Range, i64)>::Some((Range { current: iter.current + 1i64, end_val: iter.end_val }, iter.current))
+    } else {
+      Option<(Range, i64)>::None
+    }
+  }
+}

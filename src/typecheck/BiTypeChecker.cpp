@@ -503,8 +503,6 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(BinaryExprAST *ast) {
-  ast->LHS->accept_vis(this);
-  ast->RHS->accept_vis(this);
   ast->set_type(ast->accept_synthesis(this));
 }
 

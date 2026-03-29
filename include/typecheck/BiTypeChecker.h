@@ -207,6 +207,9 @@ public:
     if (!type_expr)
       return Type::NonExistent();
 
+    if (type_expr->resolved_type)
+      return *type_expr->resolved_type;
+
     if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(type_expr)) {
       if (simple->name.is_unresolved()) {
         this->add_error(type_expr->location,

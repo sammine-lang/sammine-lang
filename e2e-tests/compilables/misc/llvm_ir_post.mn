@@ -21,8 +21,7 @@
 // CHECK-NEXT: define noundef i64 @"Sized<char>::Sized"() local_unnamed_addr #0 {
 // CHECK-NEXT:   ret i64 1
 // CHECK-NEXT: }
-// CHECK:      ; Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
-// CHECK-NEXT: define noundef i32 @main() local_unnamed_addr #0 {
+// CHECK:      define noundef i32 @main() local_unnamed_addr #0 {
 // CHECK-NEXT:   ret i32 42
 // CHECK-NEXT: }
 // CHECK:      attributes #0 = { mustprogress nofree norecurse nosync nounwind willreturn memory(none) }
