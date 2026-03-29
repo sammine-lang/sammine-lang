@@ -304,7 +304,7 @@ public:
         auto resolved = resolve_type_expr(gen->type_args[i].get());
         if (resolved.is_poisoned())
           return Type::Poisoned();
-        if (resolved.type_kind == TypeKind::TypeParam)
+        if (resolved.containsTypeParam())
           has_unresolved_type_param = true;
         bindings[param_names[i]] = resolved;
         resolved_type_args.push_back(resolved);
@@ -322,12 +322,13 @@ public:
         if (existing.has_value())
           return existing.value();
 
+        for (auto &[pname, ptype] : bindings)
+          typename_to_type.registerNameT(pname, ptype);
+
         if (is_struct) {
           auto *sdef = struct_def;
           std::vector<std::string> fnames;
           std::vector<Type> ftypes;
-          for (auto &[pname, ptype] : bindings)
-            typename_to_type.registerNameT(pname, ptype);
           for (auto &member : sdef->struct_members) {
             fnames.push_back(member->name);
             ftypes.push_back(member->type_expr
@@ -340,6 +341,24 @@ public:
           typename_to_type.registerNameT(mangled, placeholder);
           return placeholder;
         }
+
+        if (is_enum) {
+          auto *edef = enum_def;
+          std::vector<EnumType::VariantInfo> variant_infos;
+          for (auto &v : edef->variants) {
+            std::vector<Type> payload;
+            for (auto &pt : v.payload_types)
+              payload.push_back(resolve_type_expr(pt.get()));
+            variant_infos.push_back(
+                {v.name, std::move(payload), v.discriminant_value});
+          }
+          auto placeholder = Type::Enum(
+              sammine_util::QualifiedName::from_parts({mangled}),
+              std::move(variant_infos));
+          typename_to_type.registerNameT(mangled, placeholder);
+          return placeholder;
+        }
+
         return Type::Poisoned();
       }
 

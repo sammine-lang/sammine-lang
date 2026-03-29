@@ -434,6 +434,18 @@ struct Type {
     return found;
   }
 
+  /// Recursively checks if this type or any nested type is a TypeParam.
+  bool containsTypeParam() const {
+    if (type_kind == TypeKind::TypeParam)
+      return true;
+    bool found = false;
+    forEachInnerType([&](const Type &inner) {
+      if (inner.containsTypeParam())
+        found = true;
+    });
+    return found;
+  }
+
   /// Visits all immediately-nested types (pointee, elements, fields, params,
   /// etc.).
   template <typename F> void forEachInnerType(F &&callback) const {
