@@ -8,15 +8,20 @@ How I pictured sammine-lang in my head
 ## Language Features
 
 ```sammine
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      34
+// CHECK-NEXT: (30, 40)
+// CHECK-NEXT: sizeof i32 = 4
+// CHECK-NEXT: sizeof i32 = 4
+// CHECK-NEXT: A
+
 // Line comments start with //
-// Types: i32, i64, u32, u64, f32, f64, bool, char, unit
+// Types: i32, i64, f64, bool, char, unit, etc
 
 import std;                                   // import standard library (provides printf)
-import vec;                                   // dynamic arrays
 
-reuse sqrt(x: f64) -> f64;                   // C FFI binding
+reuse sqrt(x: f64) -> f64;                   // C function binding
 
-// --- Functions ---
 let add(a: i32, b: i32) -> i32 {             // function definition
   a + b                                       // implicit return (last expression)
 }
@@ -29,96 +34,85 @@ let fib(x: i32) -> i32 {                     // recursion, if/else as expression
   }
 }
 
-// --- Generics (monomorphized) ---
-let identity<T>(x: T) -> T { x }             // explicit type parameters
+let identity<T>(x: T) -> T { x }             // generics (monomorphized)
 
-let apply<T, U>(f: (T) -> U, x: T) -> U {    // higher-order + generic
-  f(x)                                        // (T) -> U is a function type
+let apply<T, U>(f: (T) -> U, x: T) -> U {   // higher-order + generic
+  f(x)                                       // (T) -> U is a function type
 }
+
+// --- Type aliases ---
+type Int = i32;                                   // transparent alias for i32
 
 // --- Structs ---
-struct Point { x: i32, y: i32, };
+struct Vec2 { x: i32, y: i32, };
 
-// --- Enums ---
-type Shape = Circle(i32) | Rect(i32, i32) | Dot;
-
-// --- Typeclasses ---
-typeclass MySize<T> {
-  mysize() -> i64
-}
-
-instance MySize<Point> {
-  let mysize() -> i64 { 8 }
+// --- Operator overloading via typeclasses ---
+instance Add<Vec2> {
+  let Add(a: Vec2, b: Vec2) -> Vec2 {
+    Vec2 { x: a.x + b.x, y: a.y + b.y }
+  }
 }
 
 let main() -> i32 {
   // --- Variables ---
-  let x: i32 = 5;                            // immutable, type-annotated
+  let x: Int = 5;                            // using type alias
   let y = 10;                                // type inference
-  let mut counter: i32 = 0;                  // mutable binding
-  counter = counter + 1;                     // assignment (mut only)
-
   // --- Control flow ---
   let sign = if x > 0 { 1 }                 // if/else is an expression
              else if x == 0 { 0 }           // comparison: < <= > >= == !=
              else { -1 };                    // unary negation
 
-  let mut i: i32 = 3;                        // while loops
-  while i > 0 {
-    std::printf("%d\n", i);
-    i = i - 1;
-  };
-
   // --- Arrays ---
-  let a: [i32; 3] = [10, 20, 30];           // fixed-size array literal
+  let a: [3]i32 = [10, 20, 30];           // fixed-size array literal
   let first = a[0];                          // indexing
   let size = len(a);                         // array length
 
-  // --- Linear pointers & memory ---
-  let p = alloc<i32>(1);                     // heap alloc -> 'ptr<i32> (linear)
-  *p = 100;                                  // write through pointer
-  let val = *p;                              // dereference
-  free(p);                                   // must free linear pointers
-
-  let q: ptr<i32> = &x;                     // address-of (non-linear stack ptr)
-
-  // --- Vec<T> (dynamic array) ---
-  let v0 = vec::new<i32>(4);                 // create with capacity 4
-  let v1 = vec::push<i32>(v0, 10);           // push consumes v0, returns new vec
-  let v2 = vec::push<i32>(v1, 20);
-  let v3 = vec::push<i32>(v2, 30);
-  std::printf("%d %d\n", v3.data[0], v3.data[1]);
-  vec::delete<i32>(v3);                      // free the underlying buffer
-
-  // --- Structs ---
-  let pt = Point { x: 10, y: 20 };
-  std::printf("x=%d y=%d\n", pt.x, pt.y);
-
-  // --- Enums + pattern matching ---
-  let s: Shape = Shape::Circle(5);
-  case s {
-    Circle(r) => std::printf("circle r=%d\n", r),
-    Rect(w, h) => std::printf("rect %dx%d\n", w, h),
-    Dot => std::printf("dot\n"),
-  };
-
   // --- Tuples ---
-  let t = (42, true);                        // tuple literal
-  let (a2, b2) = t;                          // destructuring
+  let t = (100, true);                        // tuple literal (i32, bool)
+  let (tx, ty) = t;                           // destructuring let
+
+  // --- Pointers & memory ---
+  let p: 'ptr<i32> = alloc<i32>(1);         // heap allocation (count, linear)
+  *p = 42;                                   // write through pointer
+  let val = *p;                              // dereference
+  free(p);                                   // manual deallocation
+
+  let q: ptr<i32> = &x;                     // address-of (stack pointer)
+  let pp: ptr<ptr<i32>> = &q;               // nested pointers
 
   // --- Pipe operator ---
   let r1 = 5 |> add(3);                     // x |> f(y) becomes f(x, y)
-  let r2 = 5 |> identity<i32> |> add(3);    // chained pipes
+  let r2 = 5 |> identity |> add(3);         // chained pipes
 
-  // --- Partial application ---
-  let add5: (i32) -> i32 = add(5);          // fewer args -> closure
-  let eight = add5(3);                       // call the closure
+  // --- Partial function application ---
+  let add5 = add(5);                         // fewer args -> closure
+  let eight = add5(3);                       // call the partially applied fn
 
   // --- Higher-order functions ---
-  let f: (i32) -> i32 = add5;              // function as value
-  let res = apply<i32, i32>(f, 42);         // pass function as argument
+  let f: (i32) -> i32 = add5;               // function as value
+  let res = apply(f, 42);                   // pass function as argument
 
-  std::printf("%d\n", fib(9));
+  // --- Generics (monomorphized) ---
+  let a_i32 = identity(42);                 // inferred: identity.i32
+  let a_f64 = identity<f64>(3.14);          // explicit type arg: identity.f64
+
+  // --- Structs + operator overloading ---
+  let v1: Vec2 = Vec2 { x: 10, y: 15 };    // struct literal
+  let v2: Vec2 = Vec2 { x: 20, y: 25 };
+  let v3: Vec2 = v1 + v2;                   // uses Add<Vec2> instance
+
+  // --- Sizeof (built-in typeclass) ---
+  let sz = Sized<i32>();                     // compile-time size info
+  let sz2 = Sized<i32>::Sized();             // qualified typeclass call syntax
+
+  // --- Chars ---
+  let ch: char = 'A';
+
+  std::printf("%d\n", fib(9));              // 34
+  std::printf("(%d, %d)\n", v3.x, v3.y);   // (30, 40)
+  std::printf("sizeof i32 = %ld\n", sz);   // sizeof i32 = 4
+  std::printf("sizeof i32 = %ld\n", sz2);  // sizeof i32 = 4 (qualified syntax)
+  std::printf("%c\n", ch);                  // A
   return 0;                                  // explicit return
 }
 ```
