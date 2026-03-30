@@ -11,13 +11,9 @@ export let new<T>(cap: i64) -> Vec<T> {
 let grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
   let new_c = old_c * 2i64;
   let new_d = alloc<T>(new_c);
-  let ip: 'ptr<i64> = alloc<i64>(1);
-  *ip = 0i64;
-  while *ip < l {
-    new_d[*ip] = old_d[*ip];
-    *ip = *ip + 1i64;
+  for i in 0i64..l {
+    new_d[i] = old_d[i];
   };
-  free(ip);
   free(old_d);
   new_d
 }
