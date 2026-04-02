@@ -27,6 +27,13 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRArithTransforms MLIRControlFlowTransforms MLIRLinalgTransforms
   MLIRSCFTransforms MLIRTensorTransforms
   MLIRTransforms
+  # Phase 7c: GPU codegen
+  MLIRGPUDialect MLIRGPUTransforms
+  MLIRNVVMDialect
+  MLIRGPUToNVVMTransforms
+  MLIRGPUToLLVMIRTranslation
+  MLIRSCFToGPU
+  MLIRNVVMToLLVM
 )
 
 # Final linkage for folder

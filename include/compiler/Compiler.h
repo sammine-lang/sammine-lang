@@ -23,6 +23,7 @@ enum compiler_option_enum {
   LIB_FORMAT,
   JIT,
   JIT_ARGS,
+  GPU,
 };
 
 enum class LibFormat {

@@ -10,8 +10,10 @@ namespace sammine_lang {
 /// Lower MLIR modules to LLVM IR.
 /// If kernelModule is non-null, it is bufferized and lowered separately,
 /// then merged into cpuModule before final LLVM translation.
+/// gpuTarget: "" for CPU, "cuda" for NVIDIA, "amd" for AMD GPU.
 std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
                                                 mlir::ModuleOp kernelModule,
-                                                llvm::LLVMContext &llvmCtx);
+                                                llvm::LLVMContext &llvmCtx,
+                                                llvm::StringRef gpuTarget = "");
 
 } // namespace sammine_lang

@@ -40,7 +40,8 @@ namespace sammine_lang {
 
 std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
                                                 mlir::ModuleOp kernelModule,
-                                                llvm::LLVMContext &llvmCtx) {
+                                                llvm::LLVMContext &llvmCtx,
+                                                llvm::StringRef gpuTarget) {
   auto *context = cpuModule->getContext();
 
   // Phase 1: Process kernel module (if present)

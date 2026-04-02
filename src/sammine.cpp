@@ -43,6 +43,11 @@ int main(int argc, char *argv[]) {
   app.add_flag("--jit", jit,
                "JIT execute the program directly (only effective with main function)");
 
+  std::string gpu;
+  app.add_option("--gpu", gpu,
+                 "Lower kernel functions to GPU code. Values: cuda, amd")
+      ->check(CLI::IsMember({"cuda", "amd"}));
+
   std::vector<std::string> jit_args;
   app.add_option("--jit-args", jit_args,
                  "Arguments to pass to the JIT-executed program (repeatable).");
@@ -111,6 +116,7 @@ int main(int argc, char *argv[]) {
   }
   compiler_options[co::LIB_FORMAT] = lib_format;
   compiler_options[co::JIT] = jit ? "true" : "false";
+  compiler_options[co::GPU] = gpu;
   {
     std::string joined;
     for (size_t i = 0; i < jit_args.size(); i++) {

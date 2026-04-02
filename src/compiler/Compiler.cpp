@@ -23,6 +23,7 @@
 #include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -635,6 +636,12 @@ void Compiler::codegen_mlir() {
     mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
   }
 
+  // GPU dialect — needed when --gpu=cuda or --gpu=amd.
+  bool target_gpu = !compiler_options[compiler_option_enum::GPU].empty();
+  if (target_gpu) {
+    mlirCtx.getOrLoadDialect<mlir::gpu::GPUDialect>();
+  }
+
   mlir::DialectRegistry registry;
   // Core bufferization interfaces — always needed.
   mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
@@ -684,8 +691,9 @@ void Compiler::codegen_mlir() {
   mlir::ModuleOp kernelMod;
   if (mlirResult.kernelModule)
     kernelMod = *mlirResult.kernelModule;
-  auto llvmModule =
-      lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context);
+  auto llvmModule = lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod,
+                                      *resPtr->Context,
+                                      compiler_options[compiler_option_enum::GPU]);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
