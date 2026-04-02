@@ -139,7 +139,7 @@ Then configure LLVM with roughly these arguments
 cmake -S externals/llvm-project/llvm -B externals/llvm-project/build -G Ninja \
   -DLLVM_ENABLE_ASSERTIONS=ON \
   -DCMAKE_BUILD_TYPE=Release \
-  -DLLVM_TARGETS_TO_BUILD="X86;AArch64" \
+  -DLLVM_TARGETS_TO_BUILD="X86;AArch64;NVPTX" \
   -DLLVM_CCACHE_BUILD=true \
   -DLLVM_USE_LINKER=lld \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
