@@ -1,0 +1,18 @@
+// REQUIRES: cuda
+// XFAIL: *
+// RUN: %sammine -f %full %O --gpu=cuda && %T/kernel_reduce_gpu.exe | %check %full
+// Known issue: linalg.reduce → gpu.launch produces incorrect GPU codegen (segfault).
+
+import io;
+
+kernel sum_arr(a: [3]f64) -> f64 {
+  reduce(a, +, 0.0)
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  io::printf("%f\n", sum_arr(a));
+  0
+}
+
+// CHECK: 6.000000
