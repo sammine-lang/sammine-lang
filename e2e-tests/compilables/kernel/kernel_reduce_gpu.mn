@@ -1,7 +1,5 @@
 // REQUIRES: cuda
-// XFAIL: *
 // RUN: %sammine -f %full %O --gpu=cuda && %T/kernel_reduce_gpu.exe | %check %full
-// Known issue: linalg.reduce → gpu.launch produces incorrect GPU codegen (segfault).
 
 import io;
 

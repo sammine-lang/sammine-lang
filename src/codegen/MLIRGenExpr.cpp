@@ -10,6 +10,7 @@ using sammine_util::cautious_value;
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
+#include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinTypes.h"
 
 #include "llvm/ADT/SmallVector.h"
@@ -591,6 +592,95 @@ mlir::Value MLIRGenImpl::emitStringExpr(AST::StringExprAST *ast) {
 
 // ===--- Array emission ---===
 
+std::optional<mlir::DenseElementsAttr>
+MLIRGenImpl::tryBuildDenseAttr(AST::ArrayLiteralExprAST *ast) {
+  auto arrType = std::get<ArrayType>(ast->get_type().type_data);
+  auto elemSammineType = arrType.get_element();
+  auto size = static_cast<int64_t>(arrType.get_size());
+
+  // Only support homogeneous numeric/bool/char literals.
+  switch (elemSammineType.type_kind) {
+  case TypeKind::F64_t: {
+    llvm::SmallVector<double> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *num = llvm::dyn_cast<AST::NumberExprAST>(e.get());
+      if (!num)
+        return std::nullopt;
+      vals.push_back(std::stod(num->number));
+    }
+    auto tensorTy = mlir::RankedTensorType::get({size}, builder.getF64Type());
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  case TypeKind::F32_t: {
+    llvm::SmallVector<float> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *num = llvm::dyn_cast<AST::NumberExprAST>(e.get());
+      if (!num)
+        return std::nullopt;
+      vals.push_back(static_cast<float>(std::stod(num->number)));
+    }
+    auto tensorTy = mlir::RankedTensorType::get({size}, builder.getF32Type());
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  case TypeKind::I32_t: {
+    llvm::SmallVector<int32_t> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *num = llvm::dyn_cast<AST::NumberExprAST>(e.get());
+      if (!num)
+        return std::nullopt;
+      vals.push_back(static_cast<int32_t>(std::stoll(num->number)));
+    }
+    auto tensorTy =
+        mlir::RankedTensorType::get({size}, builder.getI32Type());
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  case TypeKind::I64_t: {
+    llvm::SmallVector<int64_t> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *num = llvm::dyn_cast<AST::NumberExprAST>(e.get());
+      if (!num)
+        return std::nullopt;
+      vals.push_back(std::stoll(num->number));
+    }
+    auto tensorTy =
+        mlir::RankedTensorType::get({size}, builder.getI64Type());
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  case TypeKind::Bool: {
+    llvm::SmallVector<bool> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *b = llvm::dyn_cast<AST::BoolExprAST>(e.get());
+      if (!b)
+        return std::nullopt;
+      vals.push_back(b->b);
+    }
+    auto tensorTy =
+        mlir::RankedTensorType::get({size}, builder.getI1Type());
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  case TypeKind::Char: {
+    llvm::SmallVector<int8_t> vals;
+    vals.reserve(static_cast<size_t>(size));
+    for (auto &e : ast->elements) {
+      auto *c = llvm::dyn_cast<AST::CharExprAST>(e.get());
+      if (!c)
+        return std::nullopt;
+      vals.push_back(static_cast<int8_t>(c->value));
+    }
+    auto tensorTy =
+        mlir::RankedTensorType::get({size}, builder.getIntegerType(8));
+    return mlir::DenseElementsAttr::get(tensorTy, llvm::ArrayRef(vals));
+  }
+  default:
+    return std::nullopt;
+  }
+}
+
 mlir::Value MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
   if (in_kernel_lambda_body)
     imm_error("Array literals not allowed in kernel lambdas",
@@ -600,10 +690,14 @@ mlir::Value MLIRGenImpl::emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast) {
   auto llvmArrayType =
       mlir::cast<mlir::LLVM::LLVMArrayType>(convertType(ast->get_type()));
 
-  // Stack-allocate the array via llvm.alloca
-  auto alloca = emitAllocaOne(llvmArrayType, location);
+  // Fast path: all-constant arrays → global constant, no stack copy needed
+  // since arrays are immutable values in sammine.
+  if (auto denseAttr = tryBuildDenseAttr(ast)) {
+    return emitGlobalConstArrayDense(*denseAttr, llvmArrayType, location);
+  }
 
-  // Store each element via GEP + store
+  // Slow path: non-constant elements → stack alloca + individual stores
+  auto alloca = emitAllocaOne(llvmArrayType, location);
   for (size_t i = 0; i < ast->elements.size(); ++i) {
     auto elemVal = emitRValue(ast->elements[i].get());
     if (!elemVal)

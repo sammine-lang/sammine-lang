@@ -6,7 +6,9 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenExpr.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenBinaryOps.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MLIRGenKernel.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRLowering.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/LinalgReduceToGpu.cpp
 )
 target_include_directories(MLIRBackend PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 target_link_libraries(MLIRBackend PRIVATE

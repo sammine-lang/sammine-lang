@@ -204,6 +204,12 @@ time via a `MLIR_LLVM_LIB_DIR` compile definition.
   `map`/`reduce` only accept variable names as array arguments.
 - **No upstream issue for cuModuleUnload.** The teardown problem affects any MLIR
   AOT GPU compilation, but there's no tracking issue in llvm/llvm-project.
+- **Redundant host↔device copies on chained kernel calls.** `let a = k1(x); let b = k2(a);`
+  copies `a` device→host then immediately host→device. If `a` is only consumed
+  by `k2` (not read on host), the round-trip should be elided — keep `a` on
+  device. Requires device memory liveness analysis: either at codegen time
+  (track which values are device-resident in `emitCallExpr`) or as an MLIR
+  pass that fuses adjacent `gpu.memcpy` pairs going in opposite directions.
 
 ## File Reference
 

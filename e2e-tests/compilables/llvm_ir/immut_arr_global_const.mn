@@ -1,6 +1,6 @@
 // RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
-// Immutable arrays are alloca'd on the stack so that &a returns a writable
-// address (global constants would cause UB when written through a pointer).
+// Immutable array literals are emitted as global constants — no stack
+// alloca or element-wise stores.  The variable just aliases the global.
 
 let sum3(arr: [3]i32) -> i32 {
   arr[0] + arr[1] + arr[2]
@@ -11,8 +11,5 @@ let main() -> i32 {
   return sum3(a);
 }
 
+// CHECK: @.const_arr.0 = internal constant [3 x i32] [i32 10, i32 20, i32 30]
 // CHECK: define i32 @main()
-// CHECK: alloca [3 x i32]
-// CHECK: store i32 10
-// CHECK: store i32 20
-// CHECK: store i32 30

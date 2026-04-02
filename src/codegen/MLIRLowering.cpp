@@ -1,3 +1,4 @@
+#include "codegen/LinalgReduceToGpu.h"
 #include "codegen/MLIRLowering.h"
 #include "util/Utilities.h"
 
@@ -101,6 +102,11 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       mlir::registerLLVMDialectTranslation(*context);
       mlir::registerGPUDialectTranslation(*context);
       mlir::registerNVVMDialectTranslation(*context);
+
+      // Lower linalg.reduce → gpu.launch + gpu.all_reduce before
+      // linalg-to-parallel-loops (which only handles parallel iterators).
+      if (mlir::failed(lowerLinalgReduceToGpuLaunch(kernelModule)))
+        return nullptr;
 
       // GPU path: linalg → parallel loops → gpu.launch → NVVM → binary
       mlir::PassManager kernelPM(context);

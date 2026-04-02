@@ -325,6 +325,18 @@ public:
   mlir::Value getOrCreateGlobalString(llvm::StringRef name,
                                       llvm::StringRef value,
                                       mlir::Location location);
+  /// Try to build a DenseElementsAttr from an array literal whose elements
+  /// are all compile-time constants.  Returns std::nullopt if any element
+  /// is not a literal.
+  std::optional<mlir::DenseElementsAttr>
+  tryBuildDenseAttr(AST::ArrayLiteralExprAST *ast);
+
+  /// Emit a global constant array from a DenseElementsAttr (no initializer
+  /// region needed).  Returns a pointer to the global.
+  mlir::Value emitGlobalConstArrayDense(mlir::DenseElementsAttr denseAttr,
+                                        mlir::LLVM::LLVMArrayType arrType,
+                                        mlir::Location location);
+
   mlir::Value emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
                                    const Type &type, mlir::Location location);
 };
