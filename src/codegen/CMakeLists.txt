@@ -41,6 +41,7 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRVectorToLLVM
   MLIRNVVMTarget
   MLIRRegisterAllExtensions
+  MLIRRegisterAllDialects
 )
 
 # Final linkage for folder

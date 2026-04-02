@@ -24,6 +24,8 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/InitAllExtensions.h"
 #include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
@@ -633,6 +635,17 @@ void Compiler::codegen_mlir() {
       });
 
   mlir::MLIRContext mlirCtx;
+
+  // GPU: register all LLVM conversion extensions BEFORE loading any dialects.
+  // This ensures ConvertToLLVMPatternInterface is available when dialects load.
+  bool target_gpu = !compiler_options[compiler_option_enum::GPU].empty();
+  if (target_gpu) {
+    mlir::DialectRegistry earlyRegistry;
+    mlir::registerAllExtensions(earlyRegistry);
+    mlir::registerConvertToLLVMDependentDialectLoading(earlyRegistry);
+    mlirCtx.appendDialectRegistry(earlyRegistry);
+  }
+
   // Core dialects — always needed.
   mlirCtx.getOrLoadDialect<mlir::arith::ArithDialect>();
   mlirCtx.getOrLoadDialect<mlir::func::FuncDialect>();
@@ -650,7 +663,6 @@ void Compiler::codegen_mlir() {
   }
 
   // GPU dialect — needed when --gpu=cuda or --gpu=amd.
-  bool target_gpu = !compiler_options[compiler_option_enum::GPU].empty();
   if (target_gpu) {
     mlirCtx.getOrLoadDialect<mlir::gpu::GPUDialect>();
   }

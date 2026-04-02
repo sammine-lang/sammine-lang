@@ -826,30 +826,56 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
 mlir::Value MLIRGenImpl::gpuCopyToDevice(mlir::Value hostMemref,
                                          mlir::Location loc) {
   auto memrefType = llvm::cast<mlir::MemRefType>(hostMemref.getType());
+  auto tokenType = mlir::gpu::AsyncTokenType::get(builder.getContext());
+  // gpu.wait async → token
+  auto waitOp = mlir::gpu::WaitOp::create(builder, loc, tokenType,
+                                           /*asyncDependencies=*/mlir::ValueRange{});
+  auto token = waitOp.getAsyncToken();
+  // gpu.alloc async [token]
   auto allocOp = mlir::gpu::AllocOp::create(
-      builder, loc, memrefType, /*asyncToken=*/mlir::Type{},
-      /*asyncDependencies=*/mlir::ValueRange{},
+      builder, loc, memrefType, tokenType,
+      /*asyncDependencies=*/mlir::ValueRange{token},
       /*dynamicSizes=*/mlir::ValueRange{},
       /*symbolOperands=*/mlir::ValueRange{});
-  mlir::gpu::MemcpyOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
-                               /*asyncDependencies=*/mlir::ValueRange{},
-                               allocOp.getMemref(), hostMemref);
+  // gpu.memcpy async [token]
+  auto memcpyOp = mlir::gpu::MemcpyOp::create(
+      builder, loc, tokenType,
+      /*asyncDependencies=*/mlir::ValueRange{allocOp.getAsyncToken()},
+      allocOp.getMemref(), hostMemref);
+  // gpu.wait [token] — synchronize
+  mlir::gpu::WaitOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                             /*asyncDependencies=*/mlir::ValueRange{memcpyOp.getAsyncToken()});
   return allocOp.getMemref();
 }
 
 void MLIRGenImpl::gpuCopyToHostAndDealloc(mlir::Value deviceMemref,
                                           mlir::Value hostMemref,
                                           mlir::Location loc) {
-  mlir::gpu::MemcpyOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
-                               /*asyncDependencies=*/mlir::ValueRange{},
-                               hostMemref, deviceMemref);
-  gpuDealloc(deviceMemref, loc);
+  auto tokenType = mlir::gpu::AsyncTokenType::get(builder.getContext());
+  auto waitOp = mlir::gpu::WaitOp::create(builder, loc, tokenType,
+                                           /*asyncDependencies=*/mlir::ValueRange{});
+  auto memcpyOp = mlir::gpu::MemcpyOp::create(
+      builder, loc, tokenType,
+      /*asyncDependencies=*/mlir::ValueRange{waitOp.getAsyncToken()},
+      hostMemref, deviceMemref);
+  auto deallocOp = mlir::gpu::DeallocOp::create(
+      builder, loc, tokenType,
+      /*asyncDependencies=*/mlir::ValueRange{memcpyOp.getAsyncToken()},
+      deviceMemref);
+  mlir::gpu::WaitOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                             /*asyncDependencies=*/mlir::ValueRange{deallocOp.getAsyncToken()});
 }
 
 void MLIRGenImpl::gpuDealloc(mlir::Value deviceMemref, mlir::Location loc) {
-  mlir::gpu::DeallocOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
-                                /*asyncDependencies=*/mlir::ValueRange{},
-                                deviceMemref);
+  auto tokenType = mlir::gpu::AsyncTokenType::get(builder.getContext());
+  auto waitOp = mlir::gpu::WaitOp::create(builder, loc, tokenType,
+                                           /*asyncDependencies=*/mlir::ValueRange{});
+  auto deallocOp = mlir::gpu::DeallocOp::create(
+      builder, loc, tokenType,
+      /*asyncDependencies=*/mlir::ValueRange{waitOp.getAsyncToken()},
+      deviceMemref);
+  mlir::gpu::WaitOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                             /*asyncDependencies=*/mlir::ValueRange{deallocOp.getAsyncToken()});
 }
 
 mlir::FunctionType

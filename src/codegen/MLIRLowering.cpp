@@ -28,9 +28,11 @@
 #include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
 #include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
 #include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
+#include "mlir/InitAllDialects.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/Conversion/Passes.h"
 #include "mlir/IR/BuiltinOps.h"
+#include "mlir/Parser/Parser.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Pass/PassRegistry.h"
@@ -169,15 +171,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
 
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
   if (isGPU(gpuTarget)) {
-    // gpu-to-llvm collects conversion patterns from loaded dialects via
-    // ConvertToLLVMPatternInterface. Register all extensions and ensure
-    // interfaces are applied to already-loaded dialects.
-    mlir::DialectRegistry registry;
-    mlir::registerAllExtensions(registry);
-    mlir::registerConvertToLLVMDependentDialectLoading(registry);
-    context->appendDialectRegistry(registry);
-    context->loadAllAvailableDialects();
-
     mlir::PassManager pm(context);
     pm.addPass(mlir::createSCFToControlFlowPass());
     pm.addPass(mlir::createGpuToLLVMConversionPass());
@@ -199,10 +192,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   // Register translations
   mlir::registerBuiltinDialectTranslation(*context);
   mlir::registerLLVMDialectTranslation(*context);
-  if (isGPU(gpuTarget)) {
-    mlir::registerGPUDialectTranslation(*context);
-    mlir::registerNVVMDialectTranslation(*context);
-  }
 
   // Export to LLVM IR
   auto llvmModule = mlir::translateModuleToLLVMIR(cpuModule, llvmCtx);
