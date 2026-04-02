@@ -44,7 +44,10 @@
 #include "mlir/Transforms/Passes.h"
 
 #include "llvm/IR/Attributes.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
@@ -206,6 +209,39 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   auto llvmModule = mlir::translateModuleToLLVMIR(cpuModule, llvmCtx);
   if (!llvmModule)
     return nullptr;
+
+  // GPU: replace global_dtors for GPU module unload with an explicit call
+  // at the end of main(). MLIR registers cuModuleUnload as a global destructor
+  // (priority 123), but it races with CUDA driver teardown — the driver
+  // deinitializes before the destructor runs, causing cuModuleUnload to fail.
+  // Moving the unload into main() ensures proper ordering.
+  if (isGPU(gpuTarget)) {
+    if (auto *dtors = llvmModule->getNamedGlobal("llvm.global_dtors")) {
+      // Collect unload functions from global_dtors
+      llvm::SmallVector<llvm::Function *, 2> unloadFns;
+      if (auto *init = dtors->getInitializer()) {
+        if (auto *arr = llvm::dyn_cast<llvm::ConstantArray>(init)) {
+          for (unsigned i = 0; i < arr->getNumOperands(); i++) {
+            auto *entry = llvm::cast<llvm::ConstantStruct>(arr->getOperand(i));
+            if (auto *fn = llvm::dyn_cast<llvm::Function>(entry->getOperand(1)))
+              unloadFns.push_back(fn);
+          }
+        }
+      }
+      dtors->eraseFromParent();
+
+      // Insert calls to unload functions before each return in main()
+      if (auto *mainFn = llvmModule->getFunction("main")) {
+        for (auto &BB : *mainFn) {
+          if (auto *ret = llvm::dyn_cast<llvm::ReturnInst>(BB.getTerminator())) {
+            llvm::IRBuilder<> irBuilder(ret);
+            for (auto *fn : unloadFns)
+              irBuilder.CreateCall(fn);
+          }
+        }
+      }
+    }
+  }
 
   // Annotate all functions with nounwind (sammine has no exceptions).
   // Mark malloc's return as noalias.
