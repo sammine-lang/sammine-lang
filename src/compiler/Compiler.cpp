@@ -643,6 +643,8 @@ void Compiler::codegen_mlir() {
     mlir::DialectRegistry earlyRegistry;
     mlir::registerAllExtensions(earlyRegistry);
     mlir::registerConvertToLLVMDependentDialectLoading(earlyRegistry);
+    mlir::gpu::registerOffloadingLLVMTranslationInterfaceExternalModels(
+        earlyRegistry);
     mlirCtx.appendDialectRegistry(earlyRegistry);
   }
 
@@ -1099,14 +1101,27 @@ void Compiler::link() {
   for (auto &obj : extra_object_files)
     obj_list += " " + obj;
 
-  auto try_compile_with = [&obj_list, &exe_file](const std::string &compiler) {
+  // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
+  bool gpu = !compiler_options[compiler_option_enum::GPU].empty();
+  std::string gpu_link_flags;
+  if (gpu) {
+    // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.
+    // MLIR_LLVM_LIB_DIR is set by cmake from the MLIR_DIR config path.
+    std::string lib_dir = MLIR_LLVM_LIB_DIR;
+    gpu_link_flags = fmt::format(
+        " -L{} -lmlir_cuda_runtime -Wl,-rpath,{}", lib_dir, lib_dir);
+  }
+
+  auto try_compile_with = [&obj_list, &exe_file,
+                            &gpu_link_flags](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
       return false;
     std::string command =
-        fmt::format("{} {} -o {}", compiler, obj_list, exe_file);
+        fmt::format("{} {} -o {}{}", compiler, obj_list, exe_file,
+                    gpu_link_flags);
     int result = std::system(command.c_str());
     return result == 0;
   };

@@ -121,7 +121,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
           mlir::createReconcileUnrealizedCastsPass());
       kernelPM.addPass(mlir::createGpuModuleToBinaryPass());
-      kernelPM.addPass(mlir::createGpuToLLVMConversionPass());
 
       kernelPM.addPass(mlir::memref::createExpandStridedMetadataPass());
       kernelPM.addPass(mlir::createLowerAffinePass());
@@ -154,6 +153,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
     }
 
     // Step C: Merge kernel functions (and gpu.module ops) into CPU module.
+    // After GPU lowering, functions may be llvm.func (not func.func).
     for (auto &op :
          llvm::make_early_inc_range(kernelModule.getBody()->getOperations())) {
       if (auto funcOp = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
@@ -162,11 +162,16 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
           existing.erase();
         funcOp->remove();
         cpuModule.push_back(funcOp);
-      } else if (llvm::isa<mlir::gpu::GPUModuleOp>(op)) {
+      } else if (llvm::isa<mlir::gpu::GPUModuleOp>(op) ||
+                 llvm::isa<mlir::gpu::BinaryOp>(op)) {
         op.remove();
         cpuModule.push_back(&op);
       }
     }
+    // gpu.launch_func requires gpu.container_module on the parent module.
+    if (isGPU(gpuTarget))
+      cpuModule->setAttr("gpu.container_module",
+                         mlir::UnitAttr::get(context));
   }
 
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
@@ -192,6 +197,10 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   // Register translations
   mlir::registerBuiltinDialectTranslation(*context);
   mlir::registerLLVMDialectTranslation(*context);
+  if (isGPU(gpuTarget)) {
+    mlir::registerGPUDialectTranslation(*context);
+    mlir::registerNVVMDialectTranslation(*context);
+  }
 
   // Export to LLVM IR
   auto llvmModule = mlir::translateModuleToLLVMIR(cpuModule, llvmCtx);

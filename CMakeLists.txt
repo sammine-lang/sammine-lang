@@ -48,6 +48,10 @@ endif()
 find_package(MLIR REQUIRED CONFIG)
 include_directories(SYSTEM ${MLIR_INCLUDE_DIRS})
 
+# Derive LLVM lib directory for runtime library linking (e.g. libmlir_cuda_runtime)
+get_filename_component(MLIR_LLVM_LIB_DIR "${MLIR_DIR}/../.." ABSOLUTE)
+add_compile_definitions(MLIR_LLVM_LIB_DIR="${MLIR_LLVM_LIB_DIR}")
+
 
 
 
