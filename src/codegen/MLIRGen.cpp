@@ -1425,13 +1425,9 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &gpuTarget) {
   MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpuTarget);
   auto cpuModule = impl.generate(program);
-  MLIRGenResult result;
   if (!cpuModule)
-    return result; // cpuModule null indicates failure
-  result.cpuModule = cpuModule;
-  if (impl.kernelModule)
-    result.kernelModule = impl.kernelModule;
-  return result;
+    return {};
+  return {cpuModule, impl.kernelModule};
 }
 
 } // namespace sammine_lang
