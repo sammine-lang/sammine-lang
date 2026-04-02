@@ -100,6 +100,98 @@ scf-to-cf → arith-to-llvm → cf-to-llvm → finalize-memref-to-llvm → func-
 - malloc return: `noalias`
 - Kernel wrappers: `noinline` (preserves LICM)
 
+## GPU Codegen (Phase 7c — `--gpu=cuda`)
+
+### Overview
+When `--gpu=cuda` is passed, kernel functions compile to CUDA GPU code via MLIR's
+GPU dialect pipeline. The kernel runs on the GPU; the host wrapper handles data
+marshalling. Commits: `6f6c38a`..`14c77b3`.
+
+### Architecture Changes (vs CPU path)
+
+**Wrapper signature (GPU):** array args become `memref<NxT>` (not `!llvm.ptr`).
+The wrapper body is pure func/memref/gpu dialect — no LLVM ops. This is required
+because `gpu-to-llvm` needs to convert everything in one partial conversion pass.
+
+**Call site:** when calling a kernel wrapper with `--gpu`, `emitCallExpr` converts
+`!llvm.ptr` → memref via `buildMemrefFromPtr` at the call site (not inside the wrapper).
+The `unrealized_conversion_cast` at the call site gets folded by `reconcile-unrealized-casts`.
+
+**Wrapper body (GPU path):** uses async gpu ops with `gpu.wait` barriers:
+```
+%t0 = gpu.wait async
+%dev, %t1 = gpu.alloc async [%t0] : memref<NxT>
+%t2 = gpu.memcpy async [%t1] %dev, %host_memref
+gpu.wait [%t2]            // barrier: host→device copy done
+call @__kernel_*(%dev, %dev_out)
+%t3 = gpu.wait async
+%t4 = gpu.memcpy async [%t3] %host_out, %dev_out
+%t5 = gpu.dealloc async [%t4] %dev_out
+gpu.wait [%t5]            // barrier: device→host copy done
+```
+**Why async:** `gpu-to-llvm` only converts async gpu ops (checked by
+`isAsyncWithOneDependency` in `ConvertAllocOpToGpuRuntimeCallPattern`).
+Synchronous ops are left unconverted. The `gpu.wait` barriers make execution
+synchronous despite using async ops.
+
+### GPU Lowering Pipeline (kernel module, `MLIRLowering.cpp`)
+```
+bufferize (shared with CPU)
+→ linalg-to-parallel-loops (scf.parallel, not scf.for)
+→ gpu-map-parallel-loops (nested under func::FuncOp)
+→ convert-parallel-loop-to-gpu (scf.parallel → gpu.launch)
+→ gpu-kernel-outlining (gpu.launch → gpu.func in gpu.module)
+→ gpu-nvvm-attach-target (tag gpu.module with nvptx64 triple + sm_75)
+→ gpu-to-nvvm (inside gpu.module: gpu.thread_id → nvvm intrinsics)
+→ lower-affine, arith-to-llvm, index-to-llvm, reconcile (inside gpu.module)
+→ gpu-module-to-binary (ptxas compiles to cubin, embedded as constant)
+→ expand-strided-metadata, lower-affine
+```
+
+### Phase 2 (merged CPU module)
+```
+scf-to-cf
+→ gpu-to-llvm (replaces func-to-llvm + memref-to-llvm; converts gpu.alloc→mgpuMemAlloc, etc.)
+→ reconcile-unrealized-casts
+```
+**Key:** `gpu-to-llvm` replaces the separate `func-to-llvm` + `memref-to-llvm` passes
+for the GPU path. It handles all dialect-to-LLVM conversion in one partial conversion.
+
+### Module Merge (Step C)
+Moves `func::FuncOp`, `gpu::GPUModuleOp`, and `gpu::BinaryOp` from kernel module
+into CPU module. Sets `gpu.container_module` attribute on CPU module (required by
+`gpu.launch_func`).
+
+### ConvertToLLVM Interface Registration
+`gpu-to-llvm` collects patterns from all loaded dialects via `ConvertToLLVMPatternInterface`.
+All extensions must be registered BEFORE any dialects are loaded:
+```cpp
+// In Compiler.cpp, before any getOrLoadDialect calls:
+mlir::registerAllExtensions(earlyRegistry);
+mlir::registerConvertToLLVMDependentDialectLoading(earlyRegistry);
+gpu::registerOffloadingLLVMTranslationInterfaceExternalModels(earlyRegistry);
+```
+
+### cuModuleUnload Teardown Fix
+MLIR registers `cuModuleUnload` as a global destructor (priority 123), but the CUDA
+driver deinitializes first → error at exit. Fix: strip `llvm.global_dtors` and insert
+explicit unload calls before each `ret` in `main()` (`MLIRLowering.cpp`).
+
+### Linking
+Executables link against `libmlir_cuda_runtime.so` (provides `mgpuMemAlloc`,
+`mgpuMemcpy`, `mgpuStreamCreate`, etc. which wrap CUDA driver API). Library path
+derived from `MLIR_DIR` at cmake configure time (`MLIR_LLVM_LIB_DIR` define).
+
+### Known Issues
+- `linalg.reduce` → GPU segfaults at runtime (XFAIL test: `kernel_reduce_gpu.mn`)
+- `--gpu=amd` flag accepted but not implemented
+- No tiling — 1 GPU thread per array element (fine for small arrays)
+- Kernel composition (`kernel calling kernel`) not supported at syntax level
+
+### Lit Test Infrastructure
+`lit.cfg.py` checks for `ptxas` on PATH → adds `cuda` feature. Tests use
+`REQUIRES: cuda` to gate on CUDA availability.
+
 ## Dialect Usage
 | Construct | Dialect |
 |---|---|
@@ -109,3 +201,5 @@ scf-to-cf → arith-to-llvm → cf-to-llvm → finalize-memref-to-llvm → func-
 | Bounds checks | scf (scf.if + exit) |
 | Closures, structs, enums, strings, pointers | llvm |
 | Kernel tensor ops, map, reduce | linalg, tensor |
+| GPU memory, kernel launch | gpu (alloc, memcpy, dealloc, launch_func) |
+| GPU device code | nvvm (thread_id, block_id intrinsics) |
