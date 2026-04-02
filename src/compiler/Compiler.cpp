@@ -665,7 +665,8 @@ void Compiler::codegen_mlir() {
   std::string moduleName = has_main ? "" : stem;
 
   auto mlirResult = mlirGen(mlirCtx, programAST.get(), moduleName,
-                            this->file_name, this->input, props_);
+                            this->file_name, this->input, props_,
+                            compiler_options[compiler_option_enum::GPU]);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");

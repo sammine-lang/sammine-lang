@@ -16,6 +16,7 @@ using sammine_util::cautious_value;
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 
 #include "llvm/ADT/SmallVector.h"
@@ -742,8 +743,9 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   auto retSamType = protoFT.get_return_type();
   bool returnsArray = retSamType.type_kind == TypeKind::Array;
 
-  // === Marshal input arguments: !llvm.array<NxT> → memref ===
+  // === Marshal inputs: host ptr → host memref, optionally copy to device ===
   llvm::SmallVector<mlir::Value> kernelArgs;
+  llvm::SmallVector<mlir::Value> deviceMemrefs; // GPU only: for dealloc
   size_t blockArgIdx = 0;
 
   for (size_t i = 0; i < kd->Prototype->parameterVectors.size(); ++i) {
@@ -754,49 +756,89 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     if (paramType.type_kind == TypeKind::Array) {
       auto &arrType = std::get<ArrayType>(paramType.type_data);
       auto arrSize = static_cast<int64_t>(arrType.get_size());
-      auto elemSamType = arrType.get_element();
-      auto elemMLIRType = convertTypeForKernel(elemSamType);
-
-      // blockArg is already !llvm.ptr (pass-by-reference) — wrap directly
-      auto inputMemref =
+      auto elemMLIRType = convertTypeForKernel(arrType.get_element());
+      auto hostMemref =
           buildMemrefFromPtr(blockArg, arrSize, elemMLIRType, location);
-      kernelArgs.push_back(inputMemref);
+
+      if (targetGPU()) {
+        auto deviceMem = gpuCopyToDevice(hostMemref, location);
+        kernelArgs.push_back(deviceMem);
+        deviceMemrefs.push_back(deviceMem);
+      } else {
+        kernelArgs.push_back(hostMemref);
+      }
     } else {
       kernelArgs.push_back(blockArg);
     }
   }
 
-  // === DPS: pass sret buffer as memref directly ===
-  // The sret pointer is wrapped as a memref and passed to __kernel_ as the
-  // DPS output parameter. The kernel writes directly into sret — zero alloc,
-  // zero copy. On GPU, this becomes device memory passed in.
+  // === DPS output: wrap sret, optionally allocate on device ===
+  mlir::Value hostOutMemref, deviceOut;
   if (returnsArray) {
     auto &retArrType = std::get<ArrayType>(retSamType.type_data);
     auto arrSize = static_cast<int64_t>(retArrType.get_size());
-    auto elemSamType = retArrType.get_element();
-    auto elemMLIRType = convertTypeForKernel(elemSamType);
-
+    auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
     auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
-    auto sretMemref =
+    hostOutMemref =
         buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
-    kernelArgs.push_back(sretMemref);
+
+    if (targetGPU()) {
+      deviceOut = gpuCopyToDevice(hostOutMemref, location);
+      kernelArgs.push_back(deviceOut);
+    } else {
+      kernelArgs.push_back(hostOutMemref);
+    }
   }
 
-  // === Call the internal kernel function (memref types) ===
+  // === Call kernel ===
   auto memrefFuncType =
       buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
   auto callOp = mlir::func::CallOp::create(
       builder, location, internalName, memrefFuncType.getResults(), kernelArgs);
 
-  // === Marshal return value ===
-  if (returnsArray) {
-    // DPS: kernel wrote into sret via the output memref parameter.
-    mlir::func::ReturnOp::create(builder, location);
-  } else if (retSamType.type_kind == TypeKind::Unit) {
+  // === GPU epilogue: copy result back + dealloc all device buffers ===
+  if (targetGPU()) {
+    if (returnsArray)
+      gpuCopyToHostAndDealloc(deviceOut, hostOutMemref, location);
+    for (auto dm : deviceMemrefs)
+      gpuDealloc(dm, location);
+  }
+
+  // === Return ===
+  if (returnsArray || retSamType.type_kind == TypeKind::Unit) {
     mlir::func::ReturnOp::create(builder, location);
   } else {
     mlir::func::ReturnOp::create(builder, location, callOp.getResults());
   }
+}
+
+mlir::Value MLIRGenImpl::gpuCopyToDevice(mlir::Value hostMemref,
+                                         mlir::Location loc) {
+  auto memrefType = llvm::cast<mlir::MemRefType>(hostMemref.getType());
+  auto allocOp = mlir::gpu::AllocOp::create(
+      builder, loc, memrefType, /*asyncToken=*/mlir::Type{},
+      /*asyncDependencies=*/mlir::ValueRange{},
+      /*dynamicSizes=*/mlir::ValueRange{},
+      /*symbolOperands=*/mlir::ValueRange{});
+  mlir::gpu::MemcpyOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                               /*asyncDependencies=*/mlir::ValueRange{},
+                               allocOp.getMemref(), hostMemref);
+  return allocOp.getMemref();
+}
+
+void MLIRGenImpl::gpuCopyToHostAndDealloc(mlir::Value deviceMemref,
+                                          mlir::Value hostMemref,
+                                          mlir::Location loc) {
+  mlir::gpu::MemcpyOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                               /*asyncDependencies=*/mlir::ValueRange{},
+                               hostMemref, deviceMemref);
+  gpuDealloc(deviceMemref, loc);
+}
+
+void MLIRGenImpl::gpuDealloc(mlir::Value deviceMemref, mlir::Location loc) {
+  mlir::gpu::DeallocOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
+                                /*asyncDependencies=*/mlir::ValueRange{},
+                                deviceMemref);
 }
 
 mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
@@ -1319,8 +1361,9 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &moduleName,
                       const std::string &fileName,
                       const std::string &sourceText,
-                      const AST::ASTProperties &props) {
-  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props);
+                      const AST::ASTProperties &props,
+                      const std::string &gpuTarget) {
+  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpuTarget);
   auto cpuModule = impl.generate(program);
   MLIRGenResult result;
   if (!cpuModule)

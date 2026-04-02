@@ -36,10 +36,12 @@ class MLIRGenImpl {
 public:
   MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName_,
               const std::string &fileName_, const std::string &sourceText,
-              const AST::ASTProperties &props)
+              const AST::ASTProperties &props,
+              const std::string &gpuTarget_ = "")
       : builder(&context), moduleName(moduleName_), fileName(fileName_),
         diagnosticData(sammine_util::Reporter::get_diagnostic_data(sourceText)),
-        reporter(fileName_, sourceText, 3), props_(props) {}
+        reporter(fileName_, sourceText, 3), gpuTarget(gpuTarget_),
+        props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 
@@ -54,6 +56,9 @@ public:
   std::string fileName;
   sammine_util::Reporter::DiagnosticData diagnosticData;
   sammine_util::Reporter reporter;
+
+  /// GPU target: "" for CPU, "cuda" for NVIDIA, "amd" for AMD.
+  std::string gpuTarget;
 
   /// Emit an ariadne-style error before aborting. If a Location is provided,
   /// the error points to the offending source span; otherwise shows "In
@@ -82,6 +87,14 @@ public:
   mlir::Value currentSretBuffer = nullptr;
 
   const AST::ASTProperties &props_;
+  bool targetGPU() const {
+    if (gpuTarget.empty())
+      return false;
+    if (gpuTarget != "cuda" && gpuTarget != "amd")
+      sammine_util::abort("unsupported --gpu target: " + gpuTarget +
+                          " (expected 'cuda' or 'amd')");
+    return true;
+  }
 
   /// Flag: true when emitting inside a linalg.map/linalg.reduce body builder.
   /// Guards against emitting LLVM ops (alloca, malloc, free) that are invalid
@@ -148,6 +161,13 @@ public:
   void emitKernelWrapper(AST::KernelDefAST *kd, const std::string &internalName,
                          const std::string &publicName,
                          mlir::Location location);
+  /// GPU: allocate device memref and copy host data into it.
+  mlir::Value gpuCopyToDevice(mlir::Value hostMemref, mlir::Location loc);
+  /// GPU: copy device memref back to host and deallocate device memory.
+  void gpuCopyToHostAndDealloc(mlir::Value deviceMemref,
+                               mlir::Value hostMemref, mlir::Location loc);
+  /// GPU: deallocate a device memref.
+  void gpuDealloc(mlir::Value deviceMemref, mlir::Location loc);
   mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 

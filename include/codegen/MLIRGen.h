@@ -28,10 +28,12 @@ struct MLIRGenResult {
 
 /// Emit MLIR for the given type-checked AST. Returns a CPU module and
 /// (optionally) a kernel module, or an empty result on failure.
+/// gpuTarget: "" for CPU, "cuda" for NVIDIA, "amd" for AMD GPU.
 MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &moduleName,
                       const std::string &fileName,
                       const std::string &sourceText,
-                      const AST::ASTProperties &props);
+                      const AST::ASTProperties &props,
+                      const std::string &gpuTarget = "");
 
 } // namespace sammine_lang

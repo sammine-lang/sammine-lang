@@ -33,9 +33,15 @@ The GPU path forks at `linalg-to-loops` — instead of sequential loops, we prod
 
 ## Architecture
 
-### Two-phase fork in MLIRLowering.cpp
+### Two phases: codegen (MLIRGen) + lowering (MLIRLowering)
 
-The kernel module lowering (Step B in `lowerMLIRToLLVMIR`) gets a GPU branch:
+**Phase A: Codegen (MLIRGen.cpp) — GPU-aware wrapper emission**
+
+When `--gpu=cuda`, `emitKernelWrapper` emits `gpu.alloc`/`gpu.memcpy`/`gpu.dealloc`
+in the wrapper function. The `__kernel_*` internal function is unchanged (still
+linalg on tensors). Without `--gpu`, the existing CPU wrapper is emitted.
+
+**Phase B: Lowering (MLIRLowering.cpp) — pass pipeline fork**
 
 ```
 if (targetGPU) {
@@ -45,9 +51,10 @@ if (targetGPU) {
     → map parallel loops to GPU grid dimensions
     → scf.parallel → gpu.launch
     → gpu-kernel-outlining (extracts device code into gpu.module/gpu.func)
+    → nvvm-attach-target (tag gpu.module with NVPTX triple/chip)
     → convert-gpu-to-nvvm (gpu ops → NVVM dialect inside gpu.module)
-    → serialize to cubin (compile device code to binary blob)
-    → gpu-to-llvm (host-side launch stubs + gpu.alloc/memcpy/dealloc → cudaRuntime calls)
+    → gpu-module-to-binary (ptxas compiles to cubin, embedded as constant)
+    → gpu-to-llvm (gpu.alloc→cudaMalloc, gpu.memcpy→cudaMemcpy, gpu.launch_func→cudaLaunchKernel)
     → merge into cpuModule
   cpuModule: existing pipeline (unchanged)
 } else {
@@ -55,32 +62,44 @@ if (targetGPU) {
 }
 ```
 
-### Data marshalling (the hard part)
+### Data marshalling
 
-The B2 wrapper function `@double_arr` currently does:
+The lowering passes (`gpu-kernel-outlining`, `gpu-to-llvm`, etc.) do NOT automatically
+insert device memory allocation or host↔device copies. They only transform the IR
+structure. If we pass host memrefs to `gpu.launch_func`, the GPU kernel will try to
+dereference host pointers → segfault.
+
+**Solution: explicit marshalling in the B2 wrapper (GPU-aware codegen in MLIRGen.cpp).**
+
+The wrapper is only GPU-aware when `--gpu` is passed. Without `--gpu`, the existing
+CPU wrapper is emitted unchanged.
+
+The B2 wrapper function `@double_arr` currently does (CPU path):
 
 ```
 1. receives !llvm.ptr (pointing to caller's array)
-2. builds memref descriptor from ptr
-3. bufferization.to_tensor → tensor
-4. calls @__kernel_double_arr(tensor) → tensor
-5. bufferization.materialize_in_destination → writes result to sret ptr
+2. builds memref from ptr (host memref)
+3. calls @__kernel_double_arr(host memref) → result
+4. returns (sret or scalar)
 ```
 
-For GPU, the wrapper must additionally handle host↔device transfers. Two options:
+With `--gpu`, the wrapper instead does:
 
-**Option A: Let MLIR passes handle it (recommended first)**
-- After `gpu-kernel-outlining`, the outlined kernel uses memref args
-- `gpu-to-llvm` pass automatically inserts `cudaMalloc`/`cudaMemcpy`/`cudaFree` for memref args passed to `gpu.launch_func`
-- The wrapper stays mostly the same — the passes transform the call from `func.call @__kernel_*` into the GPU launch sequence
-- This is the path of least resistance
+```
+1. receives !llvm.ptr (pointing to caller's array on host)
+2. builds host memref from ptr
+3. gpu.alloc → device memref (for each array arg)
+4. gpu.memcpy host_memref → device_memref (for each array arg)
+5. gpu.alloc → device output memref (if returns array, for DPS output)
+6. calls @__kernel_double_arr(device_memrefs..., device_output)
+7. gpu.memcpy device_output → host sret memref (if returns array)
+8. gpu.dealloc device memrefs
+9. returns
+```
 
-**Option B: Explicit marshalling in codegen (if Option A is insufficient)**
-- Emit `gpu.alloc`, `gpu.memcpy`, `gpu.launch_func`, `gpu.memcpy`, `gpu.dealloc` directly in the wrapper
-- More control, but more codegen work
-- Needed if we want async transfers, pinned memory, or multi-stream execution
-
-Start with Option A.
+The `gpu.alloc`/`gpu.memcpy`/`gpu.dealloc` ops are emitted directly in codegen.
+The lowering passes (`gpu-to-llvm`) then convert them to `cudaMalloc`/`cudaMemcpy`/
+`cudaFree` calls.
 
 ---
 
@@ -164,7 +183,93 @@ Add `GPU` to `compiler_option_enum` or add a `bool gpu` to compiler options.
 
 ---
 
-### Step 2: GPU Lowering Pipeline
+### Step 2: GPU-Aware Kernel Wrapper (marshalling)
+
+**Files: `include/codegen/MLIRGenImpl.h`, `src/codegen/MLIRGen.cpp`**
+
+The `--gpu` flag must be threaded into MLIRGenImpl so `emitKernelWrapper` can
+emit GPU marshalling ops when targeting GPU. Without `--gpu`, the existing CPU
+wrapper is emitted unchanged.
+
+**MLIRGenImpl changes:**
+- Add `bool targetGPU` member, set from constructor/caller
+- `mlirGen()` signature gets a `gpuTarget` parameter, passed from `Compiler.cpp`
+
+**emitKernelWrapper changes (GPU path):**
+
+When `targetGPU` is true, the wrapper emits explicit device memory management
+instead of passing host memrefs directly to the kernel:
+
+```cpp
+void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd, ...) {
+  // ... existing preamble (get wrapperOp, create entry block) ...
+
+  if (targetGPU) {
+    // === GPU wrapper: marshal host → device → kernel → host ===
+    llvm::SmallVector<mlir::Value> deviceMemrefs;  // to dealloc later
+    llvm::SmallVector<mlir::Value> kernelArgs;
+
+    for (each array param) {
+      auto hostMemref = buildMemrefFromPtr(blockArg, ...);
+      auto memrefType = hostMemref.getType().cast<mlir::MemRefType>();
+
+      // gpu.alloc device memory
+      auto deviceMem = gpu::AllocOp::create(builder, loc,
+          memrefType, /*asyncToken=*/nullptr, /*asyncDeps=*/{},
+          /*dynamicSizes=*/{}, /*symbolOperands=*/{});
+
+      // gpu.memcpy host → device
+      gpu::MemcpyOp::create(builder, loc, /*asyncToken=*/nullptr,
+          /*asyncDeps=*/{}, deviceMem.getMemref(), hostMemref);
+
+      kernelArgs.push_back(deviceMem.getMemref());
+      deviceMemrefs.push_back(deviceMem.getMemref());
+    }
+
+    // DPS output: allocate device output buffer
+    if (returnsArray) {
+      auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+      auto hostOutMemref = buildMemrefFromPtr(sretPtr, ...);
+      auto deviceOut = gpu::AllocOp::create(builder, loc, ...);
+      kernelArgs.push_back(deviceOut.getMemref());
+
+      // Call kernel with device args
+      func::CallOp::create(builder, loc, internalName, ..., kernelArgs);
+
+      // gpu.memcpy device output → host sret
+      gpu::MemcpyOp::create(builder, loc, ..., hostOutMemref, deviceOut.getMemref());
+
+      // gpu.dealloc all device buffers
+      gpu::DeallocOp::create(builder, loc, ..., deviceOut.getMemref());
+    } else {
+      // scalar return: call kernel, dealloc inputs
+      auto call = func::CallOp::create(builder, loc, internalName, ..., kernelArgs);
+    }
+
+    for (auto dm : deviceMemrefs)
+      gpu::DeallocOp::create(builder, loc, ..., dm);
+
+    // return
+    func::ReturnOp::create(builder, loc, ...);
+
+  } else {
+    // === CPU wrapper: existing code unchanged ===
+    // ... current emitKernelWrapper body ...
+  }
+}
+```
+
+**Key detail:** The `gpu.alloc`/`gpu.memcpy`/`gpu.dealloc` ops are emitted into the
+**kernel module** (since the wrapper lives there alongside `__kernel_*`). The lowering
+passes in Step 3 then convert them: `gpu-to-llvm` turns them into `cudaMalloc`/
+`cudaMemcpy`/`cudaFree` calls.
+
+**Verification:** With `--mlir-ir --gpu=cuda`, a kernel test should show `gpu.alloc`,
+`gpu.memcpy`, `gpu.dealloc` ops in the wrapper function.
+
+---
+
+### Step 3: GPU Lowering Pipeline
 
 **File: `src/codegen/MLIRLowering.cpp`**
 
@@ -251,7 +356,7 @@ if (kernelModule) {
 
 ---
 
-### Step 3: Register NVVM Dialect Translation for LLVM IR Export
+### Step 4: Register NVVM Dialect Translation for LLVM IR Export
 
 **File: `src/codegen/MLIRLowering.cpp`**
 
@@ -271,7 +376,7 @@ Without this, `translateModuleToLLVMIR` will fail on any NVVM ops remaining in t
 
 ---
 
-### Step 4: Linking with CUDA Runtime
+### Step 5: Linking with CUDA Runtime
 
 **File: `src/compiler/Compiler.cpp`**
 
@@ -291,7 +396,7 @@ The serialized cubin blob is embedded as a global constant in the LLVM module by
 
 ---
 
-### Step 5: End-to-End Test
+### Step 6: End-to-End Test
 
 **File: `e2e-tests/compilables/kernel/kernel_map_gpu.mn`**
 
@@ -315,8 +420,10 @@ Run with: `./build/bin/sammine -f test.mn --gpu`
 
 ## Potential Issues & Mitigations
 
-### 1. gpu-to-cubin requires CUDA toolkit at compile time
-The `createGpuSerializeToCubinPass` shells out to `ptxas` or links against `libcuda`. If CUDA isn't installed, this pass will fail. Mitigation: guard behind `MLIR_ENABLE_CUDA_RUNNER` cmake check, provide clear error message.
+### 1. gpu-module-to-binary requires CUDA toolkit at compile time
+`createGpuModuleToBinaryPass` shells out to `ptxas` (from CUDA toolkit) to compile
+PTX→cubin. If `ptxas` isn't on `$PATH`, this pass will fail. Mitigation: check for
+`ptxas` early and emit a clear error message before running the pass pipeline.
 
 ### 2. Memref layout mismatch at GPU boundary
 The B2 wrapper builds memrefs with identity layout (`memref<3xf64>`). If GPU passes expect strided layout, there will be a type mismatch. Mitigation: the bufferization already uses `IdentityLayoutMap` option — this should propagate correctly. If not, insert `memref.cast` ops.
@@ -346,11 +453,6 @@ for (auto &op : llvm::make_early_inc_range(kernelModule.getBody()->getOperations
 }
 ```
 
-### 5. The wrapper function may need restructuring
-Currently the wrapper calls `func.call @__kernel_*` which operates on memrefs after bufferization. After GPU outlining, the kernel body is extracted into a `gpu.func` inside `gpu.module`, and the original function becomes a `gpu.launch_func` call. The `gpu-to-llvm` pass converts this into `cudaLaunchKernel` with marshalled args. This *should* happen automatically if the passes run on the kernel module before merging — the wrapper just sees a regular function that internally does a GPU launch.
-
-If this doesn't work transparently, Option B (explicit `gpu.alloc`/`gpu.memcpy` in wrapper codegen) is the fallback.
-
 ---
 
 ## Pass Pipeline Summary
@@ -364,9 +466,11 @@ cpuModule: scf→cf → arith→llvm → cf→llvm → memref→llvm → func→
 
 ### GPU path (new)
 ```
+codegen: emitKernelWrapper emits gpu.alloc/gpu.memcpy/gpu.dealloc in wrapper
 kernelModule: bufferize → linalg-to-parallel-loops → gpu-map-parallel-loops
-            → parallel-to-gpu → gpu-kernel-outlining → gpu-to-nvvm
-            → gpu-module-to-binary → gpu-to-llvm → expand-strided → lower-affine
+            → parallel-to-gpu → gpu-kernel-outlining → nvvm-attach-target
+            → gpu-to-nvvm → gpu-module-to-binary → gpu-to-llvm
+            → expand-strided → lower-affine
 merge into cpuModule (func.func + gpu.module ops)
 cpuModule: scf→cf → arith→llvm → cf→llvm → memref→llvm → func→llvm → reconcile
 link: -lcudart -L/usr/local/cuda/lib64
