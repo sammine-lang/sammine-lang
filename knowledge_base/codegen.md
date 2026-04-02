@@ -107,6 +107,54 @@ When `--gpu=cuda` is passed, kernel functions compile to CUDA GPU code via MLIR'
 GPU dialect pipeline. The kernel runs on the GPU; the host wrapper handles data
 marshalling. Commits: `6f6c38a`..`14c77b3`.
 
+### Implementation Phases
+
+**Phase 1: Infrastructure (`6f6c38a`, `c3d6ac8`)**
+- Added `--gpu={cuda,amd}` CLI flag (CLI11, `GPU` in `compiler_option_enum`)
+- LLVM rebuilt with `NVPTX` in `LLVM_TARGETS_TO_BUILD`
+- CMake: linked `MLIRGPUDialect`, `MLIRGPUTransforms`, `MLIRNVVMDialect`,
+  `MLIRGPUToNVVMTransforms`, `MLIRSCFToGPU`, `MLIRNVVMToLLVM`, etc.
+- Conditionally register `gpu::GPUDialect` in `Compiler.cpp`
+- `lowerMLIRToLLVMIR` gained `gpuTarget` parameter
+- `MLIR_ENABLE_CUDA_RUNNER` NOT needed for compilation — only for the runtime
+  library (`libmlir_cuda_runtime`). `ptxas` (from CUDA toolkit) does PTX→cubin
+  as a subprocess.
+
+**Phase 2: Data Marshalling (`8b8891a`, `747b035`, `c46fa02`)**
+- `gpuTarget` threaded through `mlirGen` → `MLIRGenImpl` → `emitKernelWrapper`
+- GPU wrapper: `emitKernelWrapper` emits `gpu.alloc` + `gpu.memcpy` before kernel
+  call, `gpu.memcpy` + `gpu.dealloc` after
+- Extracted helpers: `gpuCopyToDevice`, `gpuCopyToHostAndDealloc`, `gpuDealloc`
+- **Refactor:** GPU wrapper signature uses `memref<NxT>` args (not `!llvm.ptr`)
+  so wrapper body is pure func/memref/gpu dialect with no LLVM ops. Call site
+  converts `!llvm.ptr` → memref via `buildMemrefFromPtr`. Required because
+  `gpu-to-llvm` does a single partial conversion and can't handle pre-existing
+  LLVM ops mixed with unconverted gpu ops.
+- **Async ops:** `gpu-to-llvm` only converts async gpu ops (enforced by
+  `isAsyncWithOneDependency` check in the pattern). Synchronous `gpu.alloc` etc.
+  are silently left unconverted. Fixed by emitting `gpu.wait async` → async
+  `gpu.alloc`/`gpu.memcpy`/`gpu.dealloc` → `gpu.wait` barriers.
+- `buildGpuWrapperFuncType`: new helper for GPU wrapper type (memref args)
+
+**Phase 3: Lowering Pipeline + Linking (`a234f9b`, `d3661e7`, `14c77b3`)**
+- GPU kernel pipeline in `MLIRLowering.cpp`: bufferize → linalg-to-parallel-loops
+  → gpu-map → gpu.launch → gpu-kernel-outlining → nvvm-attach-target →
+  gpu-to-nvvm → (affine/arith/index lowering inside gpu.module) →
+  gpu-module-to-binary → expand-strided → lower-affine
+- Phase 2 (merged CPU module): `scf-to-cf` → `gpu-to-llvm` → `reconcile`
+  (`gpu-to-llvm` replaces `func-to-llvm` + `memref-to-llvm` for GPU path)
+- Module merge (Step C): moves `func::FuncOp` + `gpu::BinaryOp` into CPU module,
+  sets `gpu.container_module` attribute
+- `registerAllExtensions` + `registerConvertToLLVMDependentDialectLoading` +
+  `registerOffloadingLLVMTranslationInterfaceExternalModels` registered BEFORE
+  any dialect loading (ordering matters — interfaces must be in registry before
+  dialect instances are created)
+- Linking: `libmlir_cuda_runtime.so` for `mgpu*` wrappers. Built with
+  `MLIR_ENABLE_CUDA_RUNNER=ON`. Path from `MLIR_LLVM_LIB_DIR` cmake define.
+- `cuModuleUnload` teardown fix: strip `llvm.global_dtors`, insert explicit
+  unload calls before each `ret` in `main()`
+- Lit: `ptxas` on PATH → `cuda` feature flag. `REQUIRES: cuda` gates GPU tests.
+
 ### Architecture Changes (vs CPU path)
 
 **Wrapper signature (GPU):** array args become `memref<NxT>` (not `!llvm.ptr`).
