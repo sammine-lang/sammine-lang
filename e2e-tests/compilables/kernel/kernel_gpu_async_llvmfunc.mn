@@ -1,0 +1,41 @@
+// REQUIRES: cuda
+// RUN: %sammine -f %full %O --gpu=cuda --mlir-ir 2>&1 | %check %full
+// Verify that the GPU wrapper emits async gpu ops (gpu.wait async, gpu.alloc async,
+// gpu.memcpy async) rather than synchronous ones. The gpu-to-llvm pass only converts
+// async variants — synchronous gpu.alloc/gpu.memcpy are silently left unconverted.
+// This test also ensures that the presence of llvm.func (e.g. @malloc) in the same
+// module does not interfere with async gpu op conversion.
+
+import io;
+
+kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let b = double_arr(a);
+  0
+}
+
+// CPU module should contain llvm.func (from C runtime) alongside the gpu wrapper
+// CHECK: llvm.func @malloc
+
+// The wrapper must use async gpu ops, not synchronous ones
+// CHECK:      func.func private @double_arr
+// CHECK:      gpu.wait async
+// CHECK:      gpu.alloc async
+// CHECK:      gpu.memcpy async
+// CHECK:      gpu.wait
+// CHECK:      gpu.wait async
+// CHECK:      gpu.alloc async
+// CHECK:      gpu.memcpy async
+// CHECK:      gpu.wait
+// CHECK:      call @__kernel_double_arr
+// CHECK:      gpu.wait async
+// CHECK:      gpu.memcpy async
+// CHECK:      gpu.dealloc async
+// CHECK:      gpu.wait
+// CHECK:      gpu.wait async
+// CHECK:      gpu.dealloc async
+// CHECK:      gpu.wait
