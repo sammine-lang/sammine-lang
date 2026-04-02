@@ -161,6 +161,10 @@ public:
   void emitKernelWrapper(AST::KernelDefAST *kd, const std::string &internalName,
                          const std::string &publicName,
                          mlir::Location location);
+  /// Build function type for the GPU kernel wrapper.
+  /// Array params become memref<NxT> (not !llvm.ptr) so the wrapper body
+  /// can use pure memref/gpu dialect ops without LLVM dialect mixing.
+  mlir::FunctionType buildGpuWrapperFuncType(AST::PrototypeAST *proto);
   /// GPU: allocate device memref and copy host data into it.
   mlir::Value gpuCopyToDevice(mlir::Value hostMemref, mlir::Location loc);
   /// GPU: copy device memref back to host and deallocate device memory.

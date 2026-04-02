@@ -384,7 +384,22 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
   if (ast->get_type().type_kind == TypeKind::Array) {
     auto arrMlirType = convertType(ast->get_type());
     auto localBuf = emitAllocaOne(arrMlirType, location);
-    operands.push_back(localBuf);
+
+    // GPU wrapper takes memref sret — convert ptr to memref at call site.
+    if (targetGPU() && theModule.lookupSymbol<mlir::func::FuncOp>(callee) &&
+        theModule.lookupSymbol<mlir::func::FuncOp>(callee)->hasAttr(
+            "sammine.kernel_wrapper")) {
+      auto retType = ast->get_type();
+      auto arrType = std::get<ArrayType>(retType.type_data);
+      auto arrSize = static_cast<int64_t>(arrType.get_size());
+      auto elemMLIRType = convertTypeForKernel(arrType.get_element());
+      auto sretMemref =
+          buildMemrefFromPtr(localBuf, arrSize, elemMLIRType, location);
+      operands.push_back(sretMemref);
+    } else {
+      operands.push_back(localBuf);
+    }
+
     mlir::func::CallOp::create(builder, location, llvm::StringRef(callee),
                                mlir::TypeRange{}, operands);
     return localBuf;
@@ -454,8 +469,17 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   for (auto &arg : ast->arguments) {
     if (isKernelWrapper && arg->get_type().type_kind == TypeKind::Array) {
       auto val = emitExpr(arg.get()); // returns !llvm.ptr directly
-      if (val)
+      if (val) {
+        if (targetGPU()) {
+          // GPU wrapper takes memref args — convert ptr to memref at call site.
+          auto argType = arg->get_type();
+          auto arrType = std::get<ArrayType>(argType.type_data);
+          auto arrSize = static_cast<int64_t>(arrType.get_size());
+          auto elemMLIRType = convertTypeForKernel(arrType.get_element());
+          val = buildMemrefFromPtr(val, arrSize, elemMLIRType, location);
+        }
         operands.push_back(val);
+      }
     } else {
       auto val = emitRValue(arg.get());
       if (val)

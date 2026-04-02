@@ -23,6 +23,19 @@
 #include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/NVVMToLLVM/NVVMToLLVM.h"
+#include "mlir/Conversion/UBToLLVM/UBToLLVM.h"
+#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
+#include "mlir/Target/LLVM/NVVM/Target.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
@@ -642,6 +655,7 @@ void Compiler::codegen_mlir() {
     mlirCtx.getOrLoadDialect<mlir::gpu::GPUDialect>();
   }
 
+
   mlir::DialectRegistry registry;
   // Core bufferization interfaces — always needed.
   mlir::arith::registerBufferizableOpInterfaceExternalModels(registry);
@@ -658,6 +672,22 @@ void Compiler::codegen_mlir() {
     mlir::linalg::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::tensor::registerBufferizableOpInterfaceExternalModels(registry);
     mlir::memref::registerAllocationOpInterfaceExternalModels(registry);
+  }
+  // GPU conversion interfaces — gpu-to-llvm uses ConvertToLLVM internally,
+  // which requires each dialect to register its ConvertToLLVMPatternInterface.
+  if (target_gpu) {
+    mlir::arith::registerConvertArithToLLVMInterface(registry);
+    mlir::registerConvertComplexToLLVMInterface(registry);
+    mlir::cf::registerConvertControlFlowToLLVMInterface(registry);
+    mlir::registerConvertFuncToLLVMInterface(registry);
+    mlir::gpu::registerConvertGpuToLLVMInterface(registry);
+    mlir::index::registerConvertIndexToLLVMInterface(registry);
+    mlir::registerConvertMemRefToLLVMInterface(registry);
+    mlir::registerConvertMathToLLVMInterface(registry);
+    mlir::registerConvertNVVMToLLVMInterface(registry);
+    mlir::ub::registerConvertUBToLLVMInterface(registry);
+    mlir::vector::registerConvertVectorToLLVMInterface(registry);
+    mlir::NVVM::registerNVVMTargetInterfaceExternalModels(registry);
   }
   mlirCtx.appendDialectRegistry(registry);
 

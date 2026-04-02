@@ -34,6 +34,13 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRGPUToLLVMIRTranslation
   MLIRSCFToGPU
   MLIRNVVMToLLVM
+  MLIRUBToLLVM
+  MLIRIndexToLLVM
+  MLIRMathToLLVM
+  MLIRComplexToLLVM
+  MLIRVectorToLLVM
+  MLIRNVVMTarget
+  MLIRRegisterAllExtensions
 )
 
 # Final linkage for folder

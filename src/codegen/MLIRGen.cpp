@@ -137,34 +137,41 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
           theModule.push_back(funcOp);
         }
 
-        // 3. Forward-declare public wrapper in CPU module (CPU ABI).
-        // Array params use !llvm.ptr (pass-by-reference) to avoid copying
-        // large arrays by value through the wrapper.
+        // 3. Forward-declare public wrapper in CPU module.
+        // GPU: memref args so wrapper body is pure memref/gpu dialect.
+        // CPU: !llvm.ptr args (kernel ABI — arrays by reference).
         {
-          llvm::SmallVector<mlir::Type, 4> wrapperArgTypes;
-          for (auto &param : kd->Prototype->parameterVectors) {
-            if (param->get_type().type_kind == TypeKind::Array)
-              wrapperArgTypes.push_back(llvmPtrTy());
-            else
-              wrapperArgTypes.push_back(convertType(param->get_type()));
+          auto vis = moduleName.empty()
+                         ? mlir::SymbolTable::Visibility::Private
+                         : mlir::SymbolTable::Visibility::Public;
+
+          mlir::FunctionType wrapperFuncType;
+          if (targetGPU()) {
+            wrapperFuncType = buildGpuWrapperFuncType(kd->Prototype.get());
+          } else {
+            // CPU: manually build the type with !llvm.ptr for arrays + sret
+            llvm::SmallVector<mlir::Type, 4> argTypes;
+            for (auto &param : kd->Prototype->parameterVectors) {
+              if (param->get_type().type_kind == TypeKind::Array)
+                argTypes.push_back(llvmPtrTy());
+              else
+                argTypes.push_back(convertType(param->get_type()));
+            }
+            llvm::SmallVector<mlir::Type, 1> retTypes;
+            auto protoFT = std::get<FunctionType>(
+                kd->Prototype->get_type().type_data);
+            auto retSamType = protoFT.get_return_type();
+            if (retSamType.type_kind == TypeKind::Array)
+              argTypes.push_back(llvmPtrTy()); // sret
+            else if (retSamType.type_kind != TypeKind::Unit)
+              retTypes.push_back(convertType(retSamType));
+            wrapperFuncType = builder.getFunctionType(argTypes, retTypes);
           }
-          llvm::SmallVector<mlir::Type, 1> wrapperRetTypes;
-          auto protoFT =
-              std::get<FunctionType>(kd->Prototype->get_type().type_data);
-          auto retSamType = protoFT.get_return_type();
-          if (retSamType.type_kind == TypeKind::Array) {
-            wrapperArgTypes.push_back(llvmPtrTy()); // sret
-          } else if (retSamType.type_kind != TypeKind::Unit) {
-            wrapperRetTypes.push_back(convertType(retSamType));
-          }
-          auto wrapperFuncType =
-              builder.getFunctionType(wrapperArgTypes, wrapperRetTypes);
+
           if (!theModule.lookupSymbol(publicName)) {
             auto funcOp = mlir::func::FuncOp::create(
                 builder.getUnknownLoc(), publicName, wrapperFuncType);
-            funcOp.setVisibility(moduleName.empty()
-                                     ? mlir::SymbolTable::Visibility::Private
-                                     : mlir::SymbolTable::Visibility::Public);
+            funcOp.setVisibility(vis);
             funcOp->setAttr("sammine.kernel_wrapper", builder.getUnitAttr());
             theModule.push_back(funcOp);
           }
@@ -743,7 +750,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   auto retSamType = protoFT.get_return_type();
   bool returnsArray = retSamType.type_kind == TypeKind::Array;
 
-  // === Marshal inputs: host ptr → host memref, optionally copy to device ===
+  // === Marshal inputs ===
   llvm::SmallVector<mlir::Value> kernelArgs;
   llvm::SmallVector<mlir::Value> deviceMemrefs; // GPU only: for dealloc
   size_t blockArgIdx = 0;
@@ -754,17 +761,19 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
         entryBlock.getArgument(static_cast<unsigned>(blockArgIdx++));
 
     if (paramType.type_kind == TypeKind::Array) {
-      auto &arrType = std::get<ArrayType>(paramType.type_data);
-      auto arrSize = static_cast<int64_t>(arrType.get_size());
-      auto elemMLIRType = convertTypeForKernel(arrType.get_element());
-      auto hostMemref =
-          buildMemrefFromPtr(blockArg, arrSize, elemMLIRType, location);
-
       if (targetGPU()) {
-        auto deviceMem = gpuCopyToDevice(hostMemref, location);
+        // GPU: blockArg is already memref<NxT> (GPU wrapper signature).
+        // Copy to device directly — no LLVM ops needed.
+        auto deviceMem = gpuCopyToDevice(blockArg, location);
         kernelArgs.push_back(deviceMem);
         deviceMemrefs.push_back(deviceMem);
       } else {
+        // CPU: blockArg is !llvm.ptr, wrap as memref via LLVM descriptor.
+        auto &arrType = std::get<ArrayType>(paramType.type_data);
+        auto arrSize = static_cast<int64_t>(arrType.get_size());
+        auto elemMLIRType = convertTypeForKernel(arrType.get_element());
+        auto hostMemref =
+            buildMemrefFromPtr(blockArg, arrSize, elemMLIRType, location);
         kernelArgs.push_back(hostMemref);
       }
     } else {
@@ -772,20 +781,22 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     }
   }
 
-  // === DPS output: wrap sret, optionally allocate on device ===
+  // === DPS output ===
   mlir::Value hostOutMemref, deviceOut;
   if (returnsArray) {
-    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
-    auto arrSize = static_cast<int64_t>(retArrType.get_size());
-    auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
-    auto sretPtr = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
-    hostOutMemref =
-        buildMemrefFromPtr(sretPtr, arrSize, elemMLIRType, location);
-
+    auto sretArg = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
     if (targetGPU()) {
+      // GPU: sret arg is memref<NxT>. Allocate device output.
+      hostOutMemref = sretArg;
       deviceOut = gpuCopyToDevice(hostOutMemref, location);
       kernelArgs.push_back(deviceOut);
     } else {
+      // CPU: sret arg is !llvm.ptr, wrap as memref.
+      auto &retArrType = std::get<ArrayType>(retSamType.type_data);
+      auto arrSize = static_cast<int64_t>(retArrType.get_size());
+      auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
+      hostOutMemref =
+          buildMemrefFromPtr(sretArg, arrSize, elemMLIRType, location);
       kernelArgs.push_back(hostOutMemref);
     }
   }
@@ -839,6 +850,29 @@ void MLIRGenImpl::gpuDealloc(mlir::Value deviceMemref, mlir::Location loc) {
   mlir::gpu::DeallocOp::create(builder, loc, /*asyncToken=*/mlir::Type{},
                                 /*asyncDependencies=*/mlir::ValueRange{},
                                 deviceMemref);
+}
+
+mlir::FunctionType
+MLIRGenImpl::buildGpuWrapperFuncType(AST::PrototypeAST *proto) {
+  llvm::SmallVector<mlir::Type, 4> argTypes;
+  for (auto &param : proto->parameterVectors) {
+    if (param->get_type().type_kind == TypeKind::Array)
+      argTypes.push_back(
+          convertTypeForKernel(param->get_type(), /*asMemref=*/true));
+    else
+      argTypes.push_back(convertType(param->get_type()));
+  }
+  llvm::SmallVector<mlir::Type, 1> retTypes;
+  auto funcType = std::get<FunctionType>(proto->get_type().type_data);
+  auto retType = funcType.get_return_type();
+  if (retType.type_kind == TypeKind::Array) {
+    // sret: output memref is a trailing parameter
+    argTypes.push_back(
+        convertTypeForKernel(retType, /*asMemref=*/true));
+  } else if (retType.type_kind != TypeKind::Unit) {
+    retTypes.push_back(convertType(retType));
+  }
+  return builder.getFunctionType(argTypes, retTypes);
 }
 
 mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {

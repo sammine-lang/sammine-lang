@@ -1,4 +1,5 @@
 #include "codegen/MLIRLowering.h"
+#include "util/Utilities.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
@@ -16,17 +17,27 @@
 #include "mlir/Dialect/Bufferization/Transforms/OneShotModuleBufferize.h"
 #include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Passes.h"
 #include "mlir/Dialect/MemRef/Transforms/Passes.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Conversion/GPUCommon/GPUCommonPass.h"
+#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
+#include "mlir/InitAllExtensions.h"
+#include "mlir/Conversion/Passes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Pass/PassRegistry.h"
 #include "mlir/Target/LLVMIR/Dialect/Builtin/BuiltinToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
+#include "mlir/Target/LLVMIR/Dialect/NVVM/NVVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
 
@@ -37,6 +48,16 @@
 #include "llvm/Support/raw_ostream.h"
 
 namespace sammine_lang {
+
+static bool isGPU(llvm::StringRef gpuTarget) {
+  if (gpuTarget.empty())
+    return false;
+  if (gpuTarget != "cuda" && gpuTarget != "amd")
+    sammine_util::abort("unsupported --gpu target: " + gpuTarget.str() +
+                        " (expected 'cuda' or 'amd')");
+  return true;
+}
+
 
 std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
                                                 mlir::ModuleOp kernelModule,
@@ -67,14 +88,51 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       }
     }
 
-    // Step B: Linalg → loops + buffer optimization (on kernel module only)
-    {
+    // Step B: Lower linalg ops (GPU or CPU path)
+    if (isGPU(gpuTarget)) {
+      // gpu-module-to-binary internally translates to LLVM IR, so register
+      // all dialect translations before running the pass pipeline.
+      mlir::registerBuiltinDialectTranslation(*context);
+      mlir::registerLLVMDialectTranslation(*context);
+      mlir::registerGPUDialectTranslation(*context);
+      mlir::registerNVVMDialectTranslation(*context);
+
+      // GPU path: linalg → parallel loops → gpu.launch → NVVM → binary
+      mlir::PassManager kernelPM(context);
+
+      kernelPM.addNestedPass<mlir::func::FuncOp>(
+          mlir::createConvertLinalgToParallelLoopsPass());
+      kernelPM.addNestedPass<mlir::func::FuncOp>(
+          mlir::createGpuMapParallelLoopsPass());
+      kernelPM.addPass(mlir::createConvertParallelLoopToGpuPass());
+      kernelPM.addPass(mlir::createGpuKernelOutliningPass());
+      kernelPM.addPass(mlir::createGpuNVVMAttachTarget());
+      kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
+          mlir::createConvertGpuOpsToNVVMOps());
+      // Lower remaining non-LLVM ops inside gpu.module before serialization
+      kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
+          mlir::createLowerAffinePass());
+      kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
+          mlir::createArithToLLVMConversionPass());
+      kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
+          mlir::createConvertIndexToLLVMPass());
+      kernelPM.addNestedPass<mlir::gpu::GPUModuleOp>(
+          mlir::createReconcileUnrealizedCastsPass());
+      kernelPM.addPass(mlir::createGpuModuleToBinaryPass());
+      kernelPM.addPass(mlir::createGpuToLLVMConversionPass());
+
+      kernelPM.addPass(mlir::memref::createExpandStridedMetadataPass());
+      kernelPM.addPass(mlir::createLowerAffinePass());
+
+      if (mlir::failed(kernelPM.run(kernelModule)))
+        return nullptr;
+    } else {
+      // CPU path: linalg → sequential loops + buffer optimization
       mlir::PassManager kernelPM(context);
 
       kernelPM.addNestedPass<mlir::func::FuncOp>(
           mlir::createConvertLinalgToLoopsPass());
 
-      // Buffer optimization: move allocations out of loops, promote to stack
       kernelPM.addNestedPass<mlir::func::FuncOp>(
           mlir::bufferization::createBufferHoistingPass());
       kernelPM.addNestedPass<mlir::func::FuncOp>(
@@ -86,7 +144,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
             mlir::bufferization::createPromoteBuffersToStackPass(stackOpts));
       }
 
-      // Cleanup passes needed before merging into CPU module
       kernelPM.addPass(mlir::memref::createExpandStridedMetadataPass());
       kernelPM.addPass(mlir::createLowerAffinePass());
 
@@ -94,38 +151,58 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
         return nullptr;
     }
 
-    // Step C: Merge kernel functions into CPU module.
-    // After bufferization + lowering, kernel functions have memref signatures
-    // matching the forward-declarations in the CPU module.
+    // Step C: Merge kernel functions (and gpu.module ops) into CPU module.
     for (auto &op :
          llvm::make_early_inc_range(kernelModule.getBody()->getOperations())) {
       if (auto funcOp = llvm::dyn_cast<mlir::func::FuncOp>(op)) {
         auto name = funcOp.getName();
-        // Erase the memref-typed forward-declaration in CPU module
         if (auto existing = cpuModule.lookupSymbol<mlir::func::FuncOp>(name))
           existing.erase();
-        // Move the actual definition into CPU module
         funcOp->remove();
         cpuModule.push_back(funcOp);
+      } else if (llvm::isa<mlir::gpu::GPUModuleOp>(op)) {
+        op.remove();
+        cpuModule.push_back(&op);
       }
     }
   }
 
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
-  mlir::PassManager pm(context);
-  pm.addPass(mlir::createSCFToControlFlowPass());
-  pm.addPass(mlir::createArithToLLVMConversionPass());
-  pm.addPass(mlir::createConvertControlFlowToLLVMPass());
-  pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-  pm.addPass(mlir::createConvertFuncToLLVMPass());
-  pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+  if (isGPU(gpuTarget)) {
+    // gpu-to-llvm collects conversion patterns from loaded dialects via
+    // ConvertToLLVMPatternInterface. Register all extensions and ensure
+    // interfaces are applied to already-loaded dialects.
+    mlir::DialectRegistry registry;
+    mlir::registerAllExtensions(registry);
+    mlir::registerConvertToLLVMDependentDialectLoading(registry);
+    context->appendDialectRegistry(registry);
+    context->loadAllAvailableDialects();
 
-  if (mlir::failed(pm.run(cpuModule)))
-    return nullptr;
+    mlir::PassManager pm(context);
+    pm.addPass(mlir::createSCFToControlFlowPass());
+    pm.addPass(mlir::createGpuToLLVMConversionPass());
+    pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+    if (mlir::failed(pm.run(cpuModule)))
+      return nullptr;
+  } else {
+    mlir::PassManager pm(context);
+    pm.addPass(mlir::createSCFToControlFlowPass());
+    pm.addPass(mlir::createArithToLLVMConversionPass());
+    pm.addPass(mlir::createConvertControlFlowToLLVMPass());
+    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+    pm.addPass(mlir::createConvertFuncToLLVMPass());
+    pm.addPass(mlir::createReconcileUnrealizedCastsPass());
+    if (mlir::failed(pm.run(cpuModule)))
+      return nullptr;
+  }
 
   // Register translations
   mlir::registerBuiltinDialectTranslation(*context);
   mlir::registerLLVMDialectTranslation(*context);
+  if (isGPU(gpuTarget)) {
+    mlir::registerGPUDialectTranslation(*context);
+    mlir::registerNVVMDialectTranslation(*context);
+  }
 
   // Export to LLVM IR
   auto llvmModule = mlir::translateModuleToLLVMIR(cpuModule, llvmCtx);
