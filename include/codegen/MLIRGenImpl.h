@@ -2,6 +2,7 @@
 
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
+#include "compiler/Compiler.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
 
@@ -37,10 +38,10 @@ public:
   MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName_,
               const std::string &fileName_, const std::string &sourceText,
               const AST::ASTProperties &props,
-              const std::string &gpuTarget_ = "")
+              GPUMode gpu_mode)
       : builder(&context), moduleName(moduleName_), fileName(fileName_),
         diagnosticData(sammine_util::Reporter::get_diagnostic_data(sourceText)),
-        reporter(fileName_, sourceText, 3), gpuTarget(gpuTarget_),
+        reporter(fileName_, sourceText, 3), gpu_mode_(gpu_mode),
         props_(props) {}
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
@@ -57,8 +58,7 @@ public:
   sammine_util::Reporter::DiagnosticData diagnosticData;
   sammine_util::Reporter reporter;
 
-  /// GPU target: "" for CPU, "cuda" for NVIDIA, "amd" for AMD.
-  std::string gpuTarget;
+  GPUMode gpu_mode_;
 
   /// Emit an ariadne-style error before aborting. If a Location is provided,
   /// the error points to the offending source span; otherwise shows "In
@@ -88,12 +88,7 @@ public:
 
   const AST::ASTProperties &props_;
   bool targetGPU() const {
-    if (gpuTarget.empty())
-      return false;
-    if (gpuTarget != "cuda" && gpuTarget != "amd")
-      sammine_util::abort("unsupported --gpu target: " + gpuTarget +
-                          " (expected 'cuda' or 'amd')");
-    return true;
+    return gpu_mode_ != GPUMode::NONE;
   }
 
   /// Flag: true when emitting inside a linalg.map/linalg.reduce body builder.

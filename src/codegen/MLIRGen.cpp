@@ -1,5 +1,6 @@
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRGenImpl.h"
+#include "compiler/Compiler.h"
 
 using sammine_util::cautious_at;
 using sammine_util::cautious_value;
@@ -927,8 +928,8 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &fileName,
                       const std::string &sourceText,
                       const AST::ASTProperties &props,
-                      const std::string &gpuTarget) {
-  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpuTarget);
+                      GPUMode gpu_mode) {
+  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpu_mode);
   auto cpuModule = impl.generate(program);
   if (!cpuModule)
     return {};

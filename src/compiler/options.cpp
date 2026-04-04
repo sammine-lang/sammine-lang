@@ -1,5 +1,6 @@
 #include "CLI/CLI.hpp"
-#include "compiler/Compiler.h"
+#include "util/Utilities.h"
+#include "compiler/Options.h"
 
 namespace sammine_lang {
   static LibFormat parse_lib_format(const std::string &s) {
@@ -8,6 +9,13 @@ namespace sammine_lang {
     if (s == "shared")
       return LibFormat::Shared;
     return LibFormat::Shared;
+  }
+  static GPUMode parse_gpu_mode(const std::string &s) {
+    if (s == "cuda")
+      return GPUMode::CUDA;
+    if (s == "amd")
+      return GPUMode::AMD;
+    return GPUMode::NONE;
   }
 }
 namespace sammine_lang {
@@ -31,7 +39,8 @@ Options::Options(int argc, char *argv[]) {
   app.add_flag("--jit", jit,
                "JIT execute the program directly (only effective with main function)");
 
-  app.add_option("--gpu", gpu,
+  std::string gpu_mode_raw;
+  app.add_option("--gpu", gpu_mode_raw,
                  "Lower kernel functions to GPU code. Values: cuda, amd")
       ->check(CLI::IsMember({"cuda", "amd"}));
 
@@ -79,6 +88,7 @@ Options::Options(int argc, char *argv[]) {
     return;
   }
   lib_format = parse_lib_format(lib_format_raw);
+  gpu = parse_gpu_mode(gpu_mode_raw);
 
 
   if (!output_dir_raw.empty())

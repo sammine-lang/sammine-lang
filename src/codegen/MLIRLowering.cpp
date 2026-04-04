@@ -1,5 +1,6 @@
 #include "codegen/LinalgReduceToGpu.h"
 #include "codegen/MLIRLowering.h"
+#include "compiler/Compiler.h"
 #include "util/Utilities.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
@@ -55,20 +56,15 @@
 
 namespace sammine_lang {
 
-static bool isGPU(llvm::StringRef gpuTarget) {
-  if (gpuTarget.empty())
-    return false;
-  if (gpuTarget != "cuda" && gpuTarget != "amd")
-    sammine_util::abort("unsupported --gpu target: " + gpuTarget.str() +
-                        " (expected 'cuda' or 'amd')");
-  return true;
+static bool isGPU(GPUMode gpuTarget) {
+  return gpuTarget != GPUMode::NONE;
 }
 
 
 std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
                                                 mlir::ModuleOp kernelModule,
                                                 llvm::LLVMContext &llvmCtx,
-                                                llvm::StringRef gpuTarget) {
+                                                GPUMode gpuTarget) {
   auto *context = cpuModule->getContext();
 
   // Phase 1: Process kernel module (if present)

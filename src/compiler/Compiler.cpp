@@ -573,7 +573,7 @@ void Compiler::codegen_mlir() {
 
   // GPU: register all LLVM conversion extensions BEFORE loading any dialects.
   // This ensures ConvertToLLVMPatternInterface is available when dialects load.
-  bool target_gpu = !options_.gpu.empty();
+  bool target_gpu = options_.gpu != GPUMode::NONE;
   if (target_gpu) {
     mlir::DialectRegistry earlyRegistry;
     mlir::registerAllExtensions(earlyRegistry);
@@ -1021,7 +1021,7 @@ void Compiler::link() {
     obj_list += " " + obj;
 
   // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
-  bool gpu = !options_.gpu.empty();
+  bool gpu = options_.gpu != GPUMode::NONE;
   std::string gpu_link_flags;
   if (gpu) {
     // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.

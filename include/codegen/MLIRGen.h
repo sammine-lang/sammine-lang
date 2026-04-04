@@ -2,6 +2,7 @@
 
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
+#include "compiler/Compiler.h"
 #include "typecheck/Types.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -34,6 +35,6 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &fileName,
                       const std::string &sourceText,
                       const AST::ASTProperties &props,
-                      const std::string &gpuTarget = "");
+                      GPUMode gpu_mode);
 
 } // namespace sammine_lang

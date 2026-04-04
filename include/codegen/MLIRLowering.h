@@ -1,5 +1,6 @@
 #pragma once
 
+#include "compiler/Compiler.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -14,6 +15,6 @@ namespace sammine_lang {
 std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
                                                 mlir::ModuleOp kernelModule,
                                                 llvm::LLVMContext &llvmCtx,
-                                                llvm::StringRef gpuTarget = "");
+                                                GPUMode gpu_mode);
 
 } // namespace sammine_lang
