@@ -12,23 +12,6 @@
 //! \file Compiler.h
 //! \brief Define the Compiler staging
 namespace sammine_lang {
-enum compiler_option_enum {
-  FILE,
-  STR,
-  LLVM_IR,
-  AST_IR,
-  DIAGNOSTIC,
-  CHECK,
-  TIME,
-  ARGV0,
-  MLIR_IR,
-  OUTPUT_DIR,
-  IMPORT_PATHS,
-  LIB_FORMAT,
-  JIT,
-  JIT_ARGS,
-  GPU,
-};
 
 enum class LibFormat {
   Static, // Emit .a archive
