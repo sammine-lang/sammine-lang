@@ -10,12 +10,12 @@ namespace sammine_lang {
     return LibFormat::Shared;
   }
 }
-
+namespace sammine_lang {
 int parseOption(CLI::App&app,int argc, char *argv[] ) {
   CLI11_PARSE(app, argc, argv);
   return 0;
 }
-sammine_lang::Options::Options(int argc, char *argv[]) {
+Options::Options(int argc, char *argv[]) {
   CLI::App app{"sammine"};
   auto *input_group = app.add_option_group("Input");
   input_group->add_option("-f,--file", file_arg,
@@ -59,7 +59,8 @@ sammine_lang::Options::Options(int argc, char *argv[]) {
       ->expected(0, 1)
       ->default_str("simple");
 
-  app.add_option("-O", output_dir,
+  std::string output_dir_raw;
+  app.add_option("-O", output_dir_raw,
                  "Output directory for build artifacts (.so, .a, .exe).");
 
   app.add_option("-I", import_paths,
@@ -73,11 +74,42 @@ sammine_lang::Options::Options(int argc, char *argv[]) {
       ->default_str("shared");
 
   argv0 = argv[0];
-  parseOption(app, argc, argv);
+  if (parseOption(app, argc, argv) != 0) {
+    has_error = true;
+    return;
+  }
   lib_format = parse_lib_format(lib_format_raw);
 
 
-  if (!output_dir.empty())
-    std::filesystem::create_directories(output_dir);
-  infer();
+  if (!output_dir_raw.empty())
+    std::filesystem::create_directories(output_dir_raw);
+  infer(output_dir_raw);
+}
+
+
+void Options::infer(const std::string &output_dir_raw) {
+    if (!argv0.empty()) {
+      std::error_code ec;
+      auto bin_path = std::filesystem::canonical(argv0, ec);
+      if (!ec)
+        stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
+    }
+
+
+    if (!this->str_arg.empty()) {
+      this->file_arg = "-s|--str";
+      this->from_string = true;
+    } else if (!this->file_arg.empty()) {
+      this->str_arg = sammine_util::get_string_from_file(this->file_arg);
+    } else {
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+                 "[Error during compiler initial phase]\n");
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+                 "[Both the file name and the string input is empty]\n");
+      has_error = true;
+      return;
+    }
+
+    output_dir = std::filesystem::path(output_dir_raw);
+  }
 }

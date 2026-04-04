@@ -82,12 +82,9 @@ class Compiler {
   std::shared_ptr<TokenStream> tokStream;
   std::unique_ptr<Lexer> lexer;
   std::shared_ptr<AST::ProgramAST> programAST;
-  std::map<compiler_option_enum, std::string> compiler_options_;
   std::shared_ptr<LLVMRes> resPtr;
-  std::string file_name, input;
   std::string mod_name;
   std::vector<std::string> extra_object_files;
-  std::string output_dir;
   std::vector<std::string> extra_link_objs_;
 
   AST::ASTProperties props_;
@@ -98,7 +95,6 @@ class Compiler {
   int64_t context_radius = 2;
   State state_ = State::Running;
   bool has_main = false;
-  bool from_string = false;
   int jit_exit_code_ = 0;
 
   void lex();
@@ -127,11 +123,11 @@ class Compiler {
   std::string output_path(const std::string &filename) const {
     if (options_.output_dir.empty())
       return filename;
-    return (std::filesystem::path(options_.output_dir) / filename).string();
+    return (options_.output_dir / filename).string();
   }
 
 public:
-  Compiler(const Options &options, const decltype(compiler_options_) &compiler_options);
+  Compiler(const Options &options);
   int start();
 };
 
@@ -139,38 +135,23 @@ public:
   //
 
 namespace sammine_lang {
-int CompilerRunner::run(const Options &options, const std::map<compiler_option_enum, std::string> &compiler_options) {
+int CompilerRunner::run(const Options &options) {
   
-  auto compiler = Compiler(options, compiler_options);
+  auto compiler = Compiler(options);
   return compiler.start();
 }
 
-Compiler::Compiler(const Options &options, const std::map<compiler_option_enum, std::string>& compiler_options ) : options_(options), compiler_options_(compiler_options){
+Compiler::Compiler(const Options &options) : options_(options) {
   this->state_ = State::Running;
-  this->file_name = options.file_arg;
-  this->input = options.str_arg;
 
   this->mod_name = "sammine";
-  if (!this->input.empty()) {
-    this->file_name = "-s|--str";
-    this->from_string = true;
-  } else if (!this->file_name.empty()) {
-    this->input = sammine_util::get_string_from_file(this->file_name);
-  } else {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
-               "[Error during compiler initial phase]\n");
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
-               "[Both the file name and the string input is empty]\n");
-    set_error();
-    return;
-  }
   this->resPtr = std::make_shared<LLVMRes>();
 
   // Initialize debug logging from --diagnostics flag
   sammine_log::set_enabled_types(options_.diagnostics);
   bool dev_mode = sammine_log::is_type_in_list("dev", options_.diagnostics);
   this->reporter =
-      sammine_util::Reporter(file_name, input, context_radius, dev_mode);
+      sammine_util::Reporter(options_.file_arg, options_.str_arg, context_radius, dev_mode);
 }
 
 // Stage 1: Tokenize source into a TokenStream.
@@ -180,7 +161,7 @@ void Compiler::lex() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start lexing stage...\n");
   });
-  lexer = std::make_unique<Lexer>(input);
+  lexer = std::make_unique<Lexer>(options_.str_arg);
   tokStream = lexer->getTokenStream();
 }
 
@@ -224,7 +205,7 @@ void Compiler::resolve_imports() {
                "Start resolve imports stage...\n");
   });
 
-  auto source_dir = std::filesystem::path(this->file_name).parent_path();
+  auto source_dir = std::filesystem::path(options_.file_arg).parent_path();
   if (source_dir.empty())
     source_dir = ".";
 
@@ -542,7 +523,7 @@ void Compiler::linear_check() {
 }
 
 void Compiler::dump_ast() {
-  if (compiler_options_[compiler_option_enum::AST_IR] == "true") {
+  if (options_.ast_ir) {
     LOG({
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start dumping ast-ir stage...\n");
@@ -562,7 +543,7 @@ void Compiler::codegen() {
   if (has_error()) {
     return;
   }
-  if (this->compiler_options_[compiler_option_enum::CHECK] == "true") {
+  if (options_.check) {
     LOG({
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Finished checking. Stopping at codegen stage with compiler's "
@@ -592,7 +573,7 @@ void Compiler::codegen_mlir() {
 
   // GPU: register all LLVM conversion extensions BEFORE loading any dialects.
   // This ensures ConvertToLLVMPatternInterface is available when dialects load.
-  bool target_gpu = !compiler_options_[compiler_option_enum::GPU].empty();
+  bool target_gpu = !options_.gpu.empty();
   if (target_gpu) {
     mlir::DialectRegistry earlyRegistry;
     mlir::registerAllExtensions(earlyRegistry);
@@ -658,12 +639,12 @@ void Compiler::codegen_mlir() {
   }
   mlirCtx.appendDialectRegistry(registry);
 
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string moduleName = has_main ? "" : stem;
 
   auto mlirResult =
-      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name,
-              this->input, props_, compiler_options_[compiler_option_enum::GPU]);
+      mlirGen(mlirCtx, programAST.get(), moduleName, options_.file_arg,
+              options_.str_arg, props_, options_.gpu);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -671,7 +652,7 @@ void Compiler::codegen_mlir() {
     return;
   }
 
-  if (compiler_options_[compiler_option_enum::MLIR_IR] == "true") {
+  if (options_.mlir_ir) {
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
     if (mlirResult.kernelModule) {
@@ -691,7 +672,7 @@ void Compiler::codegen_mlir() {
     kernelMod = *mlirResult.kernelModule;
   auto llvmModule =
       lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context,
-                        compiler_options_[compiler_option_enum::GPU]);
+                        options_.gpu);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
@@ -747,7 +728,7 @@ void Compiler::optimize() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start optimize stage...\n");
   });
-  std::string llvm_ir_mode = compiler_options_[compiler_option_enum::LLVM_IR];
+  std::string llvm_ir_mode = options_.llvm_ir;
 
   std::string pre_ir;
   if (llvm_ir_mode == "pre" || llvm_ir_mode == "diff") {
@@ -822,7 +803,7 @@ void Compiler::jit_execute() {
   SAMMINE_ZONE_NAMED("jit_execute");
   if (has_error())
     return;
-  if (compiler_options_[compiler_option_enum::JIT] != "true")
+  if (!options_.jit)
     return;
 
   if (!has_main) {
@@ -837,23 +818,10 @@ void Compiler::jit_execute() {
                "Start JIT execution stage...\n");
   });
 
-  // Parse semicolon-joined JIT args.
-  std::vector<std::string> jit_args;
-  {
-    std::string args_str = compiler_options_[compiler_option_enum::JIT_ARGS];
-    if (!args_str.empty()) {
-      std::istringstream ss(args_str);
-      std::string arg;
-      while (std::getline(ss, arg, ';'))
-        if (!arg.empty())
-          jit_args.push_back(arg);
-    }
-  }
-
   auto &jit = resPtr->sammineJIT;
   jit_exit_code_ =
       jit->execute_main(std::move(resPtr->Module), std::move(resPtr->Context),
-                        extra_object_files, jit_args);
+                        extra_object_files, options_.jit_args);
   reporter.report(*jit);
 
   if (jit->has_errors())
@@ -869,7 +837,7 @@ void Compiler::emit_object() {
     return;
   }
 
-  if (this->from_string) {
+  if (options_.from_string) {
     reportee.add_diagnostics(
         Location::NonPrintable(),
         "Skipping object file and executable emission: input was provided "
@@ -882,7 +850,7 @@ void Compiler::emit_object() {
                "Start emit object stage...\n");
   });
 
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string obj_file = output_path(stem + ".o");
   llvm::raw_fd_ostream dest(llvm::raw_fd_ostream(obj_file, resPtr->EC));
   if (resPtr->EC) {
@@ -911,7 +879,7 @@ void Compiler::emit_archive_impl() {
                "Start emit archive stage...\n");
   });
 
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string obj_file = output_path(stem + ".o");
   std::string archive_file = output_path(stem + ".a");
 
@@ -950,8 +918,10 @@ void Compiler::emit_archive_impl() {
   std::string cmd =
       fmt::format("cd {} && ar rcs {} *.o", tmp_dir.string(), abs_archive);
   int result = std::system(cmd.c_str());
-  if (result != 0)
+  if (result != 0) {
     fmt::print(stderr, "Failed to create archive {}\n", archive_file);
+    set_error();
+  }
 
   // Clean up temp directory
   std::filesystem::remove_all(tmp_dir);
@@ -964,7 +934,7 @@ void Compiler::emit_shared_impl() {
                "Start emit shared library stage...\n");
   });
 
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string obj_file = output_path(stem + ".o");
   std::string lib_file = output_path(stem + ".so");
 
@@ -980,23 +950,24 @@ void Compiler::emit_shared_impl() {
   int result = std::system(command.c_str());
   if (result != 0) {
     fmt::print(stderr, "Failed to create shared library {}\n", lib_file);
+    set_error();
   }
 }
 
 void Compiler::emit_library() {
-  if (has_error() || has_main || this->from_string)
+  if (has_error() || has_main || options_.from_string)
     return;
 
   // Default to shared library when no --lib flag is given
 
   // Auto-detect <stem>_runtime.o for library builds.
   {
-    std::string stem = std::filesystem::path(this->file_name).stem().string();
+    std::string stem = std::filesystem::path(options_.file_arg).stem().string();
     std::string runtime_obj = stem + "_runtime.o";
     bool found = false;
     if (!options_.output_dir.empty()) {
       // TODO: use output_path
-      auto candidate = std::filesystem::path(options_.output_dir) / runtime_obj;
+      auto candidate = options_.output_dir / runtime_obj;
       if (std::filesystem::exists(candidate)) {
         extra_link_objs_.push_back(candidate.string());
         found = true;
@@ -1004,7 +975,7 @@ void Compiler::emit_library() {
     }
     if (!found) {
       // TODO: use output_path
-      auto source_dir = std::filesystem::path(file_name).parent_path();
+      auto source_dir = std::filesystem::path(options_.file_arg).parent_path();
       if (source_dir.empty())
         source_dir = ".";
       auto candidate = source_dir / runtime_obj;
@@ -1023,7 +994,7 @@ void Compiler::emit_library() {
   }
 
   // Clean up intermediate .o — only the .a/.so is the deliverable
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string obj_file = output_path(stem + ".o");
   std::filesystem::remove(obj_file);
 }
@@ -1032,7 +1003,7 @@ void Compiler::emit_library() {
 // Executables only.
 void Compiler::link() {
   SAMMINE_ZONE_NAMED("link");
-  if (has_error() || this->from_string) {
+  if (has_error() || options_.from_string) {
     return;
   }
 
@@ -1041,7 +1012,7 @@ void Compiler::link() {
                "Start link stage...\n");
   });
 
-  std::string stem = std::filesystem::path(this->file_name).stem().string();
+  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
   std::string obj_file = output_path(stem + ".o");
   std::string exe_file = output_path(stem + ".exe");
 
@@ -1050,7 +1021,7 @@ void Compiler::link() {
     obj_list += " " + obj;
 
   // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
-  bool gpu = !compiler_options_[compiler_option_enum::GPU].empty();
+  bool gpu = !options_.gpu.empty();
   std::string gpu_link_flags;
   if (gpu) {
     // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.
@@ -1121,8 +1092,8 @@ int Compiler::start() {
       {"link", &Compiler::link},
   };
 
-  std::string time_level = compiler_options_[compiler_option_enum::TIME];
-  bool timing = time_level != "false";
+  std::string time_level = options_.time_val;
+  bool timing = !time_level.empty();
   std::vector<std::pair<const char *, double>> timings;
 
   if (time_level == "coarse")
@@ -1158,7 +1129,7 @@ int Compiler::start() {
 
   if (has_error())
     return 1;
-  if (compiler_options_[compiler_option_enum::JIT] == "true" && has_main)
+  if (options_.jit && has_main)
     return jit_exit_code_;
   return 0;
 }

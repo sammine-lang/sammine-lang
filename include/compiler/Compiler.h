@@ -4,6 +4,8 @@
 
 #pragma once
 #include "CLI/CLI.hpp"
+#include "util/Utilities.h"
+#include <filesystem>
 #include <map>
 #include <string>
 #include <vector>
@@ -44,7 +46,7 @@ public:
   bool ast_ir = false;
   std::string diagnostics = "none";
   std::string time_val;
-  std::string output_dir;
+  std::filesystem::path output_dir;
   std::vector<std::string> import_paths;
   LibFormat lib_format;
   std::filesystem::path stdlib_dir;
@@ -52,20 +54,15 @@ public:
   Options() = delete;
   Options(int argc, char *argv[]);
 
-  void infer() {
-    if (!argv0.empty()) {
-      std::error_code ec;
-      auto bin_path = std::filesystem::canonical(argv0, ec);
-      if (!ec)
-        stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
-    }
 
-  }
+  bool has_error = false;
+  bool from_string = false; 
+  void infer(const std::string &output_dir_raw); 
 };
 
 class CompilerRunner {
 public:
-  static int run(const Options &options, const std::map<compiler_option_enum, std::string> &compiler_options);
+  static int run(const Options &options);
 };
 
 } // namespace sammine_lang
