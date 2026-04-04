@@ -141,7 +141,7 @@ cmake -S externals/llvm-project/llvm -B externals/llvm-project/build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DLLVM_TARGETS_TO_BUILD="X86;AArch64;NVPTX" \
   -DLLVM_CCACHE_BUILD=true \
-  -DLLVM_USE_LINKER=lld \
+  -DLLVM_USE_LINKER=mold \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DLLVM_ENABLE_PROJECTS="mlir;llvm" \
   -DCMAKE_C_COMPILER=clang \
@@ -160,6 +160,7 @@ cmake -S . -B build \
   -DMLIR_DIR=externals/llvm-project/build/lib/cmake/mlir \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
   -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=mold" -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=mold" \
   -DSAMMINE_TEST=ON
 ```
 
