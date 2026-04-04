@@ -12,6 +12,12 @@ enum class GPUMode {
   AMD,
   NONE,
 };
+enum class TimingMode {
+  SIMPLE, 
+  COARSE,
+  SPARSE,
+  NONE,
+};
 
 class Options {
 public:
@@ -24,7 +30,7 @@ public:
   bool mlir_ir = false;
   bool ast_ir = false;
   std::string diagnostics = "none";
-  std::string time_val;
+  TimingMode time_val;
   std::filesystem::path output_dir;
   std::vector<std::string> import_paths;
   LibFormat lib_format;

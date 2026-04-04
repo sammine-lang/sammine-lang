@@ -8,6 +8,7 @@
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
+#include "compiler/Options.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -1092,11 +1093,11 @@ int Compiler::start() {
       {"link", &Compiler::link},
   };
 
-  std::string time_level = options_.time_val;
-  bool timing = !time_level.empty();
+  auto time_level = options_.time_val;
+  bool timing = options_.time_val != TimingMode::NONE; 
   std::vector<std::pair<const char *, double>> timings;
 
-  if (time_level == "coarse")
+  if (time_level == TimingMode::COARSE)
     llvm::TimePassesIsEnabled = true;
 
   for (auto &[name, fn] : stages) {
@@ -1112,14 +1113,14 @@ int Compiler::start() {
   }
 
   if (timing) {
-    if (time_level == "simple") {
+    if (time_level == TimingMode::SIMPLE) {
       double total = 0.0;
       for (auto &[name, ms] : timings)
         total += ms;
       fmt::print(stderr, "total: {:.2f}ms\n", total);
     } else {
       print_timing_table(timings);
-      if (time_level == "coarse")
+      if (time_level == TimingMode::COARSE)
         llvm::TimerGroup::printAll(llvm::errs());
     }
   }

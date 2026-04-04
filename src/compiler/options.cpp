@@ -17,6 +17,17 @@ namespace sammine_lang {
       return GPUMode::AMD;
     return GPUMode::NONE;
   }
+  // "simple", "sparse", "coarse"
+  static TimingMode parse_timing_mode(const std::string &s) {
+    if (s == "simple")
+      return TimingMode::SIMPLE;
+    if (s == "sparse")
+      return TimingMode::SPARSE;
+    if (s == "coarse")
+      return TimingMode::COARSE;
+    return TimingMode::NONE;
+
+  }
 }
 namespace sammine_lang {
 int parseOption(CLI::App&app,int argc, char *argv[] ) {
@@ -62,7 +73,8 @@ Options::Options(int argc, char *argv[]) {
       ->expected(0, 1)
       ->default_str("dev");
 
-  app.add_option("--time", time_val,
+  std::string time_val_raw;
+  app.add_option("--time", time_val_raw,
                  "Print compilation timing. Values: simple, sparse, coarse")
       ->check(CLI::IsMember({"simple", "sparse", "coarse"}))
       ->expected(0, 1)
@@ -89,6 +101,7 @@ Options::Options(int argc, char *argv[]) {
   }
   lib_format = parse_lib_format(lib_format_raw);
   gpu = parse_gpu_mode(gpu_mode_raw);
+  time_val = parse_timing_mode(time_val_raw);
 
 
   if (!output_dir_raw.empty())
