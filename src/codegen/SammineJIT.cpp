@@ -5,10 +5,14 @@
 #include "codegen/SammineJIT.h"
 
 #include "fmt/core.h"
+#include "util/Logging.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h" // Provides the SimpleCompiler class.
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h" // Provides the DynamicLibrarySearchGenerator class.
 #include "llvm/ExecutionEngine/Orc/SelfExecutorProcessControl.h" // Provides SelfExecutorProcessControl
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include <fmt/base.h>
+
+#define DEBUG_TYPE "jit"
 //! \file SammineJIT.cpp
 //! \brief The Implementation for SammineJIT
 namespace sammine_lang {
@@ -77,6 +81,7 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
                             lib));
       return 1;
     }
+    LOG({ fmt::println("Loading {}", lib); });
     if (auto err = loadLibrary(lib)) {
       add_error(Location::NonPrintable(),
                 fmt::format("JIT failed to load library '{}': {}", lib,
@@ -90,9 +95,8 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
   auto TSM = llvm::orc::ThreadSafeModule(std::move(module), TSCtx);
 
   if (auto err = addModule(std::move(TSM))) {
-    add_error(Location::NonPrintable(),
-              fmt::format("JIT addModule failed: {}",
-                          toString(std::move(err))));
+    add_error(Location::NonPrintable(), fmt::format("JIT addModule failed: {}",
+                                                    toString(std::move(err))));
     return 1;
   }
 
