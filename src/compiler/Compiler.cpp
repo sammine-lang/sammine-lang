@@ -3,7 +3,6 @@
 //
 
 #include "compiler/Compiler.h"
-#include "util/Tracy.h"
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
@@ -12,6 +11,18 @@
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
+#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
+#include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
+#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
+#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
+#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
+#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
+#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
+#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
+#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
+#include "mlir/Conversion/NVVMToLLVM/NVVMToLLVM.h"
+#include "mlir/Conversion/UBToLLVM/UBToLLVM.h"
+#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
 #include "mlir/Dialect/Affine/IR/AffineOps.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
@@ -22,23 +33,8 @@
 #include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
 #include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
-#include "mlir/Conversion/ConvertToLLVM/ToLLVMPass.h"
-#include "mlir/InitAllExtensions.h"
-#include "mlir/Conversion/ComplexToLLVM/ComplexToLLVM.h"
-#include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
-#include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
-#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
-#include "mlir/Conversion/IndexToLLVM/IndexToLLVM.h"
-#include "mlir/Conversion/MathToLLVM/MathToLLVM.h"
-#include "mlir/Conversion/MemRefToLLVM/MemRefToLLVM.h"
-#include "mlir/Conversion/NVVMToLLVM/NVVMToLLVM.h"
-#include "mlir/Conversion/UBToLLVM/UBToLLVM.h"
-#include "mlir/Conversion/VectorToLLVM/ConvertVectorToLLVM.h"
-#include "mlir/Target/LLVM/NVVM/Target.h"
-#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
@@ -49,6 +45,9 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir/InitAllExtensions.h"
+#include "mlir/Target/LLVM/NVVM/Target.h"
+#include "mlir/Target/LLVMIR/Dialect/GPU/GPUToLLVMIRTranslation.h"
 #include "parser/Parser.h"
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
@@ -56,6 +55,7 @@
 #include "typecheck/LinearTypeChecker.h"
 #include "util/Logging.h"
 #include "util/QualifiedName.h"
+#include "util/Tracy.h"
 #include "util/Utilities.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
@@ -78,6 +78,7 @@
 // Each stage method short-circuits if has_error() is true.
 namespace sammine_lang {
 class Compiler {
+  Options options;
   std::shared_ptr<TokenStream> tokStream;
   std::unique_ptr<Lexer> lexer;
   std::shared_ptr<AST::ProgramAST> programAST;
@@ -140,7 +141,7 @@ class Compiler {
   }
 
 public:
-  Compiler(std::map<compiler_option_enum, std::string> &compiler_options);
+  Compiler(const Options &options, const decltype(compiler_options) &compiler_options);
   int start();
 };
 
@@ -148,18 +149,16 @@ public:
   //
 
 namespace sammine_lang {
-int CompilerRunner::run(
-    std::map<compiler_option_enum, std::string> &compiler_options) {
-  auto compiler = Compiler(compiler_options);
+int CompilerRunner::run(const Options &options, const std::map<compiler_option_enum, std::string> &compiler_options) {
+  
+  auto compiler = Compiler(options, compiler_options);
   return compiler.start();
 }
 
-Compiler::Compiler(
-    std::map<compiler_option_enum, std::string> &compiler_options_)
-    : compiler_options(compiler_options_) {
+Compiler::Compiler(const Options &options, const std::map<compiler_option_enum, std::string>& compiler_options ) : options(options), compiler_options(compiler_options){
   this->state_ = State::Running;
-  this->file_name = compiler_options[compiler_option_enum::FILE];
-  this->input = compiler_options[compiler_option_enum::STR];
+  this->file_name = options.file_arg;
+  this->input = options.str_arg;
 
   this->mod_name = "sammine";
   if (!this->input.empty()) {
@@ -178,8 +177,7 @@ Compiler::Compiler(
   this->resPtr = std::make_shared<LLVMRes>();
 
   // Initialize debug logging from --diagnostics flag
-  std::string diagnostic_value =
-      compiler_options[compiler_option_enum::DIAGNOSTIC];
+  std::string diagnostic_value = options.diagnostics;
   sammine_log::set_enabled_types(diagnostic_value);
 
   bool dev_mode = sammine_log::is_type_in_list("dev", diagnostic_value);
@@ -187,14 +185,14 @@ Compiler::Compiler(
       sammine_util::Reporter(file_name, input, context_radius, dev_mode);
 
   // Initialize output directory
-  output_dir = compiler_options[compiler_option_enum::OUTPUT_DIR];
+  output_dir = this->compiler_options[compiler_option_enum::OUTPUT_DIR];
   if (!output_dir.empty())
     std::filesystem::create_directories(output_dir);
 
   // Parse semicolon-joined import paths
   {
     std::string paths_str =
-        compiler_options[compiler_option_enum::IMPORT_PATHS];
+        this->compiler_options[compiler_option_enum::IMPORT_PATHS];
     if (!paths_str.empty()) {
       std::istringstream ss(paths_str);
       std::string path;
@@ -205,7 +203,7 @@ Compiler::Compiler(
   }
 
   // Compute stdlib directory relative to the binary location
-  std::string argv0 = compiler_options[compiler_option_enum::ARGV0];
+  std::string argv0 = this->compiler_options[compiler_option_enum::ARGV0];
   if (!argv0.empty()) {
     std::error_code ec;
     auto bin_path = std::filesystem::canonical(argv0, ec);
@@ -214,7 +212,7 @@ Compiler::Compiler(
   }
 
   lib_format_ =
-      parse_lib_format(compiler_options[compiler_option_enum::LIB_FORMAT]);
+      parse_lib_format(this->compiler_options[compiler_option_enum::LIB_FORMAT]);
 }
 
 // Stage 1: Tokenize source into a TokenStream.
@@ -630,9 +628,7 @@ void Compiler::codegen_mlir() {
   // Check if any kernel definitions exist in the AST.
   bool has_kernel_defs = std::any_of(
       programAST->DefinitionVec.begin(), programAST->DefinitionVec.end(),
-      [](const auto &def) {
-        return llvm::isa<AST::KernelDefAST>(def.get());
-      });
+      [](const auto &def) { return llvm::isa<AST::KernelDefAST>(def.get()); });
 
   mlir::MLIRContext mlirCtx;
 
@@ -668,7 +664,6 @@ void Compiler::codegen_mlir() {
   if (target_gpu) {
     mlirCtx.getOrLoadDialect<mlir::gpu::GPUDialect>();
   }
-
 
   mlir::DialectRegistry registry;
   // Core bufferization interfaces — always needed.
@@ -708,9 +703,9 @@ void Compiler::codegen_mlir() {
   std::string stem = std::filesystem::path(this->file_name).stem().string();
   std::string moduleName = has_main ? "" : stem;
 
-  auto mlirResult = mlirGen(mlirCtx, programAST.get(), moduleName,
-                            this->file_name, this->input, props_,
-                            compiler_options[compiler_option_enum::GPU]);
+  auto mlirResult =
+      mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name,
+              this->input, props_, compiler_options[compiler_option_enum::GPU]);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -736,9 +731,9 @@ void Compiler::codegen_mlir() {
   mlir::ModuleOp kernelMod;
   if (mlirResult.kernelModule)
     kernelMod = *mlirResult.kernelModule;
-  auto llvmModule = lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod,
-                                      *resPtr->Context,
-                                      compiler_options[compiler_option_enum::GPU]);
+  auto llvmModule =
+      lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context,
+                        compiler_options[compiler_option_enum::GPU]);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
@@ -873,10 +868,9 @@ void Compiler::jit_execute() {
     return;
 
   if (!has_main) {
-    reportee.add_diagnostics(
-        Location::NonPrintable(),
-        "--jit flag ignored: no main function found. "
-        "JIT execution requires a main function.");
+    reportee.add_diagnostics(Location::NonPrintable(),
+                             "--jit flag ignored: no main function found. "
+                             "JIT execution requires a main function.");
     return;
   }
 
@@ -888,8 +882,7 @@ void Compiler::jit_execute() {
   // Parse semicolon-joined JIT args.
   std::vector<std::string> jit_args;
   {
-    std::string args_str =
-        compiler_options[compiler_option_enum::JIT_ARGS];
+    std::string args_str = compiler_options[compiler_option_enum::JIT_ARGS];
     if (!args_str.empty()) {
       std::istringstream ss(args_str);
       std::string arg;
@@ -900,9 +893,9 @@ void Compiler::jit_execute() {
   }
 
   auto &jit = resPtr->sammineJIT;
-  jit_exit_code_ = jit->execute_main(std::move(resPtr->Module),
-                                     std::move(resPtr->Context),
-                                     extra_object_files, jit_args);
+  jit_exit_code_ =
+      jit->execute_main(std::move(resPtr->Module), std::move(resPtr->Context),
+                        extra_object_files, jit_args);
   reporter.report(*jit);
 
   if (jit->has_errors())
@@ -1024,9 +1017,8 @@ void Compiler::emit_shared_impl() {
 #ifdef __APPLE__
   platform_flags = " -undefined dynamic_lookup";
 #endif
-  std::string command =
-      fmt::format("clang++ -shared{} -o {} {}{}",
-                  platform_flags, lib_file, obj_file, extra);
+  std::string command = fmt::format("clang++ -shared{} -o {} {}{}",
+                                    platform_flags, lib_file, obj_file, extra);
   int result = std::system(command.c_str());
   if (result != 0) {
     fmt::print(stderr, "Failed to create shared library {}\n", lib_file);
@@ -1108,20 +1100,19 @@ void Compiler::link() {
     // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.
     // MLIR_LLVM_LIB_DIR is set by cmake from the MLIR_DIR config path.
     std::string lib_dir = MLIR_LLVM_LIB_DIR;
-    gpu_link_flags = fmt::format(
-        " -L{} -lmlir_cuda_runtime -Wl,-rpath,{}", lib_dir, lib_dir);
+    gpu_link_flags = fmt::format(" -L{} -lmlir_cuda_runtime -Wl,-rpath,{}",
+                                 lib_dir, lib_dir);
   }
 
   auto try_compile_with = [&obj_list, &exe_file,
-                            &gpu_link_flags](const std::string &compiler) {
+                           &gpu_link_flags](const std::string &compiler) {
     std::string test_command =
         fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
     int test_result = std::system(test_command.c_str());
     if (test_result != 0)
       return false;
-    std::string command =
-        fmt::format("{} {} -o {}{}", compiler, obj_list, exe_file,
-                    gpu_link_flags);
+    std::string command = fmt::format("{} {} -o {}{}", compiler, obj_list,
+                                      exe_file, gpu_link_flags);
     int result = std::system(command.c_str());
     return result == 0;
   };
