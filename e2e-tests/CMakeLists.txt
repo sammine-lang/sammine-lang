@@ -4,6 +4,8 @@ include(CTest)
 cmake_host_system_information(RESULT LIT_WORKERS QUERY NUMBER_OF_LOGICAL_CORES)
 add_custom_target(e2e-tests
     COMMAND lit --succinct -j ${LIT_WORKERS} ${CMAKE_SOURCE_DIR}/e2e-tests --verbose
+        --param bin_dir=${CMAKE_BINARY_DIR}/bin
+        --param build_dir=${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS tests sammine SammineCheck stdlib
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )

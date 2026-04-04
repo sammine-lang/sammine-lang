@@ -3,16 +3,23 @@ import lit.formats
 import os
 import shutil
 
-# Paths are relative to build/e2e-tests/ (where cmake runs lit from)
-sammine_exe = os.path.abspath("../bin/sammine")
-sammine_check = os.path.abspath("../bin/SammineCheck")
+# Resolve paths from CMake params, falling back to relative paths for manual runs.
+bin_dir = lit_config.params.get('bin_dir', os.path.abspath("../bin"))
+build_dir = lit_config.params.get('build_dir', os.getcwd())
+
+sammine_exe = os.path.join(bin_dir, "sammine")
+sammine_check = os.path.join(bin_dir, "SammineCheck")
 
 config.name = "Sammine Lang end-to-end testsuite"
-config.test_format = lit.formats.ShTest(True)
 
 # Feature detection: CUDA available if ptxas is on PATH
 if shutil.which("ptxas"):
     config.available_features.add("cuda")
+
+# Direct test output (Output/ dirs, %t temps) into the build tree so the
+# source tree stays clean.  Without this, lit defaults to placing Output/
+# next to the .mn source files.
+config.test_exec_root = build_dir
 
 # Per-test output directory to avoid parallel races.
 # lit's %t is a unique temp path per test; we use %t.d as a directory.
