@@ -476,9 +476,9 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   mlir::Value rangeVal =
       mlir::LLVM::PoisonOp::create(builder, location, rangeMlirTy);
   rangeVal = mlir::LLVM::InsertValueOp::create(builder, location, rangeVal,
-                                               startVal, int64_t(0));
+                                               startVal, llvm::ArrayRef<int64_t>{0});
   rangeVal = mlir::LLVM::InsertValueOp::create(builder, location, rangeVal,
-                                               endVal, int64_t(1));
+                                               endVal, llvm::ArrayRef<int64_t>{1});
 
   // --- Resolve the Option<(Range, i64)> enum type ---
   auto tupleType = Type::Tuple({rangeType, ast->start->get_type()});
@@ -556,9 +556,9 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
 
     // Extract new_iter (tuple.0 = Range) and elem (tuple.1 = i64)
     auto newIterVal = mlir::LLVM::ExtractValueOp::create(
-        builder, location, rangeMlirTy, tupleVal, int64_t(0));
+        builder, location, rangeMlirTy, tupleVal, llvm::ArrayRef<int64_t>{0});
     auto elemVal = mlir::LLVM::ExtractValueOp::create(
-        builder, location, counterType, tupleVal, int64_t(1));
+        builder, location, counterType, tupleVal, llvm::ArrayRef<int64_t>{1});
 
     // Bind loop variable
     auto loopVarAlloca = emitAllocaOne(counterType, location);
@@ -574,7 +574,7 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
         bodyEnd->back().hasTrait<mlir::OpTrait::IsTerminator>();
     if (!bodyTerminated) {
       mlir::cf::BranchOp::create(builder, location, headerBlock,
-                                 mlir::ValueRange{newIterVal});
+                                 mlir::ValueRange{mlir::Value(newIterVal)});
     }
   }
 

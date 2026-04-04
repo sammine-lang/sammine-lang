@@ -78,19 +78,16 @@
 // Each stage method short-circuits if has_error() is true.
 namespace sammine_lang {
 class Compiler {
-  Options options;
+  Options options_;
   std::shared_ptr<TokenStream> tokStream;
   std::unique_ptr<Lexer> lexer;
   std::shared_ptr<AST::ProgramAST> programAST;
-  std::map<compiler_option_enum, std::string> compiler_options;
+  std::map<compiler_option_enum, std::string> compiler_options_;
   std::shared_ptr<LLVMRes> resPtr;
   std::string file_name, input;
   std::string mod_name;
   std::vector<std::string> extra_object_files;
-  std::filesystem::path stdlib_dir;
   std::string output_dir;
-  std::vector<std::string> import_paths;
-  LibFormat lib_format_ = LibFormat::None;
   std::vector<std::string> extra_link_objs_;
 
   AST::ASTProperties props_;
@@ -122,26 +119,19 @@ class Compiler {
   void link();
   void jit_execute();
 
-  static LibFormat parse_lib_format(const std::string &s) {
-    if (s == "static")
-      return LibFormat::Static;
-    if (s == "shared")
-      return LibFormat::Shared;
-    return LibFormat::None;
-  }
   void print_timing_table(
       const std::vector<std::pair<const char *, double>> &timings);
   bool has_error() const { return state_ == State::Error; }
   bool should_stop() const { return state_ != State::Running; }
   void set_error() { state_ = State::Error; }
   std::string output_path(const std::string &filename) const {
-    if (output_dir.empty())
+    if (options_.output_dir.empty())
       return filename;
-    return (std::filesystem::path(output_dir) / filename).string();
+    return (std::filesystem::path(options_.output_dir) / filename).string();
   }
 
 public:
-  Compiler(const Options &options, const decltype(compiler_options) &compiler_options);
+  Compiler(const Options &options, const decltype(compiler_options_) &compiler_options);
   int start();
 };
 
@@ -155,7 +145,7 @@ int CompilerRunner::run(const Options &options, const std::map<compiler_option_e
   return compiler.start();
 }
 
-Compiler::Compiler(const Options &options, const std::map<compiler_option_enum, std::string>& compiler_options ) : options(options), compiler_options(compiler_options){
+Compiler::Compiler(const Options &options, const std::map<compiler_option_enum, std::string>& compiler_options ) : options_(options), compiler_options_(compiler_options){
   this->state_ = State::Running;
   this->file_name = options.file_arg;
   this->input = options.str_arg;
@@ -177,42 +167,10 @@ Compiler::Compiler(const Options &options, const std::map<compiler_option_enum, 
   this->resPtr = std::make_shared<LLVMRes>();
 
   // Initialize debug logging from --diagnostics flag
-  std::string diagnostic_value = options.diagnostics;
-  sammine_log::set_enabled_types(diagnostic_value);
-
-  bool dev_mode = sammine_log::is_type_in_list("dev", diagnostic_value);
+  sammine_log::set_enabled_types(options_.diagnostics);
+  bool dev_mode = sammine_log::is_type_in_list("dev", options_.diagnostics);
   this->reporter =
       sammine_util::Reporter(file_name, input, context_radius, dev_mode);
-
-  // Initialize output directory
-  output_dir = this->compiler_options[compiler_option_enum::OUTPUT_DIR];
-  if (!output_dir.empty())
-    std::filesystem::create_directories(output_dir);
-
-  // Parse semicolon-joined import paths
-  {
-    std::string paths_str =
-        this->compiler_options[compiler_option_enum::IMPORT_PATHS];
-    if (!paths_str.empty()) {
-      std::istringstream ss(paths_str);
-      std::string path;
-      while (std::getline(ss, path, ';'))
-        if (!path.empty())
-          import_paths.push_back(path);
-    }
-  }
-
-  // Compute stdlib directory relative to the binary location
-  std::string argv0 = this->compiler_options[compiler_option_enum::ARGV0];
-  if (!argv0.empty()) {
-    std::error_code ec;
-    auto bin_path = std::filesystem::canonical(argv0, ec);
-    if (!ec)
-      stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
-  }
-
-  lib_format_ =
-      parse_lib_format(this->compiler_options[compiler_option_enum::LIB_FORMAT]);
 }
 
 // Stage 1: Tokenize source into a TokenStream.
@@ -280,7 +238,7 @@ void Compiler::resolve_imports() {
     std::filesystem::path p = name + ".mn";
     if (std::filesystem::exists(p))
       return p;
-    for (auto &ipath : import_paths) {
+    for (auto &ipath : options_.import_paths) {
       auto c = std::filesystem::path(ipath) / (name + ".mn");
       if (std::filesystem::exists(c))
         return c;
@@ -288,8 +246,8 @@ void Compiler::resolve_imports() {
     p = src_dir / (name + ".mn");
     if (std::filesystem::exists(p))
       return p;
-    if (!stdlib_dir.empty()) {
-      p = stdlib_dir / (name + ".mn");
+    if (!options_.stdlib_dir.empty()) {
+      p = options_.stdlib_dir / (name + ".mn");
       if (std::filesystem::exists(p))
         return p;
     }
@@ -409,7 +367,7 @@ void Compiler::resolve_imports() {
     // Track linkable artifact (only for direct imports).
     if (!is_transitive) {
       std::vector<std::string> lib_exts =
-          lib_format_ == LibFormat::Static
+          options_.lib_format == LibFormat::Static
               ? std::vector<std::string>{".a", ".so"}
               : std::vector<std::string>{".so", ".a"};
       std::filesystem::path obj_path;
@@ -425,14 +383,14 @@ void Compiler::resolve_imports() {
       };
       find_lib(".");
       if (obj_path.empty()) {
-        for (auto &ipath : import_paths)
+        for (auto &ipath : options_.import_paths)
           if (find_lib(ipath))
             break;
       }
       if (obj_path.empty())
         find_lib(src_dir);
-      if (obj_path.empty() && !stdlib_dir.empty())
-        find_lib(stdlib_dir);
+      if (obj_path.empty() && !options_.stdlib_dir.empty())
+        find_lib(options_.stdlib_dir);
       if (!obj_path.empty())
         extra_object_files.push_back(obj_path.string());
     }
@@ -455,8 +413,8 @@ void Compiler::load_definitions() {
 
   // Find definitions.mn in stdlib_dir
   std::filesystem::path def_path;
-  if (!stdlib_dir.empty())
-    def_path = stdlib_dir / "definitions.mn";
+  if (!options_.stdlib_dir.empty())
+    def_path = options_.stdlib_dir / "definitions.mn";
 
   if (def_path.empty() || !std::filesystem::exists(def_path))
     return;
@@ -584,7 +542,7 @@ void Compiler::linear_check() {
 }
 
 void Compiler::dump_ast() {
-  if (compiler_options[compiler_option_enum::AST_IR] == "true") {
+  if (compiler_options_[compiler_option_enum::AST_IR] == "true") {
     LOG({
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start dumping ast-ir stage...\n");
@@ -604,7 +562,7 @@ void Compiler::codegen() {
   if (has_error()) {
     return;
   }
-  if (this->compiler_options[compiler_option_enum::CHECK] == "true") {
+  if (this->compiler_options_[compiler_option_enum::CHECK] == "true") {
     LOG({
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Finished checking. Stopping at codegen stage with compiler's "
@@ -634,7 +592,7 @@ void Compiler::codegen_mlir() {
 
   // GPU: register all LLVM conversion extensions BEFORE loading any dialects.
   // This ensures ConvertToLLVMPatternInterface is available when dialects load.
-  bool target_gpu = !compiler_options[compiler_option_enum::GPU].empty();
+  bool target_gpu = !compiler_options_[compiler_option_enum::GPU].empty();
   if (target_gpu) {
     mlir::DialectRegistry earlyRegistry;
     mlir::registerAllExtensions(earlyRegistry);
@@ -705,7 +663,7 @@ void Compiler::codegen_mlir() {
 
   auto mlirResult =
       mlirGen(mlirCtx, programAST.get(), moduleName, this->file_name,
-              this->input, props_, compiler_options[compiler_option_enum::GPU]);
+              this->input, props_, compiler_options_[compiler_option_enum::GPU]);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -713,7 +671,7 @@ void Compiler::codegen_mlir() {
     return;
   }
 
-  if (compiler_options[compiler_option_enum::MLIR_IR] == "true") {
+  if (compiler_options_[compiler_option_enum::MLIR_IR] == "true") {
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
     if (mlirResult.kernelModule) {
@@ -733,7 +691,7 @@ void Compiler::codegen_mlir() {
     kernelMod = *mlirResult.kernelModule;
   auto llvmModule =
       lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context,
-                        compiler_options[compiler_option_enum::GPU]);
+                        compiler_options_[compiler_option_enum::GPU]);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
@@ -789,7 +747,7 @@ void Compiler::optimize() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start optimize stage...\n");
   });
-  std::string llvm_ir_mode = compiler_options[compiler_option_enum::LLVM_IR];
+  std::string llvm_ir_mode = compiler_options_[compiler_option_enum::LLVM_IR];
 
   std::string pre_ir;
   if (llvm_ir_mode == "pre" || llvm_ir_mode == "diff") {
@@ -864,7 +822,7 @@ void Compiler::jit_execute() {
   SAMMINE_ZONE_NAMED("jit_execute");
   if (has_error())
     return;
-  if (compiler_options[compiler_option_enum::JIT] != "true")
+  if (compiler_options_[compiler_option_enum::JIT] != "true")
     return;
 
   if (!has_main) {
@@ -882,7 +840,7 @@ void Compiler::jit_execute() {
   // Parse semicolon-joined JIT args.
   std::vector<std::string> jit_args;
   {
-    std::string args_str = compiler_options[compiler_option_enum::JIT_ARGS];
+    std::string args_str = compiler_options_[compiler_option_enum::JIT_ARGS];
     if (!args_str.empty()) {
       std::istringstream ss(args_str);
       std::string arg;
@@ -1030,22 +988,22 @@ void Compiler::emit_library() {
     return;
 
   // Default to shared library when no --lib flag is given
-  if (lib_format_ == LibFormat::None)
-    lib_format_ = LibFormat::Shared;
 
   // Auto-detect <stem>_runtime.o for library builds.
   {
     std::string stem = std::filesystem::path(this->file_name).stem().string();
     std::string runtime_obj = stem + "_runtime.o";
     bool found = false;
-    if (!output_dir.empty()) {
-      auto candidate = std::filesystem::path(output_dir) / runtime_obj;
+    if (!options_.output_dir.empty()) {
+      // TODO: use output_path
+      auto candidate = std::filesystem::path(options_.output_dir) / runtime_obj;
       if (std::filesystem::exists(candidate)) {
         extra_link_objs_.push_back(candidate.string());
         found = true;
       }
     }
     if (!found) {
+      // TODO: use output_path
       auto source_dir = std::filesystem::path(file_name).parent_path();
       if (source_dir.empty())
         source_dir = ".";
@@ -1055,14 +1013,12 @@ void Compiler::emit_library() {
     }
   }
 
-  switch (lib_format_) {
+  switch (options_.lib_format) {
   case LibFormat::Static:
     emit_archive_impl();
     break;
   case LibFormat::Shared:
     emit_shared_impl();
-    break;
-  case LibFormat::None:
     break;
   }
 
@@ -1094,7 +1050,7 @@ void Compiler::link() {
     obj_list += " " + obj;
 
   // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
-  bool gpu = !compiler_options[compiler_option_enum::GPU].empty();
+  bool gpu = !compiler_options_[compiler_option_enum::GPU].empty();
   std::string gpu_link_flags;
   if (gpu) {
     // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.
@@ -1165,7 +1121,7 @@ int Compiler::start() {
       {"link", &Compiler::link},
   };
 
-  std::string time_level = compiler_options[compiler_option_enum::TIME];
+  std::string time_level = compiler_options_[compiler_option_enum::TIME];
   bool timing = time_level != "false";
   std::vector<std::pair<const char *, double>> timings;
 
@@ -1202,7 +1158,7 @@ int Compiler::start() {
 
   if (has_error())
     return 1;
-  if (compiler_options[compiler_option_enum::JIT] == "true" && has_main)
+  if (compiler_options_[compiler_option_enum::JIT] == "true" && has_main)
     return jit_exit_code_;
   return 0;
 }

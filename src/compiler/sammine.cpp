@@ -24,11 +24,9 @@ namespace co = sammine_lang; // short alias for enum access
 
 int main(int argc, char *argv[]) {
   signal(SIGSEGV, handler);
-  CLI::App app{"sammine"};
 
   std::map<compiler_option_enum, std::string> compiler_options;
-  sammine_lang::Options options(app);
-  CLI11_PARSE(app, argc, argv);
+  sammine_lang::Options options(argc, argv);
 
   compiler_options[co::FILE] = options.file_arg;
   compiler_options[co::STR] = options.str_arg;
@@ -49,7 +47,6 @@ int main(int argc, char *argv[]) {
     }
     compiler_options[co::IMPORT_PATHS] = joined;
   }
-  compiler_options[co::LIB_FORMAT] = options.lib_format;
   compiler_options[co::JIT] = options.jit ? "true" : "false";
   compiler_options[co::GPU] = options.gpu;
   {

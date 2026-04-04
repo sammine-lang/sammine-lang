@@ -1,7 +1,22 @@
+#include "CLI/CLI.hpp"
 #include "compiler/Compiler.h"
 
+namespace sammine_lang {
+  static LibFormat parse_lib_format(const std::string &s) {
+    if (s == "static")
+      return LibFormat::Static;
+    if (s == "shared")
+      return LibFormat::Shared;
+    return LibFormat::Shared;
+  }
+}
 
-sammine_lang::Options::Options(CLI::App& app) {
+int parseOption(CLI::App&app,int argc, char *argv[] ) {
+  CLI11_PARSE(app, argc, argv);
+  return 0;
+}
+sammine_lang::Options::Options(int argc, char *argv[]) {
+  CLI::App app{"sammine"};
   auto *input_group = app.add_option_group("Input");
   input_group->add_option("-f,--file", file_arg,
                           "An input file for compiler to scan over.");
@@ -50,9 +65,19 @@ sammine_lang::Options::Options(CLI::App& app) {
   app.add_option("-I", import_paths,
                  "Add directory to import search path (repeatable).");
 
-  app.add_option("--lib", lib_format,
+  std::string lib_format_raw;
+  app.add_option("--lib", lib_format_raw,
                  "Emit library output. Values: static (.a) or shared (.so)")
       ->check(CLI::IsMember({"static", "shared"}))
       ->expected(0, 1)
       ->default_str("shared");
+
+  argv0 = argv[0];
+  parseOption(app, argc, argv);
+  lib_format = parse_lib_format(lib_format_raw);
+
+
+  if (!output_dir.empty())
+    std::filesystem::create_directories(output_dir);
+  infer();
 }

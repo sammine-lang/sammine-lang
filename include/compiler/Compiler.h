@@ -29,7 +29,6 @@ enum compiler_option_enum {
 };
 
 enum class LibFormat {
-  None,   // No library output (.o only, or link to .exe)
   Static, // Emit .a archive
   Shared, // Emit .so shared library
 };
@@ -47,10 +46,21 @@ public:
   std::string time_val;
   std::string output_dir;
   std::vector<std::string> import_paths;
-  std::string lib_format;
-
+  LibFormat lib_format;
+  std::filesystem::path stdlib_dir;
+  std::string argv0;
   Options() = delete;
-  Options(CLI::App&);
+  Options(int argc, char *argv[]);
+
+  void infer() {
+    if (!argv0.empty()) {
+      std::error_code ec;
+      auto bin_path = std::filesystem::canonical(argv0, ec);
+      if (!ec)
+        stdlib_dir = bin_path.parent_path().parent_path() / "lib" / "sammine";
+    }
+
+  }
 };
 
 class CompilerRunner {
