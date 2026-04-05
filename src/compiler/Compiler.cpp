@@ -78,66 +78,13 @@
 // Compiler: orchestrates the full compilation pipeline.
 // Each stage method short-circuits if has_error() is true.
 namespace sammine_lang {
-class Compiler {
-  Options options_;
-  std::shared_ptr<TokenStream> tokStream;
-  std::unique_ptr<Lexer> lexer;
-  std::shared_ptr<AST::ProgramAST> programAST;
-  std::shared_ptr<LLVMRes> resPtr;
-  std::string mod_name;
-  std::vector<std::string> extra_object_files;
-  std::vector<std::string> extra_link_objs_;
-
-  AST::ASTProperties props_;
-  enum class State { Running, Finished, Error };
-
-  sammine_util::Reporter reporter;
-  sammine_util::Reportee reportee;
-  int64_t context_radius = 2;
-  State state_ = State::Running;
-  bool has_main = false;
-  int jit_exit_code_ = 0;
-
-  void lex();
-  void parse();
-  void resolve_imports();
-  void load_definitions();
-  void semantics();
-  void typecheck();
-  void linear_check();
-  void dump_ast();
-  void codegen();
-  void codegen_mlir();
-  void optimize();
-  void emit_object();
-  void emit_library();
-  void emit_archive_impl();
-  void emit_shared_impl();
-  void link();
-  void jit_execute();
-
-  void print_timing_table(
-      const std::vector<std::pair<const char *, double>> &timings);
-  bool has_error() const { return state_ == State::Error; }
-  bool should_stop() const { return state_ != State::Running; }
-  void set_error() { state_ = State::Error; }
-  std::string output_path(const std::string &filename) const {
-    if (options_.output_dir.empty())
-      return filename;
-    return (options_.output_dir / filename).string();
-  }
-
-public:
-  Compiler(const Options &options);
-  int start();
-};
 
 } // namespace sammine_lang
   //
 
 namespace sammine_lang {
 int CompilerRunner::run(const Options &options) {
-  
+
   auto compiler = Compiler(options);
   return compiler.start();
 }
@@ -151,8 +98,8 @@ Compiler::Compiler(const Options &options) : options_(options) {
   // Initialize debug logging from --diagnostics flag
   sammine_log::set_enabled_types(options_.diagnostics);
   bool dev_mode = sammine_log::is_type_in_list("dev", options_.diagnostics);
-  this->reporter =
-      sammine_util::Reporter(options_.file_arg, options_.str_arg, context_radius, dev_mode);
+  this->reporter = sammine_util::Reporter(options_.file_arg, options_.str_arg,
+                                          context_radius, dev_mode);
 }
 
 // Stage 1: Tokenize source into a TokenStream.
@@ -213,29 +160,6 @@ void Compiler::resolve_imports() {
   // Track already-imported modules to avoid duplicates in transitive chains.
   std::set<std::string> imported_modules;
 
-  // Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
-  auto find_mn =
-      [&](const std::string &name,
-          const std::filesystem::path &src_dir) -> std::filesystem::path {
-    std::filesystem::path p = name + ".mn";
-    if (std::filesystem::exists(p))
-      return p;
-    for (auto &ipath : options_.import_paths) {
-      auto c = std::filesystem::path(ipath) / (name + ".mn");
-      if (std::filesystem::exists(c))
-        return c;
-    }
-    p = src_dir / (name + ".mn");
-    if (std::filesystem::exists(p))
-      return p;
-    if (!options_.stdlib_dir.empty()) {
-      p = options_.stdlib_dir / (name + ".mn");
-      if (std::filesystem::exists(p))
-        return p;
-    }
-    return {};
-  };
-
   // Recursively import a module's definitions into programAST.
   // - For direct imports: pull exported defs + all generic defs + link
   // artifact.
@@ -246,11 +170,12 @@ void Compiler::resolve_imports() {
       import_module =
           [&](const std::string &name, const std::filesystem::path &src_dir,
               const sammine_util::Location &loc, bool is_transitive) -> bool {
-    if (imported_modules.count(name))
+    if (imported_modules.contains(name))
       return true;
     imported_modules.insert(name);
 
-    auto mn_path = find_mn(name, src_dir);
+    Resolver rs(options_, loc);
+    auto mn_path = rs.find_mn(name, src_dir);
     if (mn_path.empty()) {
       if (!is_transitive) {
         reporter.immediate_error(
@@ -261,24 +186,13 @@ void Compiler::resolve_imports() {
     }
 
     // Parse the .mn file with SourceInfo for cross-file error locations.
-    std::string mn_input = sammine_util::get_string_from_file(mn_path.string());
-    auto si = std::make_shared<sammine_util::SourceInfo>(
-        sammine_util::SourceInfo{mn_path.string(), mn_input});
-    Lexer mn_lexer(mn_input, si);
-    auto mn_tok_stream = mn_lexer.getTokenStream();
-    Parser mn_parser(mn_tok_stream);
-    mn_parser.alias_to_module[name] = name;
-    auto mn_program = mn_parser.Parse();
+    auto mn_program = rs.get_program_from_file(mn_path, name);
 
-    if (mn_parser.has_errors()) {
-      if (!is_transitive) {
-        reporter.immediate_error(
-            fmt::format("Failed to parse module '{}'", mn_path.string()), loc);
-        set_error();
-      }
+    if (!mn_program) {
+      set_error();
+      reporter.report(rs);
       return false;
     }
-
     // Recursively import this module's own dependencies (transitive).
     auto mod_src_dir = mn_path.parent_path();
     for (auto &sub_import : mn_program->imports)
@@ -286,95 +200,11 @@ void Compiler::resolve_imports() {
                     true);
 
     // Filter definitions and inject into programAST.
-    for (auto it = mn_program->DefinitionVec.rbegin();
-         it != mn_program->DefinitionVec.rend(); ++it) {
-      auto &def = *it;
-
-      if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-        bool is_generic = fd->Prototype->is_generic();
-        if (is_transitive && !is_generic)
-          continue; // transitive: only need generic defs
-        if (!is_transitive && !fd->is_exported && !is_generic)
-          continue; // direct: skip non-exported non-generic
-        fd->Prototype->functionName =
-            fd->Prototype->functionName.with_module(name);
-
-        if (is_generic) {
-          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                           std::move(def));
-        } else {
-          // Non-generic exported → extern
-          auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
-          ext->is_exported = fd->is_exported;
-          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                           std::move(ext));
-        }
-      } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
-        if (is_transitive || !ext->is_exported)
-          continue;
-        ext->Prototype->functionName =
-            ext->Prototype->functionName.with_module(name);
-        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                         std::move(def));
-      } else if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-        if (!sd->is_exported)
-          continue;
-        sd->struct_name = sd->struct_name.with_module(name);
-        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                         std::move(def));
-      } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-        if (!ed->is_exported)
-          continue;
-        ed->enum_name = ed->enum_name.with_module(name);
-        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                         std::move(def));
-      } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {
-        if (!ta->is_exported)
-          continue;
-        programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                         std::move(def));
-      } else if (llvm::isa<AST::TypeClassDeclAST>(def.get())) {
-        if (!is_transitive) {
-          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                           std::move(def));
-        }
-      } else if (llvm::isa<AST::TypeClassInstanceAST>(def.get())) {
-        if (!is_transitive) {
-          programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                           std::move(def));
-        }
-      }
-    }
-
+    rs.inject_definitions(mn_program->DefinitionVec, programAST->DefinitionVec, name, is_transitive);
     // Track linkable artifact (only for direct imports).
+    // TODO: i think this can be refactored out somehow
     if (!is_transitive) {
-      std::vector<std::string> lib_exts =
-          options_.lib_format == LibFormat::Static
-              ? std::vector<std::string>{".a", ".so"}
-              : std::vector<std::string>{".so", ".a"};
-      std::filesystem::path obj_path;
-      auto find_lib = [&](const std::filesystem::path &dir) -> bool {
-        for (auto &ext : lib_exts) {
-          auto candidate = dir / (name + ext);
-          if (std::filesystem::exists(candidate)) {
-            obj_path = candidate;
-            return true;
-          }
-        }
-        return false;
-      };
-      find_lib(".");
-      if (obj_path.empty()) {
-        for (auto &ipath : options_.import_paths)
-          if (find_lib(ipath))
-            break;
-      }
-      if (obj_path.empty())
-        find_lib(src_dir);
-      if (obj_path.empty() && !options_.stdlib_dir.empty())
-        find_lib(options_.stdlib_dir);
-      if (!obj_path.empty())
-        extra_object_files.push_back(obj_path.string());
+      rs.traceLinkableArtifacts(name, src_dir, extra_object_files);
     }
 
     return true;
@@ -671,9 +501,8 @@ void Compiler::codegen_mlir() {
   mlir::ModuleOp kernelMod;
   if (mlirResult.kernelModule)
     kernelMod = *mlirResult.kernelModule;
-  auto llvmModule =
-      lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod, *resPtr->Context,
-                        options_.gpu);
+  auto llvmModule = lowerMLIRToLLVMIR(*mlirResult.cpuModule, kernelMod,
+                                      *resPtr->Context, options_.gpu);
   if (!llvmModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR lowering to LLVM IR failed\n");
@@ -1094,7 +923,7 @@ int Compiler::start() {
   };
 
   auto time_level = options_.time_val;
-  bool timing = options_.time_val != TimingMode::NONE; 
+  bool timing = options_.time_val != TimingMode::NONE;
   std::vector<std::pair<const char *, double>> timings;
 
   if (time_level == TimingMode::COARSE)
