@@ -61,6 +61,7 @@
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/IR/GlobalIFunc.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Timer.h"
@@ -633,16 +634,21 @@ void Compiler::emit_object() {
     set_error();
     return;
   }
-  auto FileType = llvm::CodeGenFileType::ObjectFile;
-
-  if (resPtr->target_machine->addPassesToEmitFile(resPtr->pass, dest, nullptr,
-                                                  FileType)) {
+  // Build the codegen pipeline and execute it. The pipeline lives in a
+  // local PassManager because nothing outside this stage touches it —
+  // addPassesToEmitFile appends every codegen pass the target needs, and
+  // .run() walks the module through them, streaming encoded machine code
+  // to `dest` as a side effect.
+  llvm::legacy::PassManager codegen_passes;
+  if (resPtr->target_machine->addPassesToEmitFile(
+          codegen_passes, dest, /*dwarf_out=*/nullptr,
+          llvm::CodeGenFileType::ObjectFile)) {
     llvm::errs() << "TargetMachine can't emit a file of this type\n";
     set_error();
     return;
   }
 
-  resPtr->pass.run(*resPtr->Module);
+  codegen_passes.run(*resPtr->Module);
   dest.flush();
 }
 
