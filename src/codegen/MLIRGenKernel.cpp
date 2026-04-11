@@ -12,6 +12,7 @@
 //   buildKernelFuncType        ← called from generate() + emitKernelDef + emitKernelWrapper
 //   convertTypeForKernel       ← leaf, used by all type builders
 
+#include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -203,57 +204,14 @@ MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
         bool savedKernelCtx = in_kernel_lambda_body;
         in_kernel_lambda_body = true;
 
-        mlir::Value result;
         auto opTok = reduceExpr->op_tok->tok_type;
-
-        if (isFloatType(elemSamType)) {
-          switch (opTok) {
-          case TokenType::TokADD:
-            result = mlir::arith::AddFOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokSUB:
-            result = mlir::arith::SubFOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokMUL:
-            result = mlir::arith::MulFOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokDIV:
-            result = mlir::arith::DivFOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          default:
-            imm_error("Unsupported reduce operator");
-          }
-        } else {
-          bool isUnsigned = isUnsignedIntegerType(elemSamType);
-          switch (opTok) {
-          case TokenType::TokADD:
-            result = mlir::arith::AddIOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokSUB:
-            result = mlir::arith::SubIOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokMUL:
-            result = mlir::arith::MulIOp::create(b, loc, args[0], args[1])
-                         .getResult();
-            break;
-          case TokenType::TokDIV:
-            if (isUnsigned)
-              result = mlir::arith::DivUIOp::create(b, loc, args[0], args[1])
-                           .getResult();
-            else
-              result = mlir::arith::DivSIOp::create(b, loc, args[0], args[1])
-                           .getResult();
-            break;
-          default:
-            imm_error("Unsupported reduce operator");
-          }
-        }
+        mlir::Value result =
+            isFloatType(elemSamType)
+                ? emitFloatArithOp(b, loc, args[0], args[1], opTok)
+                : emitIntArithOp(b, loc, args[0], args[1], opTok,
+                                 isUnsignedIntegerType(elemSamType));
+        if (!result)
+          imm_error("Unsupported reduce operator");
 
         in_kernel_lambda_body = savedKernelCtx;
 
