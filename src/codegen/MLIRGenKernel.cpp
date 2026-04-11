@@ -25,14 +25,14 @@
 
 namespace sammine_lang {
 
-// ===--- Entry: kernel definition ---===
+// --- Entry: kernel definition ---
 
 void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
   auto location = loc(kd);
   auto publicName = mangleName(kd->Prototype->functionName);
   auto internalName = kKernelPrefix.str() + publicName;
 
-  // === 1. Emit the internal kernel function (tensor types) ===
+  //  1. Emit the internal kernel function (tensor types) 
   {
     decltype(symbolTable)::Guard scope(symbolTable);
 
@@ -61,54 +61,57 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
       dpsOutput = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
     }
 
-    // Dispatch to the appropriate kernel expression handler
+    // Each handler produces a result value; the single func.return that
+    // terminates the function is emitted here, not inside the handlers.
+    // Empty body → void return. Unknown expression → imm_error leaves
+    // resultVal null, and no terminator is emitted (matches prior behavior).
     if (kd->Body->expressions.empty()) {
       mlir::func::ReturnOp::create(builder, location);
     } else {
       auto *firstExpr = kd->Body->expressions[0].get();
+      mlir::Value resultVal;
 
       if (auto *numExpr = llvm::dyn_cast<AST::KernelNumberExprAST>(firstExpr)) {
         auto retType = kernelFuncType.getResults()[0];
         if (mlir::isa<mlir::FloatType>(retType)) {
           double val = std::stod(numExpr->number);
-          auto constVal =
-              mlir::arith::ConstantFloatOp::create(
-                  builder, location, mlir::cast<mlir::FloatType>(retType),
-                  llvm::APFloat(val))
-                  .getResult();
-          mlir::func::ReturnOp::create(builder, location,
-                                       mlir::ValueRange{constVal});
+          resultVal = mlir::arith::ConstantFloatOp::create(
+                          builder, location,
+                          mlir::cast<mlir::FloatType>(retType),
+                          llvm::APFloat(val))
+                          .getResult();
         } else {
           int64_t val = std::stoll(numExpr->number);
-          auto constVal = mlir::arith::ConstantIntOp::create(builder, location,
-                                                             retType, val)
-                              .getResult();
-          mlir::func::ReturnOp::create(builder, location,
-                                       mlir::ValueRange{constVal});
+          resultVal = mlir::arith::ConstantIntOp::create(builder, location,
+                                                         retType, val)
+                          .getResult();
         }
       } else if (auto *mapExpr =
                      llvm::dyn_cast<AST::KernelMapExprAST>(firstExpr)) {
-        emitKernelMapExpr(mapExpr, entryBlock, kd, location, dpsOutput);
+        resultVal = emitKernelMapExpr(mapExpr, kd, location, dpsOutput);
       } else if (auto *reduceExpr =
                      llvm::dyn_cast<AST::KernelReduceExprAST>(firstExpr)) {
-        emitKernelReduceExpr(reduceExpr, entryBlock, kd, location);
+        resultVal = emitKernelReduceExpr(reduceExpr, kd, location);
       } else {
         imm_error("Unknown kernel expression type", kd->get_location());
       }
+
+      if (resultVal)
+        mlir::func::ReturnOp::create(builder, location,
+                                     mlir::ValueRange{resultVal});
     }
   } // end symbol table scope
 
-  // === 2. Emit the public CPU-ABI wrapper ===
+  //  2. Emit the public CPU-ABI wrapper 
   emitKernelWrapper(kd, internalName, publicName, location);
 }
 
-// ===--- Kernel map ---===
+// --- Kernel map ---
 
-void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
-                                    mlir::Block &entryBlock,
-                                    AST::KernelDefAST *kd,
-                                    mlir::Location location,
-                                    mlir::Value dpsOutput) {
+mlir::Value MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                                           AST::KernelDefAST *kd,
+                                           mlir::Location location,
+                                           mlir::Value dpsOutput) {
   auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
 
   Type foundInputType = Type::NonExistent();
@@ -151,15 +154,15 @@ void MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
         mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{bodyResult});
       });
 
-  mlir::func::ReturnOp::create(builder, location, mapOp->getResults());
+  return mapOp->getResult(0);
 }
 
-// ===--- Kernel reduce ---===
+// --- Kernel reduce ---
 
-void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
-                                       mlir::Block &entryBlock,
-                                       AST::KernelDefAST *kd,
-                                       mlir::Location location) {
+mlir::Value
+MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                                  AST::KernelDefAST *kd,
+                                  mlir::Location location) {
   auto inputTensor = symbolTable.get_from_name(reduceExpr->input_name);
 
   Type foundInputType = Type::NonExistent();
@@ -260,11 +263,10 @@ void MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
   auto scalarResult = mlir::tensor::ExtractOp::create(
       builder, location, reduceOp->getResult(0), mlir::ValueRange{});
 
-  mlir::func::ReturnOp::create(builder, location,
-                               mlir::ValueRange{scalarResult});
+  return scalarResult.getResult();
 }
 
-// ====== Kernel wrapper (host<->device boundary) ======
+//  Kernel wrapper (host<->device boundary) 
 
 void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
                                     const std::string &internalName,
@@ -282,7 +284,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   auto retSamType = protoFT.get_return_type();
   bool returnsArray = retSamType.type_kind == TypeKind::Array;
 
-  // === Marshal inputs ===
+  //  Marshal inputs 
   llvm::SmallVector<mlir::Value> kernelArgs;
   llvm::SmallVector<mlir::Value> deviceMemrefs; // GPU only: for dealloc
   size_t blockArgIdx = 0;
@@ -310,7 +312,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     }
   }
 
-  // === DPS output ===
+  //  DPS output 
   mlir::Value hostOutMemref, deviceOut;
   if (returnsArray) {
     auto sretArg = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
@@ -328,13 +330,13 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     }
   }
 
-  // === Call kernel ===
+  //  Call kernel 
   auto memrefFuncType =
       buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
   auto callOp = mlir::func::CallOp::create(
       builder, location, internalName, memrefFuncType.getResults(), kernelArgs);
 
-  // === GPU epilogue ===
+  //  GPU epilogue 
   if (targetGPU()) {
     if (returnsArray)
       gpuCopyToHostAndDealloc(deviceOut, hostOutMemref, location);
@@ -342,7 +344,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
       gpuDealloc(dm, location);
   }
 
-  // === Return ===
+  //  Return 
   if (returnsArray || retSamType.type_kind == TypeKind::Unit) {
     mlir::func::ReturnOp::create(builder, location);
   } else {
@@ -350,7 +352,7 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
   }
 }
 
-// ===--- GPU memory helpers ---===
+// --- GPU memory helpers ---
 
 mlir::Value MLIRGenImpl::gpuCopyToDevice(mlir::Value hostMemref,
                                          mlir::Location loc) {
@@ -402,7 +404,7 @@ void MLIRGenImpl::gpuDealloc(mlir::Value deviceMemref, mlir::Location loc) {
                              /*asyncDependencies=*/mlir::ValueRange{deallocOp.getAsyncToken()});
 }
 
-// ===--- Kernel type helpers ---===
+// --- Kernel type helpers ---
 
 mlir::Type MLIRGenImpl::convertTypeForKernel(const Type &type, bool asMemref) {
   switch (type.type_kind) {

@@ -147,12 +147,12 @@ public:
   // --- Definition emission (MLIRGen.cpp) ---
   void emitDefinition(AST::DefinitionAST *def);
   void emitKernelDef(AST::KernelDefAST *kd);
-  void emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
-                         mlir::Block &entryBlock, AST::KernelDefAST *kd,
-                         mlir::Location location, mlir::Value dpsOutput);
-  void emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
-                            mlir::Block &entryBlock, AST::KernelDefAST *kd,
-                            mlir::Location location);
+  mlir::Value emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
+                                AST::KernelDefAST *kd, mlir::Location location,
+                                mlir::Value dpsOutput);
+  mlir::Value emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
+                                   AST::KernelDefAST *kd,
+                                   mlir::Location location);
   void emitKernelWrapper(AST::KernelDefAST *kd, const std::string &internalName,
                          const std::string &publicName,
                          mlir::Location location);
