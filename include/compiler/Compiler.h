@@ -76,6 +76,47 @@ public:
                std::vector<std::string> &extra_object_files);
 };
 
+/// LibraryEmitter: owns the "package the module's .o into a .a or .so"
+/// stage for library builds. Mirrors the Resolver stage shape —
+/// construct once, call Emit(), flush queued diagnostics via
+/// reporter.report(emitter).
+///
+/// Handles runtime-object auto-detection (`<stem>_runtime.o`),
+/// archive construction (via `ar`, splicing in transitive .a members),
+/// and shared-library construction (via `clang++ -shared`). Cleans up
+/// the intermediate .o when done.
+class LibraryEmitter : public sammine_util::Reportee {
+  const Options &options_;
+  const std::vector<std::string> &extra_object_files_;
+
+  /// Auto-detected transitive link inputs (e.g. `<stem>_runtime.o`).
+  /// Populated by Emit() before dispatching to the archive/shared path.
+  std::vector<std::string> extra_link_objs_;
+
+  std::string output_path(const std::string &filename) const;
+
+  /// Search output_dir then source_dir for `<stem>_runtime.o` and append
+  /// it to extra_link_objs_ if found.
+  void autoDetectRuntimeObject();
+
+  /// Create a static archive (.a) by unioning this module's .o with
+  /// transitive deps. .a deps are extracted via `ar x` so their members
+  /// get rolled into the output archive.
+  void emitArchive();
+
+  /// Create a shared library (.so) via `clang++ -shared`.
+  void emitShared();
+
+public:
+  LibraryEmitter(const Options &options,
+                 const std::vector<std::string> &extra_object_files)
+      : options_(options), extra_object_files_(extra_object_files) {}
+
+  /// Entry point: package the already-emitted .o into the configured
+  /// lib format, then remove the intermediate .o.
+  void Emit();
+};
+
 class Compiler {
   Options options_;
   std::shared_ptr<TokenStream> tokStream;
@@ -84,7 +125,6 @@ class Compiler {
   std::shared_ptr<LLVMRes> resPtr;
   std::string mod_name;
   std::vector<std::string> extra_object_files;
-  std::vector<std::string> extra_link_objs_;
 
   AST::ASTProperties props_;
   enum class State { Running, Finished, Error };
@@ -109,8 +149,6 @@ class Compiler {
   void optimize();
   void emit_object();
   void emit_library();
-  void emit_archive_impl();
-  void emit_shared_impl();
   void link();
   void jit_execute();
 

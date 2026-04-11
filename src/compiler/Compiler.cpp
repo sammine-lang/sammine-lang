@@ -646,132 +646,19 @@ void Compiler::emit_object() {
   dest.flush();
 }
 
-// Create a static archive (.a) by collecting this module's .o + transitive
-// deps.
-void Compiler::emit_archive_impl() {
-  LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-               "Start emit archive stage...\n");
-  });
-
-  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
-  std::string obj_file = output_path(stem + ".o");
-  std::string archive_file = output_path(stem + ".a");
-
-  // Collect all .o files into a temp directory, then create the archive.
-  // For .a deps, extract their members first.
-  auto tmp_dir =
-      std::filesystem::temp_directory_path() / ("sammine_ar_" + stem);
-  std::filesystem::create_directories(tmp_dir);
-
-  // Copy this module's .o
-  std::filesystem::copy_file(
-      obj_file, tmp_dir / std::filesystem::path(obj_file).filename(),
-      std::filesystem::copy_options::overwrite_existing);
-
-  auto copy_dep = [&](const std::string &dep) {
-    std::string ext = std::filesystem::path(dep).extension().string();
-    if (ext == ".a") {
-      auto abs_dep = std::filesystem::absolute(dep).string();
-      std::string cmd =
-          fmt::format("cd {} && ar x {}", tmp_dir.string(), abs_dep);
-      std::system(cmd.c_str());
-    } else {
-      std::filesystem::copy_file(
-          dep, tmp_dir / std::filesystem::path(dep).filename(),
-          std::filesystem::copy_options::overwrite_existing);
-    }
-  };
-
-  for (auto &dep : extra_object_files)
-    copy_dep(dep);
-  for (auto &dep : extra_link_objs_)
-    copy_dep(dep);
-
-  // Create the archive from all collected .o files
-  auto abs_archive = std::filesystem::absolute(archive_file).string();
-  std::string cmd =
-      fmt::format("cd {} && ar rcs {} *.o", tmp_dir.string(), abs_archive);
-  int result = std::system(cmd.c_str());
-  if (result != 0) {
-    fmt::print(stderr, "Failed to create archive {}\n", archive_file);
-    set_error();
-  }
-
-  // Clean up temp directory
-  std::filesystem::remove_all(tmp_dir);
-}
-
-// Create a shared library (.so) via clang++ -shared.
-void Compiler::emit_shared_impl() {
-  LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-               "Start emit shared library stage...\n");
-  });
-
-  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
-  std::string obj_file = output_path(stem + ".o");
-  std::string lib_file = output_path(stem + ".so");
-
-  std::string extra;
-  for (auto &obj : extra_link_objs_)
-    extra += " " + obj;
-  std::string platform_flags;
-#ifdef __APPLE__
-  platform_flags = " -undefined dynamic_lookup";
-#endif
-  std::string command = fmt::format("clang++ -shared{} -o {} {}{}",
-                                    platform_flags, lib_file, obj_file, extra);
-  int result = std::system(command.c_str());
-  if (result != 0) {
-    fmt::print(stderr, "Failed to create shared library {}\n", lib_file);
-    set_error();
-  }
-}
-
+// Stage 11: Package the .o into a .a or .so for library builds. Thin driver
+// — all orchestration lives in LibraryEmitter::Emit, mirroring the parse and
+// resolve_imports stages.
 void Compiler::emit_library() {
   if (has_error() || has_main || options_.from_string)
     return;
 
-  // Default to shared library when no --lib flag is given
+  LibraryEmitter le(options_, extra_object_files);
+  le.Emit();
 
-  // Auto-detect <stem>_runtime.o for library builds.
-  {
-    std::string stem = std::filesystem::path(options_.file_arg).stem().string();
-    std::string runtime_obj = stem + "_runtime.o";
-    bool found = false;
-    if (!options_.output_dir.empty()) {
-      // TODO: use output_path
-      auto candidate = options_.output_dir / runtime_obj;
-      if (std::filesystem::exists(candidate)) {
-        extra_link_objs_.push_back(candidate.string());
-        found = true;
-      }
-    }
-    if (!found) {
-      // TODO: use output_path
-      auto source_dir = std::filesystem::path(options_.file_arg).parent_path();
-      if (source_dir.empty())
-        source_dir = ".";
-      auto candidate = source_dir / runtime_obj;
-      if (std::filesystem::exists(candidate))
-        extra_link_objs_.push_back(candidate.string());
-    }
-  }
-
-  switch (options_.lib_format) {
-  case LibFormat::Static:
-    emit_archive_impl();
-    break;
-  case LibFormat::Shared:
-    emit_shared_impl();
-    break;
-  }
-
-  // Clean up intermediate .o — only the .a/.so is the deliverable
-  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
-  std::string obj_file = output_path(stem + ".o");
-  std::filesystem::remove(obj_file);
+  if (le.has_errors())
+    set_error();
+  reporter.report(le);
 }
 
 // Stage 12: Link .o files into executable via clang++ (fallback: g++).
