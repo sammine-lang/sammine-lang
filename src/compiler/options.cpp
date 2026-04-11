@@ -123,6 +123,16 @@ void Options::infer(const std::string &output_dir_raw) {
       this->file_arg = "-s|--str";
       this->from_string = true;
     } else if (!this->file_arg.empty()) {
+      // User error — surface cleanly without triggering the ICE path in
+      // get_string_from_file (which aborts with a stack trace).
+      if (!std::filesystem::exists(this->file_arg)) {
+        fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+                   "[Error during compiler initial phase]\n");
+        fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+                   "[Cannot find or open file: {}]\n", this->file_arg);
+        has_error = true;
+        return;
+      }
       this->str_arg = sammine_util::get_string_from_file(this->file_arg);
     } else {
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
