@@ -3,7 +3,6 @@
 //
 
 #include "compiler/Compiler.h"
-#include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
@@ -70,8 +69,6 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
-#include <set>
-#include <sstream>
 
 #define DEBUG_TYPE "stages"
 
