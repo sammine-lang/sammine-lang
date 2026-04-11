@@ -140,9 +140,9 @@ void Compiler::parse() {
 }
 
 // Stage 3: Resolve `import` declarations by parsing .mn files on the fly.
-// Recursively handles transitive imports. Deduplicates via canonical module
-// name. Exported defs become ExternASTs; generic defs are inlined for
-// monomorphization.
+// Thin driver — all orchestration lives in Resolver::Resolve, mirroring the
+// parse() stage. Recursion, deduplication, and link-artifact tracking are
+// the Resolver's responsibility.
 void Compiler::resolve_imports() {
   SAMMINE_ZONE_NAMED("imports");
   if (has_error() || programAST->imports.empty())
@@ -157,64 +157,12 @@ void Compiler::resolve_imports() {
   if (source_dir.empty())
     source_dir = ".";
 
-  // Track already-imported modules to avoid duplicates in transitive chains.
-  std::set<std::string> imported_modules;
+  Resolver rs(options_, reporter);
+  rs.Resolve(*programAST, source_dir, extra_object_files);
 
-  // Recursively import a module's definitions into programAST.
-  // - For direct imports: pull exported defs + all generic defs + link
-  // artifact.
-  // - For transitive imports (is_transitive=true): only pull generic function
-  //   defs and type defs needed by the monomorphizer — no link artifact.
-  std::function<bool(const std::string &, const std::filesystem::path &,
-                     const sammine_util::Location &, bool)>
-      import_module =
-          [&](const std::string &name, const std::filesystem::path &src_dir,
-              const sammine_util::Location &loc, bool is_transitive) -> bool {
-    if (imported_modules.contains(name))
-      return true;
-    imported_modules.insert(name);
-
-    Resolver rs(options_, loc);
-    auto mn_path = rs.find_mn(name, src_dir);
-    if (mn_path.empty()) {
-      if (!is_transitive) {
-        reporter.immediate_error(
-            fmt::format("Cannot find module '{}.mn'", name), loc);
-        set_error();
-      }
-      return false;
-    }
-
-    // Parse the .mn file with SourceInfo for cross-file error locations.
-    auto mn_program = rs.get_program_from_file(mn_path, name);
-
-    if (!mn_program) {
-      set_error();
-      reporter.report(rs);
-      return false;
-    }
-    // Recursively import this module's own dependencies (transitive).
-    auto mod_src_dir = mn_path.parent_path();
-    for (auto &sub_import : mn_program->imports)
-      import_module(sub_import.module_name, mod_src_dir, sub_import.location,
-                    true);
-
-    // Filter definitions and inject into programAST.
-    rs.inject_definitions(mn_program->DefinitionVec, programAST->DefinitionVec, name, is_transitive);
-    // Track linkable artifact (only for direct imports).
-    // TODO: i think this can be refactored out somehow
-    if (!is_transitive) {
-      rs.traceLinkableArtifacts(name, src_dir, extra_object_files);
-    }
-
-    return true;
-  };
-
-  for (auto &import : programAST->imports) {
-    import_module(import.module_name, source_dir, import.location, false);
-    if (has_error())
-      return;
-  }
+  if (rs.has_errors())
+    set_error();
+  reporter.report(rs);
 }
 
 // Stage 4: Load stdlib/definitions.mn (builtin type defs). Executables only.

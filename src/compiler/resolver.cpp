@@ -1,18 +1,78 @@
 
 #include "compiler/Compiler.h"
 #include "compiler/Options.h"
+#include "fmt/core.h"
 #include "parser/Parser.h"
 
 namespace sammine_lang {
 
+// Entry point: walk every direct import in `programAST` and recurse into
+// transitive imports via `import_module`. Mirrors Parser::Parse() — all
+// orchestration lives here so Compiler::resolve_imports is a thin driver.
+void Resolver::Resolve(AST::ProgramAST &programAST, const Path &source_dir,
+                       std::vector<std::string> &extra_object_files) {
+  for (auto &import : programAST.imports) {
+    import_module(import.module_name, source_dir, import.location,
+                  /*is_transitive=*/false, programAST, extra_object_files);
+    if (has_errors())
+      return;
+  }
+}
+
+// Recursively import a module's definitions into `programAST`.
+//   - Direct imports: pull exported defs + all generic defs + link artifact.
+//   - Transitive imports: only pull generic function defs and type defs
+//     needed by the monomorphizer — no link artifact.
+bool Resolver::import_module(const std::string &name, const Path &src_dir,
+                             const sammine_util::Location &loc,
+                             bool is_transitive, AST::ProgramAST &programAST,
+                             std::vector<std::string> &extra_object_files) {
+  if (imported_modules.contains(name))
+    return true;
+  imported_modules.insert(name);
+
+  auto mn_path = find_mn(name, src_dir);
+  if (mn_path.empty()) {
+    if (!is_transitive) {
+      auto msg = fmt::format("Cannot find module '{}.mn'", name);
+      if (reporter.has_value())
+        reporter->get().immediate_error(msg, loc);
+      add_error(loc, msg);
+    }
+    return false;
+  }
+
+  // Parse the .mn file with SourceInfo for cross-file error locations.
+  auto mn_program = get_program_from_file(mn_path, name, loc);
+  if (!mn_program)
+    return false;
+
+  // Recursively import this module's own dependencies (transitive).
+  auto mod_src_dir = mn_path.parent_path();
+  for (auto &sub_import : mn_program->imports) {
+    import_module(sub_import.module_name, mod_src_dir, sub_import.location,
+                  /*is_transitive=*/true, programAST, extra_object_files);
+  }
+
+  // Filter definitions and inject into programAST.
+  inject_definitions(mn_program->DefinitionVec, programAST.DefinitionVec, name,
+                     is_transitive);
+
+  // Track linkable artifact (only for direct imports).
+  if (!is_transitive)
+    traceLinkableArtifacts(name, src_dir, extra_object_files);
+
+  return true;
+}
+
 // Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
-std::filesystem::path Resolver::find_mn(const std::string &name,
-                                        const std::filesystem::path &src_dir) {
-  std::filesystem::path p = name + ".mn";
+Path Resolver::find_mn(const std::string &name,
+                                        const Path &src_dir) {
+  Path p = name + ".mn";
   if (std::filesystem::exists(p))
     return p;
   for (auto &ipath : options_.import_paths) {
-    auto c = std::filesystem::path(ipath) / (name + ".mn");
+    auto c = Path(ipath) / (name + ".mn");
     if (std::filesystem::exists(c))
       return c;
   }
@@ -26,8 +86,9 @@ std::filesystem::path Resolver::find_mn(const std::string &name,
   }
   return {};
 }
-UP Resolver::get_program_from_file(const std::filesystem::path &file_path,
-                                   const std::string &name) {
+UP Resolver::get_program_from_file(const Path &file_path,
+                                   const std::string &name,
+                                   const sammine_util::Location &loc) {
 
   std::string mn_input = sammine_util::get_string_from_file(file_path.string());
   auto si = std::make_shared<sammine_util::SourceInfo>(
@@ -39,7 +100,7 @@ UP Resolver::get_program_from_file(const std::filesystem::path &file_path,
   auto mn_program = mn_parser.Parse();
 
   if (mn_parser.has_errors()) {
-    add_error(loc_,
+    add_error(loc,
               fmt::format("Failed to parse module '{}'", file_path.string()));
     return nullptr;
   }
@@ -112,15 +173,15 @@ void Resolver::inject_definitions(
   }
 }
 void Resolver::traceLinkableArtifacts(
-    const std::string &name, const std::filesystem::path &src_dir,
+    const std::string &name, const Path &src_dir,
     std::vector<std::string> &extra_object_files) {
   std::vector<std::string> lib_exts =
       options_.lib_format == LibFormat::Static
           ? std::vector<std::string>{".a", ".so"}
           : std::vector<std::string>{".so", ".a"};
-  std::filesystem::path obj_path;
+  Path obj_path;
   auto find_lib = [&name, &obj_path,
-                   &lib_exts](const std::filesystem::path &dir) -> bool {
+                   &lib_exts](const Path &dir) -> bool {
     for (auto &ext : lib_exts) {
       auto candidate = dir / (name + ext);
       if (std::filesystem::exists(candidate)) {

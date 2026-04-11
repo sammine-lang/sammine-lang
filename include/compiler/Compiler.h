@@ -10,6 +10,8 @@
 #include "lex/Token.h"
 #include "util/Utilities.h"
 #include <memory>
+#include <optional>
+#include <set>
 //! \file Compiler.h
 //! \brief Define the Compiler staging
 namespace sammine_lang {
@@ -17,27 +19,61 @@ namespace sammine_lang {
 using UP = std::unique_ptr<AST::ProgramAST>;
 using Path = std::filesystem::path;
 
+/// Resolver: owns the `import` resolution stage.
+///
+/// Mirrors the Parser stage — construct once, call Resolve(), then flush
+/// queued diagnostics via `reporter.report(resolver)`. Immediate, unlocated
+/// errors (e.g. "cannot find module 'foo.mn'") are routed through the
+/// optional Reporter reference, matching Parser's pattern.
 class Resolver : public sammine_util::Reportee {
+  const Options &options_;
+  std::optional<std::reference_wrapper<sammine_util::Reporter>> reporter;
 
-  const Options& options_;
-  sammine_util::Location loc_;
+  /// Tracks canonical module names already imported to break cycles and
+  /// deduplicate transitive chains.
+  std::set<std::string> imported_modules;
 
-  UP program;
-public:
-  Resolver(const Options& options, const sammine_util::Location& loc) : options_(options), loc_(loc) {}
-  void traceLinkableArtifacts(const std::string &name,
-                              const std::filesystem::path &src_dir,
+  /// Recursively import a module's definitions into `programAST`.
+  ///   - Direct imports (is_transitive=false): pull exported defs + all
+  ///     generic defs + link artifact.
+  ///   - Transitive imports (is_transitive=true): only pull generic function
+  ///     defs and type defs needed by the monomorphizer; no link artifact.
+  bool import_module(const std::string &name, const Path &src_dir,
+                     const sammine_util::Location &loc, bool is_transitive,
+                     AST::ProgramAST &programAST,
+                     std::vector<std::string> &extra_object_files);
+
+  /// Locate a linkable artifact (.a/.so) for `name` and append it to
+  /// `extra_object_files`. Search order mirrors find_mn.
+  void traceLinkableArtifacts(const std::string &name, const Path &src_dir,
                               std::vector<std::string> &extra_object_files);
 
-  Path find_mn(const std::string& name, const Path& src_dir); 
+  /// Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
+  Path find_mn(const std::string &name, const Path &src_dir);
 
-  UP get_program_from_file(const Path& file, const std::string& name);
+  /// Lex + parse a .mn file. On failure, queues an error at `loc` against
+  /// this Reportee and returns nullptr.
+  UP get_program_from_file(const Path &file, const std::string &name,
+                           const sammine_util::Location &loc);
 
-void inject_definitions(
-    std::vector<std::unique_ptr<AST::DefinitionAST>> &DefinitionVec,
-    std::vector<std::unique_ptr<AST::DefinitionAST>> &program_vec,
-    const std::string &name,
-    bool is_transitive);
+  /// Filter and inject definitions from an imported module into the main
+  /// program's DefinitionVec, respecting is_exported / is_generic rules.
+  void inject_definitions(
+      std::vector<std::unique_ptr<AST::DefinitionAST>> &DefinitionVec,
+      std::vector<std::unique_ptr<AST::DefinitionAST>> &program_vec,
+      const std::string &name, bool is_transitive);
+
+public:
+  Resolver(const Options &options,
+           std::optional<std::reference_wrapper<sammine_util::Reporter>>
+               reporter_ = std::nullopt)
+      : options_(options), reporter(reporter_) {}
+
+  /// Entry point: resolve every `import` in `programAST` (recursively),
+  /// mutating `programAST->DefinitionVec` and appending link artifacts to
+  /// `extra_object_files`. Stops early on the first fatal error.
+  void Resolve(AST::ProgramAST &programAST, const Path &source_dir,
+               std::vector<std::string> &extra_object_files);
 };
 
 class Compiler {
