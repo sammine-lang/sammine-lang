@@ -27,7 +27,10 @@ add_library(MLIRBackend OBJECT
 )
 add_dependencies(MLIRBackend SammineOpsIncGen)
 target_include_directories(MLIRBackend PRIVATE
-  ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS} ${CMAKE_CURRENT_BINARY_DIR}
+  ${INCLUDE_PROJECT_DIR} ${CMAKE_CURRENT_BINARY_DIR}
+)
+target_include_directories(MLIRBackend SYSTEM PRIVATE
+  ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS}
   ${CMAKE_SOURCE_DIR}/externals/stablehlo
   ${CMAKE_BINARY_DIR}/externals/stablehlo
 )

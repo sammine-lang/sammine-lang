@@ -1,0 +1,15 @@
+// RUN: %sammine -f %full %O --mlir-ir 2>&1 | %check %full
+// Verify that kernel reduce emits stablehlo.reduce in the pre-lowering IR.
+
+kernel sum_arr(a: [3]f64) -> f64 {
+  reduce(a, +, 0.0)
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let b = sum_arr(a);
+  0
+}
+
+// CHECK: stablehlo.reduce
+// CHECK: stablehlo.return

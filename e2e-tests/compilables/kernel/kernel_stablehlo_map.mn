@@ -1,0 +1,15 @@
+// RUN: %sammine -f %full %O --mlir-ir 2>&1 | %check %full
+// Verify that kernel map emits stablehlo.map in the pre-lowering IR.
+
+kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}
+
+let main() -> i32 {
+  let a = [1.0, 2.0, 3.0];
+  let b = double_arr(a);
+  0
+}
+
+// CHECK: stablehlo.map
+// CHECK: stablehlo.return

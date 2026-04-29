@@ -7,6 +7,7 @@
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
+#include "codegen/SammineDialect.h"
 #include "compiler/Options.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
@@ -44,6 +45,7 @@
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "stablehlo/dialect/StablehloOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/Target/LLVM/NVVM/Target.h"
@@ -374,6 +376,8 @@ void Compiler::codegen_mlir() {
     mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
     mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
     mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
+    mlirCtx.getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
+    mlirCtx.getOrLoadDialect<smn::SammineDialect>();
   }
 
   // GPU dialect — needed when --gpu=cuda or --gpu=amd.
