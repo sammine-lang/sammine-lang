@@ -10,7 +10,8 @@ option(SAMMINE_TRACY "Enable Tracy profiler instrumentation" OFF)
 add_subdirectory(externals/)
 
 # LLVM-STUFF
-# find_package(ZSTD REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(zstd REQUIRED)
 
 # Check to see if were on a apple
 if(APPLE AND NOT DEFINED LLVM_DIR)
@@ -47,10 +48,17 @@ if(APPLE AND NOT DEFINED MLIR_DIR)
 endif()
 find_package(MLIR REQUIRED CONFIG)
 include_directories(SYSTEM ${MLIR_INCLUDE_DIRS})
+list(APPEND CMAKE_MODULE_PATH "${MLIR_CMAKE_DIR}" "${LLVM_CMAKE_DIR}")
+include(TableGen)
+include(AddMLIR)
 
 # Derive LLVM lib directory for runtime library linking (e.g. libmlir_cuda_runtime)
 get_filename_component(MLIR_LLVM_LIB_DIR "${MLIR_DIR}/../.." ABSOLUTE)
 add_compile_definitions(MLIR_LLVM_LIB_DIR="${MLIR_LLVM_LIB_DIR}")
+
+# StableHLO (built embedded, reuses the MLIR found above)
+set(STABLEHLO_BUILD_EMBEDDED ON CACHE BOOL "" FORCE)
+add_subdirectory(externals/stablehlo EXCLUDE_FROM_ALL)
 
 
 

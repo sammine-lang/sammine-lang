@@ -3,3 +3,6 @@
 	url = https://github.com/llvm/llvm-project.git
 	branch = main
 	shallow = true
+[submodule "externals/stablehlo"]
+	path = externals/stablehlo
+	url = https://github.com/openxla/stablehlo.git
