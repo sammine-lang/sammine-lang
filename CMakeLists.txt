@@ -26,6 +26,8 @@ endif()
 
 find_package(LLVM REQUIRED CONFIG)
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+# Nix clang wrapper already defines _LIBCPP_HARDENING_MODE; drop LLVM's copy to avoid -Wmacro-redefined
+list(FILTER LLVM_DEFINITIONS_LIST EXCLUDE REGEX "_LIBCPP_HARDENING_MODE")
 include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 llvm_map_components_to_libnames(llvm_libs native orcjit core support irreader)

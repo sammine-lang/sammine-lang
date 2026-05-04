@@ -89,7 +89,7 @@ void LibraryEmitter::emitArchive() {
       auto abs_dep = std::filesystem::absolute(dep).string();
       std::string cmd =
           fmt::format("cd {} && ar x {}", tmp_dir.string(), abs_dep);
-      std::system(cmd.c_str());
+      (void)std::system(cmd.c_str());
     } else {
       std::filesystem::copy_file(
           dep, tmp_dir / std::filesystem::path(dep).filename(),
