@@ -15,9 +15,11 @@ See e2e-tests/compilables/misc/readme_demo.mn for a demo of the language
 sammine relies on LLVM and StableHLO for its back end. We'll use them as git submodules pinned
 to a specific compatible version. 
 
-We'll use just nix and just file to determinatize and automate these steps.
+We'll use nix and just file to determinatize and automate these steps.
 
 ### Steps
+
+Run `nix develop` to enter the development workspace.
 
 Run `just` for all the sensible commands, but the following is what you should do
 
