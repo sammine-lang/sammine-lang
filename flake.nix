@@ -9,7 +9,10 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
         llvmPackages = pkgs.llvmPackages_20;
       in
       {
@@ -27,6 +30,9 @@
           buildInputs = [
             pkgs.zlib
             pkgs.zstd
+          ] ++ pkgs.lib.optionals (pkgs.stdenv.hostPlatform.isLinux) [
+            pkgs.cudaPackages.cuda_cudart
+            pkgs.cudaPackages.cuda_nvcc
           ];
         };
       });
