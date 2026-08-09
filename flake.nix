@@ -14,6 +14,7 @@
           config.allowUnfree = true;
         };
         llvmPackages = pkgs.llvmPackages_20;
+        cudaSupported = system == "x86_64-linux";
       in
       {
         devShells.default = pkgs.mkShell.override { stdenv = llvmPackages.stdenv; } {
@@ -26,27 +27,23 @@
             (pkgs.python3.withPackages (ps: [ ps.lit ]))
             pkgs.git
             pkgs.mold
+          ] ++ pkgs.lib.optionals cudaSupported [
+            pkgs.cudaPackages.cudatoolkit
           ];
 
           shellHook = ''
             export PATH="$PWD/build/bin:$PATH"
-
-            # Detect CUDA toolkit: check PATH first, then common system locations.
-            if ! command -v nvcc &>/dev/null; then
-              for _cuda_dir in /opt/cuda /usr/local/cuda; do
-                if [ -x "$_cuda_dir/bin/nvcc" ]; then
-                  export PATH="$_cuda_dir/bin:$PATH"
-                  break
-                fi
-              done
-            fi
-            if command -v nvcc &>/dev/null; then
-              export NVCC_PATH="$(command -v nvcc)"
-              export CUDA_PATH="$(dirname "$(dirname "$NVCC_PATH")")"
-            fi
-            if [ -d /usr/lib ] && [ -e /usr/lib/libcuda.so.1 ]; then
-              export LD_LIBRARY_PATH="/usr/lib:''${LD_LIBRARY_PATH:-}"
-            fi
+          '' + pkgs.lib.optionalString cudaSupported ''
+            export CUDA_PATH="${pkgs.cudaPackages.cudatoolkit}"
+            export CUDAToolkit_ROOT="${pkgs.cudaPackages.cudatoolkit}"
+            # libcuda.so.1 comes from the host NVIDIA driver:
+            # /run/opengl-driver/lib on NixOS, /usr/lib on Arch and friends.
+            for _driver_dir in /run/opengl-driver/lib /usr/lib; do
+              if [ -e "$_driver_dir/libcuda.so.1" ]; then
+                export LD_LIBRARY_PATH="$_driver_dir''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                break
+              fi
+            done
           '';
 
           buildInputs = [

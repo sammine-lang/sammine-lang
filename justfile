@@ -4,6 +4,8 @@ llvm_build_dir := "externals/llvm-project/build"
 total_cpus := `python3 -c "import os; print(os.cpu_count() or 4)"`
 jobs := `python3 -c "import os; n = os.cpu_count() or 4; print(max(4, n - 4))"`
 
+default:
+      @just --list
 # Fetch submodules (LLVM, StableHLO)
 init:
     git submodule update --init --recursive
@@ -12,8 +14,10 @@ init:
 llvm:
     cmake -S externals/llvm-project/llvm -B {{llvm_build_dir}} -G Ninja \
         -DLLVM_ENABLE_ASSERTIONS=ON \
+        -DLLVM_INCLUDE_BENCHMARKS=OFF \
         -DCMAKE_BUILD_TYPE=Release \
         -DLLVM_TARGETS_TO_BUILD="X86;AArch64;NVPTX" \
+        -DMLIR_ENABLE_CUDA_RUNNER=ON \
         -DLLVM_CCACHE_BUILD=true \
         -DLLVM_USE_LINKER=mold \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
