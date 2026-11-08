@@ -1,0 +1,9 @@
+// RUN: ! %sammine --file %full %O > %T/out.txt 2>&1
+// RUN: %check %full < %T/out.txt
+
+let main() -> i32 {
+  let a = 1 && 2;
+  0
+}
+
+// CHECK: Logical operations need boolean arguments

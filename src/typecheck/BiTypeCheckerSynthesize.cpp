@@ -657,8 +657,14 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     return ast->set_type(Type::Unit());
   }
 
-  if (ast->Op->is_logical())
-    return ast->set_type(lhs_type);
+  if (ast->Op->is_logical()) {
+    if (lhs_type == Type::Bool() && rhs_type == Type::Bool())
+      return ast->set_type(lhs_type);
+    else  {
+      add_error(ast->Op->get_location(), fmt::format("Logical operations need boolean arguments"));
+      return ast->set_type(Type::Poisoned());
+   }
+  }
 
   // Bitwise operators: valid on integer types and integer-backed enums
   if (ast->Op->is_bitwise()) {
