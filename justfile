@@ -6,7 +6,7 @@ jobs := `python3 -c "import os; n = os.cpu_count() or 4; print(max(4, n - 4))"`
 
 default:
       @just --list
-# Fetch submodules (LLVM, StableHLO)
+# Fetch submodules (LLVM)
 init:
     git submodule update --init --recursive
 

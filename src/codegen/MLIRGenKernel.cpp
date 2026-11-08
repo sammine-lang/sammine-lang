@@ -23,7 +23,6 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "stablehlo/dialect/StablehloOps.h"
 
 #include "fmt/core.h"
 
@@ -56,9 +55,14 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
       symbolTable.registerNameT(param->name, argVal);
     }
 
-    // StableHLO ops are functional (tensor in → tensor out), so the inner
-    // kernel function no longer needs a DPS output parameter.
-    mlir::Value dpsOutput; // unused, kept for API compat with emitKernelMapExpr
+    // DPS: for array-returning kernels, the last entry block argument is the
+    // output tensor provided by the caller (the wrapper).
+    auto protoFT = std::get<FunctionType>(kd->Prototype->get_type().type_data);
+    auto retSamType = protoFT.get_return_type();
+    mlir::Value dpsOutput;
+    if (retSamType.type_kind == TypeKind::Array) {
+      dpsOutput = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
+    }
 
     // Each handler produces a result value; the single func.return that
     // terminates the function is emitted here, not inside the handlers.
@@ -110,7 +114,7 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
 mlir::Value MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
                                            AST::KernelDefAST *kd,
                                            mlir::Location location,
-                                           mlir::Value /*dpsOutput*/) {
+                                           mlir::Value dpsOutput) {
   auto inputTensor = symbolTable.get_from_name(mapExpr->input_name);
 
   Type foundInputType = Type::NonExistent();
@@ -123,61 +127,35 @@ mlir::Value MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
   assert(foundInputType.type_kind != TypeKind::NonExistent &&
          "Map input must be a kernel parameter");
 
-  auto inputRankedType =
-      mlir::cast<mlir::RankedTensorType>(inputTensor.getType());
-  auto resultType = inputRankedType;
+  assert(dpsOutput && "Map kernel must have DPS output parameter");
 
-  mlir::stablehlo::MapOp mapOp;
+  auto mapOp = mlir::linalg::MapOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*init=*/dpsOutput,
+      /*bodyBuilder=*/
+      [&](mlir::OpBuilder &b, mlir::Location loc, mlir::ValueRange args) {
+        auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
 
-  {
-    // Guard the insertion point so we return to the function body after
-    // building the computation region (createBlock moves the IP).
-    mlir::OpBuilder::InsertionGuard guard(builder);
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
 
-    mapOp = mlir::stablehlo::MapOp::create(
-        builder, location,
-        /*resultType0=*/resultType,
-        /*inputs=*/mlir::ValueRange{inputTensor},
-        /*dimensions=*/llvm::ArrayRef<int64_t>{0});
+        decltype(symbolTable)::Guard lambdaScope(symbolTable);
+        symbolTable.registerNameT(lambdaParamName, args[0]);
 
-    // Build the computation region. stablehlo.map body takes 0-d tensor args.
-    auto elemType = inputRankedType.getElementType();
-    auto scalarTensorType = mlir::RankedTensorType::get({}, elemType);
-    auto &computation = mapOp.getComputation();
-    auto *entryBlock = builder.createBlock(
-        &computation, {}, {scalarTensorType}, {location});
-    builder.setInsertionPointToStart(entryBlock);
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
 
-    auto lambdaParamName = mapExpr->lambda_proto->parameterVectors[0]->name;
-    auto arg0 = entryBlock->getArgument(0);
+        mlir::Value bodyResult = nullptr;
+        for (auto &expr : mapExpr->lambda_body->Statements) {
+          bodyResult = emitExpr(expr.get());
+        }
 
-    // Extract scalar from 0-d tensor, run the lambda body, wrap back.
-    auto scalar = mlir::tensor::ExtractOp::create(
-        builder, location, arg0, mlir::ValueRange{});
+        in_kernel_lambda_body = savedKernelCtx;
 
-    decltype(symbolTable)::Guard lambdaScope(symbolTable);
-    symbolTable.registerNameT(lambdaParamName, scalar.getResult());
-
-    bool savedKernelCtx = in_kernel_lambda_body;
-    in_kernel_lambda_body = true;
-
-    mlir::Value bodyResult = nullptr;
-    for (auto &expr : mapExpr->lambda_body->Statements) {
-      bodyResult = emitExpr(expr.get());
-    }
-
-    in_kernel_lambda_body = savedKernelCtx;
-
-    assert(bodyResult && "Lambda body must produce a value");
-
-    // Wrap scalar result back to 0-d tensor for stablehlo.return.
-    auto emptyTensor = mlir::tensor::EmptyOp::create(
-        builder, location, llvm::ArrayRef<int64_t>{}, bodyResult.getType());
-    auto resultTensor = mlir::tensor::InsertOp::create(
-        builder, location, bodyResult, emptyTensor, mlir::ValueRange{});
-    mlir::stablehlo::ReturnOp::create(builder, location,
-                                      mlir::ValueRange{resultTensor});
-  }
+        assert(bodyResult && "Lambda body must produce a value");
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{bodyResult});
+      });
 
   return mapOp->getResult(0);
 }
@@ -203,65 +181,45 @@ MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
   auto elemSamType = arrType.get_element();
   auto elemMLIRType = convertTypeForKernel(elemSamType);
 
-  // Build the init value as a 0-d tensor for stablehlo.reduce.
   auto identityVal = emitExpr(reduceExpr->identity.get());
   assert(identityVal && "Identity expression must produce a value");
-  auto emptyInit = mlir::tensor::EmptyOp::create(
+
+  auto emptyScalar = mlir::tensor::EmptyOp::create(
       builder, location, llvm::ArrayRef<int64_t>{}, elemMLIRType);
-  auto initTensor = mlir::tensor::InsertOp::create(
-      builder, location, identityVal, emptyInit, mlir::ValueRange{});
 
-  // Dimension to reduce along (future-proofed, default 0 for 1-D arrays).
-  int64_t reduceDim = 0;
+  auto fillOp = mlir::linalg::FillOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{identityVal},
+      /*outputs=*/mlir::ValueRange{emptyScalar.getResult()});
+  auto filledInit = fillOp.getResultTensors()[0];
 
-  auto scalarTensorType = mlir::RankedTensorType::get({}, elemMLIRType);
+  auto reduceOp = mlir::linalg::ReduceOp::create(
+      builder, location,
+      /*inputs=*/mlir::ValueRange{inputTensor},
+      /*inits=*/mlir::ValueRange{filledInit},
+      /*dimensions=*/llvm::ArrayRef<int64_t>{0},
+      /*bodyBuilder=*/
+      [&](mlir::OpBuilder &b, mlir::Location loc, mlir::ValueRange args) {
+        mlir::OpBuilder::InsertionGuard builderGuard(builder);
+        builder.setInsertionPointToStart(b.getInsertionBlock());
 
-  mlir::stablehlo::ReduceOp reduceOp;
+        bool savedKernelCtx = in_kernel_lambda_body;
+        in_kernel_lambda_body = true;
 
-  {
-    // Guard the insertion point so we return to the function body after
-    // building the reducer region (createBlock moves the IP).
-    mlir::OpBuilder::InsertionGuard guard(builder);
+        auto opTok = reduceExpr->op_tok->tok_type;
+        mlir::Value result =
+            isFloatType(elemSamType)
+                ? emitFloatArithOp(b, loc, args[0], args[1], opTok)
+                : emitIntArithOp(b, loc, args[0], args[1], opTok,
+                                 isUnsignedIntegerType(elemSamType));
+        if (!result)
+          imm_error("Unsupported reduce operator");
 
-    reduceOp = mlir::stablehlo::ReduceOp::create(
-        builder, location,
-        /*inputs=*/mlir::ValueRange{inputTensor},
-        /*init_values=*/mlir::ValueRange{initTensor},
-        /*dimensions=*/llvm::ArrayRef<int64_t>{reduceDim});
+        in_kernel_lambda_body = savedKernelCtx;
 
-    // Build the reducer body. stablehlo.reduce body takes 0-d tensor pairs.
-    auto &body = reduceOp.getBody();
-    auto *entryBlock = builder.createBlock(
-        &body, {}, {scalarTensorType, scalarTensorType}, {location, location});
-    builder.setInsertionPointToStart(entryBlock);
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{result});
+      });
 
-    auto lhsTensor = entryBlock->getArgument(0);
-    auto rhsTensor = entryBlock->getArgument(1);
-
-    // Extract scalars, apply binary op, wrap back to 0-d tensor.
-    auto lhs = mlir::tensor::ExtractOp::create(
-        builder, location, lhsTensor, mlir::ValueRange{});
-    auto rhs = mlir::tensor::ExtractOp::create(
-        builder, location, rhsTensor, mlir::ValueRange{});
-
-    auto opTok = reduceExpr->op_tok->tok_type;
-    mlir::Value result =
-        isFloatType(elemSamType)
-            ? emitFloatArithOp(builder, location, lhs, rhs, opTok)
-            : emitIntArithOp(builder, location, lhs, rhs, opTok,
-                             isUnsignedIntegerType(elemSamType));
-    if (!result)
-      imm_error("Unsupported reduce operator");
-
-    auto emptyResult = mlir::tensor::EmptyOp::create(
-        builder, location, llvm::ArrayRef<int64_t>{}, result.getType());
-    auto resultTensor = mlir::tensor::InsertOp::create(
-        builder, location, result, emptyResult, mlir::ValueRange{});
-    mlir::stablehlo::ReturnOp::create(builder, location,
-                                      mlir::ValueRange{resultTensor});
-  }
-
-  // stablehlo.reduce returns a 0-d tensor; extract the scalar.
   auto scalarResult = mlir::tensor::ExtractOp::create(
       builder, location, reduceOp->getResult(0), mlir::ValueRange{});
 
@@ -314,41 +272,34 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
     }
   }
 
-  //  Prepare output buffer (for array-returning kernels)
-  mlir::Value hostOutMemref;
+  //  DPS output (for array-returning kernels)
+  mlir::Value deviceOut;
   if (returnsArray) {
     auto sretArg = entryBlock.getArgument(entryBlock.getNumArguments() - 1);
-    auto &retArrType = std::get<ArrayType>(retSamType.type_data);
-    auto arrSize = static_cast<int64_t>(retArrType.get_size());
-    auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
     if (targetGPU()) {
-      hostOutMemref = sretArg;
+      deviceOut = smn::ToDeviceOp::create(builder, location, sretArg.getType(),
+                                          sretArg)
+                      .getResult();
+      kernelArgs.push_back(deviceOut);
     } else {
-      hostOutMemref =
-          buildMemrefFromPtr(sretArg, arrSize, elemMLIRType, location);
+      auto &retArrType = std::get<ArrayType>(retSamType.type_data);
+      auto arrSize = static_cast<int64_t>(retArrType.get_size());
+      auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
+      kernelArgs.push_back(
+          buildMemrefFromPtr(sretArg, arrSize, elemMLIRType, location));
     }
   }
 
-  //  Call kernel (no DPS — kernel returns result functionally)
+  //  Call kernel
   auto memrefFuncType =
       buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
   auto callOp = mlir::func::CallOp::create(
       builder, location, internalName, memrefFuncType.getResults(), kernelArgs);
 
-  //  Copy result to output buffer for array returns
-  if (returnsArray) {
-    auto resultMemref = callOp.getResult(0);
-    if (targetGPU()) {
-      smn::ToHostOp::create(builder, location, hostOutMemref.getType(),
-                            resultMemref);
-    } else {
-      mlir::memref::CopyOp::create(builder, location, resultMemref,
-                                   hostOutMemref);
-    }
-  }
-
-  //  GPU epilogue: dealloc device input copies
+  //  GPU epilogue: copy the result back, dealloc device input copies
   if (targetGPU()) {
+    if (returnsArray)
+      smn::ToHostOp::create(builder, location, deviceOut.getType(), deviceOut);
     for (auto dm : deviceMemrefs)
       gpuDealloc(dm, location);
   }
@@ -474,6 +425,8 @@ mlir::FunctionType MLIRGenImpl::buildKernelFuncType(AST::PrototypeAST *proto,
     if (retType.type_kind != TypeKind::Unit) {
       auto mlirRetType = convertTypeForKernel(retType, asMemref);
       retTypes.push_back(mlirRetType);
+      if (retType.type_kind == TypeKind::Array)
+        argTypes.push_back(mlirRetType);
     }
   }
 

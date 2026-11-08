@@ -31,8 +31,6 @@ target_include_directories(MLIRBackend PRIVATE
 )
 target_include_directories(MLIRBackend SYSTEM PRIVATE
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS}
-  ${CMAKE_SOURCE_DIR}/externals/stablehlo
-  ${CMAKE_BINARY_DIR}/externals/stablehlo
 )
 target_link_libraries(MLIRBackend PRIVATE
   project_options
@@ -67,9 +65,6 @@ target_link_libraries(MLIRBackend PRIVATE
   MLIRNVVMTarget
   MLIRRegisterAllExtensions
   MLIRRegisterAllDialects
-  # StableHLO
-  StablehloOps
-  StablehloLinalgTransforms
 )
 
 # Final linkage for folder

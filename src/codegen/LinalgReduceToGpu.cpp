@@ -30,23 +30,11 @@ detectReduceOp(mlir::linalg::ReduceOp reduceOp) {
     return std::nullopt;
 
   auto &block = body.front();
-  // After stablehlo-to-linalg + bufferize, the body may contain
-  // memref.load/store wrappers around the core arith op. Scan all
-  // ops to find the first recognized arith reduction op.
-  mlir::Operation *arithOp = nullptr;
-  for (auto &op : block.getOperations()) {
-    if (llvm::isa<mlir::arith::AddFOp>(op) || llvm::isa<mlir::arith::AddIOp>(op) ||
-        llvm::isa<mlir::arith::MulFOp>(op) || llvm::isa<mlir::arith::MulIOp>(op) ||
-        llvm::isa<mlir::arith::MaximumFOp>(op) || llvm::isa<mlir::arith::MaxSIOp>(op) ||
-        llvm::isa<mlir::arith::MinimumFOp>(op) || llvm::isa<mlir::arith::MinSIOp>(op)) {
-      arithOp = &op;
-      break;
-    }
-  }
-  if (!arithOp)
+  // Body should be: one arith op + linalg.yield
+  if (block.getOperations().size() != 2)
     return std::nullopt;
 
-  auto &op = *arithOp;
+  auto &op = block.front();
   using AROp = mlir::gpu::AllReduceOperation;
 
   if (llvm::isa<mlir::arith::AddFOp>(op) || llvm::isa<mlir::arith::AddIOp>(op))

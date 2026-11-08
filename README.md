@@ -12,7 +12,7 @@ See e2e-tests/compilables/misc/readme_demo.mn for a demo of the language
 
 ### Architecture
 
-sammine relies on LLVM and StableHLO for its back end. We'll use them as git submodules pinned
+sammine relies on LLVM/MLIR for its back end. We'll use it as a git submodule pinned
 to a specific compatible version. 
 
 We'll use nix and just file to determinatize and automate these steps.
@@ -23,7 +23,7 @@ Run `nix develop` to enter the development workspace.
 
 Run `just` for all the sensible commands, but the following is what you should do
 
-1. `just init`: clone and initialize llvm-project and stablehlo.
+1. `just init`: clone and initialize llvm-project.
 
 2. `just llvm`: configure llvm and build it.
 

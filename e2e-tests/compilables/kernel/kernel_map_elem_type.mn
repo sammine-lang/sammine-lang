@@ -1,0 +1,17 @@
+// RUN: %sammine -f %full %O && %T/kernel_map_elem_type.exe | %check %full
+// A kernel map may produce a different element type than its input.
+
+import io;
+
+kernel to_half(a: [3]i32) -> [3]f64 {
+  map(a, (x: i32) -> f64 { 0.5 })
+}
+
+let main() -> i32 {
+  let a = [1, 2, 3];
+  let b = to_half(a);
+  io::printf("%f\n", b[2]);
+  0
+}
+
+// CHECK: 0.500000

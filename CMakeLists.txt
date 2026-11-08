@@ -58,9 +58,6 @@ include(AddMLIR)
 get_filename_component(MLIR_LLVM_LIB_DIR "${MLIR_DIR}/../.." ABSOLUTE)
 add_compile_definitions(MLIR_LLVM_LIB_DIR="${MLIR_LLVM_LIB_DIR}")
 
-# StableHLO (built embedded, reuses the MLIR found above)
-set(STABLEHLO_BUILD_EMBEDDED ON CACHE BOOL "" FORCE)
-add_subdirectory(externals/stablehlo EXCLUDE_FROM_ALL)
 
 
 

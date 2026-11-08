@@ -4,8 +4,6 @@
 #include "compiler/Compiler.h"
 #include "util/Utilities.h"
 
-#include "stablehlo/conversions/linalg/transforms/Passes.h"
-
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
 #include "mlir/Conversion/ControlFlowToLLVM/ControlFlowToLLVM.h"
@@ -72,17 +70,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
 
   // Phase 1: Process kernel module (if present)
   if (kernelModule) {
-    // Step A0: Lower StableHLO ops to linalg before bufferization.
-    {
-      mlir::PassManager stablehloPM(context);
-      mlir::stablehlo::StablehloLegalizeToLinalgPassOptions opts;
-      opts.enablePrimitiveOps = true;
-      stablehloPM.addPass(
-          mlir::stablehlo::createStablehloLegalizeToLinalgPass(opts));
-      if (mlir::failed(stablehloPM.run(kernelModule)))
-        return nullptr;
-    }
-
     // Step A: Bufferize the kernel module (clean — no ad-hoc filters needed).
     // The kernel module contains only func/tensor/linalg/arith ops,
     // so full analysis works without allowUnknownOps or noAnalysisFuncFilter.
