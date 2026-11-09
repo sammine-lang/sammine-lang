@@ -24,7 +24,7 @@
 | Tuple | `LLVMStructType::getLiteral(elementTypes)` |
 
 ## Variable Model
-- All non-array vars: alloca + store (uniform for mut/immut)
+- All non-array vars: alloca + store
 - Arrays: alloca returns `!llvm.ptr`; `emitVariableExpr` returns pointer directly (no load)
 - Named constants: `.str.` (strings), `.const_arr.` (immutable all-literal arrays → globals)
 

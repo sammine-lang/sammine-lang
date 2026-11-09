@@ -37,9 +37,9 @@ Suffixes override the default: `42i64`, `42u32`, `100u64`, `3.14f32`.
 Polymorphic literals flow into the type expected by an annotation or function parameter:
 
 ```sammine
-let x: i64 = 7;          # literal 7 becomes i64
-let y: f32 = 3.14;       # literal 3.14 becomes f32
-let z: i64 = 1 + 2;      # binary expression of literals resolves to i64
+let x: i64 = 7;          // literal 7 becomes i64
+let y: f32 = 3.14;       // literal 3.14 becomes f32
+let z: i64 = 1 + 2;      // binary expression of literals resolves to i64
 ```
 
 ### Type Aliases
@@ -63,25 +63,34 @@ let main() -> i32 {
 
 ### Immutable Bindings
 
-Variables are immutable by default. Declare with `let`:
+All variables are immutable. Declare with `let`:
 
 ```sammine
-let x: i32 = 5;       # explicit type annotation
-let y = 10;            # type inferred as i32
-let name = "hello";    # type inferred as ptr<char>
+let x: i32 = 5;       // explicit type annotation
+let y = 10;            // type inferred as i32
+let name = "hello";    // type inferred as ptr<char>
 ```
 
-Reassigning an immutable variable is a compile-time error.
+### Shadowing
 
-Variable shadowing is not allowed -- re-declaring a variable name that already exists in an enclosing scope is a compile-time error.
-
-### Mutable Bindings
-
-Use `let mut` for mutable variables:
+A `let` can reuse a name that is already visible, including the name of a function:
 
 ```sammine
-let mut counter: i32 = 0;
-counter = counter + 1;         # OK: counter is mutable
+let x = 1;
+let x = x + 1;         // x is now 2
+```
+
+A binding declared in a block ends with that block:
+
+```sammine
+let x = 5;
+if true {
+  let x = 10;
+  std::printf("%d\n", x);    // 10
+} else {
+  std::printf("no\n");
+};
+std::printf("%d\n", x);      // 5
 ```
 
 ### Type Inference
@@ -89,9 +98,9 @@ counter = counter + 1;         # OK: counter is mutable
 The compiler infers types from initializer expressions:
 
 ```sammine
-let x = 42;           # i32
-let y = add(1, 2);    # inferred from return type of add
-let z = 3.14;         # f64
+let x = 42;           // i32
+let y = add(1, 2);    // inferred from return type of add
+let z = 3.14;         // f64
 ```
 
 ---
@@ -104,25 +113,11 @@ Functions are declared with `let name(params) -> ReturnType { body }`:
 
 ```sammine
 let add(a: i32, b: i32) -> i32 {
-  a + b                          # implicit return (last expression)
+  a + b                          // implicit return (last expression)
 }
 
-let greet() {                    # return type omitted means unit
+let greet() {                    // return type omitted means unit
   std::printf("hello\n");
-}
-```
-
-### Mutable Parameters
-
-Function parameters can be declared `mut` to allow reassignment within the function body:
-
-```sammine
-let countdown(mut n: i32) -> i32 {
-  while n > 0 {
-    std::printf("%d\n", n);
-    n = n - 1;
-  };
-  0
 }
 ```
 
@@ -144,9 +139,9 @@ The last expression in a function body is the return value. An explicit `return`
 ```sammine
 let fib(x: i32) -> i32 {
   if x == 0 || x == 1 {
-    x                            # implicit return from if-branch
+    x                            // implicit return from if-branch
   } else {
-    fib(x - 1) + fib(x - 2)     # implicit return from else-branch
+    fib(x - 1) + fib(x - 2)     // implicit return from else-branch
   }
 }
 ```
@@ -172,14 +167,14 @@ let is_odd(n: i32) -> i32 {
 The `reuse` keyword declares a C function binding:
 
 ```sammine
-reuse sqrt(x: f64) -> f64;                     # bind to C sqrt()
-reuse printf(fmt: ptr<char>, ...) -> i32;       # varargs supported
+reuse sqrt(x: f64) -> f64;                     // bind to C sqrt()
+reuse printf(fmt: ptr<char>, ...) -> i32;       // varargs supported
 ```
 
 Imported modules can re-export C bindings with `export reuse`:
 
 ```sammine
-# In stdlib/std.mn:
+// In stdlib/std.mn:
 export reuse printf(fmt: ptr<char>, ...) -> i32;
 ```
 
@@ -192,14 +187,14 @@ export reuse printf(fmt: ptr<char>, ...) -> i32;
 `if/else` is an expression that returns a value. Both branches must end with a semicolon when used as a statement:
 
 ```sammine
-# As a statement
+// As a statement
 if x > 3 {
   std::printf("big\n");
 } else {
   std::printf("small\n");
 };
 
-# As an expression (returns a value)
+// As an expression (returns a value)
 let sign = if x > 0 { 1 }
            else if x == 0 { 0 }
            else { -1 };
@@ -216,28 +211,42 @@ if x > 3 {
 ### While Loops
 
 ```sammine
-let mut i: i32 = 5;
-while i > 0 {
-  std::printf("%d\n", i);
-  i = i - 1;
+let i = alloc<i32>(1);
+*i = 5;
+while *i > 0 {
+  std::printf("%d\n", *i);
+  *i = *i - 1;
 };
+free(i);
 ```
 
 Loops can be nested:
 
 ```sammine
-let mut i: i32 = 1;
-while i <= 2 {
-  let mut j: i32 = 1;
-  while j <= 2 {
-    std::printf("%d %d\n", i, j);
-    j = j + 1;
+let i = alloc<i32>(1);
+*i = 1;
+while *i <= 2 {
+  let j = alloc<i32>(1);
+  *j = 1;
+  while *j <= 2 {
+    std::printf("%d %d\n", *i, *j);
+    *j = *j + 1;
   };
-  i = i + 1;
+  free(j);
+  *i = *i + 1;
 };
+free(i);
 ```
 
-There are no `for` loops yet.
+### For Loops
+
+A `for` loop runs over an integer range. The end is exclusive:
+
+```sammine
+for i in 0..3 {
+  std::printf("%d\n", i);    // 0, 1, 2
+};
+```
 
 ---
 
@@ -250,8 +259,8 @@ There are no `for` loops yet.
 ```sammine
 let a: i32 = 10;
 let b: i32 = 3;
-std::printf("%d\n", a + b);    # 13
-std::printf("%d\n", a % b);    # 1
+std::printf("%d\n", a + b);    // 13
+std::printf("%d\n", a % b);    // 1
 ```
 
 ### Comparison
@@ -280,11 +289,11 @@ if x > 0 && x < 100 {
 ```sammine
 let a: i32 = 10;
 let b: i32 = 12;
-std::printf("%d\n", a & b);     # 8
-std::printf("%d\n", a | b);     # 14
-std::printf("%d\n", a ^ b);     # 6
-std::printf("%d\n", a << 2);    # 40
-std::printf("%d\n", a >> 2);    # 2
+std::printf("%d\n", a & b);     // 8
+std::printf("%d\n", a | b);     // 14
+std::printf("%d\n", a ^ b);     // 6
+std::printf("%d\n", a << 2);    // 40
+std::printf("%d\n", a >> 2);    // 2
 ```
 
 ### Unary
@@ -293,8 +302,8 @@ std::printf("%d\n", a >> 2);    # 2
 
 ```sammine
 let x: i32 = 5;
-std::printf("%d\n", -x);        # -5
-std::printf("%d\n", -(-x));     # 5
+std::printf("%d\n", -x);        // -5
+std::printf("%d\n", -(-x));     // 5
 ```
 
 ### Operator Precedence
@@ -341,7 +350,7 @@ struct Outer { inner: Inner, x: i32, };
 let main() -> i32 {
   let i: Inner = Inner { value: 42 };
   let o: Outer = Outer { inner: i, x: 10 };
-  std::printf("%d\n", o.inner.value);    # 42
+  std::printf("%d\n", o.inner.value);    // 42
   return 0;
 }
 ```
@@ -365,7 +374,7 @@ struct Box<T> {
 
 let main() -> i32 {
   let b = Box<i32>{ value: 42 };
-  std::printf("%d", b.value);       # 42
+  std::printf("%d", b.value);       // 42
   return 0;
 }
 ```
@@ -427,8 +436,8 @@ Integer-backed enums support bitwise operations:
 ```sammine
 type Flags = Read(1) | Write(2) | Exec(4);
 
-let rw: Flags = Read | Write;        # bitwise OR: value 3
-let all: Flags = Read | Write | Exec; # value 7
+let rw: Flags = Read | Write;        // bitwise OR: value 3
+let all: Flags = Read | Write | Exec; // value 7
 ```
 
 ### Case/Match Expressions
@@ -466,7 +475,7 @@ let describe(s: Shape) -> i32 {
 Unqualified variant names work when unambiguous, both in patterns and constructors:
 
 ```sammine
-let c: Color = Red;              # unqualified constructor (no Color:: needed)
+let c: Color = Red;              // unqualified constructor (no Color:: needed)
 
 case s {
   Circle(r) => std::printf("circle r: %d\n", r),
@@ -515,9 +524,9 @@ Generic functions are monomorphized at compile time -- a separate copy is genera
 let identity<T>(x: T) -> T { x }
 
 let main() -> i32 {
-  let a = identity(42);           # inferred: identity<i32>
-  let b = identity(3.14);         # inferred: identity<f64>
-  std::printf("%d %.2f", a, b);   # 42 3.14
+  let a = identity(42);           // inferred: identity<i32>
+  let b = identity(3.14);         // inferred: identity<f64>
+  std::printf("%d %.2f", a, b);   // 42 3.14
   return 0;
 }
 ```
@@ -570,8 +579,8 @@ instance MySize<i64> {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", mysize<i32>());    # 4
-  std::printf("%ld\n", mysize<i64>());    # 8
+  std::printf("%ld\n", mysize<i32>());    // 4
+  std::printf("%ld\n", mysize<i64>());    // 8
   return 0;
 }
 ```
@@ -581,8 +590,8 @@ let main() -> i32 {
 Typeclass methods can be called with either syntax:
 
 ```sammine
-mysize<i32>()                 # unqualified with type arg
-MySize<i32>::mysize()         # qualified: ClassName<Type>::method()
+mysize<i32>()                 // unqualified with type arg
+MySize<i32>::mysize()         // qualified: ClassName<Type>::method()
 ```
 
 ### Multi-Parameter Typeclasses
@@ -604,11 +613,11 @@ instance Converter<Celsius, Fahrenheit> {
 **`Sized<T>`** -- returns the byte size of a type at compile time:
 
 ```sammine
-std::printf("%ld\n", Sized<i32>());     # 4
-std::printf("%ld\n", Sized<i64>());     # 8
-std::printf("%ld\n", Sized<f64>());     # 8
-std::printf("%ld\n", Sized<bool>());    # 1
-std::printf("%ld\n", Sized<char>());    # 1
+std::printf("%ld\n", Sized<i32>());     // 4
+std::printf("%ld\n", Sized<i64>());     // 8
+std::printf("%ld\n", Sized<f64>());     // 8
+std::printf("%ld\n", Sized<bool>());    // 1
+std::printf("%ld\n", Sized<char>());    // 1
 ```
 
 **`Hash<T>`** -- user-defined hash function:
@@ -636,8 +645,8 @@ instance Add<Vec2> {
 
 let v1: Vec2 = Vec2 { x: 10, y: 15 };
 let v2: Vec2 = Vec2 { x: 20, y: 25 };
-let v3: Vec2 = v1 + v2;                 # uses Add<Vec2>
-std::printf("%d %d\n", v3.x, v3.y);     # 30 40
+let v3: Vec2 = v1 + v2;                 // uses Add<Vec2>
+std::printf("%d %d\n", v3.x, v3.y);     // 30 40
 ```
 
 **`Indexer<Collection, Element>`** -- custom indexing:
@@ -661,10 +670,10 @@ instance Indexer<IntList, i32> {
 Tuple literals group multiple values. Destructure with pattern matching on `let`:
 
 ```sammine
-let t = (42, true);          # type: (i32, bool)
-let (a, b) = t;              # destructuring
-std::printf("%d\n", a);      # 42
-std::printf("%d\n", b);      # 1 (true printed as integer)
+let t = (42, true);          // type: (i32, bool)
+let (a, b) = t;              // destructuring
+std::printf("%d\n", a);      // 42
+std::printf("%d\n", b);      // 1 (true printed as integer)
 ```
 
 ---
@@ -677,25 +686,19 @@ Fixed-size, stack-allocated arrays with compile-time known length.
 
 ```sammine
 let a: [i32; 3] = [10, 20, 30];
-std::printf("%d\n", a[0]);           # 10
-std::printf("%d\n", a[1]);           # 20
-std::printf("%d\n", a[2]);           # 30
+std::printf("%d\n", a[0]);           // 10
+std::printf("%d\n", a[1]);           // 20
+std::printf("%d\n", a[2]);           // 30
 ```
 
 ### Array Length
 
 ```sammine
 let a: [i32; 5] = [1, 2, 3, 4, 5];
-std::printf("%d\n", len(a));         # 5
+std::printf("%d\n", len(a));         // 5
 ```
 
-### Mutable Array Elements
-
-```sammine
-let mut a: [i32; 3] = [10, 20, 30];
-a[1] = 99;
-std::printf("%d\n", a[1]);          # 99
-```
+Array elements cannot be written to.
 
 ### Bounds Checking
 
@@ -704,7 +707,7 @@ Out-of-bounds access with a constant index is caught at compile time:
 ```sammine
 let a: [i32; 3] = [10, 20, 30];
 std::printf("%d\n", a[5]);
-# Error: Array index out of bounds: index 5 on array of size 3
+// Error: Array index out of bounds: index 5 on array of size 3
 ```
 
 ---
@@ -718,11 +721,11 @@ sammine-lang has two pointer kinds: **linear** (`'ptr<T>`) for heap-allocated me
 `alloc<T>(count)` allocates memory on the heap and returns a linear `'ptr<T>`. Linear pointers must be consumed exactly once -- via `free()`, a move, or a return:
 
 ```sammine
-let p: 'ptr<i32> = alloc<i32>(1);    # allocate 1 element
-*p = 42;                              # write through pointer
-let y: i32 = *p;                      # dereference (read)
-free(p);                              # deallocate (consumes p)
-std::printf("%d\n", y);               # 42
+let p: 'ptr<i32> = alloc<i32>(1);    // allocate 1 element
+*p = 42;                              // write through pointer
+let y: i32 = *p;                      // dereference (read)
+free(p);                              // deallocate (consumes p)
+std::printf("%d\n", y);               // 42
 ```
 
 Failing to free a linear pointer is a compile-time error:
@@ -731,7 +734,7 @@ Failing to free a linear pointer is a compile-time error:
 let p = alloc<i32>(1);
 *p = 42;
 return 0;
-# Error: Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
+// Error: Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
 ```
 
 ### Address-Of (Non-Linear Pointers)
@@ -741,8 +744,8 @@ return 0;
 ```sammine
 let x: i32 = 42;
 let p: ptr<i32> = &x;
-let y: i32 = *p;                     # dereference
-std::printf("%d\n", y);              # 42
+let y: i32 = *p;                     // dereference
+std::printf("%d\n", y);              // 42
 ```
 
 ### Pointer Indexing
@@ -750,12 +753,12 @@ std::printf("%d\n", y);              # 42
 Heap-allocated buffers can be indexed like arrays:
 
 ```sammine
-let mut p: 'ptr<i32> = alloc<i32>(3);
+let p: 'ptr<i32> = alloc<i32>(3);
 p[0] = 10;
 p[1] = 20;
 p[2] = 42;
-std::printf("%d\n", p[0]);           # 10
-std::printf("%d\n", p[2]);           # 42
+std::printf("%d\n", p[0]);           // 10
+std::printf("%d\n", p[2]);           // 42
 free(p);
 ```
 
@@ -766,9 +769,9 @@ Assigning a linear pointer to a new variable moves ownership:
 ```sammine
 let p = alloc<i32>(1);
 *p = 55;
-let q = p;            # p is consumed, q now owns the memory
+let q = p;            // p is consumed, q now owns the memory
 let v: i32 = *q;
-free(q);              # must free q, not p
+free(q);              // must free q, not p
 ```
 
 ### Returning Linear Pointers
@@ -779,13 +782,13 @@ Functions can transfer ownership by returning a linear pointer:
 let make_ptr() -> 'ptr<i32> {
   let p = alloc<i32>(1);
   *p = 123;
-  return p;           # ownership transferred to caller
+  return p;           // ownership transferred to caller
 }
 
 let main() -> i32 {
   let p = make_ptr();
   let v: i32 = *p;
-  free(p);            # caller must free
+  free(p);            // caller must free
   std::printf("%d\n", v);
   return 0;
 }
@@ -800,7 +803,7 @@ The pipe operator `|>` passes the left-hand value as the first argument to the r
 ```sammine
 let square(x: i32) -> i32 { x * x }
 
-std::printf("%d\n", 5 |> square);     # square(5) = 25
+std::printf("%d\n", 5 |> square);     // square(5) = 25
 ```
 
 With additional arguments:
@@ -808,7 +811,7 @@ With additional arguments:
 ```sammine
 let add(a: i32, b: i32) -> i32 { a + b }
 
-std::printf("%d\n", 5 |> add(3));     # add(5, 3) = 8
+std::printf("%d\n", 5 |> add(3));     // add(5, 3) = 8
 ```
 
 Pipes chain left-to-right:
@@ -819,7 +822,7 @@ let double(x: i32) -> i32 { x + x }
 let add(a: i32, b: i32) -> i32 { a + b }
 
 let result = 5 |> square |> double |> add(1);
-std::printf("%d\n", result);           # ((5*5)*2)+1 = 51
+std::printf("%d\n", result);           // ((5*5)*2)+1 = 51
 ```
 
 ---
@@ -831,9 +834,9 @@ Calling a function with fewer arguments than it expects creates a closure:
 ```sammine
 let add(a: i32, b: i32) -> i32 { a + b }
 
-let add5: (i32) -> i32 = add(5);     # partially apply first arg
-std::printf("%d\n", add5(3));         # 8
-std::printf("%d\n", add5(7));         # 12
+let add5: (i32) -> i32 = add(5);     // partially apply first arg
+std::printf("%d\n", add5(3));         // 8
+std::printf("%d\n", add5(7));         // 12
 ```
 
 Multi-argument partial application:
@@ -842,7 +845,7 @@ Multi-argument partial application:
 let add3(a: i32, b: i32, c: i32) -> i32 { a + b + c }
 
 let add1_2: (i32) -> i32 = add3(1, 2);
-std::printf("%d\n", add1_2(7));       # 10
+std::printf("%d\n", add1_2(7));       // 10
 ```
 
 Partial application works with higher-order functions:
@@ -850,7 +853,7 @@ Partial application works with higher-order functions:
 ```sammine
 let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 
-std::printf("%d\n", apply(add(10), 32));    # 42
+std::printf("%d\n", apply(add(10), 32));    // 42
 ```
 
 Note: Closures created by partial application are stack-allocated and cannot escape their defining scope.
@@ -867,7 +870,7 @@ Functions are first-class values. Function types are written as `(ParamTypes) ->
 let inc(x: i32) -> i32 { x + 1 }
 
 let f: (i32) -> i32 = inc;
-std::printf("%d\n", f(41));           # 42
+std::printf("%d\n", f(41));           // 42
 ```
 
 ### Functions as Parameters
@@ -877,7 +880,7 @@ let square(x: i32) -> i32 { x * x }
 
 let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 
-std::printf("%d\n", apply(square, 5));    # 25
+std::printf("%d\n", apply(square, 5));    // 25
 ```
 
 ### Generic Higher-Order Functions
@@ -895,8 +898,8 @@ let apply<T, U>(f: (T) -> U, x: T) -> U {
 ### Basic Imports
 
 ```sammine
-import std;                            # import the std module
-std::printf("hello %d\n", 42);        # qualified access
+import std;                            // import the std module
+std::printf("hello %d\n", 42);        // qualified access
 ```
 
 ### Aliased Imports
@@ -918,7 +921,7 @@ math::multiply(3, 4);
 Use `export` to make definitions visible to importers. `export` works with functions, structs, enums, and C bindings:
 
 ```sammine
-# In math.mn:
+// In math.mn:
 export let add(a: i32, b: i32) -> i32 { a + b }
 export struct Point { x: i32, y: i32, };
 export type Color = Red | Green | Blue;
@@ -944,12 +947,12 @@ import std;
 import vec;
 
 let main() -> i32 {
-  let v0 = vec::new<i32>(4);             # create with initial capacity 4
-  let v1 = vec::push<i32>(v0, 10);       # push returns new Vec
+  let v0 = vec::new<i32>(4);             // create with initial capacity 4
+  let v1 = vec::push<i32>(v0, 10);       // push returns new Vec
   let v2 = vec::push<i32>(v1, 20);
   let v3 = vec::push<i32>(v2, 30);
-  std::printf("%d %d %d", v3.data[0], v3.data[1], v3.data[2]);  # 10 20 30
-  vec::delete<i32>(v3);                   # must free (linear data pointer)
+  std::printf("%d %d %d", v3.data[0], v3.data[1], v3.data[2]);  // 10 20 30
+  vec::delete<i32>(v3);                   // must free (linear data pointer)
   return 0;
 }
 ```
@@ -966,9 +969,9 @@ let main() -> i32 {
 
 ```sammine
 struct Vec<T> {
-  data: 'ptr<T>,     # linear pointer to heap buffer
-  length: i64,       # current number of elements
-  cap: i64,          # allocated capacity
+  data: 'ptr<T>,     // linear pointer to heap buffer
+  length: i64,       // current number of elements
+  cap: i64,          // allocated capacity
 };
 ```
 
@@ -979,10 +982,10 @@ struct Vec<T> {
 ```sammine
 import vec;
 
-let v0 = vec::new<i32>(2);     # capacity 2
+let v0 = vec::new<i32>(2);     // capacity 2
 let v1 = vec::push<i32>(v0, 0);
 let v2 = vec::push<i32>(v1, 1);
-let v3 = vec::push<i32>(v2, 2);  # triggers growth to capacity 4
-# ... keep pushing, grows as needed
+let v3 = vec::push<i32>(v2, 2);  // triggers growth to capacity 4
+// ... keep pushing, grows as needed
 vec::delete<i32>(v3);
 ```

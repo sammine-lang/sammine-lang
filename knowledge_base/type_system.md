@@ -6,7 +6,7 @@
 - Pseudo: `Never`, `NonExistent`, `Poisoned`, `Integer` (polymorphic → default i32), `Flt` (→ default f64), `TypeParam`, `Generic`
 - `PointerType` uses `shared_ptr<Type>` (forward-decl needs indirection); copy/move ctors declared in header, defaulted in .cpp
 - `operator==` compares kind + data only (ignores mutability). Use `compatible_to_from(to, from)` for directional checks
-- Immutable by default; `let mut` / `mut` param for mutable. `is_literal()` types bypass mutability checks
+- All bindings are immutable. Blocks are scopes
 
 ## ASTProperties
 - Side table keyed by `NodeId` (auto-incrementing per `AstBase`)

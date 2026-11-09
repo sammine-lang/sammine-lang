@@ -48,7 +48,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 
 **param_list_with_vararg** ::= **param_list** (`,` `...`)? | `...`
 
-**typed_var** ::= `mut`? ID (`:` **type**)?
+**typed_var** ::= ID (`:` **type**)?
 
 **variant** ::= ID                             *unit variant*
   | ID `(` **type** (`,` **type**)* `)`        *payload variant*
@@ -87,8 +87,8 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
   | **while_expr**
   | **case_expr**
 
-**let_expr** ::= `let` `mut`? **typed_var** `=` **expr**
-  | `let` `mut`? `(` ID (`,` ID)* `)` `=` **expr**    *tuple destructuring*
+**let_expr** ::= `let` **typed_var** `=` **expr**
+  | `let` `(` ID (`,` ID)* `)` `=` **expr**    *tuple destructuring*
 
 **return_expr** ::= `return` **expr**?
 
