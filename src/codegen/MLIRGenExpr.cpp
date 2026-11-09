@@ -467,10 +467,10 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
     return nullptr;
 
   // --- Build the Range struct type and initial value ---
-  // Range { current: i64, end_val: i64 }
-  auto rangeType = Type::Struct(
-      sammine_util::QualifiedName::from_parts({"Range"}), {"current", "end_val"},
-      {ast->start->get_type(), ast->end->get_type()});
+  auto *forProps = props_.for_loop(ast->id());
+  sammine_util::abort_if_not(forProps != nullptr && forProps->range_type,
+                             "ICE: missing Range type for for-loop");
+  auto rangeType = *forProps->range_type;
   auto rangeMlirTy = convertType(rangeType);
 
   mlir::Value rangeVal =

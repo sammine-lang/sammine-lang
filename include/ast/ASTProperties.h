@@ -37,12 +37,18 @@ struct TypeClassInstanceProps {
   std::vector<Type> concrete_types;
 };
 
+struct ForProps {
+  /// The `Range` struct definition this loop iterates with.
+  std::optional<Type> range_type;
+};
+
 class ASTProperties {
   std::unordered_map<NodeId, CallProps> call_props_;
   std::unordered_map<NodeId, VariableProps> variable_props_;
   std::unordered_map<NodeId, BinaryProps> binary_props_;
   std::unordered_map<NodeId, TypeAliasProps> type_alias_props_;
   std::unordered_map<NodeId, TypeClassInstanceProps> type_class_instance_props_;
+  std::unordered_map<NodeId, ForProps> for_props_;
   std::unordered_map<NodeId, Type> node_types_;
 
 public:
@@ -51,6 +57,7 @@ public:
   VariableProps &variable(NodeId id) { return variable_props_[id]; }
   BinaryProps &binary(NodeId id) { return binary_props_[id]; }
   TypeAliasProps &type_alias(NodeId id) { return type_alias_props_[id]; }
+  ForProps &for_loop(NodeId id) { return for_props_[id]; }
   TypeClassInstanceProps &type_class_instance(NodeId id) {
     return type_class_instance_props_[id];
   }
@@ -71,6 +78,10 @@ public:
   const TypeAliasProps *type_alias(NodeId id) const {
     auto it = type_alias_props_.find(id);
     return it != type_alias_props_.end() ? &it->second : nullptr;
+  }
+  const ForProps *for_loop(NodeId id) const {
+    auto it = for_props_.find(id);
+    return it != for_props_.end() ? &it->second : nullptr;
   }
   const TypeClassInstanceProps *type_class_instance(NodeId id) const {
     auto it = type_class_instance_props_.find(id);
