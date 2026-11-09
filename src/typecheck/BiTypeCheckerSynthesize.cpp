@@ -1477,7 +1477,7 @@ Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
   }
 
   // 4. Push new scope for lambda body and synthesize parameter
-  enter_new_scope();
+  ScopeGuard scope(*this);
 
   map_expr->lambda_proto->parameterVectors[0]->accept_synthesis(this);
   auto param_type = map_expr->lambda_proto->parameterVectors[0]->get_type();
@@ -1489,23 +1489,18 @@ Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
         fmt::format("Kernel map lambda parameter type '{}' does not match "
                     "array element type '{}'",
                     param_type.to_string(), elem_type.to_string()));
-    exit_new_scope();
     return Type::Poisoned();
   }
 
   // 6. Resolve declared return type of the lambda
   auto declared_ret =
       resolve_type_expr(map_expr->lambda_proto->return_type_expr.get());
-  if (declared_ret.is_poisoned()) {
-    exit_new_scope();
+  if (declared_ret.is_poisoned())
     return Type::Poisoned();
-  }
 
   // 7. Visit the lambda body (walks children via accept_vis, then synthesizes)
   map_expr->lambda_body->accept_vis(this);
   auto body_type = map_expr->lambda_body->accept_synthesis(this);
-
-  exit_new_scope();
 
   if (body_type.is_poisoned())
     return Type::Poisoned();
@@ -1829,7 +1824,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     if (had_error && !arm.pattern.is_wildcard && !arm.pattern.is_literal)
       continue; // skip arms with validation errors
 
-    enter_new_scope();
+    ScopeGuard scope(*this);
 
     // Register enum payload bindings (only for non-wildcard, non-literal enum
     // arms)
@@ -1844,7 +1839,6 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
 
     arm.body->accept_vis(this);
     auto arm_type = arm.body->accept_synthesis(this);
-    exit_new_scope();
 
     // Unify with result type
     if (result_type.is_never()) {

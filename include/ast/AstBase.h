@@ -353,6 +353,22 @@ public:
   virtual void enter_new_scope() = 0;
   virtual void exit_new_scope() = 0;
 
+  /// RAII scope: enter_new_scope() on construction, exit_new_scope() on
+  /// destruction, so early returns cannot leave a scope open.
+  class ScopeGuard {
+    ScopedASTVisitor &visitor_;
+
+  public:
+    explicit ScopeGuard(ScopedASTVisitor &visitor) : visitor_(visitor) {
+      visitor_.enter_new_scope();
+    }
+    ~ScopeGuard() { visitor_.exit_new_scope(); }
+    ScopeGuard(const ScopeGuard &) = delete;
+    ScopeGuard &operator=(const ScopeGuard &) = delete;
+    ScopeGuard(ScopeGuard &&) = delete;
+    ScopeGuard &operator=(ScopeGuard &&) = delete;
+  };
+
   /// Push a copy of the current ASTContext (called by enter_new_scope impls).
   void push_ast_context() { ast_ctx_stack_.push_back(ast_ctx_stack_.back()); }
 

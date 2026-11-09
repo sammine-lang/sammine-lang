@@ -84,7 +84,7 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
-  enter_new_scope();
+  ScopeGuard scope(*this);
   ctx().enclosing_function = ast;
 
   if (ast->Prototype->is_var_arg) {
@@ -111,8 +111,6 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   } else {
     ast->Block->accept_vis(this);
   }
-
-  exit_new_scope();
 }
 
 void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
@@ -188,17 +186,15 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(ExternAST *ast) {
-  enter_new_scope();
+  ScopeGuard scope(*this);
   if (ast->Prototype->is_generic()) {
     this->add_error(
         ast->Prototype->get_location(),
         "Generic reuse declarations are not supported; generics require a "
         "function body for monomorphization");
-    exit_new_scope();
     return;
   }
   ast->Prototype->accept_vis(this);
-  exit_new_scope();
 }
 
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
@@ -626,11 +622,10 @@ void BiTypeCheckerVisitor::visit(ForExprAST *ast) {
   ast->start->accept_vis(this);
   ast->end->accept_vis(this);
 
-  enter_new_scope();
+  ScopeGuard scope(*this);
   ast->accept_synthesis(this);
   if (!ast->get_type().is_poisoned())
     ast->body->accept_vis(this);
-  exit_new_scope();
 }
 
 void BiTypeCheckerVisitor::visit(TupleLiteralExprAST *ast) {
@@ -643,16 +638,17 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   if (type_class_defs.contains(ast->class_name))
     return;
 
-  enter_new_scope();
-  for (auto &param : ast->type_params)
-    typename_to_type.registerNameT(param, Type::TypeParam(param));
+  {
+    ScopeGuard scope(*this);
+    for (auto &param : ast->type_params)
+      typename_to_type.registerNameT(param, Type::TypeParam(param));
 
-  for (auto &proto : ast->methods) {
-    proto->accept_synthesis(this);
-    method_to_class[proto->functionName.mangled()] = ast->class_name;
+    for (auto &proto : ast->methods) {
+      proto->accept_synthesis(this);
+      method_to_class[proto->functionName.mangled()] = ast->class_name;
+    }
   }
 
-  exit_new_scope();
   type_class_defs[ast->class_name] = ast;
 }
 
@@ -735,11 +731,10 @@ void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
 void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {
   // Kernel defs: CPU visitors see the prototype but don't recurse into kernel
   // body
-  enter_new_scope();
+  ScopeGuard scope(*this);
   ctx().enclosing_kernel = ast;
   ast->Prototype->accept_vis(this);
   ast->accept_synthesis(this);
-  exit_new_scope();
 }
 
 } // namespace sammine_lang::AST
