@@ -752,8 +752,8 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
     else if (suffix == "f32")
       ast->set_type(Type::F32_t());
     else
-      this->abort_on(
-          true,
+      this->add_error(
+          ast->get_location(),
           fmt::format("invalid type suffix '{}' on number literal", suffix));
   } else if (ast->number.find('.') == std::string::npos)
     ast->set_type(Type::Integer());

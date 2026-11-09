@@ -1,0 +1,7 @@
+// RUN: %sammine --file %full %O > %T/out.txt 2>&1; test $? -eq 1
+// An unknown numeric suffix must be a diagnostic, not an internal compiler error.
+
+let main() -> i32 {
+  let a = 1abc;
+  0
+}
