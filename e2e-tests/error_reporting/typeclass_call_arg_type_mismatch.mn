@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Argument 1 to 'Foo<i32>::foo': expected i32, got bool
+// CHECK-NOT: Wrong return type
+
+typeclass Foo<T> {
+  foo(x: T) -> i32;
+}
+
+instance Foo<i32> {
+  let foo(x: i32) -> i32 { x }
+}
+
+let main() -> i32 {
+  return foo<i32>(true);
+}

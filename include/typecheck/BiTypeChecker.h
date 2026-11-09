@@ -6,6 +6,7 @@
 #include "typecheck/Monomorphizer.h"
 #include "typecheck/Types.h"
 #include "util/LexicalContext.h"
+#include <span>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -16,6 +17,19 @@
 namespace sammine_lang {
 
 namespace AST {
+
+/// What a call expects, as decided by a call resolver.
+struct ResolvedCall {
+  std::string callee;         ///< Name used in diagnostics.
+  std::vector<Type> expected; ///< Expected type of each checked argument.
+  Type result;
+  std::optional<Type> signature; ///< Shown in a note on argument mismatches.
+  bool failed; ///< An error was already reported; the call is poisoned.
+
+  static ResolvedCall failure() {
+    return {"", {}, Type::Poisoned(), std::nullopt, true};
+  }
+};
 
 class BiTypeCheckerVisitor : public ScopedASTVisitor,
                              public TypeCheckerVisitor {
@@ -124,15 +138,26 @@ public:
   void register_typeclass_instance(TypeClassInstanceAST *ast);
   void register_builtin_op_instances();
 
-  // Call expression visit handlers (return true = handled, stops dispatch)
-  bool handle_enum_or_typeclass_call(CallExprAST *ast, CallProps &cp);
-  bool handle_generic_call(CallExprAST *ast, CallProps &cp);
-  bool handle_normal_call_args(CallExprAST *ast, CallProps &cp);
+  // Monomorphize and type-check the generic function a call resolved to.
+  void instantiate_generic_callee(CallExprAST *ast);
 
-  // Call expression synthesis helpers
-  std::optional<Type> synthesize_typeclass_call(CallExprAST *ast);
-  std::optional<Type> synthesize_generic_call(CallExprAST *ast);
-  std::optional<Type> synthesize_normal_call(CallExprAST *ast);
+  // Call resolvers: nullopt means the call is not of this kind.
+  std::optional<ResolvedCall> resolve_enum_call(CallExprAST *ast);
+  std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
+  std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);
+  std::optional<ResolvedCall> resolve_normal_call(CallExprAST *ast);
+
+  /// Check one visited call argument against its expected type, resolving
+  /// literals on success. Returns false on a mismatch (reported here) or a
+  /// poisoned argument.
+  bool check_call_argument(CallExprAST *ast, size_t i, const Type &expected,
+                           const std::string &callee);
+
+  /// A generic prototype's parameter and return types under concrete bindings.
+  std::pair<std::vector<Type>, Type>
+  resolve_generic_signature(PrototypeAST *proto, std::span<const Type> params,
+                            const Type &return_type,
+                            const TypeBindings &bindings);
 
   /// Resolve explicit type args against type params, producing bindings and
   /// the resolved types in order. Returns nullopt if any type arg resolves

@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Function 'f' expects 1 arguments, got 3
+// CHECK-NOT: Wrong return type
+
+let f(x: i32) -> i32 { x }
+
+let main() -> i32 {
+  return f(1, 2, 3);
+}

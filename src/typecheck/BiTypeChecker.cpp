@@ -398,84 +398,30 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   }
 }
 
-bool BiTypeCheckerVisitor::handle_enum_or_typeclass_call(CallExprAST *ast,
-                                                         CallProps &cp) {
-  if (!cp.is_enum_constructor && !cp.is_typeclass_call)
-    return false;
-  // Fully resolved during synthesis; codegen reads resolved_name
-  return true;
-}
+void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {
+  auto &cp = props_.call(ast->id());
+  if (cp.is_enum_constructor || cp.is_typeclass_call ||
+      !cp.resolved_name.has_value())
+    return;
 
-bool BiTypeCheckerVisitor::handle_generic_call(CallExprAST *ast,
-                                               CallProps &cp) {
   auto *generic_def =
       monomorphizer.generic_funcs.find(ast->functionName.mangled());
   if (!generic_def)
-    return false;
+    return;
 
-  if (cp.resolved_name.has_value()) {
-    auto key = MonomorphizedKey::from_bindings(
-        ast->functionName.mangled(), generic_def->Prototype->type_params,
-        cp.type_bindings);
-    if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
-                                                          cp.type_bindings)) {
-      cloned->accept_vis(this);
-    }
+  auto key = MonomorphizedKey::from_bindings(
+      ast->functionName.mangled(), generic_def->Prototype->type_params,
+      cp.type_bindings);
+  if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
+                                                        cp.type_bindings)) {
+    cloned->accept_vis(this);
   }
-  return true;
-}
-
-bool BiTypeCheckerVisitor::handle_normal_call_args(CallExprAST *ast,
-                                                   CallProps &cp) {
-  if (!cp.callee_func_type.has_value() ||
-      cp.callee_func_type->type_kind != TypeKind::Function)
-    return true;
-
-  auto func = std::get<FunctionType>(cp.callee_func_type->type_data);
-  if (func.is_var_arg())
-    return true;
-
-  auto params = func.get_params_types();
-  for (size_t i = 0; i < ast->arguments.size(); i++) {
-    if (!this->type_map_ordering.compatible_to_from(
-            params[i], ast->arguments[i]->get_type())) {
-      report_type_mismatch(
-          ast->arguments[i]->get_location(),
-          fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
-                      ast->functionName.with_alias().mangled(),
-                      params[i].to_string(),
-                      ast->arguments[i]->get_type().to_string()),
-          params[i], ast->arguments[i]->get_type());
-      this->add_diagnostics(
-          ast->arguments[i]->get_location(),
-          fmt::format("note: '{}' has signature: {}",
-                      ast->functionName.with_alias().mangled(),
-                      cp.callee_func_type->to_string()));
-    } else {
-      resolve_literal_type(ast->arguments[i].get(), params[i]);
-    }
-  }
-  return true;
 }
 
 void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
+  // Arguments are visited and checked inside synthesize(CallExprAST*).
   ast->accept_synthesis(this);
-  for (auto &arg : ast->arguments)
-    arg->accept_vis(this);
-
-  auto &cp = props_.call(ast->id());
-
-  using Handler = bool (BiTypeCheckerVisitor::*)(CallExprAST *, CallProps &);
-  static constexpr Handler handlers[] = {
-      &BiTypeCheckerVisitor::handle_enum_or_typeclass_call,
-      &BiTypeCheckerVisitor::handle_generic_call,
-      &BiTypeCheckerVisitor::handle_normal_call_args,
-  };
-
-  for (auto handler : handlers) {
-    if ((this->*handler)(ast, cp))
-      return;
-  }
+  instantiate_generic_callee(ast);
 }
 
 void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
@@ -486,6 +432,9 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   auto scope_fn = this->ctx().enclosing_function;
   auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
+  // A poisoned value's own error has already been reported.
+  if (t.is_poisoned())
+    return;
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
     report_type_mismatch(ast->get_location(),
                          fmt::format("Wrong return type for function {}, "

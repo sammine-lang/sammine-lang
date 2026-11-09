@@ -235,106 +235,163 @@ Type BiTypeCheckerVisitor::synthesize(PrototypeAST *ast) {
   return ast->get_type();
 }
 
-// Call resolution order: enum variant → generic function → typeclass method →
-// normal call. If fewer args than params, creates a partial application
-// (closure).
+bool BiTypeCheckerVisitor::check_call_argument(CallExprAST *ast, size_t i,
+                                               const Type &expected,
+                                               const std::string &callee) {
+  auto *arg = ast->arguments[i].get();
+  auto arg_type = arg->get_type();
+  // The argument's own error has already been reported.
+  if (arg_type.is_poisoned())
+    return false;
+
+  if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
+    report_type_mismatch(arg->get_location(),
+                         fmt::format("Argument {} to '{}': expected {}, got {}",
+                                     i + 1, callee, expected.to_string(),
+                                     arg_type.to_string()),
+                         expected, arg_type);
+    return false;
+  }
+
+  resolve_literal_type(arg, expected);
+  return true;
+}
+
+std::pair<std::vector<Type>, Type>
+BiTypeCheckerVisitor::resolve_generic_signature(PrototypeAST *proto,
+                                                std::span<const Type> params,
+                                                const Type &return_type,
+                                                const TypeBindings &bindings) {
+  // Re-evaluate the type ASTs with concrete bindings in scope, rather than
+  // using substitute(), so generic types (e.g. Box<T> -> Box<i32>) get
+  // properly instantiated through resolve_type_expr.
+  decltype(typename_to_type)::Guard scope(typename_to_type);
+  for (auto &[pname, ptype] : bindings)
+    typename_to_type.registerNameT(pname, ptype);
+
+  std::vector<Type> expected;
+  for (size_t i = 0; i < params.size(); i++) {
+    auto *param_type_ast = proto->parameterVectors[i]->type_expr.get();
+    expected.push_back(param_type_ast ? resolve_type_expr(param_type_ast)
+                                      : substitute(params[i], bindings));
+  }
+
+  auto *return_type_ast = proto->return_type_expr.get();
+  return {std::move(expected), return_type_ast
+                                   ? resolve_type_expr(return_type_ast)
+                                   : substitute(return_type, bindings)};
+}
+
+// Call resolution order: enum variant → typeclass method → generic function →
+// normal call. Each resolver only says what the call expects; the arguments
+// are compared here, in one place.
 Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  // Visit every argument up front, so the resolvers can read argument types
+  // and arguments are still visited when resolution fails.
+  for (auto &arg : ast->arguments)
+    arg->accept_vis(this);
+
+  std::optional<ResolvedCall> call;
+  for (auto resolve : {&BiTypeCheckerVisitor::resolve_enum_call,
+                       &BiTypeCheckerVisitor::resolve_typeclass_call,
+                       &BiTypeCheckerVisitor::resolve_generic_call,
+                       &BiTypeCheckerVisitor::resolve_normal_call}) {
+    call = (this->*resolve)(ast);
+    if (call)
+      break;
+  }
+  if (!call || call->failed)
+    return ast->set_type(Type::Poisoned());
+
+  bool args_ok = true;
+  for (size_t i = 0; i < call->expected.size(); i++) {
+    if (check_call_argument(ast, i, call->expected[i], call->callee))
+      continue;
+    args_ok = false;
+    if (call->signature && !ast->arguments[i]->get_type().is_poisoned())
+      this->add_diagnostics(ast->arguments[i]->get_location(),
+                            fmt::format("note: '{}' has signature: {}",
+                                        call->callee,
+                                        call->signature->to_string()));
+  }
+  return ast->set_type(args_ok ? call->result : Type::Poisoned());
+}
+
+std::optional<ResolvedCall>
+BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
   // INFO: All enum variant calls arrive here in qualified form (Enum::Variant).
   // The scope generator rewrites unqualified variant names (e.g. Some(42)) to
   // qualified form (e.g. Option::Some(42)) via variant_to_enum. The type
   // checker does NOT resolve unqualified enum variant names — that is the scope
   // generator's responsibility.
-  if (ast->functionName.is_qualified()) {
-    auto enum_type_opt = get_typename_type(ast->functionName.get_qualifier());
+  if (!ast->functionName.is_qualified())
+    return std::nullopt;
 
-    // If not found and we have explicit type args, try generic enum
-    // instantiation
-    if (!enum_type_opt && !ast->explicit_type_args.empty()) {
-      auto base_name = ast->functionName.strip_type_args().get_qualifier();
-      auto *generic_def = monomorphizer.generic_enums.find(base_name);
-      if (generic_def) {
-        if (ast->explicit_type_args.size() == generic_def->type_params.size()) {
-          auto resolved = resolve_explicit_type_args(ast->explicit_type_args,
-                                                     generic_def->type_params);
-          if (resolved) {
-            auto &[bindings, type_args] = *resolved;
-            MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
-            monomorphizer.instantiate_enum(generic_def, key, bindings)
-                ->accept_vis(this);
-            enum_type_opt = get_typename_type(
-                key.to_generic_name(generic_def->enum_name).mangled());
-          }
-        }
+  auto enum_type_opt = get_typename_type(ast->functionName.get_qualifier());
+
+  // If not found and we have explicit type args, try generic enum
+  // instantiation
+  if (!enum_type_opt && !ast->explicit_type_args.empty()) {
+    auto base_name = ast->functionName.strip_type_args().get_qualifier();
+    auto *generic_def = monomorphizer.generic_enums.find(base_name);
+    if (generic_def &&
+        ast->explicit_type_args.size() == generic_def->type_params.size()) {
+      auto resolved = resolve_explicit_type_args(ast->explicit_type_args,
+                                                 generic_def->type_params);
+      if (resolved) {
+        auto &[bindings, type_args] = *resolved;
+        MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
+        monomorphizer.instantiate_enum(generic_def, key, bindings)
+            ->accept_vis(this);
+        enum_type_opt = get_typename_type(
+            key.to_generic_name(generic_def->enum_name).mangled());
       }
-    }
-
-    // Enum variant without explicit type args — use fully-qualified mangled
-    // name (e.g., Some(42) rewritten to Option::Some by scope generator)
-    if (!enum_type_opt) {
-      auto vc_it = variant_constructors.find(ast->functionName.mangled());
-      if (vc_it != variant_constructors.end())
-        enum_type_opt = vc_it->second.first;
-    }
-
-    if (enum_type_opt && enum_type_opt->type_kind == TypeKind::Enum) {
-      auto &enum_type = *enum_type_opt;
-      auto &et = std::get<EnumType>(enum_type.type_data);
-      auto variant_idx = et.get_variant_index(ast->functionName.get_name());
-      if (!variant_idx) {
-        this->add_error(ast->get_location(),
-                        fmt::format("Type '{}' has no variant '{}'",
-                                    ast->functionName.get_qualifier(),
-                                    ast->functionName.get_name()));
-        return ast->set_type(Type::Poisoned());
-      }
-      auto &vi = et.get_variant(*variant_idx);
-
-      if (ast->arguments.size() != vi.payload_types.size()) {
-        this->add_error(
-            ast->get_location(),
-            fmt::format("Enum variant '{}::{}' expects {} arguments, got {}",
-                        ast->functionName.get_qualifier(), vi.name,
-                        vi.payload_types.size(), ast->arguments.size()));
-        return ast->set_type(Type::Poisoned());
-      }
-
-      for (size_t i = 0; i < ast->arguments.size(); i++) {
-        auto arg_type = ast->arguments[i]->accept_synthesis(this);
-        if (!type_map_ordering.compatible_to_from(vi.payload_types[i],
-                                                  arg_type)) {
-          report_type_mismatch(
-              ast->arguments[i]->get_location(),
-              fmt::format("Type mismatch in enum variant '{}::{}' argument {}: "
-                          "expected {}, got {}",
-                          ast->functionName.get_qualifier(), vi.name, i + 1,
-                          vi.payload_types[i].to_string(),
-                          arg_type.to_string()),
-              vi.payload_types[i], arg_type);
-          return ast->set_type(Type::Poisoned());
-        }
-      }
-
-      props_.call(ast->id()).is_enum_constructor = true;
-      props_.call(ast->id()).enum_variant_index = *variant_idx;
-      return ast->set_type(enum_type);
     }
   }
 
-  // Try each call resolution strategy in order
-  for (auto synth : {&BiTypeCheckerVisitor::synthesize_typeclass_call,
-                     &BiTypeCheckerVisitor::synthesize_generic_call,
-                     &BiTypeCheckerVisitor::synthesize_normal_call}) {
-    if (auto result = (this->*synth)(ast))
-      return *result;
+  // Enum variant without explicit type args — use fully-qualified mangled
+  // name (e.g., Some(42) rewritten to Option::Some by scope generator)
+  if (!enum_type_opt) {
+    auto vc_it = variant_constructors.find(ast->functionName.mangled());
+    if (vc_it != variant_constructors.end())
+      enum_type_opt = vc_it->second.first;
   }
-  return ast->set_type(Type::Poisoned());
+
+  if (!enum_type_opt || enum_type_opt->type_kind != TypeKind::Enum)
+    return std::nullopt;
+
+  auto &et = std::get<EnumType>(enum_type_opt->type_data);
+  auto variant_idx = et.get_variant_index(ast->functionName.get_name());
+  if (!variant_idx) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Type '{}' has no variant '{}'",
+                                ast->functionName.get_qualifier(),
+                                ast->functionName.get_name()));
+    return ResolvedCall::failure();
+  }
+  auto &vi = et.get_variant(*variant_idx);
+
+  if (ast->arguments.size() != vi.payload_types.size()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Enum variant '{}::{}' expects {} arguments, got {}",
+                    ast->functionName.get_qualifier(), vi.name,
+                    vi.payload_types.size(), ast->arguments.size()));
+    return ResolvedCall::failure();
+  }
+
+  props_.call(ast->id()).is_enum_constructor = true;
+  props_.call(ast->id()).enum_variant_index = *variant_idx;
+  return ResolvedCall{
+      fmt::format("{}::{}", ast->functionName.get_qualifier(), vi.name),
+      vi.payload_types, *enum_type_opt, std::nullopt, false};
 }
 
-std::optional<Type>
-BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
+std::optional<ResolvedCall>
+BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   // Support both syntaxes:
   //   add<i32>(x, y)       — method_name = "add", type arg in
   //   explicit_type_args Add<i32>::add(x, y)  — method_name = "add"
@@ -367,13 +424,13 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
               fmt::format("Type class '{}' expects {} type argument(s), got {}",
                           class_name, tc->type_params.size(),
                           ast->explicit_type_args.size()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   auto resolved_args =
       resolve_explicit_type_args(ast->explicit_type_args, tc->type_params);
   if (!resolved_args)
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   auto &[tc_bindings, tc_type_args] = *resolved_args;
 
   MonomorphizedKey tc_key{class_name, tc_type_args};
@@ -381,7 +438,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     add_error(ast->get_location(),
               fmt::format("No instance of {}<{}>", class_name,
                           tc_key.type_args_string()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   PrototypeAST *method_proto = nullptr;
@@ -395,7 +452,7 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     add_error(ast->get_location(),
               fmt::format("Method '{}' not found in type class '{}'",
                           method_name, class_name));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   auto func_type = std::get<FunctionType>(method_proto->get_type().type_data);
@@ -404,29 +461,22 @@ BiTypeCheckerVisitor::synthesize_typeclass_call(CallExprAST *ast) {
     add_error(ast->get_location(),
               fmt::format("Type class method '{}' expects {} arguments, got {}",
                           method_name, params.size(), ast->arguments.size()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
-  props_.call(ast->id()).resolved_name = tc_key.to_typeclass_name(method_name);
+  auto resolved_name = tc_key.to_typeclass_name(method_name);
+  props_.call(ast->id()).resolved_name = resolved_name;
   props_.call(ast->id()).is_typeclass_call = true;
 
-  // Resolve return type by re-evaluating the prototype's return type AST with
-  // concrete bindings in scope, rather than using substitute(). This ensures
-  // generic return types (e.g. Option<(I, T)> → Option<(Range, i64)>) get
-  // properly monomorphized with the correct name.
-  auto *ret_type_ast = method_proto->return_type_expr.get();
-  if (ret_type_ast) {
-    decltype(typename_to_type)::Guard scope(typename_to_type);
-    for (auto &[pname, ptype] : tc_bindings)
-      typename_to_type.registerNameT(pname, ptype);
-    return ast->set_type(resolve_type_expr(ret_type_ast));
-  }
-  return ast->set_type(
-      substitute(func_type.get_return_type(), tc_bindings));
+  auto [expected, result] = resolve_generic_signature(
+      method_proto, params, func_type.get_return_type(), tc_bindings);
+  return ResolvedCall{resolved_name.mangled(), std::move(expected),
+                      std::move(result),
+                      substitute(method_proto->get_type(), tc_bindings), false};
 }
 
-std::optional<Type>
-BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
+std::optional<ResolvedCall>
+BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
   auto *generic_def =
       monomorphizer.generic_funcs.find(ast->functionName.mangled());
   if (!generic_def)
@@ -434,6 +484,7 @@ BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
   auto generic_type = generic_def->get_type();
   auto func = std::get<FunctionType>(generic_type.type_data);
   auto params = func.get_params_types();
+  auto &type_params = generic_def->Prototype->type_params;
 
   if (ast->arguments.size() != params.size()) {
     this->add_error(
@@ -441,78 +492,39 @@ BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         fmt::format("Generic function '{}' expects {} arguments, got {}",
                     ast->functionName.mangled(), params.size(),
                     ast->arguments.size()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   TypeBindings bindings;
 
   if (!ast->explicit_type_args.empty()) {
     // Explicit type arguments: f<T, U>(args) — must provide all
-    auto &type_params = generic_def->Prototype->type_params;
     if (ast->explicit_type_args.size() != type_params.size()) {
       this->add_error(
           ast->get_location(),
           fmt::format("Expected {} type argument(s) for '{}', got {}",
                       type_params.size(), ast->functionName.mangled(),
                       ast->explicit_type_args.size()));
-      return ast->set_type(Type::Poisoned());
+      return ResolvedCall::failure();
     }
 
     auto resolved_args =
         resolve_explicit_type_args(ast->explicit_type_args, type_params);
     if (!resolved_args)
-      return ast->set_type(Type::Poisoned());
+      return ResolvedCall::failure();
     bindings = std::move(resolved_args->first);
-
-    // Register concrete bindings in a temporary scope so resolve_type_expr
-    // can resolve generic struct types (e.g. Vec<T> → Vec<i32>).
-    {
-      decltype(typename_to_type)::Guard scope(typename_to_type);
-      for (auto &[pname, ptype] : bindings)
-        typename_to_type.registerNameT(pname, ptype);
-
-      for (size_t i = 0; i < ast->arguments.size(); i++) {
-        auto arg_type = ast->arguments[i]->accept_synthesis(this);
-        if (arg_type.is_poisoned()) {
-          return ast->set_type(Type::Poisoned());
-        }
-        // Resolve expected type from the parameter AST with concrete bindings,
-        // rather than substitute() on the possibly-placeholder stored type.
-        auto *param_type_ast =
-            generic_def->Prototype->parameterVectors[i]->type_expr.get();
-        auto expected = param_type_ast ? resolve_type_expr(param_type_ast)
-                                       : substitute(params[i], bindings);
-        if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
-          auto call_name = format_generic_call_name(
-              ast->functionName.with_alias(), type_params, bindings);
-          report_type_mismatch(
-              ast->arguments[i]->get_location(),
-              fmt::format("Argument {} to '{}': expected {}, got {}", i + 1,
-                          call_name, expected.to_string(),
-                          arg_type.to_string()),
-              expected, arg_type);
-          auto mono_sig = substitute(generic_type, bindings);
-          this->add_diagnostics(ast->arguments[i]->get_location(),
-                                fmt::format("note: '{}' has signature: {}",
-                                            call_name, mono_sig.to_string()));
-          return ast->set_type(Type::Poisoned());
-        }
-        resolve_literal_type(ast->arguments[i].get(), expected);
-      }
-    }
   } else {
     // Infer type arguments from call arguments
     for (size_t i = 0; i < ast->arguments.size(); i++) {
-      auto arg_type = ast->arguments[i]->accept_synthesis(this);
+      auto arg_type = ast->arguments[i]->get_type();
       if (arg_type.is_poisoned())
-        return ast->set_type(Type::Poisoned());
+        return ResolvedCall::failure();
       // Default polymorphic literals before generic unification
       arg_type = default_polymorphic_type(arg_type);
       resolve_literal_type(ast->arguments[i].get(), arg_type);
       if (!unify(params[i], arg_type, bindings)) {
         auto call_name = format_generic_call_name(
-            ast->functionName.with_alias(), generic_def->Prototype->type_params,
-            bindings);
+            ast->functionName.with_alias(), type_params, bindings);
         auto expected = substitute(params[i], bindings);
         this->add_error(ast->arguments[i]->get_location(),
                         fmt::format("Type mismatch in argument {} of '{}': "
@@ -523,53 +535,45 @@ BiTypeCheckerVisitor::synthesize_generic_call(CallExprAST *ast) {
         this->add_diagnostics(ast->arguments[i]->get_location(),
                               fmt::format("note: '{}' has signature: {}",
                                           call_name, mono_sig.to_string()));
-        return ast->set_type(Type::Poisoned());
+        return ResolvedCall::failure();
       }
     }
 
     // Check all type params resolved
-    for (auto &tp : generic_def->Prototype->type_params) {
+    for (auto &tp : type_params) {
       if (!bindings.contains(tp)) {
         this->add_error(
             ast->get_location(),
             fmt::format("Type parameter '{}' could not be inferred for '{}'",
                         tp, ast->functionName.mangled()));
-        return ast->set_type(Type::Poisoned());
+        return ResolvedCall::failure();
       }
     }
   }
 
-  auto key = MonomorphizedKey::from_bindings(
-      ast->functionName.mangled(), generic_def->Prototype->type_params,
-      bindings);
+  auto key = MonomorphizedKey::from_bindings(ast->functionName.mangled(),
+                                             type_params, bindings);
 
   props_.call(ast->id()).resolved_name = key.to_generic_name(ast->functionName);
   props_.call(ast->id()).type_bindings = bindings;
   props_.call(ast->id()).callee_func_type = generic_type;
 
-  // Resolve return type by re-evaluating the return type AST with concrete
-  // bindings registered, rather than using substitute(). This ensures that
-  // generic struct return types (e.g. Box<T> → Box<i32>) get properly
-  // instantiated through the normal resolve_type_expr path.
-  auto *ret_type_ast = generic_def->Prototype->return_type_expr.get();
-  if (ret_type_ast) {
-    decltype(typename_to_type)::Guard scope(typename_to_type);
-    for (auto &[pname, ptype] : bindings)
-      typename_to_type.registerNameT(pname, ptype);
-    auto resolved_ret = resolve_type_expr(ret_type_ast);
-    return ast->set_type(resolved_ret);
-  }
-  return ast->set_type(substitute(func.get_return_type(), bindings));
+  auto [expected, result] = resolve_generic_signature(
+      generic_def->Prototype.get(), params, func.get_return_type(), bindings);
+  return ResolvedCall{format_generic_call_name(ast->functionName.with_alias(),
+                                               type_params, bindings),
+                      std::move(expected), std::move(result),
+                      substitute(generic_type, bindings), false};
 }
 
-std::optional<Type>
-BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
+std::optional<ResolvedCall>
+BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
   auto ty = id_to_type.recursive_try_get(ast->functionName.mangled());
   if (!ty.has_value()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Function '{}' not found", ast->functionName.mangled()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   props_.call(ast->id()).callee_func_type = ty;
@@ -578,11 +582,12 @@ BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
     this->add_error(
         ast->get_location(),
         fmt::format("'{}' is not callable", ast->functionName.mangled()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
 
   auto func = std::get<FunctionType>(ty->type_data);
   auto params = func.get_params_types();
+  auto callee = ast->functionName.with_alias().mangled();
 
   // Variadic functions: accept any number of args >= fixed params
   if (func.is_var_arg()) {
@@ -592,9 +597,9 @@ BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
                                   "arguments, got {}",
                                   ast->functionName.mangled(), params.size(),
                                   ast->arguments.size()));
-      return ast->set_type(Type::Poisoned());
+      return ResolvedCall::failure();
     }
-    return ast->set_type(func.get_return_type());
+    return ResolvedCall{callee, {}, func.get_return_type(), ty, false};
   }
 
   if (ast->arguments.size() > params.size()) {
@@ -602,22 +607,24 @@ BiTypeCheckerVisitor::synthesize_normal_call(CallExprAST *ast) {
                     fmt::format("Function '{}' expects {} arguments, got {}",
                                 ast->functionName.mangled(), params.size(),
                                 ast->arguments.size()));
-    return ast->set_type(Type::Poisoned());
+    return ResolvedCall::failure();
   }
+
+  auto supplied = params.first(ast->arguments.size());
+  std::vector<Type> expected(supplied.begin(), supplied.end());
 
   // Partial application: fewer args than params
   if (ast->arguments.size() < params.size()) {
     props_.call(ast->id()).is_partial = true;
-    std::vector<Type> remaining;
-    for (size_t i = ast->arguments.size(); i < params.size(); i++)
-      remaining.push_back(params[i]);
+    auto rest = params.subspan(ast->arguments.size());
+    std::vector<Type> remaining(rest.begin(), rest.end());
     remaining.push_back(func.get_return_type());
-    return ast->set_type(Type::Function(std::move(remaining)));
+    return ResolvedCall{callee, std::move(expected),
+                        Type::Function(std::move(remaining)), ty, false};
   }
 
-  // Arg type-checking happens in visit(CallExprAST*) after args are visited,
-  // since synthesize runs before args have their types set.
-  return ast->set_type(func.get_return_type());
+  return ResolvedCall{callee, std::move(expected), func.get_return_type(), ty,
+                      false};
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnStmtAST *ast) {

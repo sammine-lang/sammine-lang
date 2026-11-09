@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7
+
+import std;
+
+typeclass Foo<T> {
+  foo(x: T) -> T;
+}
+
+instance Foo<i64> {
+  let foo(x: i64) -> i64 { x }
+}
+
+let main() -> i32 {
+  std::printf("%ld\n", foo<i64>(7));
+  return 0;
+}
