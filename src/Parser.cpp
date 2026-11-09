@@ -116,7 +116,10 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
     }
     if (result == NONCOMMITTED)
       break;
-    programAST->DefinitionVec.push_back(std::move(def));
+    // A failed definition is kept for reporting, but it may be null and later
+    // stages expect no null entries.
+    if (def)
+      programAST->DefinitionVec.push_back(std::move(def));
     return programAST;
   }
   if (!tokStream->isEnd())
