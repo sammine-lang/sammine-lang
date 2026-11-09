@@ -230,16 +230,19 @@ void Reporter::report_singular_line(ReportKind report_kind,
 void Reporter::print_data_singular_line(std::string_view msg, int64_t col_start,
                                         int64_t col_end) {
 
-  for (size_t j = 0; j < static_cast<size_t>(col_start); j++)
+  // A location at end of file can point past the last character of the line.
+  size_t start = std::min(static_cast<size_t>(col_start), msg.size());
+  size_t end = std::min(static_cast<size_t>(col_end), msg.size());
+
+  for (size_t j = 0; j < start; j++)
     fmt::print(stderr, "{}", msg[j]);
-  for (size_t j = static_cast<size_t>(col_start);
-       j < static_cast<size_t>(col_end); j++) {
+  for (size_t j = start; j < end; j++) {
     if (sammine_util::stderr_is_tty())
       fmt::print(stderr, fmt::emphasis::bold, "{}", msg[j]);
     else
       fmt::print(stderr, "{}", msg[j]);
   }
-  for (size_t j = static_cast<size_t>(col_end); j < msg.size(); j++)
+  for (size_t j = end; j < msg.size(); j++)
     fmt::print(stderr, "{}", msg[j]);
 
   fmt::print(stderr, "\n");
