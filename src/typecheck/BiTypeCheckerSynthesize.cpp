@@ -45,6 +45,15 @@ static std::optional<Type> number_suffix_type(const std::string &suffix) {
   return std::nullopt;
 }
 
+/// Whether `digits` parses as the given kind of number. Reports an error if not.
+static bool is_representable_literal(sammine_util::Reportee &reportee,
+                                     const std::string &digits, bool is_float,
+                                     sammine_util::Location loc) {
+  if (is_float)
+    return sammine_util::str_to_double(reportee, digits, loc).has_value();
+  return sammine_util::str_to_int<int64_t>(reportee, digits, loc).has_value();
+}
+
 std::optional<std::pair<TypeBindings, std::vector<Type>>>
 BiTypeCheckerVisitor::resolve_explicit_type_args(
     const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
@@ -737,18 +746,25 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  std::optional<Type> type;
   if (ast->suffix.empty())
-    return ast->set_type(ast->number.find('.') == std::string::npos
-                             ? Type::Integer()
-                             : Type::Flt());
+    type = ast->number.find('.') == std::string::npos ? Type::Integer()
+                                                      : Type::Flt();
+  else
+    type = number_suffix_type(ast->suffix);
 
-  if (auto suffix_type = number_suffix_type(ast->suffix))
-    return ast->set_type(*suffix_type);
+  if (!type) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("invalid type suffix '{}' on number literal", ast->suffix));
+    return ast->set_type(Type::Poisoned());
+  }
 
-  this->add_error(
-      ast->get_location(),
-      fmt::format("invalid type suffix '{}' on number literal", ast->suffix));
-  return ast->set_type(Type::Poisoned());
+  // Reject unrepresentable values here so codegen can parse them unchecked.
+  if (!is_representable_literal(*this, ast->number, type->is_float(),
+                                ast->get_location()))
+    return ast->set_type(Type::Poisoned());
+  return ast->set_type(*type);
 }
 Type BiTypeCheckerVisitor::synthesize(BoolExprAST *ast) {
   return ast->set_type(Type::Bool());
@@ -970,6 +986,9 @@ Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
   auto start_type = ast->start->accept_synthesis(this);
   auto end_type = ast->end->accept_synthesis(this);
 
+  if (start_type.is_poisoned() || end_type.is_poisoned())
+    return ast->set_type(Type::Poisoned());
+
   // Check that both sides are integer types or polymorphic Integer
   if (!start_type.is_integer()) {
     this->add_error(ast->start->get_location(),
@@ -994,8 +1013,14 @@ Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
   }
 
   // Parse the literal values
-  int64_t start_val = std::stoll(start_num->number);
-  int64_t end_val = std::stoll(end_num->number);
+  auto parsed_start = sammine_util::str_to_int<int64_t>(
+      *this, start_num->number, ast->start->get_location());
+  auto parsed_end = sammine_util::str_to_int<int64_t>(*this, end_num->number,
+                                                      ast->end->get_location());
+  if (!parsed_start || !parsed_end)
+    return ast->set_type(Type::Poisoned());
+  int64_t start_val = *parsed_start;
+  int64_t end_val = *parsed_end;
 
   if (end_val < start_val) {
     this->add_error(ast->get_location(),
@@ -1037,7 +1062,11 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   if (arr_type.type_kind == TypeKind::Array) {
     auto &arr_data = std::get<ArrayType>(arr_type.type_data);
     if (auto *num = llvm::dyn_cast<NumberExprAST>(ast->index_expr.get())) {
-      int idx = sammine_util::str_to_int<int32_t>(*this, num->number, ast->get_location());
+      auto parsed_idx = sammine_util::str_to_int<int32_t>(*this, num->number,
+                                                          ast->get_location());
+      if (!parsed_idx)
+        return ast->set_type(Type::Poisoned());
+      int idx = *parsed_idx;
       int size = static_cast<int>(arr_data.get_size());
       if (idx < 0 || idx >= size) {
         this->add_error(
@@ -1347,13 +1376,17 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
   auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
   auto *end_num = llvm::dyn_cast<NumberExprAST>(ast->end.get());
   if (start_num && end_num) {
-    int64_t start_val = std::stoll(start_num->number);
-    int64_t end_val = std::stoll(end_num->number);
-    if (start_val >= end_val) {
+    auto start_val = sammine_util::str_to_int<int64_t>(
+        *this, start_num->number, ast->start->get_location());
+    auto end_val = sammine_util::str_to_int<int64_t>(
+        *this, end_num->number, ast->end->get_location());
+    if (!start_val || !end_val)
+      return ast->set_type(Type::Poisoned());
+    if (*start_val >= *end_val) {
       this->add_error(
           ast->get_location(),
           fmt::format("for-range is empty: start ({}) >= end ({})",
-                      start_val, end_val));
+                      *start_val, *end_val));
       return ast->set_type(Type::Poisoned());
     }
   }
@@ -1403,8 +1436,12 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
     } else if (auto *reduce_expr =
                    llvm::dyn_cast<KernelReduceExprAST>(expr.get())) {
       body_result_type = synthesize_kernel_reduce(ast, reduce_expr);
-    } else if (llvm::isa<KernelNumberExprAST>(expr.get())) {
+    } else if (auto *num = llvm::dyn_cast<KernelNumberExprAST>(expr.get())) {
       // Number literal — assume declared return type
+      auto digits = sammine_util::split_number_lexeme(num->number).first;
+      if (!is_representable_literal(*this, digits, declared_ret.is_float(),
+                                    num->get_location()))
+        return ast->set_type(Type::Poisoned());
       body_result_type = declared_ret;
     } else {
       this->add_error(expr->get_location(),
@@ -1671,6 +1708,16 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
         this->add_error(arm.pattern.location,
                         fmt::format("Duplicate literal pattern '{}'",
                                     arm.pattern.literal_value));
+        had_error = true;
+        continue;
+      }
+
+      if (arm.pattern.literal_kind == LK::Integer &&
+          !is_representable_literal(
+              *this,
+              sammine_util::split_number_lexeme(arm.pattern.literal_value)
+                  .first,
+              /*is_float=*/false, arm.pattern.location)) {
         had_error = true;
         continue;
       }

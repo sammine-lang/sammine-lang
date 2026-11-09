@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Integer '99999999999999999999' is out of range for i64
+
+import std;
+
+let main() -> i32 {
+  let x = 1;
+  case x {
+    99999999999999999999 => std::printf("big\n"),
+    _ => std::printf("other\n"),
+  };
+  return 0;
+}

@@ -3,6 +3,7 @@
 #include "fmt/core.h"
 #include <algorithm>
 #include <cassert>
+#include <cctype>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -345,16 +346,28 @@ auto get_string_from_file(
     std::source_location src = std::source_location::current())
     -> std::optional<std::string>;
 
+/// Split a number lexeme into its digits and type suffix, e.g. "42i64" ->
+/// {"42", "i64"}. The suffix starts at the first letter and may be empty.
+inline std::pair<std::string, std::string>
+split_number_lexeme(const std::string &lexeme) {
+  auto suffix_start = std::find_if(lexeme.begin(), lexeme.end(), [](char c) {
+    return std::isalpha(static_cast<unsigned char>(c));
+  });
+  return {std::string(lexeme.begin(), suffix_start),
+          std::string(suffix_start, lexeme.end())};
+}
+
 /// Integer types the compiler parses literals into: i32 and i64.
 template <typename T>
 concept LiteralInt = std::same_as<T, int32_t> || std::same_as<T, int64_t>;
 
 /// Parse a base-10 integer. On invalid or out-of-range input, reports an error
-/// through `reportee` and returns 0, so callers should check has_errors().
+/// through `reportee` and returns nullopt.
 template <LiteralInt T>
-T str_to_int(Reportee &reportee, const std::string &str,
-             Location loc = Location::NonPrintable(),
-             std::source_location src = std::source_location::current()) {
+std::optional<T>
+str_to_int(Reportee &reportee, const std::string &str,
+           Location loc = Location::NonPrintable(),
+           std::source_location src = std::source_location::current()) {
   T value = 0;
   const char *end = str.data() + str.size();
   auto [ptr, ec] = std::from_chars(str.data(), end, value);
@@ -368,6 +381,26 @@ T str_to_int(Reportee &reportee, const std::string &str,
                        src);
   else
     return value;
-  return 0;
+  return std::nullopt;
+}
+
+/// Parse a decimal floating-point number. On invalid or out-of-range input,
+/// reports an error through `reportee` and returns nullopt.
+inline std::optional<double>
+str_to_double(Reportee &reportee, const std::string &str,
+              Location loc = Location::NonPrintable(),
+              std::source_location src = std::source_location::current()) {
+  double value = 0;
+  const char *end = str.data() + str.size();
+  auto [ptr, ec] = std::from_chars(str.data(), end, value);
+  if (ec == std::errc::result_out_of_range)
+    reportee.add_error(
+        loc, fmt::format("Float literal '{}' is out of range", str), src);
+  else if (ec != std::errc{} || ptr != end)
+    reportee.add_error(
+        loc, fmt::format("'{}' is not a valid float literal", str), src);
+  else
+    return value;
+  return std::nullopt;
 }
 } // namespace sammine_util

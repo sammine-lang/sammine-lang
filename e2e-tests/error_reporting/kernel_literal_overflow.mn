@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Integer '99999999999999999999' is out of range for i64
+
+kernel big() -> i64 {
+  99999999999999999999
+}
+
+let main() -> i32 {
+  return 0;
+}

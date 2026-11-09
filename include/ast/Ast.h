@@ -3,9 +3,7 @@
 #include "ast/AstDecl.h"
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
-#include <algorithm>
 #include <cassert>
-#include <cctype>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -479,12 +477,7 @@ public:
       : ExprAST(NodeKind::NumberExprAST) {
     assert(t);
     join_location(t);
-    const std::string &lexeme = t->lexeme;
-    auto suffix_start = std::find_if(lexeme.begin(), lexeme.end(), [](char c) {
-      return std::isalpha(static_cast<unsigned char>(c));
-    });
-    number.assign(lexeme.begin(), suffix_start);
-    suffix.assign(suffix_start, lexeme.end());
+    std::tie(number, suffix) = sammine_util::split_number_lexeme(t->lexeme);
   }
   std::string to_string() const override;
   AST_NODE_METHODS("NumberExprAST", NodeKind::NumberExprAST)
