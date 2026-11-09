@@ -1,0 +1,32 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      5
+// CHECK-NEXT: 8
+// CHECK-NEXT: 9
+
+import std;
+
+let from_return(x: i32) -> i64 {
+  return case x {
+    1 => 8,
+    _ => 0,
+  };
+}
+
+let main() -> i32 {
+  let from_let: i64 = case 1 {
+    1 => 5,
+    _ => 6,
+  };
+  let nested: i64 = if true {
+    case 2 {
+      2 => 9,
+      _ => 0,
+    }
+  } else {
+    1
+  };
+  std::printf("%ld\n", from_let);
+  std::printf("%ld\n", from_return(1));
+  std::printf("%ld\n", nested);
+  return 0;
+}

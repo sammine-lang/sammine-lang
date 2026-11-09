@@ -529,6 +529,14 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
       resolve_literal_type(last_else, target);
       if_expr->elseBlockAST->set_type(target);
     }
+  } else if (auto *case_expr = llvm::dyn_cast<CaseExprAST>(expr)) {
+    for (auto &arm : case_expr->arms) {
+      if (arm.body->Statements.empty() ||
+          !arm.body->get_type().is_polymorphic_numeric())
+        continue;
+      resolve_literal_type(arm.body->Statements.back().get(), target);
+      arm.body->set_type(target);
+    }
   }
 }
 
