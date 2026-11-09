@@ -1,10 +1,10 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |i32_main_wrong_return.mn:3:4
-// CHECK:         3|let main() -> i64 {
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: i32_main_wrong_return.mn:11:4
+// CHECK:         11|let main() -> i64 {
 // CHECK-NEXT:     |    ────────────┬
 // CHECK-NEXT:     |                ╰─ main must return i32, found i64
-// CHECK-NEXT:    4|  return 0;
-// CHECK-NEXT:    5|}
+// CHECK-NEXT:    12|  return 0;
+// CHECK-NEXT:    13|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: Linear variable '*pp' must be consumed before scope exit
 
 import std;

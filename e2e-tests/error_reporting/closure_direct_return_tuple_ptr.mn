@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |closure_direct_return_tuple_ptr.mn:15:2
-// CHECK-NEXT:   13|let make() -> (i32) -> i32 {
-// CHECK-NEXT:   14|  let t = (42, true);
-// CHECK-NEXT:   15|  return get_fst(&t);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: closure_direct_return_tuple_ptr.mn:26:2
+// CHECK-NEXT:   24|let make() -> (i32) -> i32 {
+// CHECK-NEXT:   25|  let t = (42, true);
+// CHECK-NEXT:   26|  return get_fst(&t);
 // CHECK-NEXT:     |  ────────────────┬
 // CHECK-NEXT:     |                  ╰─ Cannot return partial application of 'get_fst' — it captures a non-linear pointer (may dangle after return)
-// CHECK-NEXT:   16|}
-// CHECK-NEXT:   17|
+// CHECK-NEXT:   27|}
+// CHECK-NEXT:   28|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

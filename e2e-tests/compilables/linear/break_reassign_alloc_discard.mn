@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |break_reassign_alloc_discard.mn:10:2
-// CHECK-NEXT:    8|
-// CHECK-NEXT:    9|let main() -> i32 {
-// CHECK-NEXT:   10|  alloc<i32>(1);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: break_reassign_alloc_discard.mn:20:2
+// CHECK-NEXT:    18|
+// CHECK-NEXT:    19|let main() -> i32 {
+// CHECK-NEXT:   20|  alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────┬
 // CHECK-NEXT:     |             ╰─ Linear pointer from alloc is discarded (must be stored in a variable)
-// CHECK-NEXT:   11|  std::printf("done\n");
-// CHECK-NEXT:   12|  return 0;
+// CHECK-NEXT:   21|  std::printf("done\n");
+// CHECK-NEXT:   22|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

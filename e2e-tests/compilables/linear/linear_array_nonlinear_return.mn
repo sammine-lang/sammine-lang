@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full --check --diagnostics 2>&1 | %check %full
-// CHECK:          |linear_array_nonlinear_return.mn:9:2
-// CHECK-NEXT:    7|  let p : ptr<i32> = &x;
-// CHECK-NEXT:    8|  let a : [1]ptr<i32> = [p];
-// CHECK-NEXT:    9|  return a;
+// RUN: (! %sammine --file %full --check 2>&1) | %check %full
+// CHECK: linear_array_nonlinear_return.mn:19:2
+// CHECK-NEXT:    17|  let p : ptr<i32> = &x;
+// CHECK-NEXT:    18|  let a : [1]ptr<i32> = [p];
+// CHECK-NEXT:    19|  return a;
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Cannot return 'a' of type '[1]ptr<i32>': non-linear ptr<i32> in element (may reference a local variable)
-// CHECK-NEXT:   10|}
-// CHECK-NEXT:   11|
+// CHECK-NEXT:   20|}
+// CHECK-NEXT:   21|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

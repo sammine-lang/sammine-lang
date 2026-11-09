@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |struct_wrong_field_type.mn:16:25
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: struct_wrong_field_type.mn:16:25
 // CHECK-NEXT:   14|
 // CHECK-NEXT:   15|let main() -> i32 {
 // CHECK-NEXT:   16|  let b : Bar = Bar { x: 3.14 };

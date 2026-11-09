@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |func_arg_type_mismatch.mn
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: func_arg_type_mismatch.mn
 // CHECK-NEXT:   18|
 // CHECK-NEXT:   19|let main() -> i32 {
 // CHECK-NEXT:   20|  return add(1, 3.14);

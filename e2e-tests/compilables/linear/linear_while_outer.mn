@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |linear_while_outer.mn
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: linear_while_outer.mn
 // CHECK-NEXT:   19|
 // CHECK-NEXT:   20|let main() -> i32 {
 // CHECK-NEXT:   21|  let p = alloc<i32>(1);

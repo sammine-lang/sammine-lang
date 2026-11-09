@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |signed_unsigned_mix.mn
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: signed_unsigned_mix.mn
 // CHECK-NEXT:   17|  let x: i32 = 10;
 // CHECK-NEXT:   18|  let y: u32 = 20u32;
 // CHECK-NEXT:   19|  let z: i32 = x + y;

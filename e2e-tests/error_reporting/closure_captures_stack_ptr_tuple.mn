@@ -1,21 +1,21 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |closure_captures_stack_ptr_tuple.mn:27:2
-// CHECK-NEXT:   25|  let p : ptr<(i32, bool)> = &t;
-// CHECK-NEXT:   26|  let f : (i32) -> i32 = get_fst(p);
-// CHECK-NEXT:   27|  return f;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: closure_captures_stack_ptr_tuple.mn:47:2
+// CHECK-NEXT:   45|  let p : ptr<(i32, bool)> = &t;
+// CHECK-NEXT:   46|  let f : (i32) -> i32 = get_fst(p);
+// CHECK-NEXT:   47|  return f;
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
-// CHECK-NEXT:   28|}
-// CHECK-NEXT:   29|
+// CHECK-NEXT:   48|}
+// CHECK-NEXT:   49|
 // CHECK-NEXT: --------------------------------------------------------------------------
-// CHECK-NEXT:     |closure_captures_stack_ptr_tuple.mn:34:2
-// CHECK-NEXT:   32|  let p : ptr<(i32, bool)> = &t;
-// CHECK-NEXT:   33|  let f : (i32) -> i32 = get_snd_as_int(p);
-// CHECK-NEXT:   34|  return f;
+// CHECK-NEXT: closure_captures_stack_ptr_tuple.mn:54:2
+// CHECK-NEXT:   52|  let p : ptr<(i32, bool)> = &t;
+// CHECK-NEXT:   53|  let f : (i32) -> i32 = get_snd_as_int(p);
+// CHECK-NEXT:   54|  return f;
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
-// CHECK-NEXT:   35|}
-// CHECK-NEXT:   36|
+// CHECK-NEXT:   55|}
+// CHECK-NEXT:   56|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

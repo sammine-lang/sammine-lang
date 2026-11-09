@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |break_scope_alloc_in_while.mn:24:4
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: break_scope_alloc_in_while.mn:24:4
 // CHECK-NEXT:   22|  *ip = 0;
 // CHECK-NEXT:   23|  while (*ip < 1) {
 // CHECK-NEXT:   24|    let q = alloc<i32>(1);

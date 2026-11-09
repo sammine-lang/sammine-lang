@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |linear_nested_array_struct_return.mn:15:2
-// CHECK-NEXT:   13|  let h : HasPtr = HasPtr { p: q, tag: 1 };
-// CHECK-NEXT:   14|  let a : [1]HasPtr = [h];
-// CHECK-NEXT:   15|  return a;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: linear_nested_array_struct_return.mn:25:2
+// CHECK-NEXT:   23|  let h : HasPtr = HasPtr { p: q, tag: 1 };
+// CHECK-NEXT:   24|  let a : [1]HasPtr = [h];
+// CHECK-NEXT:   25|  return a;
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Cannot return 'a' of type '[1]HasPtr': non-linear ptr<i32> in field 'p' in element (may reference a local variable)
-// CHECK-NEXT:   16|}
-// CHECK-NEXT:   17|
+// CHECK-NEXT:   26|}
+// CHECK-NEXT:   27|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

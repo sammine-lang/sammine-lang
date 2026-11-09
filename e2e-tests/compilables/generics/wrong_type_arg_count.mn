@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |wrong_type_arg_count.mn:7:29
-// CHECK-NEXT:    5|
-// CHECK-NEXT:    6|let main() -> i32 {
-// CHECK-NEXT:    7|  let a = identity<i32, f64>(42);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: wrong_type_arg_count.mn:17:29
+// CHECK-NEXT:    15|
+// CHECK-NEXT:    16|let main() -> i32 {
+// CHECK-NEXT:    17|  let a = identity<i32, f64>(42);
 // CHECK-NEXT:     |                             ─┬
 // CHECK-NEXT:     |                              ╰─ Expected 1 type argument(s) for 'identity', got 2
-// CHECK-NEXT:    8|  return 0;
-// CHECK-NEXT:    9|}
+// CHECK-NEXT:    18|  return 0;
+// CHECK-NEXT:    19|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

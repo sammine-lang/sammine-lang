@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |bitwise_on_float.mn:7:17
-// CHECK-NEXT:    5|  let x: f64 = 3.14;
-// CHECK-NEXT:    6|  let y: f64 = 1.0;
-// CHECK-NEXT:    7|  let z: f64 = x & y;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: bitwise_on_float.mn:17:17
+// CHECK-NEXT:    15|  let x: f64 = 3.14;
+// CHECK-NEXT:    16|  let y: f64 = 1.0;
+// CHECK-NEXT:    17|  let z: f64 = x & y;
 // CHECK-NEXT:     |                 ┬
 // CHECK-NEXT:     |                 ╰─ Bitwise operator '&' is not valid on type 'f64'
-// CHECK-NEXT:    8|  return 0;
-// CHECK-NEXT:    9|}
+// CHECK-NEXT:    18|  return 0;
+// CHECK-NEXT:    19|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |hint_signed_unsigned.mn
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: hint_signed_unsigned.mn
 // CHECK-NEXT:   16|let main() -> i32 {
 // CHECK-NEXT:   17|  let x: u32 = 42u32;
 // CHECK-NEXT:   18|  let y: i32 = x;

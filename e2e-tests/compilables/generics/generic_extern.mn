@@ -1,11 +1,11 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |generic_extern.mn:4:6
-// CHECK:         3|
-// CHECK-NEXT:    4|reuse generic_func<T>(x: T) -> T;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_extern.mn:13:6
+// CHECK:         12|
+// CHECK-NEXT:    13|reuse generic_func<T>(x: T) -> T;
 // CHECK-NEXT:     |      ─────────────────────────┬
 // CHECK-NEXT:     |                               ╰─ Generic reuse declarations are not supported; generics require a function body for monomorphization
-// CHECK-NEXT:    5|
-// CHECK-NEXT:    6|let main() -> i32 {
+// CHECK-NEXT:    14|
+// CHECK-NEXT:    15|let main() -> i32 {
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

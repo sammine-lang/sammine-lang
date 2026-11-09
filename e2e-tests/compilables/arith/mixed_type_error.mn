@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |mixed_type_error.mn:7:12
-// CHECK-NEXT:    5|  let a : i32 = 5;
-// CHECK-NEXT:    6|  let b : f64 = 3.14;
-// CHECK-NEXT:    7|  let c = a + b;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: mixed_type_error.mn:17:12
+// CHECK-NEXT:    15|  let a : i32 = 5;
+// CHECK-NEXT:    16|  let b : f64 = 3.14;
+// CHECK-NEXT:    17|  let c = a + b;
 // CHECK-NEXT:     |            ┬
 // CHECK-NEXT:     |            ╰─ Incompatible types for operator '+': i32 and f64
-// CHECK-NEXT:    8|  return 0;
-// CHECK-NEXT:    9|}
+// CHECK-NEXT:    18|  return 0;
+// CHECK-NEXT:    19|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

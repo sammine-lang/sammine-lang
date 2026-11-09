@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |break_call_implicit_return_alloc.mn:16:2
-// CHECK-NEXT:   14|
-// CHECK-NEXT:   15|let main() -> i32 {
-// CHECK-NEXT:   16|  make_ptr();
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: break_call_implicit_return_alloc.mn:26:2
+// CHECK-NEXT:   24|
+// CHECK-NEXT:   25|let main() -> i32 {
+// CHECK-NEXT:   26|  make_ptr();
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Return value of 'make_ptr' has linear type ''ptr<i32>' and must not be discarded
-// CHECK-NEXT:   17|  std::printf("done\n");
-// CHECK-NEXT:   18|  return 0;
+// CHECK-NEXT:   27|  std::printf("done\n");
+// CHECK-NEXT:   28|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

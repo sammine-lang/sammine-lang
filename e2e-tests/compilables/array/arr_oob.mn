@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |arr_oob.mn:8:22
-// CHECK-NEXT:    6|let main() -> i32 {
-// CHECK-NEXT:    7|  let a : [3]i32 = [10, 20, 30];
-// CHECK-NEXT:    8|  std::printf("%d\n", a[5]);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: arr_oob.mn:18:22
+// CHECK-NEXT:    16|let main() -> i32 {
+// CHECK-NEXT:    17|  let a : [3]i32 = [10, 20, 30];
+// CHECK-NEXT:    18|  std::printf("%d\n", a[5]);
 // CHECK-NEXT:     |                      ──┬
 // CHECK-NEXT:     |                        ╰─ Array index out of bounds: index 5 on array of size 3
-// CHECK-NEXT:    9|  return 0;
-// CHECK-NEXT:   10|}
+// CHECK-NEXT:    19|  return 0;
+// CHECK-NEXT:   20|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

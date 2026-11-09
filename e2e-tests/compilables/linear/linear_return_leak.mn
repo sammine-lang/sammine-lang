@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |linear_return_leak.mn:5:2
-// CHECK-NEXT:    3|
-// CHECK-NEXT:    4|let main() -> i32 {
-// CHECK-NEXT:    5|  let p = alloc<i32>(1);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: linear_return_leak.mn:15:2
+// CHECK-NEXT:    13|
+// CHECK-NEXT:    14|let main() -> i32 {
+// CHECK-NEXT:    15|  let p = alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────────────┬
 // CHECK-NEXT:     |                     ╰─ Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:    6|  *p = 42;
-// CHECK-NEXT:    7|  return 0;
+// CHECK-NEXT:    16|  *p = 42;
+// CHECK-NEXT:    17|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

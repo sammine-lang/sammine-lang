@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |immutable_reassign.mn:6:4
-// CHECK-NEXT:    4|let main() -> i32 {
-// CHECK-NEXT:    5|  let x: i32 = 5;
-// CHECK-NEXT:    6|  x = 10;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: immutable_reassign.mn:16:4
+// CHECK-NEXT:    14|let main() -> i32 {
+// CHECK-NEXT:    15|  let x: i32 = 5;
+// CHECK-NEXT:    16|  x = 10;
 // CHECK-NEXT:     |    ┬
 // CHECK-NEXT:     |    ╰─ Cannot reassign variable 'x'. All bindings are immutable; use 'let x = ...' to shadow
-// CHECK-NEXT:    7|  return x;
-// CHECK-NEXT:    8|}
+// CHECK-NEXT:    17|  return x;
+// CHECK-NEXT:    18|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

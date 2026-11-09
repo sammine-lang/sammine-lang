@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O --diagnostics 2>&1 | %check %full
-// CHECK:          |free_non_pointer.mn:5:2
-// CHECK-NEXT:    3|let main() -> i32 {
-// CHECK-NEXT:    4|  let x : i32 = 42;
-// CHECK-NEXT:    5|  free(x);
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: free_non_pointer.mn:15:2
+// CHECK-NEXT:    13|let main() -> i32 {
+// CHECK-NEXT:    14|  let x : i32 = 42;
+// CHECK-NEXT:    15|  free(x);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot free non-pointer type 'i32'
-// CHECK-NEXT:    6|  return 0;
-// CHECK-NEXT:    7|}
+// CHECK-NEXT:    16|  return 0;
+// CHECK-NEXT:    17|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

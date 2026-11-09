@@ -1,12 +1,12 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |struct_field_access_non_struct.mn:6:15
-// CHECK-NEXT:    4|let main() -> i32 {
-// CHECK-NEXT:    5|  let x: i32 = 42;
-// CHECK-NEXT:    6|  let y: i32 = x.field;
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: struct_field_access_non_struct.mn:16:15
+// CHECK-NEXT:    14|let main() -> i32 {
+// CHECK-NEXT:    15|  let x: i32 = 42;
+// CHECK-NEXT:    16|  let y: i32 = x.field;
 // CHECK-NEXT:     |               ──────┬
 // CHECK-NEXT:     |                     ╰─ Cannot access field 'field' on non-struct type i32
-// CHECK-NEXT:    7|  return 0;
-// CHECK-NEXT:    8|}
+// CHECK-NEXT:    17|  return 0;
+// CHECK-NEXT:    18|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

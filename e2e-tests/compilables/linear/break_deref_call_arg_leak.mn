@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK:          |break_deref_call_arg_leak.mn:24:2
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: break_deref_call_arg_leak.mn:24:2
 // CHECK-NEXT:   22|
 // CHECK-NEXT:   23|let main() -> i32 {
 // CHECK-NEXT:   24|  let a = alloc<i32>(1);
