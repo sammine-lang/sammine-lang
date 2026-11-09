@@ -184,6 +184,14 @@ public:
   Type synthesize_kernel_reduce(KernelDefAST *kd,
                                 KernelReduceExprAST *reduce_expr);
 
+  /// The array type of a kernel operation's input, or nullopt after reporting
+  /// that the name is unknown or not an array.
+  std::optional<Type> lookup_kernel_input_array(const std::string &name,
+                                                const char *op,
+                                                sammine_util::Location loc);
+
+  Type synthesize_tuple_destructure(VarDefAST *ast);
+
   // pre order
 
   // post order

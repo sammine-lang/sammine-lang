@@ -71,6 +71,17 @@ static bool is_valid_number_lexeme(sammine_util::Reportee &reportee,
   return is_representable_literal(reportee, digits, type, loc);
 }
 
+/// Whether a range bound has integer type. Reports an error if not.
+static bool is_integer_bound(sammine_util::Reportee &reportee, ExprAST *bound,
+                             const Type &type, const char *label) {
+  if (type.is_integer())
+    return true;
+  reportee.add_error(bound->get_location(),
+                     fmt::format("{} must be an integer type, got {}", label,
+                                 type.to_string()));
+  return false;
+}
+
 /// Reject a for-range with literal bounds that is empty, comparing as `T`.
 template <sammine_util::LiteralInt T>
 static bool is_nonempty_for_range(sammine_util::Reportee &reportee,
@@ -113,60 +124,62 @@ Type BiTypeCheckerVisitor::synthesize(ProgramAST *ast) {
 // Variable definition: infers type from expression, checks against annotation
 // if present. Polymorphic literals (Integer/Flt) resolve to the annotated type
 // via compatible_to_from.
+// Tuple destructuring: let (a, b) = expr;
+Type BiTypeCheckerVisitor::synthesize_tuple_destructure(VarDefAST *ast) {
+  if (!ast->Expression) {
+    this->add_error(ast->get_location(),
+                    "Destructuring requires an initializer expression");
+    return ast->set_type(Type::Poisoned());
+  }
+  auto expr_type = ast->Expression->accept_synthesis(this);
+  if (expr_type.is_poisoned())
+    return ast->set_type(Type::Poisoned());
+
+  if (expr_type.type_kind != TypeKind::Tuple) {
+    this->add_error(ast->Expression->get_location(),
+                    fmt::format("Cannot destructure non-tuple type '{}'",
+                                expr_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  auto &tt = std::get<TupleType>(expr_type.type_data);
+  if (tt.size() != ast->destructure_vars.size()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Tuple has {} elements but destructuring has {} variables",
+                    tt.size(), ast->destructure_vars.size()));
+    return ast->set_type(Type::Poisoned());
+  }
+
+  for (size_t i = 0; i < tt.size(); i++) {
+    auto elem_type = tt.get_element(i);
+    // If the var has a type annotation, check compatibility
+    if (ast->destructure_vars[i]->type_expr) {
+      auto ann_type = ast->destructure_vars[i]->accept_synthesis(this);
+      if (!type_map_ordering.compatible_to_from(ann_type, elem_type)) {
+        report_type_mismatch(
+            ast->destructure_vars[i]->get_location(),
+            fmt::format("Type annotation '{}' incompatible with tuple "
+                        "element type '{}'",
+                        ann_type.to_string(), elem_type.to_string()),
+            ann_type, elem_type);
+        return ast->set_type(Type::Poisoned());
+      }
+      elem_type = ann_type;
+    }
+    ast->destructure_vars[i]->set_type(elem_type);
+    id_to_type.registerNameT(ast->destructure_vars[i]->name, elem_type);
+  }
+
+  return ast->set_type(Type::Unit());
+}
+
 Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
-  // Handle tuple destructuring: let (a, b) = expr;
-  if (ast->is_tuple_destructure) {
-    if (!ast->Expression) {
-      this->add_error(ast->get_location(),
-                      "Destructuring requires an initializer expression");
-      return ast->set_type(Type::Poisoned());
-    }
-    auto expr_type = ast->Expression->accept_synthesis(this);
-    if (expr_type.is_poisoned())
-      return ast->set_type(Type::Poisoned());
-
-    if (expr_type.type_kind != TypeKind::Tuple) {
-      this->add_error(ast->Expression->get_location(),
-                      fmt::format("Cannot destructure non-tuple type '{}'",
-                                  expr_type.to_string()));
-      return ast->set_type(Type::Poisoned());
-    }
-
-    auto &tt = std::get<TupleType>(expr_type.type_data);
-    if (tt.size() != ast->destructure_vars.size()) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format(
-              "Tuple has {} elements but destructuring has {} variables",
-              tt.size(), ast->destructure_vars.size()));
-      return ast->set_type(Type::Poisoned());
-    }
-
-    for (size_t i = 0; i < tt.size(); i++) {
-      auto elem_type = tt.get_element(i);
-      // If the var has a type annotation, check compatibility
-      if (ast->destructure_vars[i]->type_expr) {
-        auto ann_type = ast->destructure_vars[i]->accept_synthesis(this);
-        if (!type_map_ordering.compatible_to_from(ann_type, elem_type)) {
-          report_type_mismatch(
-              ast->destructure_vars[i]->get_location(),
-              fmt::format("Type annotation '{}' incompatible with tuple "
-                          "element type '{}'",
-                          ann_type.to_string(), elem_type.to_string()),
-              ann_type, elem_type);
-          return ast->set_type(Type::Poisoned());
-        }
-        elem_type = ann_type;
-      }
-      ast->destructure_vars[i]->set_type(elem_type);
-      id_to_type.registerNameT(ast->destructure_vars[i]->name, elem_type);
-    }
-
-    return ast->set_type(Type::Unit());
-  }
+  if (ast->is_tuple_destructure)
+    return synthesize_tuple_destructure(ast);
 
   // if you dont have type lexeme for typed var, then just assign type of expr
   // to typed var, if we dont have expr also, then we add error
@@ -1032,18 +1045,9 @@ Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
     return ast->set_type(Type::Poisoned());
 
   // Check that both sides are integer types or polymorphic Integer
-  if (!start_type.is_integer()) {
-    this->add_error(ast->start->get_location(),
-                    fmt::format("Range start must be an integer type, got {}",
-                                start_type.to_string()));
+  if (!is_integer_bound(*this, ast->start.get(), start_type, "Range start") ||
+      !is_integer_bound(*this, ast->end.get(), end_type, "Range end"))
     return ast->set_type(Type::Poisoned());
-  }
-  if (!end_type.is_integer()) {
-    this->add_error(ast->end->get_location(),
-                    fmt::format("Range end must be an integer type, got {}",
-                                end_type.to_string()));
-    return ast->set_type(Type::Poisoned());
-  }
 
   // Both must be NumberExprAST (compile-time constants)
   auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
@@ -1363,18 +1367,10 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
       end_type.type_kind == TypeKind::Poisoned)
     return ast->set_type(Type::Poisoned());
 
-  if (!start_type.is_integer()) {
-    this->add_error(ast->start->get_location(),
-                    fmt::format("for-range start must be an integer type, got {}",
-                                start_type.to_string()));
+  if (!is_integer_bound(*this, ast->start.get(), start_type,
+                        "for-range start") ||
+      !is_integer_bound(*this, ast->end.get(), end_type, "for-range end"))
     return ast->set_type(Type::Poisoned());
-  }
-  if (!end_type.is_integer()) {
-    this->add_error(ast->end->get_location(),
-                    fmt::format("for-range end must be an integer type, got {}",
-                                end_type.to_string()));
-    return ast->set_type(Type::Poisoned());
-  }
 
   // Resolve polymorphic Integer → concrete via default_polymorphic_type,
   // then check both sides match.
@@ -1509,28 +1505,36 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
   return ast->set_type(proto_type);
 }
 
+std::optional<Type>
+BiTypeCheckerVisitor::lookup_kernel_input_array(const std::string &name,
+                                                const char *op,
+                                                sammine_util::Location loc) {
+  auto input_type = id_to_type.recursive_try_get(name);
+  if (!input_type) {
+    this->add_error(loc,
+                    fmt::format("Unknown variable '{}' in kernel {}", name, op));
+    return std::nullopt;
+  }
+
+  if (input_type->type_kind != TypeKind::Array) {
+    this->add_error(loc,
+                    fmt::format("Kernel {} input '{}' must be an array type, "
+                                "got '{}'",
+                                op, name, input_type->to_string()));
+    return std::nullopt;
+  }
+  return input_type;
+}
+
 Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
                                                  KernelMapExprAST *map_expr) {
-  // 1. Look up input array in scope
-  auto input_type_opt = id_to_type.recursive_try_get(map_expr->input_name);
-  if (!input_type_opt) {
-    this->add_error(map_expr->get_location(),
-                    fmt::format("Unknown variable '{}' in kernel map",
-                                map_expr->input_name));
+  // 1-2. Look up input array in scope and verify it's an Array type
+  auto input_type = lookup_kernel_input_array(map_expr->input_name, "map",
+                                              map_expr->get_location());
+  if (!input_type)
     return Type::Poisoned();
-  }
-  auto input_type = *input_type_opt;
 
-  // 2. Verify it's an Array type
-  if (input_type.type_kind != TypeKind::Array) {
-    this->add_error(
-        map_expr->get_location(),
-        fmt::format("Kernel map input '{}' must be an array type, got '{}'",
-                    map_expr->input_name, input_type.to_string()));
-    return Type::Poisoned();
-  }
-
-  auto &arr_type = std::get<ArrayType>(input_type.type_data);
+  auto &arr_type = std::get<ArrayType>(input_type->type_data);
   auto elem_type = arr_type.get_element();
   auto arr_size = arr_type.get_size();
 
@@ -1599,26 +1603,13 @@ Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
 
 Type BiTypeCheckerVisitor::synthesize_kernel_reduce(
     KernelDefAST *kd, KernelReduceExprAST *reduce_expr) {
-  // 1. Look up input array in scope
-  auto input_type_opt = id_to_type.recursive_try_get(reduce_expr->input_name);
-  if (!input_type_opt) {
-    this->add_error(reduce_expr->get_location(),
-                    fmt::format("Unknown variable '{}' in kernel reduce",
-                                reduce_expr->input_name));
+  // 1-2. Look up input array in scope and verify it's an Array type
+  auto input_type = lookup_kernel_input_array(reduce_expr->input_name, "reduce",
+                                              reduce_expr->get_location());
+  if (!input_type)
     return Type::Poisoned();
-  }
-  auto input_type = *input_type_opt;
 
-  // 2. Verify Array type and extract element type
-  if (input_type.type_kind != TypeKind::Array) {
-    this->add_error(
-        reduce_expr->get_location(),
-        fmt::format("Kernel reduce input '{}' must be an array type, got '{}'",
-                    reduce_expr->input_name, input_type.to_string()));
-    return Type::Poisoned();
-  }
-
-  auto &arr_type = std::get<ArrayType>(input_type.type_data);
+  auto &arr_type = std::get<ArrayType>(input_type->type_data);
   auto elem_type = arr_type.get_element();
 
   // 3. Verify operator is valid (+, -, *, /)
