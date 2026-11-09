@@ -1907,6 +1907,15 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   if (had_error)
     return ast->set_type(Type::Poisoned());
 
+  // Arms holding polymorphic literals take the unified result type.
+  for (auto &arm : ast->arms) {
+    if (arm.body->get_type().is_polymorphic_numeric() &&
+        !arm.body->Statements.empty()) {
+      resolve_literal_type(arm.body->Statements.back().get(), result_type);
+      arm.body->set_type(result_type);
+    }
+  }
+
   return ast->set_type(result_type);
 }
 
