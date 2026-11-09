@@ -1,0 +1,29 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      i32 0
+// CHECK-NEXT: i32 1
+// CHECK-NEXT: i64 5000000000
+// CHECK-NEXT: i64 5000000001
+// CHECK-NEXT: u32 3000000000
+// CHECK-NEXT: u32 3000000001
+// CHECK-NEXT: u64 5000000000
+// CHECK-NEXT: u64 5000000001
+
+import std;
+
+// The i64, u32 and u64 bounds do not fit in i32, so a loop that narrowed them
+// would print different values.
+let main() -> i32 {
+  for i in 0i32..2i32 {
+    std::printf("i32 %d\n", i);
+  };
+  for i in 5000000000i64..5000000002i64 {
+    std::printf("i64 %ld\n", i);
+  };
+  for i in 3000000000u32..3000000002u32 {
+    std::printf("u32 %u\n", i);
+  };
+  for i in 5000000000u64..5000000002u64 {
+    std::printf("u64 %lu\n", i);
+  };
+  return 0;
+}

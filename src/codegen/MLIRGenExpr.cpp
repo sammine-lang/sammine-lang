@@ -484,8 +484,8 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   auto tupleType = Type::Tuple({rangeType, ast->start->get_type()});
   auto optionType =
       Type::Enum(sammine_util::QualifiedName::from_parts(
-                     {"Option<(Range, " + ast->start->get_type().to_string() +
-                      ")>"}),
+                     {"Option<(" + rangeType.to_string() + ", " +
+                      ast->start->get_type().to_string() + ")>"}),
                  {{/*name=*/"Some",
                    /*payload=*/{tupleType},
                    /*discriminant=*/std::nullopt},
@@ -504,9 +504,9 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   builder.setInsertionPointToStart(headerBlock);
   auto iterArg = headerBlock->getArgument(0);
 
-  // --- Call Iterator<Range, i64>::next(iter) ---
-  std::string nextFn = "Iterator<Range, " +
-                        ast->start->get_type().to_string() + ">::next";
+  // --- Call Iterator<Range<T>, T>::next(iter) ---
+  std::string nextFn = "Iterator<" + rangeType.to_string() + ", " +
+                       ast->start->get_type().to_string() + ">::next";
   llvm::SmallVector<mlir::Type, 1> resultTypes{optionMlirTy};
   auto callOp = mlir::func::CallOp::create(
       builder, location, llvm::StringRef(nextFn), resultTypes,

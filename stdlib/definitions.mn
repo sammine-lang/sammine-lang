@@ -56,17 +56,47 @@ typeclass Iterator<I, T> {
   next(iter : I) -> Option<(I, T)>;
 }
 
-struct Range {
-  current: i64,
-  end_val: i64,
+struct Range<T> {
+  current: T,
+  end_val: T,
 };
 
-instance Iterator<Range, i64> {
-  let next(iter: Range) -> Option<(Range, i64)> {
+instance Iterator<Range<i32>, i32> {
+  let next(iter: Range<i32>) -> Option<(Range<i32>, i32)> {
     if iter.current < iter.end_val {
-      Option<(Range, i64)>::Some((Range { current: iter.current + 1i64, end_val: iter.end_val }, iter.current))
+      Option<(Range<i32>, i32)>::Some((Range<i32> { current: iter.current + 1i32, end_val: iter.end_val }, iter.current))
     } else {
-      Option<(Range, i64)>::None
+      Option<(Range<i32>, i32)>::None
+    }
+  }
+}
+
+instance Iterator<Range<i64>, i64> {
+  let next(iter: Range<i64>) -> Option<(Range<i64>, i64)> {
+    if iter.current < iter.end_val {
+      Option<(Range<i64>, i64)>::Some((Range<i64> { current: iter.current + 1i64, end_val: iter.end_val }, iter.current))
+    } else {
+      Option<(Range<i64>, i64)>::None
+    }
+  }
+}
+
+instance Iterator<Range<u32>, u32> {
+  let next(iter: Range<u32>) -> Option<(Range<u32>, u32)> {
+    if iter.current < iter.end_val {
+      Option<(Range<u32>, u32)>::Some((Range<u32> { current: iter.current + 1u32, end_val: iter.end_val }, iter.current))
+    } else {
+      Option<(Range<u32>, u32)>::None
+    }
+  }
+}
+
+instance Iterator<Range<u64>, u64> {
+  let next(iter: Range<u64>) -> Option<(Range<u64>, u64)> {
+    if iter.current < iter.end_val {
+      Option<(Range<u64>, u64)>::Some((Range<u64> { current: iter.current + 1u64, end_val: iter.end_val }, iter.current))
+    } else {
+      Option<(Range<u64>, u64)>::None
     }
   }
 }

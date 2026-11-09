@@ -1325,8 +1325,12 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
   resolve_literal_type(ast->start.get(), resolved);
   resolve_literal_type(ast->end.get(), resolved);
 
-  // Verify that Iterator<Range, element_type> instance exists
-  auto range_type = get_typename_type("Range");
+  // Verify that Iterator<Range<element_type>, element_type> instance exists.
+  // Declaring that instance is what instantiates Range<element_type>.
+  auto range_type = get_typename_type(
+      MonomorphizedKey{"Range", {resolved}}
+          .to_generic_name(sammine_util::QualifiedName::from_parts({"Range"}))
+          .mangled());
   if (!range_type ||
       !type_class_instances.contains(
           MonomorphizedKey{"Iterator", {*range_type, resolved}})) {

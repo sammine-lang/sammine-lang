@@ -476,7 +476,7 @@ public:
   NodeKind getKind() const { return kind; }
   AstBase *join_location(AstBase *ast) {
     if (ast)
-      change_location(ast->get_location());
+      join_location(ast->get_location());
     return this;
   }
 
