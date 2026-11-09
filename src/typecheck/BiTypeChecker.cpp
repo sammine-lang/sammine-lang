@@ -682,6 +682,13 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   MonomorphizedKey tc_key{ast->class_name, tcip.concrete_types};
 
+  if (type_class_instances.contains(tc_key)) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Duplicate instance of {}<{}>", ast->class_name,
+                                tc_key.type_args_string()));
+    return;
+  }
+
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
     method->Prototype->functionName = tc_key.to_typeclass_name(original_name);
