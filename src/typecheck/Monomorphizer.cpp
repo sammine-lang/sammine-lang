@@ -170,7 +170,7 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   switch (expr->getKind()) {
   case NodeKind::NumberExprAST: {
     auto *num = llvm::cast<NumberExprAST>(expr);
-    result = std::make_unique<NumberExprAST>(make_tok(num->number));
+    result = std::make_unique<NumberExprAST>(make_tok(num->to_string()));
     break;
   }
   case NodeKind::StringExprAST: {

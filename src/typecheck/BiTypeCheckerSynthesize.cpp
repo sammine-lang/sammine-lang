@@ -28,6 +28,23 @@ format_generic_call_name(const sammine_util::QualifiedName &fn_name,
   return result + ">";
 }
 
+/// The concrete type named by a number literal suffix, if it is a valid one.
+static std::optional<Type> number_suffix_type(const std::string &suffix) {
+  if (suffix == "i32")
+    return Type::I32_t();
+  if (suffix == "i64")
+    return Type::I64_t();
+  if (suffix == "u32")
+    return Type::U32_t();
+  if (suffix == "u64")
+    return Type::U64_t();
+  if (suffix == "f32")
+    return Type::F32_t();
+  if (suffix == "f64")
+    return Type::F64_t();
+  return std::nullopt;
+}
+
 std::optional<std::pair<TypeBindings, std::vector<Type>>>
 BiTypeCheckerVisitor::resolve_explicit_type_args(
     const std::vector<std::unique_ptr<TypeExprAST>> &explicit_type_args,
@@ -720,44 +737,18 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
-  // Check for type suffix (e.g., 42i64, 3.14f64)
-  // Find the first alpha character — everything from there is the suffix
-  std::string suffix;
-  size_t suffix_start = ast->number.size();
-  for (size_t i = 0; i < ast->number.size(); ++i) {
-    if (std::isalpha(ast->number[i])) {
-      suffix_start = i;
-      break;
-    }
-  }
-  if (suffix_start < ast->number.size()) {
-    suffix = ast->number.substr(suffix_start);
-    ast->number = ast->number.substr(0, suffix_start);
-  }
+  if (ast->suffix.empty())
+    return ast->set_type(ast->number.find('.') == std::string::npos
+                             ? Type::Integer()
+                             : Type::Flt());
 
-  if (!suffix.empty()) {
-    if (suffix == "i32")
-      ast->set_type(Type::I32_t());
-    else if (suffix == "i64")
-      ast->set_type(Type::I64_t());
-    else if (suffix == "u32")
-      ast->set_type(Type::U32_t());
-    else if (suffix == "u64")
-      ast->set_type(Type::U64_t());
-    else if (suffix == "f64")
-      ast->set_type(Type::F64_t());
-    else if (suffix == "f32")
-      ast->set_type(Type::F32_t());
-    else
-      this->add_error(
-          ast->get_location(),
-          fmt::format("invalid type suffix '{}' on number literal", suffix));
-  } else if (ast->number.find('.') == std::string::npos)
-    ast->set_type(Type::Integer());
-  else
-    ast->set_type(Type::Flt());
+  if (auto suffix_type = number_suffix_type(ast->suffix))
+    return ast->set_type(*suffix_type);
 
-  return ast->get_type();
+  this->add_error(
+      ast->get_location(),
+      fmt::format("invalid type suffix '{}' on number literal", ast->suffix));
+  return ast->set_type(Type::Poisoned());
 }
 Type BiTypeCheckerVisitor::synthesize(BoolExprAST *ast) {
   return ast->set_type(Type::Bool());

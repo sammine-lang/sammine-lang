@@ -1,0 +1,16 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      5000000000
+// CHECK-NEXT: 5000000000
+
+import std;
+
+// Each instantiation clones the body, so every clone must keep the i64 suffix.
+let big<T>(x: T) -> i64 {
+  5000000000i64
+}
+
+let main() -> i32 {
+  std::printf("%ld\n", big<i32>(1));
+  std::printf("%ld\n", big<f64>(1.5));
+  return 0;
+}

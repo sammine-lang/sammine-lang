@@ -124,7 +124,7 @@ std::string FuncDefAST::to_string() const {
 
 // ── ExprAST subclasses ───────────────────────────────────────────────
 
-std::string NumberExprAST::to_string() const { return number; }
+std::string NumberExprAST::to_string() const { return number + suffix; }
 
 std::string StringExprAST::to_string() const {
   return "\"" + escape_string(string_content) + "\"";
