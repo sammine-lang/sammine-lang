@@ -720,9 +720,6 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
-  this->abort_on(ast->number.empty(),
-                 "NumberExprAST should have a number lexeme");
-
   // Check for type suffix (e.g., 42i64, 3.14f64)
   // Find the first alpha character — everything from there is the suffix
   std::string suffix;
