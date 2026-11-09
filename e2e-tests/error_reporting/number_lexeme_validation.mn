@@ -1,0 +1,19 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: invalid type suffix 'zz' on number literal
+// CHECK-NOT: invalid type suffix 'i32'
+// CHECK: invalid type suffix 'yy' on number literal
+// CHECK: Integer '99999999999999999999' is out of range for i64
+
+kernel bad_suffix() -> i64 {
+  5zz
+}
+
+let main() -> i32 {
+  case 3 {
+    1i32 => 0,
+    3yy => 1,
+    99999999999999999999i64 => 2,
+    _ => 3,
+  };
+  return 0;
+}

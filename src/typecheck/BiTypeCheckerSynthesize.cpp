@@ -58,6 +58,19 @@ static bool is_representable_literal(sammine_util::Reportee &reportee,
   return sammine_util::str_to_int<int64_t>(reportee, digits, loc).has_value();
 }
 
+/// Validate a raw number lexeme's suffix and value. Reports an error if bad.
+static bool is_valid_number_lexeme(sammine_util::Reportee &reportee,
+                                   const std::string &lexeme, const Type &type,
+                                   sammine_util::Location loc) {
+  auto [digits, suffix] = sammine_util::split_number_lexeme(lexeme);
+  if (!suffix.empty() && !number_suffix_type(suffix)) {
+    reportee.add_error(
+        loc, fmt::format("invalid type suffix '{}' on number literal", suffix));
+    return false;
+  }
+  return is_representable_literal(reportee, digits, type, loc);
+}
+
 /// Reject a for-range with literal bounds that is empty, comparing as `T`.
 template <sammine_util::LiteralInt T>
 static bool is_nonempty_for_range(sammine_util::Reportee &reportee,
@@ -1453,9 +1466,8 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
       body_result_type = synthesize_kernel_reduce(ast, reduce_expr);
     } else if (auto *num = llvm::dyn_cast<KernelNumberExprAST>(expr.get())) {
       // Number literal — assume declared return type
-      auto digits = sammine_util::split_number_lexeme(num->number).first;
-      if (!is_representable_literal(*this, digits, declared_ret,
-                                    num->get_location()))
+      if (!is_valid_number_lexeme(*this, num->number, declared_ret,
+                                  num->get_location()))
         return ast->set_type(Type::Poisoned());
       body_result_type = declared_ret;
     } else {
@@ -1728,11 +1740,8 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
       }
 
       if (arm.pattern.literal_kind == LK::Integer &&
-          !is_representable_literal(
-              *this,
-              sammine_util::split_number_lexeme(arm.pattern.literal_value)
-                  .first,
-              scrutinee_type, arm.pattern.location)) {
+          !is_valid_number_lexeme(*this, arm.pattern.literal_value,
+                                  scrutinee_type, arm.pattern.location)) {
         had_error = true;
         continue;
       }
