@@ -45,13 +45,36 @@ static std::optional<Type> number_suffix_type(const std::string &suffix) {
   return std::nullopt;
 }
 
-/// Whether `digits` parses as the given kind of number. Reports an error if not.
+/// Whether `digits` parses as a value of `type`. Reports an error if not.
 static bool is_representable_literal(sammine_util::Reportee &reportee,
-                                     const std::string &digits, bool is_float,
+                                     const std::string &digits,
+                                     const Type &type,
                                      sammine_util::Location loc) {
-  if (is_float)
+  if (type.is_float())
     return sammine_util::str_to_double(reportee, digits, loc).has_value();
+  if (type.type_kind == TypeKind::U64_t && digits.front() != '-')
+    return sammine_util::str_to_int<uint64_t>(reportee, digits, loc)
+        .has_value();
   return sammine_util::str_to_int<int64_t>(reportee, digits, loc).has_value();
+}
+
+/// Reject a for-range with literal bounds that is empty, comparing as `T`.
+template <sammine_util::LiteralInt T>
+static bool is_nonempty_for_range(sammine_util::Reportee &reportee,
+                                  ForExprAST *ast, NumberExprAST *start,
+                                  NumberExprAST *end) {
+  auto start_val = sammine_util::str_to_int<T>(reportee, start->number,
+                                               start->get_location());
+  auto end_val =
+      sammine_util::str_to_int<T>(reportee, end->number, end->get_location());
+  if (!start_val || !end_val)
+    return false;
+  if (*start_val < *end_val)
+    return true;
+  reportee.add_error(ast->get_location(),
+                     fmt::format("for-range is empty: start ({}) >= end ({})",
+                                 *start_val, *end_val));
+  return false;
 }
 
 std::optional<std::pair<TypeBindings, std::vector<Type>>>
@@ -761,8 +784,7 @@ Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
   }
 
   // Reject unrepresentable values here so codegen can parse them unchecked.
-  if (!is_representable_literal(*this, ast->number, type->is_float(),
-                                ast->get_location()))
+  if (!is_representable_literal(*this, ast->number, *type, ast->get_location()))
     return ast->set_type(Type::Poisoned());
   return ast->set_type(*type);
 }
@@ -1376,19 +1398,12 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
   auto *start_num = llvm::dyn_cast<NumberExprAST>(ast->start.get());
   auto *end_num = llvm::dyn_cast<NumberExprAST>(ast->end.get());
   if (start_num && end_num) {
-    auto start_val = sammine_util::str_to_int<int64_t>(
-        *this, start_num->number, ast->start->get_location());
-    auto end_val = sammine_util::str_to_int<int64_t>(
-        *this, end_num->number, ast->end->get_location());
-    if (!start_val || !end_val)
+    bool nonempty =
+        resolved.type_kind == TypeKind::U64_t
+            ? is_nonempty_for_range<uint64_t>(*this, ast, start_num, end_num)
+            : is_nonempty_for_range<int64_t>(*this, ast, start_num, end_num);
+    if (!nonempty)
       return ast->set_type(Type::Poisoned());
-    if (*start_val >= *end_val) {
-      this->add_error(
-          ast->get_location(),
-          fmt::format("for-range is empty: start ({}) >= end ({})",
-                      *start_val, *end_val));
-      return ast->set_type(Type::Poisoned());
-    }
   }
 
   id_to_type.registerNameT(ast->loop_var, resolved);
@@ -1439,7 +1454,7 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
     } else if (auto *num = llvm::dyn_cast<KernelNumberExprAST>(expr.get())) {
       // Number literal — assume declared return type
       auto digits = sammine_util::split_number_lexeme(num->number).first;
-      if (!is_representable_literal(*this, digits, declared_ret.is_float(),
+      if (!is_representable_literal(*this, digits, declared_ret,
                                     num->get_location()))
         return ast->set_type(Type::Poisoned());
       body_result_type = declared_ret;
@@ -1717,7 +1732,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
               *this,
               sammine_util::split_number_lexeme(arm.pattern.literal_value)
                   .first,
-              /*is_float=*/false, arm.pattern.location)) {
+              scrutinee_type, arm.pattern.location)) {
         had_error = true;
         continue;
       }

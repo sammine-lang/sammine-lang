@@ -874,7 +874,7 @@ mlir::Value MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
           elemVal = mlir::arith::ConstantFloatOp::create(builder, location,
                                                          mlirFloatType, apVal);
         } else {
-          int64_t val = std::stoll(num->number);
+          int64_t val = sammine_util::literal_int_bits(num->number);
           elemVal = mlir::arith::ConstantIntOp::create(builder, location,
                                                        elemType, val);
         }

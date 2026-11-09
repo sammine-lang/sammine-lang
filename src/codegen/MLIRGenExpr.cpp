@@ -79,7 +79,8 @@ mlir::Value MLIRGenImpl::emitNumberExpr(AST::NumberExprAST *ast) {
   auto type = ast->get_type();
   if (isFloatType(type))
     return emitFloatConstant(std::stod(ast->number), type, loc(ast));
-  return emitIntConstant(std::stoll(ast->number), type, loc(ast));
+  return emitIntConstant(sammine_util::literal_int_bits(ast->number), type,
+                         loc(ast));
 }
 
 mlir::Value MLIRGenImpl::emitBoolExpr(AST::BoolExprAST *ast) {
@@ -1332,8 +1333,9 @@ mlir::Value MLIRGenImpl::emitLiteralCaseExpr(AST::CaseExprAST *ast,
               static_cast<uint8_t>(arm.pattern.literal_value[0]), Type::Char(),
               loc);
         case LK::Integer:
-          return emitIntConstant(std::stoll(arm.pattern.literal_value),
-                                 scrutineeType, loc);
+          return emitIntConstant(
+              sammine_util::literal_int_bits(arm.pattern.literal_value),
+              scrutineeType, loc);
         default:
           imm_error("unexpected literal kind in case pattern",
                     arm.pattern.location);

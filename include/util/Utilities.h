@@ -357,9 +357,16 @@ split_number_lexeme(const std::string &lexeme) {
           std::string(suffix_start, lexeme.end())};
 }
 
-/// Integer types the compiler parses literals into: i32 and i64.
+/// Integer types the compiler parses literals into: i32, i64 and u64.
 template <typename T>
-concept LiteralInt = std::same_as<T, int32_t> || std::same_as<T, int64_t>;
+concept LiteralInt = std::same_as<T, int32_t> || std::same_as<T, int64_t> ||
+                     std::same_as<T, uint64_t>;
+
+/// The 64-bit pattern of an already validated integer literal. Values above
+/// the i64 maximum wrap, which keeps the bits of large u64 literals.
+inline int64_t literal_int_bits(const std::string &str) {
+  return static_cast<int64_t>(std::stoull(str));
+}
 
 /// Parse a base-10 integer. On invalid or out-of-range input, reports an error
 /// through `reportee` and returns nullopt.
@@ -374,7 +381,9 @@ str_to_int(Reportee &reportee, const std::string &str,
   if (ec == std::errc::result_out_of_range)
     reportee.add_error(loc,
                        fmt::format("Integer '{}' is out of range for {}", str,
-                                   std::same_as<T, int32_t> ? "i32" : "i64"),
+                                   std::same_as<T, int32_t>   ? "i32"
+                                   : std::same_as<T, int64_t> ? "i64"
+                                                              : "u64"),
                        src);
   else if (ec != std::errc{} || ptr != end)
     reportee.add_error(loc, fmt::format("'{}' is not a valid integer", str),

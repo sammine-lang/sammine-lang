@@ -84,7 +84,7 @@ void MLIRGenImpl::emitKernelDef(AST::KernelDefAST *kd) {
                           llvm::APFloat(val))
                           .getResult();
         } else {
-          int64_t val = std::stoll(numExpr->number);
+          int64_t val = sammine_util::literal_int_bits(numExpr->number);
           resultVal = mlir::arith::ConstantIntOp::create(builder, location,
                                                          retType, val)
                           .getResult();
