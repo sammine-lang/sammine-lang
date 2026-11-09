@@ -418,11 +418,38 @@ void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {
   }
 }
 
-void BiTypeCheckerVisitor::visit(CallExprAST *ast) {
-  // Arguments are visited and checked inside synthesize(CallExprAST*).
-  ast->accept_synthesis(this);
-  instantiate_generic_callee(ast);
-}
+// Expressions: synthesize visits its own children, so visit just forwards to it.
+#define VISIT_VIA_SYNTHESIZE(Node)                                             \
+  void BiTypeCheckerVisitor::visit(Node *ast) { ast->accept_synthesis(this); }
+
+VISIT_VIA_SYNTHESIZE(CallExprAST)
+VISIT_VIA_SYNTHESIZE(BinaryExprAST)
+VISIT_VIA_SYNTHESIZE(BlockAST)
+VISIT_VIA_SYNTHESIZE(IfExprAST)
+VISIT_VIA_SYNTHESIZE(NumberExprAST)
+VISIT_VIA_SYNTHESIZE(StringExprAST)
+VISIT_VIA_SYNTHESIZE(BoolExprAST)
+VISIT_VIA_SYNTHESIZE(CharExprAST)
+VISIT_VIA_SYNTHESIZE(UnitExprAST)
+VISIT_VIA_SYNTHESIZE(VariableExprAST)
+VISIT_VIA_SYNTHESIZE(TypedVarAST)
+VISIT_VIA_SYNTHESIZE(DerefExprAST)
+VISIT_VIA_SYNTHESIZE(AddrOfExprAST)
+VISIT_VIA_SYNTHESIZE(AllocExprAST)
+VISIT_VIA_SYNTHESIZE(FreeExprAST)
+VISIT_VIA_SYNTHESIZE(ArrayLiteralExprAST)
+VISIT_VIA_SYNTHESIZE(RangeExprAST)
+VISIT_VIA_SYNTHESIZE(IndexExprAST)
+VISIT_VIA_SYNTHESIZE(LenExprAST)
+VISIT_VIA_SYNTHESIZE(DimExprAST)
+VISIT_VIA_SYNTHESIZE(UnaryNegExprAST)
+VISIT_VIA_SYNTHESIZE(StructLiteralExprAST)
+VISIT_VIA_SYNTHESIZE(FieldAccessExprAST)
+VISIT_VIA_SYNTHESIZE(CaseExprAST)
+VISIT_VIA_SYNTHESIZE(WhileExprAST)
+VISIT_VIA_SYNTHESIZE(ForExprAST)
+VISIT_VIA_SYNTHESIZE(TupleLiteralExprAST)
+#undef VISIT_VIA_SYNTHESIZE
 
 void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   if (ast->return_expr)
@@ -445,142 +472,6 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   } else {
     resolve_literal_type(ast->return_expr.get(), return_type);
   }
-}
-
-void BiTypeCheckerVisitor::visit(BinaryExprAST *ast) {
-  ast->set_type(ast->accept_synthesis(this));
-}
-
-void BiTypeCheckerVisitor::visit(BlockAST *ast) {
-  for (auto &stmt : ast->Statements)
-    stmt->accept_vis(this);
-}
-
-void BiTypeCheckerVisitor::visit(IfExprAST *ast) {
-  ast->bool_expr->accept_vis(this);
-  ast->thenBlockAST->accept_vis(this);
-  ast->elseBlockAST->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(NumberExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(StringExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(BoolExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-void BiTypeCheckerVisitor::visit(CharExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(UnitExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(VariableExprAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(TypedVarAST *ast) {
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(DerefExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(AddrOfExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(AllocExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(FreeExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(ArrayLiteralExprAST *ast) {
-  for (auto &elem : ast->elements)
-    elem->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(RangeExprAST *ast) {
-  ast->start->accept_vis(this);
-  ast->end->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(IndexExprAST *ast) {
-  ast->array_expr->accept_vis(this);
-  ast->index_expr->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(LenExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(DimExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(UnaryNegExprAST *ast) {
-  ast->operand->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(StructLiteralExprAST *ast) {
-  for (auto &val : ast->field_values)
-    val->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(FieldAccessExprAST *ast) {
-  ast->object_expr->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(CaseExprAST *ast) {
-  // Scrutinee visiting and arm visiting are done inside synthesize()
-  // because arms need per-arm scoping with payload bindings
-  ast->scrutinee->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(WhileExprAST *ast) {
-  ast->condition->accept_vis(this);
-  ast->body->accept_vis(this);
-  ast->accept_synthesis(this);
-}
-
-void BiTypeCheckerVisitor::visit(ForExprAST *ast) {
-  ast->start->accept_vis(this);
-  ast->end->accept_vis(this);
-
-  ScopeGuard scope(*this);
-  ast->accept_synthesis(this);
-  if (!ast->get_type().is_poisoned())
-    ast->body->accept_vis(this);
-}
-
-void BiTypeCheckerVisitor::visit(TupleLiteralExprAST *ast) {
-  for (auto &elem : ast->elements)
-    elem->accept_vis(this);
-  ast->accept_synthesis(this);
 }
 
 void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {

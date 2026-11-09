@@ -330,7 +330,9 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
                                         call->callee,
                                         call->signature->to_string()));
   }
-  return ast->set_type(args_ok ? call->result : Type::Poisoned());
+  ast->set_type(args_ok ? call->result : Type::Poisoned());
+  instantiate_generic_callee(ast);
+  return ast->get_type();
 }
 
 std::optional<ResolvedCall>
@@ -854,6 +856,9 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
   return ast->get_type();
 }
 Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
   // Block typing rule:
   // 1. Type each statement in order
   // 2. If any statement has type ! (Never) and is not the return , stop: the
@@ -865,12 +870,14 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
     return ast->set_type(Type::Unit());
   }
 
+  // Statements are visited so declarations and returns run their checks.
+  bool is_never = false;
   for (auto &stmt : ast->Statements) {
-    auto stmt_type = stmt->accept_synthesis(this);
-    if (stmt_type.is_never()) {
-      return ast->set_type(Type::Never());
-    }
+    stmt->accept_vis(this);
+    is_never = is_never || stmt->get_type().is_never();
   }
+  if (is_never)
+    return ast->set_type(Type::Never());
 
   // Block's type is the type of the last expression
   return ast->set_type(ast->Statements.back()->get_type());
@@ -881,6 +888,13 @@ Type BiTypeCheckerVisitor::synthesize(UnitExprAST *ast) {
   return ast->set_type(Type::Unit());
 }
 Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  ast->bool_expr->accept_vis(this);
+  ast->thenBlockAST->accept_vis(this);
+  ast->elseBlockAST->accept_vis(this);
+
   // If expression typing rule:
   // 1. Condition must be bool
   // 2. If both branches have type Never, the if has type Never
@@ -948,6 +962,8 @@ Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->operand->accept_vis(this);
+
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::Pointer) {
     this->add_error(ast->get_location(),
@@ -965,6 +981,8 @@ Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->operand->accept_vis(this);
+
   auto operand_type = ast->operand->accept_synthesis(this);
   return ast->set_type(Type::Pointer(operand_type));
 }
@@ -972,6 +990,8 @@ Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->operand->accept_vis(this);
 
   // Resolve the element type from alloc<T>
   auto element_type = resolve_type_expr(ast->type_arg.get());
@@ -999,6 +1019,8 @@ Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->operand->accept_vis(this);
+
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::Pointer) {
     this->add_error(ast->get_location(),
@@ -1012,6 +1034,9 @@ Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  for (auto &elem : ast->elements)
+    elem->accept_vis(this);
 
   if (ast->elements.empty()) {
     this->add_error(ast->get_location(),
@@ -1037,6 +1062,9 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
 
   auto start_type = ast->start->accept_synthesis(this);
   auto end_type = ast->end->accept_synthesis(this);
@@ -1088,6 +1116,9 @@ Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->array_expr->accept_vis(this);
+  ast->index_expr->accept_vis(this);
 
   auto arr_type = ast->array_expr->accept_synthesis(this);
 
@@ -1142,6 +1173,8 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->operand->accept_vis(this);
+
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::Array) {
     this->add_error(ast->get_location(),
@@ -1156,6 +1189,8 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(DimExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->operand->accept_vis(this);
 
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::Array) {
@@ -1181,6 +1216,8 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->operand->accept_vis(this);
+
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.is_unsigned()) {
     this->add_error(ast->get_location(),
@@ -1200,6 +1237,9 @@ Type BiTypeCheckerVisitor::synthesize(UnaryNegExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  for (auto &val : ast->field_values)
+    val->accept_vis(this);
 
   if (ast->struct_name.is_unresolved()) {
     this->add_error(ast->get_location(),
@@ -1298,6 +1338,8 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
+  ast->object_expr->accept_vis(this);
+
   auto obj_type = ast->object_expr->accept_synthesis(this);
   if (obj_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
@@ -1345,8 +1387,14 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
 }
 
 Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
   if (!ast->condition || !ast->body)
     return ast->set_type(Type::Poisoned());
+
+  ast->condition->accept_vis(this);
+  ast->body->accept_vis(this);
   auto cond_type = ast->condition->accept_synthesis(this);
   if (cond_type != Type::Bool() && cond_type != Type::Poisoned()) {
     this->add_error(ast->condition->get_location(),
@@ -1359,6 +1407,12 @@ Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->start->accept_vis(this);
+  ast->end->accept_vis(this);
+
+  // The loop variable lives in a scope around the body.
+  ScopeGuard scope(*this);
 
   auto start_type = ast->start->accept_synthesis(this);
   auto end_type = ast->end->accept_synthesis(this);
@@ -1424,12 +1478,17 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
 
   id_to_type.registerNameT(ast->loop_var, resolved);
 
-  return ast->set_type(Type::Unit());
+  ast->set_type(Type::Unit());
+  ast->body->accept_vis(this);
+  return ast->get_type();
 }
 
 Type BiTypeCheckerVisitor::synthesize(TupleLiteralExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  for (auto &elem : ast->elements)
+    elem->accept_vis(this);
   std::vector<Type> elem_types;
   for (auto &elem : ast->elements) {
     auto t = elem->accept_synthesis(this);
@@ -1570,7 +1629,6 @@ Type BiTypeCheckerVisitor::synthesize_kernel_map(KernelDefAST *kd,
     return Type::Poisoned();
 
   // 7. Visit the lambda body (walks children via accept_vis, then synthesizes)
-  map_expr->lambda_body->accept_vis(this);
   auto body_type = map_expr->lambda_body->accept_synthesis(this);
 
   if (body_type.is_poisoned())
@@ -1666,6 +1724,8 @@ Type BiTypeCheckerVisitor::synthesize_kernel_reduce(
 Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
+
+  ast->scrutinee->accept_vis(this);
 
   auto scrutinee_type = ast->scrutinee->accept_synthesis(this);
   if (scrutinee_type.is_poisoned())
@@ -1931,7 +1991,6 @@ Type BiTypeCheckerVisitor::check_arm_bodies(CaseExprAST *ast,
       }
     }
 
-    arm.body->accept_vis(this);
     auto arm_type = arm.body->accept_synthesis(this);
 
     // Unify with result type
