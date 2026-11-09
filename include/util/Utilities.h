@@ -7,6 +7,9 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <charconv>
+#include <concepts>
+#include <cstdint>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -20,6 +23,7 @@
 //! source locations caching & indexing
 
 namespace sammine_util {
+
 inline bool stderr_is_tty() {
   static const bool is_tty = ::isatty(STDERR_FILENO);
   return is_tty;
@@ -331,4 +335,31 @@ public:
         diagnostic_data(get_diagnostic_data(this->input)),
         context_radius(radius), dev_mode(dev) {}
 };
+
+
+/// Integer types the compiler parses literals into: i32 and i64.
+template <typename T>
+concept LiteralInt = std::same_as<T, int32_t> || std::same_as<T, int64_t>;
+
+/// Parse a base-10 integer. On invalid or out-of-range input, reports an error
+/// through `reportee` and returns 0, so callers should check has_errors().
+template <LiteralInt T>
+T str_to_int(Reportee &reportee, const std::string &str,
+             Location loc = Location::NonPrintable(),
+             std::source_location src = std::source_location::current()) {
+  T value = 0;
+  const char *end = str.data() + str.size();
+  auto [ptr, ec] = std::from_chars(str.data(), end, value);
+  if (ec == std::errc::result_out_of_range)
+    reportee.add_error(loc,
+                       fmt::format("Integer '{}' is out of range for {}", str,
+                                   std::same_as<T, int32_t> ? "i32" : "i64"),
+                       src);
+  else if (ec != std::errc{} || ptr != end)
+    reportee.add_error(loc, fmt::format("'{}' is not a valid integer", str),
+                       src);
+  else
+    return value;
+  return 0;
+}
 } // namespace sammine_util

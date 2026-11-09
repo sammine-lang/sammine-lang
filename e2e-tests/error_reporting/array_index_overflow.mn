@@ -1,0 +1,8 @@
+// RUN: %sammine --file %full %O > %T/out.txt 2>&1; test $? -eq 1
+// An index too large for the literal parser must be a diagnostic, not a crash.
+
+let main() -> i32 {
+  let a = [1, 2, 3];
+  let b = a[99999999999];
+  0
+}

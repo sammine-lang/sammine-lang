@@ -1049,7 +1049,7 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   if (arr_type.type_kind == TypeKind::Array) {
     auto &arr_data = std::get<ArrayType>(arr_type.type_data);
     if (auto *num = llvm::dyn_cast<NumberExprAST>(ast->index_expr.get())) {
-      int idx = std::stoi(num->number);
+      int idx = sammine_util::str_to_int<int32_t>(*this, num->number, ast->get_location());
       int size = static_cast<int>(arr_data.get_size());
       if (idx < 0 || idx >= size) {
         this->add_error(
