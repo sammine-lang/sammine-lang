@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK-ERR: Float types cannot be used in literal case patterns
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Float types cannot be used in literal case patterns
 
 let main() -> i32 {
   let x: f64 = 3.14;

@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK-ERR: Duplicate literal pattern '0'
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Duplicate literal pattern '0'
 
 let main() -> i32 {
   let x: i32 = 42;

@@ -1,5 +1,5 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK-ERR: Cannot mix literal and enum variant patterns in case expression
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot mix literal and enum variant patterns in case expression
 
 import std;
 
