@@ -497,6 +497,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
 // ===--- Block and variable definition ---===
 
 mlir::Value MLIRGenImpl::emitBlock(AST::BlockAST *ast) {
+  // A block is a scope, so names declared in it end with it.
+  decltype(symbolTable)::Guard scope(symbolTable);
   mlir::Value lastVal = nullptr;
 
   for (auto &stmt : ast->Statements) {
@@ -653,7 +655,7 @@ mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
 
   // Variable: return its alloca
   if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
-    return symbolTable.get_from_name(var->variableName);
+    return symbolTable.recursive_get_from_name(var->variableName);
 
   // Dereference: lvalue of *p is the value of p
   if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))

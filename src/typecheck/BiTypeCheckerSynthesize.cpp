@@ -870,6 +870,9 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
     return ast->set_type(Type::Unit());
   }
 
+  // A block is a scope, so names declared in it end with it.
+  ScopeGuard scope(*this);
+
   // Statements are visited so declarations and returns run their checks.
   bool is_never = false;
   for (auto &stmt : ast->Statements) {

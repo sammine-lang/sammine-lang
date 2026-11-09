@@ -332,7 +332,7 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
   auto varName = ast->functionName.mangled();
 
   // Load closure value from symbol table
-  auto closureVal = symbolTable.get_from_name(varName);
+  auto closureVal = symbolTable.recursive_get_from_name(varName);
 
   // If stored in llvm.alloca (variable), load it first
   if (mlir::isa<mlir::LLVM::LLVMPointerType>(closureVal.getType()))

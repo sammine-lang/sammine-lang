@@ -47,6 +47,12 @@ public:
   void register_name(const std::string &symbol, sammine_util::Location loc) {
     return this->scope_stack.registerNameT(symbol, loc);
   }
+  // A block is a scope, so names declared in it end with it.
+  virtual void visit(BlockAST *ast) override {
+    ScopeGuard scope(*this);
+    ASTVisitor::visit(ast);
+  }
+
   // Case expressions: arm bodies contain pattern bindings not known at
   // scope-gen time
   virtual void visit(CaseExprAST *ast) override {
