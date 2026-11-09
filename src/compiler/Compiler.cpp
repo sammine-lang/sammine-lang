@@ -183,7 +183,13 @@ void Compiler::load_definitions() {
                "Start load definitions stage...\n");
   });
 
-  std::string def_input = sammine_util::get_string_from_file(def_path.string());
+  auto contents =
+      sammine_util::get_string_from_file(reportee, def_path.string());
+  if (!contents) {
+    set_error();
+    return;
+  }
+  std::string def_input = std::move(*contents);
   Lexer def_lexer(def_input);
   auto def_tok_stream = def_lexer.getTokenStream();
   Parser def_parser(def_tok_stream);

@@ -10,15 +10,16 @@
 #include <map>
 #include <string_view>
 namespace sammine_util {
-auto get_string_from_file(const std::string &file_name) -> std::string {
+auto get_string_from_file(Reportee &reportee, const std::string &file_name,
+                          Location loc, std::source_location src)
+    -> std::optional<std::string> {
   auto file = FileRAII(file_name);
-
-  std::string error_msg =
-      fmt::format("Cannot find or open file : {}", file_name);
-  abort_on(!file.isOpen(), error_msg);
-  auto input = file.getInternalStr();
-
-  return input;
+  if (!file.isOpen()) {
+    reportee.add_error(
+        loc, fmt::format("Cannot find or open file: {}", file_name), src);
+    return std::nullopt;
+  }
+  return file.getInternalStr();
 }
 [[noreturn]] auto abort(const std::string &message) -> void {
   auto style =

@@ -90,7 +90,11 @@ UP Resolver::get_program_from_file(const Path &file_path,
                                    const std::string &name,
                                    const sammine_util::Location &loc) {
 
-  std::string mn_input = sammine_util::get_string_from_file(file_path.string());
+  auto contents =
+      sammine_util::get_string_from_file(*this, file_path.string(), loc);
+  if (!contents)
+    return nullptr;
+  std::string mn_input = std::move(*contents);
   auto si = std::make_shared<sammine_util::SourceInfo>(
       sammine_util::SourceInfo{file_path.string(), mn_input});
   Lexer mn_lexer(mn_input, si);

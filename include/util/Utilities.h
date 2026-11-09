@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <charconv>
 #include <concepts>
 #include <cstdint>
@@ -32,7 +33,6 @@ inline fmt::text_style styled(fmt::terminal_color c) {
   return stderr_is_tty() ? fg(c) : fmt::text_style{};
 }
 
-auto get_string_from_file(const std::string &file_name) -> std::string;
 
 template <typename T>
 concept explicitly_bool_like = requires(T t) {
@@ -336,6 +336,14 @@ public:
         context_radius(radius), dev_mode(dev) {}
 };
 
+
+/// Read a whole file. If it cannot be opened, reports an error through
+/// `reportee` at `loc` and returns nullopt.
+auto get_string_from_file(
+    Reportee &reportee, const std::string &file_name,
+    Location loc = Location::NonPrintable(),
+    std::source_location src = std::source_location::current())
+    -> std::optional<std::string>;
 
 /// Integer types the compiler parses literals into: i32 and i64.
 template <typename T>
