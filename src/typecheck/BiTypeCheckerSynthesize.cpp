@@ -1667,12 +1667,11 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
-  // 1. Synthesize scrutinee
   auto scrutinee_type = ast->scrutinee->accept_synthesis(this);
   if (scrutinee_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
-  // 2. Detect mode: literal vs enum
+  // Detect mode: literal vs enum
   bool has_literal = false, has_variant = false;
   for (auto &arm : ast->arms) {
     if (arm.pattern.is_wildcard)
@@ -1690,197 +1689,227 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
-  // 3. Validate patterns based on mode
+  auto patterns = has_literal ? check_literal_patterns(ast, scrutinee_type)
+                              : check_enum_patterns(ast, scrutinee_type);
+  if (patterns == CasePatternResult::Fatal)
+    return ast->set_type(Type::Poisoned());
+
+  bool had_error = patterns == CasePatternResult::InvalidArms;
+  auto result_type = check_arm_bodies(ast, scrutinee_type, had_error);
+  if (had_error)
+    return ast->set_type(Type::Poisoned());
+
+  return ast->set_type(result_type);
+}
+
+// Validates literal patterns and their exhaustiveness. Polymorphic scrutinees
+// are resolved to their default type, so `scrutinee_type` may be updated.
+CasePatternResult
+BiTypeCheckerVisitor::check_literal_patterns(CaseExprAST *ast,
+                                             Type &scrutinee_type) {
   bool had_error = false;
 
-  if (has_literal) {
-    // --- Literal mode ---
-    // Resolve polymorphic scrutinee (e.g. Integer → i32)
-    if (scrutinee_type.is_polymorphic_numeric()) {
-      scrutinee_type = default_polymorphic_type(scrutinee_type);
-      resolve_literal_type(ast->scrutinee.get(), scrutinee_type);
+  // Resolve polymorphic scrutinee (e.g. Integer → i32)
+  if (scrutinee_type.is_polymorphic_numeric()) {
+    scrutinee_type = default_polymorphic_type(scrutinee_type);
+    resolve_literal_type(ast->scrutinee.get(), scrutinee_type);
+  }
+
+  // Reject float scrutinees
+  if (scrutinee_type.is_float()) {
+    this->add_error(
+        ast->scrutinee->get_location(),
+        fmt::format("Float types cannot be used in literal case "
+                    "patterns (float equality is unreliable), got {}",
+                    scrutinee_type.to_string()));
+    return CasePatternResult::Fatal;
+  }
+
+  // Must be integer, bool, or char
+  if (!scrutinee_type.is_matchable_scalar()) {
+    this->add_error(
+        ast->scrutinee->get_location(),
+        fmt::format("Literal case patterns require an integer, bool, or char "
+                    "scrutinee type, got {}",
+                    scrutinee_type.to_string()));
+    return CasePatternResult::Fatal;
+  }
+
+  // Validate each literal pattern
+  using LK = CasePattern::LiteralKind;
+  std::set<std::string> seen_literals;
+  for (auto &arm : ast->arms) {
+    if (arm.pattern.is_wildcard || !arm.pattern.is_literal)
+      continue;
+
+    // Check for duplicates
+    if (!seen_literals.insert(arm.pattern.literal_value).second) {
+      this->add_error(arm.pattern.location,
+                      fmt::format("Duplicate literal pattern '{}'",
+                                  arm.pattern.literal_value));
+      had_error = true;
+      continue;
     }
 
-    // Reject float scrutinees
-    if (scrutinee_type.is_float()) {
-      this->add_error(
-          ast->scrutinee->get_location(),
-          fmt::format("Float types cannot be used in literal case "
-                      "patterns (float equality is unreliable), got {}",
-                      scrutinee_type.to_string()));
-      return ast->set_type(Type::Poisoned());
+    if (arm.pattern.literal_kind == LK::Integer &&
+        !is_valid_number_lexeme(*this, arm.pattern.literal_value,
+                                scrutinee_type, arm.pattern.location)) {
+      had_error = true;
+      continue;
     }
 
-    // Must be integer, bool, or char
-    if (!scrutinee_type.is_matchable_scalar()) {
-      this->add_error(
-          ast->scrutinee->get_location(),
-          fmt::format("Literal case patterns require an integer, bool, or char "
-                      "scrutinee type, got {}",
-                      scrutinee_type.to_string()));
-      return ast->set_type(Type::Poisoned());
-    }
-
-    // Validate each literal pattern
-    using LK = CasePattern::LiteralKind;
-    std::set<std::string> seen_literals;
-    for (auto &arm : ast->arms) {
-      if (arm.pattern.is_wildcard || !arm.pattern.is_literal)
-        continue;
-
-      // Check for duplicates
-      if (!seen_literals.insert(arm.pattern.literal_value).second) {
+    // Validate literal kind matches scrutinee type
+    if (scrutinee_type.type_kind == TypeKind::Bool) {
+      if (arm.pattern.literal_kind != LK::Bool) {
         this->add_error(arm.pattern.location,
-                        fmt::format("Duplicate literal pattern '{}'",
+                        fmt::format("Expected boolean pattern, got '{}'",
                                     arm.pattern.literal_value));
         had_error = true;
-        continue;
       }
-
-      if (arm.pattern.literal_kind == LK::Integer &&
-          !is_valid_number_lexeme(*this, arm.pattern.literal_value,
-                                  scrutinee_type, arm.pattern.location)) {
-        had_error = true;
-        continue;
-      }
-
-      // Validate literal kind matches scrutinee type
-      if (scrutinee_type.type_kind == TypeKind::Bool) {
-        if (arm.pattern.literal_kind != LK::Bool) {
-          this->add_error(arm.pattern.location,
-                          fmt::format("Expected boolean pattern, got '{}'",
-                                      arm.pattern.literal_value));
-          had_error = true;
-        }
-      } else if (scrutinee_type.type_kind == TypeKind::Char) {
-        if (arm.pattern.literal_kind != LK::Char) {
-          this->add_error(arm.pattern.location,
-                          fmt::format("Expected character pattern, got '{}'",
-                                      arm.pattern.literal_value));
-          had_error = true;
-        }
-      } else {
-        // Integer scrutinee
-        if (arm.pattern.literal_kind != LK::Integer) {
-          this->add_error(
-              arm.pattern.location,
-              fmt::format("Expected integer pattern for {} scrutinee, got '{}'",
-                          scrutinee_type.to_string(),
-                          arm.pattern.literal_value));
-          had_error = true;
-        }
-      }
-    }
-
-    // Exhaustiveness for literals
-    if (!had_error) {
-      bool has_wildcard =
-          std::any_of(ast->arms.begin(), ast->arms.end(),
-                      [](const auto &a) { return a.pattern.is_wildcard; });
-
-      if (scrutinee_type.type_kind == TypeKind::Bool) {
-        // Bool: exhaustive if both true and false covered, or wildcard present
-        if (!has_wildcard) {
-          bool has_true = seen_literals.contains("true");
-          bool has_false = seen_literals.contains("false");
-          if (!has_true || !has_false) {
-            std::string missing;
-            if (!has_true)
-              missing += "true";
-            if (!has_false) {
-              if (!missing.empty())
-                missing += ", ";
-              missing += "false";
-            }
-            this->add_error(ast->scrutinee->get_location(),
-                            fmt::format("Non-exhaustive case expression: "
-                                        "missing pattern(s) {}",
-                                        missing));
-            had_error = true;
-          }
-        }
-      } else {
-        // Integer/char: wildcard always required
-        if (!has_wildcard) {
-          this->add_error(ast->scrutinee->get_location(),
-                          fmt::format("Non-exhaustive case expression on {}: "
-                                      "a wildcard '_' pattern is required",
-                                      scrutinee_type.to_string()));
-          had_error = true;
-        }
-      }
-    }
-  } else {
-    // --- Enum mode (existing logic) ---
-    if (scrutinee_type.type_kind != TypeKind::Enum) {
-      this->add_error(
-          ast->scrutinee->get_location(),
-          fmt::format("Case expression requires an enum type, got {}",
-                      scrutinee_type.to_string()));
-      return ast->set_type(Type::Poisoned());
-    }
-
-    auto &et = std::get<EnumType>(scrutinee_type.type_data);
-
-    for (auto &arm : ast->arms) {
-      if (arm.pattern.is_wildcard)
-        continue;
-
-      auto variant_name = arm.pattern.variant_name.get_name();
-      auto variant_idx = et.get_variant_index(variant_name);
-      if (!variant_idx.has_value()) {
+    } else if (scrutinee_type.type_kind == TypeKind::Char) {
+      if (arm.pattern.literal_kind != LK::Char) {
         this->add_error(arm.pattern.location,
-                        fmt::format("Type '{}' has no variant '{}'",
-                                    et.get_name().mangled(), variant_name));
+                        fmt::format("Expected character pattern, got '{}'",
+                                    arm.pattern.literal_value));
         had_error = true;
-        continue;
       }
-
-      arm.pattern.variant_index = variant_idx.value();
-      auto &vi = et.get_variant(variant_idx.value());
-
-      if (arm.pattern.bindings.size() != vi.payload_types.size()) {
+    } else {
+      // Integer scrutinee
+      if (arm.pattern.literal_kind != LK::Integer) {
         this->add_error(
             arm.pattern.location,
-            fmt::format("Pattern '{}::{}' expects {} bindings, got {}",
-                        et.get_name().mangled(), variant_name,
-                        vi.payload_types.size(), arm.pattern.bindings.size()));
-        had_error = true;
-        continue;
-      }
-    }
-
-    // Enum exhaustiveness check
-    if (!had_error) {
-      bool has_wildcard = false;
-      std::set<size_t> covered_indices;
-      for (auto &arm : ast->arms) {
-        if (arm.pattern.is_wildcard) {
-          has_wildcard = true;
-          break;
-        }
-        covered_indices.insert(arm.pattern.variant_index);
-      }
-
-      if (!has_wildcard && covered_indices.size() < et.variant_count()) {
-        std::string missing;
-        for (size_t i = 0; i < et.variant_count(); i++) {
-          if (!covered_indices.contains(i)) {
-            if (!missing.empty())
-              missing += ", ";
-            missing += et.get_variant(i).name;
-          }
-        }
-        this->add_error(
-            ast->scrutinee->get_location(),
-            fmt::format("Non-exhaustive case expression: missing variant(s) {}",
-                        missing));
+            fmt::format("Expected integer pattern for {} scrutinee, got '{}'",
+                        scrutinee_type.to_string(),
+                        arm.pattern.literal_value));
         had_error = true;
       }
     }
   }
 
-  // 4. Type-check arm bodies and unify result types
+  // Exhaustiveness for literals
+  if (!had_error) {
+    bool has_wildcard =
+        std::any_of(ast->arms.begin(), ast->arms.end(),
+                    [](const auto &a) { return a.pattern.is_wildcard; });
+
+    if (scrutinee_type.type_kind == TypeKind::Bool) {
+      // Bool: exhaustive if both true and false covered, or wildcard present
+      if (!has_wildcard) {
+        bool has_true = seen_literals.contains("true");
+        bool has_false = seen_literals.contains("false");
+        if (!has_true || !has_false) {
+          std::string missing;
+          if (!has_true)
+            missing += "true";
+          if (!has_false) {
+            if (!missing.empty())
+              missing += ", ";
+            missing += "false";
+          }
+          this->add_error(ast->scrutinee->get_location(),
+                          fmt::format("Non-exhaustive case expression: "
+                                      "missing pattern(s) {}",
+                                      missing));
+          had_error = true;
+        }
+      }
+    } else {
+      // Integer/char: wildcard always required
+      if (!has_wildcard) {
+        this->add_error(ast->scrutinee->get_location(),
+                        fmt::format("Non-exhaustive case expression on {}: "
+                                    "a wildcard '_' pattern is required",
+                                    scrutinee_type.to_string()));
+        had_error = true;
+      }
+    }
+  }
+
+  return had_error ? CasePatternResult::InvalidArms : CasePatternResult::Valid;
+}
+
+// Validates enum patterns, resolves their variant indices, and checks
+// exhaustiveness.
+CasePatternResult
+BiTypeCheckerVisitor::check_enum_patterns(CaseExprAST *ast,
+                                          const Type &scrutinee_type) {
+  bool had_error = false;
+
+  if (scrutinee_type.type_kind != TypeKind::Enum) {
+    this->add_error(
+        ast->scrutinee->get_location(),
+        fmt::format("Case expression requires an enum type, got {}",
+                    scrutinee_type.to_string()));
+    return CasePatternResult::Fatal;
+  }
+
+  auto &et = std::get<EnumType>(scrutinee_type.type_data);
+
+  for (auto &arm : ast->arms) {
+    if (arm.pattern.is_wildcard)
+      continue;
+
+    auto variant_name = arm.pattern.variant_name.get_name();
+    auto variant_idx = et.get_variant_index(variant_name);
+    if (!variant_idx.has_value()) {
+      this->add_error(arm.pattern.location,
+                      fmt::format("Type '{}' has no variant '{}'",
+                                  et.get_name().mangled(), variant_name));
+      had_error = true;
+      continue;
+    }
+
+    arm.pattern.variant_index = variant_idx.value();
+    auto &vi = et.get_variant(variant_idx.value());
+
+    if (arm.pattern.bindings.size() != vi.payload_types.size()) {
+      this->add_error(
+          arm.pattern.location,
+          fmt::format("Pattern '{}::{}' expects {} bindings, got {}",
+                      et.get_name().mangled(), variant_name,
+                      vi.payload_types.size(), arm.pattern.bindings.size()));
+      had_error = true;
+      continue;
+    }
+  }
+
+  // Enum exhaustiveness check
+  if (!had_error) {
+    bool has_wildcard = false;
+    std::set<size_t> covered_indices;
+    for (auto &arm : ast->arms) {
+      if (arm.pattern.is_wildcard) {
+        has_wildcard = true;
+        break;
+      }
+      covered_indices.insert(arm.pattern.variant_index);
+    }
+
+    if (!has_wildcard && covered_indices.size() < et.variant_count()) {
+      std::string missing;
+      for (size_t i = 0; i < et.variant_count(); i++) {
+        if (!covered_indices.contains(i)) {
+          if (!missing.empty())
+            missing += ", ";
+          missing += et.get_variant(i).name;
+        }
+      }
+      this->add_error(
+          ast->scrutinee->get_location(),
+          fmt::format("Non-exhaustive case expression: missing variant(s) {}",
+                      missing));
+      had_error = true;
+    }
+  }
+
+  return had_error ? CasePatternResult::InvalidArms : CasePatternResult::Valid;
+}
+
+// Type-checks each arm body in its own scope and unifies their types.
+// Sets `had_error` if the arms have incompatible types.
+Type BiTypeCheckerVisitor::check_arm_bodies(CaseExprAST *ast,
+                                            const Type &scrutinee_type,
+                                            bool &had_error) {
   // ASTContext is inherited on enter_new_scope(), so enclosing_function
   // is automatically available inside arm scopes — no manual capture needed.
   Type result_type = Type::Never();
@@ -1927,7 +1956,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   }
 
   if (had_error)
-    return ast->set_type(Type::Poisoned());
+    return result_type;
 
   // Arms holding polymorphic literals take the unified result type.
   for (auto &arm : ast->arms) {
@@ -1938,7 +1967,7 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
     }
   }
 
-  return ast->set_type(result_type);
+  return result_type;
 }
 
 // --- Generic support: unification, substitution ---

@@ -18,6 +18,13 @@ namespace sammine_lang {
 
 namespace AST {
 
+/// Outcome of validating a case expression's patterns.
+enum class CasePatternResult {
+  Valid,
+  InvalidArms, ///< Errors reported; arms are still checked where possible.
+  Fatal,       ///< Errors reported; the case expression is poisoned.
+};
+
 /// What a call expects, as decided by a call resolver.
 struct ResolvedCall {
   std::string callee;         ///< Name used in diagnostics.
@@ -191,6 +198,14 @@ public:
                                                 sammine_util::Location loc);
 
   Type synthesize_tuple_destructure(VarDefAST *ast);
+
+  // Case expression synthesis helpers
+  CasePatternResult check_literal_patterns(CaseExprAST *ast,
+                                           Type &scrutinee_type);
+  CasePatternResult check_enum_patterns(CaseExprAST *ast,
+                                        const Type &scrutinee_type);
+  Type check_arm_bodies(CaseExprAST *ast, const Type &scrutinee_type,
+                        bool &had_error);
 
   // pre order
 
