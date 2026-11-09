@@ -125,7 +125,7 @@ void Compiler::parse() {
   auto result = psr.Parse();
   programAST = std::move(result);
 
-  if (psr.has_errors())
+  if (psr.has_errors() || lexer->has_errors())
     set_error();
   reporter.report(*lexer);
   reporter.report(psr);
