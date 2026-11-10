@@ -209,31 +209,58 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
   for (auto &param : ast->Prototype->parameterVectors)
     register_if_linear(param->name, param->get_type(), param->get_location());
 
-  if (ast->Block)
-    check_block(ast->Block.get());
+  if (ast->Block) {
+    auto fn_type = std::get<FunctionType>(ast->Prototype->get_type().type_data);
+    check_block(ast->Block.get(), fn_type.get_return_type());
+  }
 
   pop_scope_and_check(ast->get_location());
 }
 
-void LinearTypeChecker::check_block(BlockAST *ast) {
+// A temporary has no name to track, so the position it appears in decides
+// its fate. Callers pass expressions in positions that do not take ownership.
+void LinearTypeChecker::reject_linear_temporary(ExprAST *expr) {
+  bool is_temporary =
+      llvm::isa<CallExprAST, AllocExprAST, StructLiteralExprAST,
+                ArrayLiteralExprAST, TupleLiteralExprAST, IfExprAST,
+                CaseExprAST>(expr);
+  if (is_temporary && expr->get_type().containsLinearTypes()) {
+    this->add_error(
+        expr->get_location(),
+        fmt::format("Temporary of linear type '{}' must not be discarded "
+                    "(bind it with 'let' first)",
+                    expr->get_type().to_string()));
+  }
+}
+
+void LinearTypeChecker::report_if_discarded(ExprAST *stmt) {
+  if (llvm::isa<AllocExprAST>(stmt)) {
+    this->add_error(stmt->get_location(),
+                    "Linear pointer from alloc is discarded"
+                    " (must be stored in a variable)");
+  } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt)) {
+    if (call->get_type().containsLinearTypes()) {
+      this->add_error(
+          call->get_location(),
+          fmt::format(
+              "Return value of '{}' has linear type '{}' and must not be "
+              "discarded",
+              call->functionName.mangled(), call->get_type().to_string()));
+    }
+  } else {
+    reject_linear_temporary(stmt);
+  }
+}
+
+// The last statement is the block's value: it is only kept if whatever owns
+// the block produces a linear result.
+void LinearTypeChecker::check_block(BlockAST *ast, const Type &result_type) {
   for (auto &stmt : ast->Statements) {
     check_stmt(stmt.get());
-
-    // Check for bare statements that discard linear values
-    if (llvm::isa<AllocExprAST>(stmt.get())) {
-      this->add_error(stmt->get_location(),
-                      "Linear pointer from alloc is discarded"
-                      " (must be stored in a variable)");
-    } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt.get())) {
-      if (call->get_type().containsLinearTypes()) {
-        this->add_error(
-            call->get_location(),
-            fmt::format(
-                "Return value of '{}' has linear type '{}' and must not be "
-                "discarded",
-                call->functionName.mangled(), call->get_type().to_string()));
-      }
-    }
+    bool is_kept_value =
+        stmt == ast->Statements.back() && result_type.containsLinearTypes();
+    if (!is_kept_value)
+      report_if_discarded(stmt.get());
   }
 }
 
@@ -287,6 +314,9 @@ void LinearTypeChecker::check_stmt(ExprAST *stmt) {
   case NK::AddrOfExprAST:
     check_addr_of(llvm::cast<AddrOfExprAST>(stmt));
     break;
+  case NK::FieldAccessExprAST:
+    check_field_access(llvm::cast<FieldAccessExprAST>(stmt));
+    break;
   default:
     break; // All other nodes (number, string, etc.): no linear state changes
   }
@@ -312,10 +342,8 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
     // Walk into RHS for other expressions
     check_stmt(ast->Expression.get());
     // Register any linear vars from the destructured elements
-    for (auto &var : ast->destructure_vars) {
-      if (var->get_type().linearity == Linearity::Linear)
-        register_linear(var->name, var->get_location());
-    }
+    for (auto &var : ast->destructure_vars)
+      register_if_linear(var->name, var->get_type(), var->get_location());
     return;
   }
 
@@ -551,6 +579,8 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     }
   } else {
     // Non-assignment binary: walk both sides
+    reject_linear_temporary(ast->LHS.get());
+    reject_linear_temporary(ast->RHS.get());
     check_stmt(ast->LHS.get());
     check_stmt(ast->RHS.get());
   }
@@ -626,7 +656,13 @@ void LinearTypeChecker::check_deref(DerefExprAST *ast) {
         return;
     }
   }
+  reject_linear_temporary(ast->operand.get());
   check_stmt(ast->operand.get());
+}
+
+void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast) {
+  reject_linear_temporary(ast->object_expr.get());
+  check_stmt(ast->object_expr.get());
 }
 
 // ── check_index ─────────────────────────────────────────────────────
@@ -644,6 +680,7 @@ void LinearTypeChecker::check_index(IndexExprAST *ast) {
         return;
     }
   }
+  reject_linear_temporary(ast->array_expr.get());
   check_stmt(ast->array_expr.get());
   check_stmt(ast->index_expr.get());
 }
@@ -829,7 +866,7 @@ void LinearTypeChecker::check_if(IfExprAST *ast) {
   auto before = snapshot();
 
   // Then branch
-  check_block(ast->thenBlockAST.get());
+  check_block(ast->thenBlockAST.get(), ast->get_type());
   auto state_then = snapshot();
 
   // Restore for else
@@ -837,7 +874,7 @@ void LinearTypeChecker::check_if(IfExprAST *ast) {
 
   LinearVarMap state_else;
   if (ast->elseBlockAST) {
-    check_block(ast->elseBlockAST.get());
+    check_block(ast->elseBlockAST.get(), ast->get_type());
     state_else = snapshot();
   } else {
     // No else = "no change" branch
@@ -884,7 +921,7 @@ void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
 void LinearTypeChecker::check_while(WhileExprAST *ast) {
   check_loop_body([&] {
     check_stmt(ast->condition.get());
-    check_block(ast->body.get());
+    check_block(ast->body.get(), Type::Unit());
   });
 }
 
@@ -894,7 +931,7 @@ void LinearTypeChecker::check_for(ForExprAST *ast) {
   check_loop_body([&] {
     check_stmt(ast->start.get());
     check_stmt(ast->end.get());
-    check_block(ast->body.get());
+    check_block(ast->body.get(), Type::Unit());
   });
 }
 
@@ -964,7 +1001,7 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
     push_scope();
     register_case_bindings(arm.pattern, ast->scrutinee->get_type());
     if (arm.body)
-      check_block(arm.body.get());
+      check_block(arm.body.get(), ast->get_type());
     pop_scope_and_check(arm.pattern.location);
     arm_states.push_back(snapshot());
   }

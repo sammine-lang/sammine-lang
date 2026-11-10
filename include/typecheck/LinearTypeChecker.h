@@ -67,7 +67,8 @@ class LinearTypeChecker : public sammine_util::Reportee {
   // Recursive dispatch
   void check_program(ProgramAST *ast);
   void check_func(FuncDefAST *ast);
-  void check_block(BlockAST *ast);
+  void check_block(BlockAST *ast, const Type &result_type);
+  void report_if_discarded(ExprAST *stmt);
   void check_stmt(ExprAST *stmt);
   void check_var_def(VarDefAST *ast);
   void check_binary(BinaryExprAST *ast);
@@ -82,6 +83,7 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_addr_of(AddrOfExprAST *ast);
   void check_deref(DerefExprAST *ast);
   void check_index(IndexExprAST *ast);
+  void check_field_access(FieldAccessExprAST *ast);
   void check_struct_literal(StructLiteralExprAST *ast);
   void check_array_literal(ArrayLiteralExprAST *ast);
   void check_tuple_literal(TupleLiteralExprAST *ast);
@@ -94,6 +96,9 @@ class LinearTypeChecker : public sammine_util::Reportee {
   // Register a variable as linear if its type is or contains linear.
   void register_if_linear(const std::string &name, const Type &type,
                           sammine_util::Location loc);
+
+  // Report a linear temporary in a position that does not take ownership.
+  void reject_linear_temporary(ExprAST *expr);
 
   // Register a case arm's payload bindings as linear where their types are.
   void register_case_bindings(const CasePattern &pattern,

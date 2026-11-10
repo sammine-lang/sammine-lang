@@ -1,0 +1,15 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: done
+
+import std;
+
+let a1() -> 'ptr<i32> { alloc<i32>(1) }
+
+let main() -> i32 {
+  let t = if true { (a1(), a1()) } else { (a1(), a1()) };
+  let (a, b) = t;
+  free(a);
+  free(b);
+  std::printf("done\n");
+  return 0;
+}

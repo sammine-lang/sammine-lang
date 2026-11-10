@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: must not be discarded
+
+let a1() -> 'ptr<i32> { alloc<i32>(1) }
+struct S { a: 'ptr<i32>, b: 'ptr<i32>, };
+let two() -> S { S { a: a1(), b: a1() } }
+
+let main() -> i32 {
+  let x = *two().a;
+  return 0;
+}
