@@ -68,8 +68,28 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_program(ProgramAST *ast);
   void check_func(FuncDefAST *ast);
   void check_block(BlockAST *ast, const Type &result_type);
-  void report_if_discarded(ExprAST *stmt);
-  void check_stmt(ExprAST *stmt);
+
+  // What a parent expression does with a child expression.
+  struct Use {
+    enum class Kind { Own, Read };
+    Kind kind;
+    sammine_util::Location loc;
+    const char *action; // consume reason for Own, verb for Read
+
+    static Use owns(sammine_util::Location loc, const char *reason) {
+      return {Kind::Own, loc, reason};
+    }
+    static Use reads(sammine_util::Location loc, const char *verb) {
+      return {Kind::Read, loc, verb};
+    }
+  };
+
+  void check_expr(ExprAST *expr, Use use);
+  void apply_use(VarInfo *info, Use use);
+  void check_variable(VariableExprAST *ast, Use use);
+  void check_field_access(FieldAccessExprAST *ast, Use use);
+  VarInfo *find_field(FieldAccessExprAST *ast);
+  void check_assign_target(ExprAST *target);
   void check_var_def(VarDefAST *ast);
   void check_binary(BinaryExprAST *ast);
   void check_call(CallExprAST *ast);
@@ -81,12 +101,6 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_loop_body(std::function<void()> check_body);
   void check_case(CaseExprAST *ast);
   void check_addr_of(AddrOfExprAST *ast);
-  void check_deref(DerefExprAST *ast);
-  void check_index(IndexExprAST *ast);
-  void check_field_access(FieldAccessExprAST *ast);
-  void check_struct_literal(StructLiteralExprAST *ast);
-  void check_array_literal(ArrayLiteralExprAST *ast);
-  void check_tuple_literal(TupleLiteralExprAST *ast);
 
   // Use-after-consume check: emits error if info is already consumed.
   // Returns true if consumed (caller should bail), false if ok.
@@ -97,9 +111,6 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void register_if_linear(const std::string &name, const Type &type,
                           sammine_util::Location loc);
 
-  // Report a linear temporary in a position that does not take ownership.
-  void reject_linear_temporary(ExprAST *expr);
-
   // Register a case arm's payload bindings as linear where their types are.
   void register_case_bindings(const CasePattern &pattern,
                               const Type &scrutinee_type);
@@ -107,9 +118,9 @@ class LinearTypeChecker : public sammine_util::Reportee {
   // Reject a wildcard arm that could match a variant with a linear payload.
   void check_wildcard_arm(const CaseExprAST &ast, const CaseArm &wildcard);
 
-  // Consume linear vars/fields in a list of element expressions.
-  void consume_elements(const std::vector<std::unique_ptr<ExprAST>> &elements,
-                        sammine_util::Location loc, const std::string &reason);
+  // Each element of a literal moves into the literal.
+  void move_elements(const std::vector<std::unique_ptr<ExprAST>> &elements,
+                     sammine_util::Location loc, const char *reason);
 
   // Recursive inner-linear tracking for wrapper types
   void register_inner_linear(VarInfo &parent, const Type &t,

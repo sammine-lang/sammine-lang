@@ -1,0 +1,12 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: done
+
+import std;
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  let q = if true { p } else { p };
+  free(q);
+  std::printf("done\n");
+  return 0;
+}

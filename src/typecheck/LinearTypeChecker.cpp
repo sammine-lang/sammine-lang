@@ -217,109 +217,178 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
   pop_scope_and_check(ast->get_location());
 }
 
-// A temporary has no name to track, so the position it appears in decides
-// its fate. Callers pass expressions in positions that do not take ownership.
-void LinearTypeChecker::reject_linear_temporary(ExprAST *expr) {
-  bool is_temporary =
-      llvm::isa<CallExprAST, AllocExprAST, StructLiteralExprAST,
-                ArrayLiteralExprAST, TupleLiteralExprAST, IfExprAST,
-                CaseExprAST>(expr);
-  if (is_temporary && expr->get_type().containsLinearTypes()) {
+// The last statement is the block's value: it is only kept if whatever owns
+// the block produces a linear result.
+void LinearTypeChecker::check_block(BlockAST *ast, const Type &result_type) {
+  for (auto &stmt : ast->Statements) {
+    bool is_kept_value =
+        stmt == ast->Statements.back() && result_type.containsLinearTypes();
+    auto loc = stmt->get_location();
+    check_expr(stmt.get(),
+               is_kept_value ? Use::owns(loc, "moved") : Use::reads(loc, "use"));
+  }
+}
+
+// ── Recursive dispatch ──────────────────────────────────────────────
+
+// Places name existing storage and statements produce no value. Everything
+// else creates a new value, so a new expression kind is a temporary by default.
+static bool is_place_or_statement(const ExprAST *expr) {
+  return llvm::isa<VariableExprAST, FieldAccessExprAST, DerefExprAST,
+                   IndexExprAST, VarDefAST, ReturnStmtAST>(expr);
+}
+
+// Every expression is visited with what its parent does with it. A linear
+// temporary has no name to track, so it is only legal where ownership is taken.
+void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
+  if (use.kind == Use::Kind::Read && !is_place_or_statement(expr) &&
+      expr->get_type().containsLinearTypes()) {
     this->add_error(
         expr->get_location(),
         fmt::format("Temporary of linear type '{}' must not be discarded "
                     "(bind it with 'let' first)",
                     expr->get_type().to_string()));
   }
-}
 
-void LinearTypeChecker::report_if_discarded(ExprAST *stmt) {
-  if (llvm::isa<AllocExprAST>(stmt)) {
-    this->add_error(stmt->get_location(),
-                    "Linear pointer from alloc is discarded"
-                    " (must be stored in a variable)");
-  } else if (auto *call = llvm::dyn_cast<CallExprAST>(stmt)) {
-    if (call->get_type().containsLinearTypes()) {
-      this->add_error(
-          call->get_location(),
-          fmt::format(
-              "Return value of '{}' has linear type '{}' and must not be "
-              "discarded",
-              call->functionName.mangled(), call->get_type().to_string()));
-    }
-  } else {
-    reject_linear_temporary(stmt);
-  }
-}
+  auto loc = expr->get_location();
+  auto read_child = [&](ExprAST *child) {
+    check_expr(child, Use::reads(loc, "use"));
+  };
 
-// The last statement is the block's value: it is only kept if whatever owns
-// the block produces a linear result.
-void LinearTypeChecker::check_block(BlockAST *ast, const Type &result_type) {
-  for (auto &stmt : ast->Statements) {
-    check_stmt(stmt.get());
-    bool is_kept_value =
-        stmt == ast->Statements.back() && result_type.containsLinearTypes();
-    if (!is_kept_value)
-      report_if_discarded(stmt.get());
-  }
-}
-
-// ── Recursive dispatch ──────────────────────────────────────────────
-
-void LinearTypeChecker::check_stmt(ExprAST *stmt) {
   using NK = NodeKind;
-  switch (stmt->getKind()) {
-  case NK::VarDefAST:
-    check_var_def(llvm::cast<VarDefAST>(stmt));
-    break;
-  case NK::BinaryExprAST:
-    check_binary(llvm::cast<BinaryExprAST>(stmt));
-    break;
-  case NK::CallExprAST:
-    check_call(llvm::cast<CallExprAST>(stmt));
-    break;
-  case NK::FreeExprAST:
-    check_free(llvm::cast<FreeExprAST>(stmt));
-    break;
-  case NK::ReturnStmtAST:
-    check_return(llvm::cast<ReturnStmtAST>(stmt));
-    break;
-  case NK::IfExprAST:
-    check_if(llvm::cast<IfExprAST>(stmt));
-    break;
-  case NK::WhileExprAST:
-    check_while(llvm::cast<WhileExprAST>(stmt));
-    break;
-  case NK::ForExprAST:
-    check_for(llvm::cast<ForExprAST>(stmt));
-    break;
-  case NK::CaseExprAST:
-    check_case(llvm::cast<CaseExprAST>(stmt));
-    break;
-  case NK::StructLiteralExprAST:
-    check_struct_literal(llvm::cast<StructLiteralExprAST>(stmt));
-    break;
-  case NK::ArrayLiteralExprAST:
-    check_array_literal(llvm::cast<ArrayLiteralExprAST>(stmt));
-    break;
-  case NK::TupleLiteralExprAST:
-    check_tuple_literal(llvm::cast<TupleLiteralExprAST>(stmt));
-    break;
-  case NK::DerefExprAST:
-    check_deref(llvm::cast<DerefExprAST>(stmt));
-    break;
-  case NK::IndexExprAST:
-    check_index(llvm::cast<IndexExprAST>(stmt));
-    break;
-  case NK::AddrOfExprAST:
-    check_addr_of(llvm::cast<AddrOfExprAST>(stmt));
+  // No default: a new node kind must be classified before this compiles.
+  switch (expr->getKind()) {
+  case NK::VariableExprAST:
+    check_variable(llvm::cast<VariableExprAST>(expr), use);
     break;
   case NK::FieldAccessExprAST:
-    check_field_access(llvm::cast<FieldAccessExprAST>(stmt));
+    check_field_access(llvm::cast<FieldAccessExprAST>(expr), use);
     break;
-  default:
-    break; // All other nodes (number, string, etc.): no linear state changes
+  case NK::VarDefAST:
+    check_var_def(llvm::cast<VarDefAST>(expr));
+    break;
+  case NK::BinaryExprAST:
+    check_binary(llvm::cast<BinaryExprAST>(expr));
+    break;
+  case NK::CallExprAST:
+    check_call(llvm::cast<CallExprAST>(expr));
+    break;
+  case NK::FreeExprAST:
+    check_free(llvm::cast<FreeExprAST>(expr));
+    break;
+  case NK::ReturnStmtAST:
+    check_return(llvm::cast<ReturnStmtAST>(expr));
+    break;
+  case NK::IfExprAST:
+    check_if(llvm::cast<IfExprAST>(expr));
+    break;
+  case NK::WhileExprAST:
+    check_while(llvm::cast<WhileExprAST>(expr));
+    break;
+  case NK::ForExprAST:
+    check_for(llvm::cast<ForExprAST>(expr));
+    break;
+  case NK::CaseExprAST:
+    check_case(llvm::cast<CaseExprAST>(expr));
+    break;
+  case NK::StructLiteralExprAST:
+    move_elements(llvm::cast<StructLiteralExprAST>(expr)->field_values, loc,
+                  "moved into struct");
+    break;
+  case NK::ArrayLiteralExprAST:
+    move_elements(llvm::cast<ArrayLiteralExprAST>(expr)->elements, loc,
+                  "moved into array");
+    break;
+  case NK::TupleLiteralExprAST:
+    move_elements(llvm::cast<TupleLiteralExprAST>(expr)->elements, loc,
+                  "moved into tuple");
+    break;
+  case NK::DerefExprAST:
+    check_expr(llvm::cast<DerefExprAST>(expr)->operand.get(),
+               Use::reads(loc, "dereference"));
+    break;
+  case NK::IndexExprAST: {
+    auto *index = llvm::cast<IndexExprAST>(expr);
+    check_expr(index->array_expr.get(), Use::reads(loc, "index"));
+    read_child(index->index_expr.get());
+    break;
   }
+  case NK::AddrOfExprAST:
+    check_addr_of(llvm::cast<AddrOfExprAST>(expr));
+    break;
+  case NK::RangeExprAST: {
+    auto *range = llvm::cast<RangeExprAST>(expr);
+    read_child(range->start.get());
+    read_child(range->end.get());
+    break;
+  }
+  case NK::LenExprAST:
+    read_child(llvm::cast<LenExprAST>(expr)->operand.get());
+    break;
+  case NK::DimExprAST:
+    read_child(llvm::cast<DimExprAST>(expr)->operand.get());
+    break;
+  case NK::UnaryNegExprAST:
+    read_child(llvm::cast<UnaryNegExprAST>(expr)->operand.get());
+    break;
+  case NK::NumberExprAST:
+  case NK::StringExprAST:
+  case NK::BoolExprAST:
+  case NK::CharExprAST:
+  case NK::UnitExprAST:
+  case NK::AllocExprAST:
+    break;
+  // Not expressions: never reached from an ExprAST.
+  case NK::ProgramAST:
+  case NK::PrototypeAST:
+  case NK::TypedVarAST:
+  case NK::BlockAST:
+  case NK::FuncDefAST:
+  case NK::ExternAST:
+  case NK::StructDefAST:
+  case NK::EnumDefAST:
+  case NK::TypeAliasDefAST:
+  case NK::TypeClassDeclAST:
+  case NK::TypeClassInstanceAST:
+  case NK::KernelDefAST:
+  case NK::KernelNumberExprAST:
+  case NK::KernelMapExprAST:
+  case NK::KernelReduceExprAST:
+    break;
+  }
+}
+
+void LinearTypeChecker::apply_use(VarInfo *info, Use use) {
+  if (use.kind == Use::Kind::Own)
+    consume(info, use.loc, use.action);
+  else
+    check_use_after_consume(info, use.loc, use.action);
+}
+
+void LinearTypeChecker::check_variable(VariableExprAST *ast, Use use) {
+  if (auto *info = find_linear(ast->variableName))
+    apply_use(info, use);
+}
+
+VarInfo *LinearTypeChecker::find_field(FieldAccessExprAST *ast) {
+  auto *obj = llvm::dyn_cast<VariableExprAST>(ast->object_expr.get());
+  return obj ? find_child(obj->variableName, ast->field_name) : nullptr;
+}
+
+void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast, Use use) {
+  if (auto *child = find_field(ast)) {
+    apply_use(child, use);
+    return;
+  }
+  // Non-linear field: the object is only read, even when the field is moved.
+  check_expr(ast->object_expr.get(), Use::reads(use.loc, use.action));
+}
+
+void LinearTypeChecker::move_elements(
+    const std::vector<std::unique_ptr<ExprAST>> &elements,
+    sammine_util::Location loc, const char *reason) {
+  for (auto &elem : elements)
+    check_expr(elem.get(), Use::owns(loc, reason));
 }
 
 // ── check_var_def ───────────────────────────────────────────────────
@@ -332,46 +401,17 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
 
   // Tuple destructuring: let (a, b) = expr;
   if (ast->is_tuple_destructure) {
-    // If RHS is a wrapper var, consume it (children dissolve into individual
-    // vars)
-    if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
-      auto *info = find_linear(var->variableName);
-      if (info)
-        consume(info, loc, "destructured");
-    }
-    // Walk into RHS for other expressions
-    check_stmt(ast->Expression.get());
-    // Register any linear vars from the destructured elements
+    check_expr(ast->Expression.get(), Use::owns(loc, "destructured"));
     for (auto &var : ast->destructure_vars)
       register_if_linear(var->name, var->get_type(), var->get_location());
     return;
   }
 
-  // Check if RHS is a variable referencing a linear var (move)
+  // Propagate closure captures through variable-to-variable assignment
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
-    auto *info = find_linear(var->variableName);
-    if (info) {
-      consume(info, loc, "moved");
-      register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
-      return;
-    }
-    // Propagate closure captures through variable-to-variable assignment
     auto it = closure_captures_.find(var->variableName);
     if (it != closure_captures_.end())
       closure_captures_[ast->TypedVar->name] = it->second;
-  }
-
-  // Check if RHS is a field access extracting a linear field (e.g. let q =
-  // b.data)
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->Expression.get())) {
-    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-      auto *child = find_child(obj->variableName, fa->field_name);
-      if (child) {
-        consume(child, loc, "moved");
-        register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
-        return;
-      }
-    }
   }
 
   // Record captured types if RHS is a partial application
@@ -402,8 +442,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
                llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get()))
     propagate_from_elements(al->elements);
 
-  // Walk into RHS (may contain calls that consume things)
-  check_stmt(ast->Expression.get());
+  check_expr(ast->Expression.get(), Use::owns(loc, "moved"));
 
   register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
 }
@@ -508,12 +547,24 @@ static bool involves_deref(ExprAST *expr) {
   return false;
 }
 
+// An assignment target is overwritten rather than read, so a consumed variable
+// or field is a valid target. Pointers on the way to the target are still read.
+void LinearTypeChecker::check_assign_target(ExprAST *target) {
+  if (llvm::isa<VariableExprAST>(target))
+    return;
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(target)) {
+    check_assign_target(fa->object_expr.get());
+    return;
+  }
+  check_expr(target, Use::reads(target->get_location(), "use"));
+}
+
 // ── check_binary ────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
   if (ast->Op->is_assign()) {
     // Check LHS for deref-after-consume (e.g. free(p); *p = 7)
-    check_stmt(ast->LHS.get());
+    check_assign_target(ast->LHS.get());
 
     // Lateral escape: storing a non-linear pointer through a pointer
     // dereference allows it to outlive the current scope.
@@ -529,16 +580,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
       }
     }
 
-    // RHS: linear variable → consume (move), otherwise walk for nested ops
-    if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->RHS.get())) {
-      auto *rhs_info = find_linear(var->variableName);
-      if (rhs_info)
-        consume(rhs_info, ast->get_location(), "moved");
-      else
-        check_stmt(ast->RHS.get());
-    } else {
-      check_stmt(ast->RHS.get());
-    }
+    check_expr(ast->RHS.get(), Use::owns(ast->get_location(), "moved"));
 
     // LHS deref: *pp = x updates the "*" child's location
     if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
@@ -578,51 +620,33 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
       }
     }
   } else {
-    // Non-assignment binary: walk both sides
-    reject_linear_temporary(ast->LHS.get());
-    reject_linear_temporary(ast->RHS.get());
-    check_stmt(ast->LHS.get());
-    check_stmt(ast->RHS.get());
+    auto read = Use::reads(ast->get_location(), "use");
+    check_expr(ast->LHS.get(), read);
+    check_expr(ast->RHS.get(), read);
   }
 }
 
 // ── check_call ──────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_call(CallExprAST *ast) {
-  // Check each argument: if it's a variable referencing a linear var,
-  // and the parameter type is linear, consume it.
   auto *cp = props_ ? props_->call(ast->id()) : nullptr;
+  std::vector<Type> params;
   if (cp && cp->callee_func_type) {
-    auto &func_type = std::get<FunctionType>(cp->callee_func_type->type_data);
-    auto params = func_type.get_params_types();
-    for (size_t i = 0; i < ast->arguments.size() && i < params.size(); i++) {
-      if (auto *var =
-              llvm::dyn_cast<VariableExprAST>(ast->arguments[i].get())) {
-        auto *info = find_linear(var->variableName);
-        if (info && params[i].containsLinearTypes()) {
-          consume(info, ast->get_location(), "passed to function");
-          continue;
-        }
-      }
-      // Handle field access arguments (e.g., some_func(b.data))
-      if (auto *fa =
-              llvm::dyn_cast<FieldAccessExprAST>(ast->arguments[i].get())) {
-        if (auto *obj =
-                llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-          auto *child = find_child(obj->variableName, fa->field_name);
-          if (child && params[i].containsLinearTypes()) {
-            consume(child, ast->get_location(), "passed to function");
-            continue;
-          }
-        }
-      }
-      // Walk into nested expressions
-      check_stmt(ast->arguments[i].get());
-    }
-  } else {
-    // No callee type info — walk arguments for nested linear ops
-    for (auto &arg : ast->arguments)
-      check_stmt(arg.get());
+    auto callee_params = std::get<FunctionType>(cp->callee_func_type->type_data)
+                             .get_params_types();
+    params.assign(callee_params.begin(), callee_params.end());
+  }
+
+  auto loc = ast->get_location();
+  for (size_t i = 0; i < ast->arguments.size(); i++) {
+    // Variadic arguments have no parameter to take ownership. With no callee
+    // information, the type checker has already matched any linear argument.
+    bool is_variadic = !params.empty() && i >= params.size();
+    bool takes_ownership =
+        !is_variadic && (params.empty() || params[i].containsLinearTypes());
+    check_expr(ast->arguments[i].get(), takes_ownership
+                                            ? Use::owns(loc, "passed to function")
+                                            : Use::reads(loc, "use"));
   }
 }
 
@@ -638,88 +662,29 @@ void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
                                 "linear values cannot be aliased"));
     return;
   }
-  check_stmt(ast->operand.get());
-}
-
-// ── check_deref ─────────────────────────────────────────────────────
-
-void LinearTypeChecker::check_deref(DerefExprAST *ast) {
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
-    if (check_use_after_consume(find_linear(var->variableName),
-                                ast->get_location(), "dereference"))
-      return;
-  }
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->operand.get())) {
-    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-      if (check_use_after_consume(find_child(obj->variableName, fa->field_name),
-                                  ast->get_location(), "dereference"))
-        return;
-    }
-  }
-  reject_linear_temporary(ast->operand.get());
-  check_stmt(ast->operand.get());
-}
-
-void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast) {
-  reject_linear_temporary(ast->object_expr.get());
-  check_stmt(ast->object_expr.get());
-}
-
-// ── check_index ─────────────────────────────────────────────────────
-
-void LinearTypeChecker::check_index(IndexExprAST *ast) {
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->array_expr.get())) {
-    if (check_use_after_consume(find_linear(var->variableName),
-                                ast->get_location(), "index"))
-      return;
-  }
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->array_expr.get())) {
-    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-      if (check_use_after_consume(find_child(obj->variableName, fa->field_name),
-                                  ast->get_location(), "index"))
-        return;
-    }
-  }
-  reject_linear_temporary(ast->array_expr.get());
-  check_stmt(ast->array_expr.get());
-  check_stmt(ast->index_expr.get());
+  check_expr(ast->operand.get(), Use::reads(ast->get_location(), "use"));
 }
 
 // ── check_free ──────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_free(FreeExprAST *ast) {
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->operand.get())) {
-    auto *info = find_linear(var->variableName);
-    if (info) {
-      check_children_consumed(*info);
-      consume(info, ast->get_location(), "freed");
-      return;
-    }
+  auto *operand = ast->operand.get();
+  VarInfo *target = nullptr;
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(operand)) {
+    target = find_linear(var->variableName);
+  } else if (auto *deref = llvm::dyn_cast<DerefExprAST>(operand)) {
+    if (auto *base = llvm::dyn_cast<VariableExprAST>(deref->operand.get()))
+      target = find_child(base->variableName, "*");
+  } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(operand)) {
+    target = find_field(fa);
   }
-  // Handle free(*pp) — deref operand: consume the "*" child
-  if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->operand.get())) {
-    if (auto *var = llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
-      auto *child = find_child(var->variableName, "*");
-      if (child) {
-        check_children_consumed(*child);
-        consume(child, ast->get_location(), "freed");
-        return;
-      }
-    }
+
+  if (target) {
+    check_children_consumed(*target);
+    consume(target, ast->get_location(), "freed");
+    return;
   }
-  // Handle free(b.data) — field access operand
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->operand.get())) {
-    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-      auto *child = find_child(obj->variableName, fa->field_name);
-      if (child) {
-        check_children_consumed(*child);
-        consume(child, ast->get_location(), "freed");
-        return;
-      }
-    }
-  }
-  // Walk operand for nested linear ops
-  check_stmt(ast->operand.get());
+  check_expr(operand, Use::owns(ast->get_location(), "freed"));
 }
 
 // ── Closure capture tracking ─────────────────────────────────────────
@@ -749,10 +714,9 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
     return;
 
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->return_expr.get())) {
-    auto *info = find_linear(var->variableName);
-    if (info) {
+    if (find_linear(var->variableName)) {
       // Returning a linear pointer (or wrapper): ownership transfers to caller
-      consume(info, ast->get_location(), "returned");
+      check_expr(var, Use::owns(ast->get_location(), "returned"));
       return;
     }
     // Returning a type that contains a non-linear pointer — error (may dangle)
@@ -782,17 +746,6 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
     }
   }
 
-  // Handle return b.data — field access returning a linear field
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(ast->return_expr.get())) {
-    if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-      auto *child = find_child(obj->variableName, fa->field_name);
-      if (child) {
-        consume(child, ast->get_location(), "returned");
-        return;
-      }
-    }
-  }
-
   // Returning a compound literal (struct/tuple/array) that wraps a tainted
   // closure
   auto check_elements_for_tainted_closure =
@@ -809,7 +762,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
                               "a closure that captured a non-linear pointer "
                               "(may dangle after return)",
                               v->variableName));
-              check_stmt(ast->return_expr.get());
+              check_expr(ast->return_expr.get(), Use::owns(ast->get_location(), "returned"));
               return true;
             }
           }
@@ -846,7 +799,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
                           "(may dangle after return)",
                           call->functionName.mangled()));
           // Still walk args for other linear checks
-          check_stmt(ast->return_expr.get());
+          check_expr(ast->return_expr.get(), Use::owns(ast->get_location(), "returned"));
           return;
         }
       }
@@ -854,14 +807,14 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
   }
 
   // Walk into return expression
-  check_stmt(ast->return_expr.get());
+  check_expr(ast->return_expr.get(), Use::owns(ast->get_location(), "returned"));
 }
 
 // ── check_if ────────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_if(IfExprAST *ast) {
   // Condition can consume (unconditional)
-  check_stmt(ast->bool_expr.get());
+  check_expr(ast->bool_expr.get(), Use::reads(ast->get_location(), "use"));
 
   auto before = snapshot();
 
@@ -920,7 +873,7 @@ void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
 
 void LinearTypeChecker::check_while(WhileExprAST *ast) {
   check_loop_body([&] {
-    check_stmt(ast->condition.get());
+    check_expr(ast->condition.get(), Use::reads(ast->get_location(), "use"));
     check_block(ast->body.get(), Type::Unit());
   });
 }
@@ -929,8 +882,9 @@ void LinearTypeChecker::check_while(WhileExprAST *ast) {
 
 void LinearTypeChecker::check_for(ForExprAST *ast) {
   check_loop_body([&] {
-    check_stmt(ast->start.get());
-    check_stmt(ast->end.get());
+    auto read = Use::reads(ast->get_location(), "use");
+    check_expr(ast->start.get(), read);
+    check_expr(ast->end.get(), read);
     check_block(ast->body.get(), Type::Unit());
   });
 }
@@ -982,14 +936,8 @@ void LinearTypeChecker::check_wildcard_arm(const CaseExprAST &ast,
 
 void LinearTypeChecker::check_case(CaseExprAST *ast) {
   // A linear scrutinee is taken apart: ownership moves to the arm's bindings.
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->scrutinee.get())) {
-    auto *info = find_linear(var->variableName);
-    if (info)
-      consume(info, ast->get_location(), "matched in case");
-  }
-
-  // Walk scrutinee
-  check_stmt(ast->scrutinee.get());
+  check_expr(ast->scrutinee.get(),
+             Use::owns(ast->get_location(), "matched in case"));
 
   auto before = snapshot();
   std::vector<LinearVarMap> arm_states;
@@ -1008,24 +956,6 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
 
   restore(before);
   check_branch_consistency(before, arm_states, ast->get_location());
-}
-
-// ── check_struct_literal ─────────────────────────────────────────────
-
-void LinearTypeChecker::check_struct_literal(StructLiteralExprAST *ast) {
-  consume_elements(ast->field_values, ast->get_location(), "moved into struct");
-}
-
-// ── check_array_literal ─────────────────────────────────────────────
-
-void LinearTypeChecker::check_array_literal(ArrayLiteralExprAST *ast) {
-  consume_elements(ast->elements, ast->get_location(), "moved into array");
-}
-
-// ── check_tuple_literal ──────────────────────────────────────────────
-
-void LinearTypeChecker::check_tuple_literal(TupleLiteralExprAST *ast) {
-  consume_elements(ast->elements, ast->get_location(), "moved into tuple");
 }
 
 // ── Inner-linear tracking helpers ────────────────────────────────────
@@ -1156,29 +1086,6 @@ void LinearTypeChecker::register_if_linear(const std::string &name,
   register_linear(name, loc);
   auto *info = find_linear(name);
   register_inner_linear(*info, type, loc);
-}
-
-void LinearTypeChecker::consume_elements(
-    const std::vector<std::unique_ptr<ExprAST>> &elements,
-    sammine_util::Location loc, const std::string &reason) {
-  for (auto &elem : elements) {
-    if (auto *var = llvm::dyn_cast<VariableExprAST>(elem.get())) {
-      auto *info = find_linear(var->variableName);
-      if (info) {
-        consume(info, loc, reason);
-        continue;
-      }
-    } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(elem.get())) {
-      if (auto *obj = llvm::dyn_cast<VariableExprAST>(fa->object_expr.get())) {
-        auto *child = find_child(obj->variableName, fa->field_name);
-        if (child) {
-          consume(child, loc, reason);
-          continue;
-        }
-      }
-    }
-    check_stmt(elem.get());
-  }
 }
 
 } // namespace sammine_lang::AST
