@@ -459,8 +459,8 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   auto scope_fn = this->ctx().enclosing_function;
   auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
-  // A poisoned value's own error has already been reported.
-  if (t.is_poisoned())
+  // A poisoned value or return type has already had its error reported.
+  if (t.is_poisoned() || return_type.is_poisoned())
     return;
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
     report_type_mismatch(ast->get_location(),
