@@ -1,5 +1,5 @@
 build_dir := "build"
-build_type := "Debug"
+release_dir := "build-release"
 llvm_build_dir := "externals/llvm-project/build"
 total_cpus := `python3 -c "import os; print(os.cpu_count() or 4)"`
 jobs := `python3 -c "import os; n = os.cpu_count() or 4; print(max(4, n - 4))"`
@@ -26,11 +26,12 @@ llvm:
         -DCMAKE_CXX_COMPILER=clang++
     cmake --build {{llvm_build_dir}} -j{{jobs}}
 
-# Configure the CMake build
-configure *FLAGS:
-    cmake -S . -B {{build_dir}} \
+# Shared CMake configuration for both build channels
+_configure dir type sanitize *FLAGS:
+    cmake -S . -B {{dir}} \
         -G Ninja \
-        -DCMAKE_BUILD_TYPE={{build_type}} \
+        -DCMAKE_BUILD_TYPE={{type}} \
+        -DSAMMINE_SANITIZE={{sanitize}} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DLLVM_DIR={{llvm_build_dir}}/lib/cmake/llvm \
         -DMLIR_DIR={{llvm_build_dir}}/lib/cmake/mlir \
@@ -39,9 +40,19 @@ configure *FLAGS:
         -DSAMMINE_TEST=ON \
         {{FLAGS}}
 
-# Build the project
-build:
+# Configure the debug build (ASan + UBSan)
+configure *FLAGS: (_configure build_dir "Debug" "ON" FLAGS)
+
+# Configure the optimized release build (no sanitizers)
+configure-release *FLAGS: (_configure release_dir "Release" "OFF" FLAGS)
+
+# Build the debug channel (ASan + UBSan) in build/
+build: configure
     cmake --build {{build_dir}} -j{{jobs}}
+
+# Build the release channel (optimized, no sanitizers) in build-release/
+release: configure-release
+    cmake --build {{release_dir}} -j{{jobs}}
 
 alias b := build
 
@@ -49,9 +60,9 @@ alias b := build
 test:
     cmake --build {{build_dir}} -j{{jobs}} --target unit-tests e2e-tests
 
-# Clean the build directory
+# Clean both build directories
 clean:
-    rm -rf {{build_dir}}
+    rm -rf {{build_dir}} {{release_dir}}
 
 # Run the compiler on a file
 run FILE *ARGS:

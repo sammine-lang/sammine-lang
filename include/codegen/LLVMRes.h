@@ -53,7 +53,7 @@ private:
 
     Module = std::make_unique<llvm::Module>("KaleidoscopeJIT", *Context);
     assert(Module);
-    llvm::Triple TargetTriple(LLVMGetDefaultTargetTriple());
+    llvm::Triple TargetTriple(llvm::sys::getDefaultTargetTriple());
     std::string Error;
     auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
 

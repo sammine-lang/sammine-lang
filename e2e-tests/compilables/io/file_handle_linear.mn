@@ -15,5 +15,6 @@ let main() -> i32 {
   io::println(buf);
 
   io::close(f);
+  free(buf);
   0
 }

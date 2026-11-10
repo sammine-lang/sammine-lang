@@ -8,5 +8,6 @@ let main() -> i32 {
   let line: ptr<char> = io::read_line(&line_len);
   io::print("got: ");
   io::println(line);
+  free(line);
   0
 }

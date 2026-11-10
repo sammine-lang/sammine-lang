@@ -9,5 +9,6 @@ let main() -> i32 {
   let out_len: i64 = 0;
   let data: ptr<char> = io::read_file("/tmp/sammine_test_io.txt", &out_len);
   io::println(data);
+  free(data);
   0
 }

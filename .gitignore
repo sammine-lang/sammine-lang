@@ -49,6 +49,7 @@ cmake-build-debug/
 cmake-build-debug-event-trace
 cmake-build-release/
 build/
+build-release/
 build_ssh/
 Testing/
 Output/
