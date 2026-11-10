@@ -60,8 +60,9 @@ public:
     bool check(std::istream &input) {
         std::vector<std::string> input_lines;
         std::string line;
+        // Match against the same path-stripped form that --update writes.
         while (std::getline(input, line)) {
-            input_lines.push_back(line);
+            input_lines.push_back(sanitize_output_line(line));
         }
 
         if (checks_.empty()) {
