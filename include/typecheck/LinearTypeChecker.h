@@ -95,6 +95,13 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void register_if_linear(const std::string &name, const Type &type,
                           sammine_util::Location loc);
 
+  // Register a case arm's payload bindings as linear where their types are.
+  void register_case_bindings(const CasePattern &pattern,
+                              const Type &scrutinee_type);
+
+  // Reject a wildcard arm that could match a variant with a linear payload.
+  void check_wildcard_arm(const CaseExprAST &ast, const CaseArm &wildcard);
+
   // Consume linear vars/fields in a list of element expressions.
   void consume_elements(const std::vector<std::unique_ptr<ExprAST>> &elements,
                         sammine_util::Location loc, const std::string &reason);

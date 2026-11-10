@@ -900,7 +900,57 @@ void LinearTypeChecker::check_for(ForExprAST *ast) {
 
 // ── check_case ──────────────────────────────────────────────────────
 
+void LinearTypeChecker::register_case_bindings(const CasePattern &pattern,
+                                               const Type &scrutinee_type) {
+  if (pattern.is_wildcard || pattern.is_literal ||
+      scrutinee_type.type_kind != TypeKind::Enum)
+    return;
+
+  auto &enum_type = std::get<EnumType>(scrutinee_type.type_data);
+  auto &payloads = enum_type.get_variants()[pattern.variant_index].payload_types;
+  for (size_t i = 0; i < pattern.bindings.size() && i < payloads.size(); i++)
+    register_if_linear(pattern.bindings[i], payloads[i], pattern.location);
+}
+
+void LinearTypeChecker::check_wildcard_arm(const CaseExprAST &ast,
+                                           const CaseArm &wildcard) {
+  auto scrutinee_type = ast.scrutinee->get_type();
+  if (scrutinee_type.type_kind != TypeKind::Enum)
+    return;
+
+  auto &variants = std::get<EnumType>(scrutinee_type.type_data).get_variants();
+  std::vector<bool> named_earlier(variants.size(), false);
+  for (auto &arm : ast.arms) {
+    if (&arm == &wildcard)
+      break;
+    if (!arm.pattern.is_wildcard && !arm.pattern.is_literal)
+      named_earlier[arm.pattern.variant_index] = true;
+  }
+
+  for (size_t i = 0; i < variants.size(); i++) {
+    if (named_earlier[i])
+      continue;
+    for (auto &payload : variants[i].payload_types) {
+      if (payload.containsLinearTypes()) {
+        this->add_error(
+            wildcard.pattern.location,
+            fmt::format("Wildcard drops linear payload of variant '{}'; match "
+                        "it by name and consume it",
+                        variants[i].name));
+        break;
+      }
+    }
+  }
+}
+
 void LinearTypeChecker::check_case(CaseExprAST *ast) {
+  // A linear scrutinee is taken apart: ownership moves to the arm's bindings.
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->scrutinee.get())) {
+    auto *info = find_linear(var->variableName);
+    if (info)
+      consume(info, ast->get_location(), "matched in case");
+  }
+
   // Walk scrutinee
   check_stmt(ast->scrutinee.get());
 
@@ -909,8 +959,13 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
 
   for (auto &arm : ast->arms) {
     restore(before);
+    if (arm.pattern.is_wildcard)
+      check_wildcard_arm(*ast, arm);
+    push_scope();
+    register_case_bindings(arm.pattern, ast->scrutinee->get_type());
     if (arm.body)
       check_block(arm.body.get());
+    pop_scope_and_check(arm.pattern.location);
     arm_states.push_back(snapshot());
   }
 

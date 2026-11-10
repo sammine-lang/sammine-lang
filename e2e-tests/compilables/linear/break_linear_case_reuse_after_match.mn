@@ -1,0 +1,18 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot use linear variable 'm'
+
+type M = L('ptr<i32>) | E;
+let mk() -> M { L(alloc<i32>(1)) }
+
+let main() -> i32 {
+  let m = mk();
+  case m {
+    L(p) => { free(p); },
+    E => { },
+  };
+  case m {
+    L(q) => { free(q); },
+    E => { },
+  };
+  return 0;
+}

@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: done
+
+import std;
+
+type M = L('ptr<i32>) | E;
+let mk() -> M { L(alloc<i32>(1)) }
+
+let main() -> i32 {
+  let m = mk();
+  case m {
+    L(p) => { free(p); },
+    _ => { },
+  };
+  std::printf("done\n");
+  return 0;
+}
