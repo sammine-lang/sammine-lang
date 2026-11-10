@@ -193,8 +193,12 @@ void LinearTypeChecker::check(ProgramAST *program, const ASTProperties &props) {
 
 void LinearTypeChecker::check_program(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
-    if (auto *func = llvm::dyn_cast<FuncDefAST>(def.get()))
+    if (auto *func = llvm::dyn_cast<FuncDefAST>(def.get())) {
       check_func(func);
+    } else if (auto *inst = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
+      for (auto &method : inst->methods)
+        check_func(method.get());
+    }
   }
 }
 
