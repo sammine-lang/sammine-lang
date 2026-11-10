@@ -103,6 +103,9 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_variable(VariableExprAST *ast, Use use);
   void check_field_access(FieldAccessExprAST *ast, Use use);
   VarInfo *find_field(FieldAccessExprAST *ast);
+  // The tracked variable or field an argument names, if any.
+  VarInfo *find_tracked(ExprAST *expr);
+  bool contains_tracked(const VarInfo &owner, const VarInfo *part);
   void check_through_pointer(ExprAST *pointer, Use use,
                              sammine_util::Location loc, const char *verb);
   void check_var_def(VarDefAST *ast);

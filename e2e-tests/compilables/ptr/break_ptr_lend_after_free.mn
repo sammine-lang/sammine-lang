@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot use 'b'
+
+let look(p: ptr<i32>) -> i32 {
+  *p
+}
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  free(b);
+  look(b);
+  return 0;
+}

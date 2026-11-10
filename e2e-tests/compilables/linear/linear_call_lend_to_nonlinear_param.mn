@@ -1,0 +1,20 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 42
+
+// Passing 'ptr<i32> to a ptr<i32> parameter lends it: read_val only reads,
+// and main still owns p, so main frees it.
+
+import std;
+
+let read_val(p: ptr<i32>) -> i32 {
+  return *p;
+}
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let v : i32 = read_val(p);
+  free(p);
+  std::printf("%d\n", v);
+  return 0;
+}

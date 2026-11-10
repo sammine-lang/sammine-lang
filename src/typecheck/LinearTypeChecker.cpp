@@ -661,16 +661,47 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
   }
 
   auto loc = ast->get_location();
+  std::vector<VarInfo *> lent, moved;
   for (size_t i = 0; i < ast->arguments.size(); i++) {
+    auto *arg = ast->arguments[i].get();
     // Variadic arguments have no parameter to take ownership. With no callee
     // information, the type checker has already matched any linear argument.
+    // A linear argument to a non-linear parameter is lent, not moved.
     bool is_variadic = !params.empty() && i >= params.size();
     bool takes_ownership =
         !is_variadic && (params.empty() || params[i].containsLinearTypes());
-    check_expr(ast->arguments[i].get(), takes_ownership
-                                            ? Use::owns(loc, "passed to function")
-                                            : Use::reads(loc, "use"));
+    if (auto *info = find_tracked(arg))
+      (takes_ownership ? moved : lent).push_back(info);
+    check_expr(arg, takes_ownership ? Use::owns(loc, "passed to function")
+                                    : Use::reads(loc, "use"));
   }
+
+  // The callee could free what it was given while still reading the lent view.
+  for (auto *view : lent) {
+    for (auto *owner : moved) {
+      if (view == owner || contains_tracked(*owner, view)) {
+        this->add_error(loc, fmt::format("Cannot lend '{}' and move it in the "
+                                         "same call",
+                                         view->name));
+      }
+    }
+  }
+}
+
+VarInfo *LinearTypeChecker::find_tracked(ExprAST *expr) {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
+    return find_linear(var->variableName);
+  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr))
+    return find_field(fa);
+  return nullptr;
+}
+
+bool LinearTypeChecker::contains_tracked(const VarInfo &owner,
+                                         const VarInfo *part) {
+  for (auto &[name, child] : owner.children)
+    if (&child == part || contains_tracked(child, part))
+      return true;
+  return false;
 }
 
 // ── check_addr_of ───────────────────────────────────────────────────

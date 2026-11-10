@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 10 30
+
+import std;
+
+let read_elem(arr: ptr<[3]i32>, i: i32) -> i32 {
+  (*arr)[i]
+}
+
+let main() -> i32 {
+  let b = alloc<[3]i32>(1);
+  (*b)[0] = 10;
+  (*b)[2] = 30;
+  std::printf("%d %d\n", read_elem(b, 0), read_elem(b, 2));
+  free(b);
+  return 0;
+}

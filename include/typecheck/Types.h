@@ -602,4 +602,8 @@ struct TypeMapOrdering {
 
   /// Qualifier check only: linearity
   bool qualifier_compatible(const Type &to, const Type &from) const;
+
+  /// Call arguments only: an owned 'ptr<T> can be lent to a ptr<T> parameter.
+  /// The caller keeps ownership; the callee only reads through it.
+  bool lendable_to_from(const Type &to, const Type &from) const;
 };

@@ -257,7 +257,8 @@ bool BiTypeCheckerVisitor::check_call_argument(CallExprAST *ast, size_t i,
   if (arg_type.is_poisoned())
     return false;
 
-  if (!type_map_ordering.compatible_to_from(expected, arg_type)) {
+  bool is_lent = type_map_ordering.lendable_to_from(expected, arg_type);
+  if (!is_lent && !type_map_ordering.compatible_to_from(expected, arg_type)) {
     report_type_mismatch(arg->get_location(),
                          fmt::format("Argument {} to '{}': expected {}, got {}",
                                      i + 1, callee, expected.to_string(),

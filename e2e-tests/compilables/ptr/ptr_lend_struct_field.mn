@@ -1,0 +1,18 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 5
+
+import std;
+
+struct W { p: 'ptr<i32>, };
+
+let look(p: ptr<i32>) -> i32 {
+  *p
+}
+
+let main() -> i32 {
+  let w = W { p: alloc<i32>(1) };
+  *w.p = 5;
+  std::printf("%d\n", look(w.p));
+  free(w.p);
+  return 0;
+}

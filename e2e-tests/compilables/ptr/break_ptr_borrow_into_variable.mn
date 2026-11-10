@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Type mismatch
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  let q: ptr<i32> = b;
+  free(b);
+  return 0;
+}

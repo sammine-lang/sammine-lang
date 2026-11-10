@@ -338,6 +338,15 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
 // Full assignment compatibility: structural match + qualifier checks
 // (linearity). Used for variable initialization, function arguments,
 // and return type validation.
+bool TypeMapOrdering::lendable_to_from(const Type &to,
+                                       const Type &from) const {
+  return to.type_kind == TypeKind::Pointer &&
+         from.type_kind == TypeKind::Pointer &&
+         to.linearity == Linearity::NonLinear &&
+         from.linearity == Linearity::Linear &&
+         structurally_compatible(to, from);
+}
+
 bool TypeMapOrdering::compatible_to_from(const Type &to,
                                          const Type &from) const {
   if (!qualifier_compatible(to, from))

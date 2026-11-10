@@ -1,0 +1,16 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7 7
+
+import std;
+
+let look(p: ptr<i32>) -> i32 {
+  *p
+}
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  *b = 7;
+  std::printf("%d %d\n", look(b), look(b));
+  free(b);
+  return 0;
+}
