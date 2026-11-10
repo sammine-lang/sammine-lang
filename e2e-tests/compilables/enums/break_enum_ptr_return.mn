@@ -1,6 +1,8 @@
-// RUN: %sammine_jit --file %full | %check %full
-// CHECK:      got val: 42
-// CHECK-NEXT: got nothing
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Non-owning pointer in an enum payload ('MaybePtr')
+
+// A non-owning ptr<T> can only be the type of a parameter or local
+// variable, so storing one is rejected.
 
 import std;
 

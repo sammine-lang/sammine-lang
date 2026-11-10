@@ -1,13 +1,13 @@
 export reuse printf(fmt: ptr<char>, ...) -> i32;
 reuse sammine_io_eprint(s: ptr<char>) -> unit;
 reuse sammine_io_eprintln(s: ptr<char>) -> unit;
-reuse sammine_io_read_line(out_len: ptr<i64>) -> ptr<char>;
+reuse sammine_io_read_line(out_len: ptr<i64>) -> 'ptr<char>;
 reuse scanf(fmt: ptr<char>, ...) -> i32;
 reuse sammine_io_open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char>;
 reuse sammine_io_close(handle: 'ptr<char>) -> unit;
-reuse sammine_io_file_read_line(handle: 'ptr<char>, out_buf: ptr<ptr<char>>, out_len: ptr<i64>) -> 'ptr<char>;
+reuse sammine_io_file_read_line(handle: ptr<char>, out_len: ptr<i64>) -> 'ptr<char>;
 reuse sammine_io_file_write(handle: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char>;
-reuse sammine_io_read_file(path: ptr<char>, out_len: ptr<i64>) -> ptr<char>;
+reuse sammine_io_read_file(path: ptr<char>, out_len: ptr<i64>) -> 'ptr<char>;
 reuse sammine_io_write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 reuse sammine_io_append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 
@@ -22,21 +22,23 @@ export let print_bool(b: bool) -> unit { if b { printf("true") } else { printf("
 export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
 export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
-export let read_line(out_len: ptr<i64>) -> ptr<char> { sammine_io_read_line(out_len) }
+export let read_line(out_len: ptr<i64>) -> 'ptr<char> { sammine_io_read_line(out_len) }
 export let read_i32() -> i32 { let v: i32 = 0; scanf("%d", &v); v }
 export let read_i64() -> i64 { let v: i64 = 0i64; scanf("%ld", &v); v }
 export let read_f64() -> f64 { let v: f64 = 0.0; scanf("%lf", &v); v }
 
 export let open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char> { sammine_io_open(path, mode) }
 export let close(f: 'ptr<char>) -> unit { sammine_io_close(f) }
-export let file_read_line(f: 'ptr<char>, out_buf: ptr<ptr<char>>, out_len: ptr<i64>) -> 'ptr<char> {
-  sammine_io_file_read_line(f, out_buf, out_len)
+// Returns the file handle back with the line, which the caller owns.
+export let file_read_line(f: 'ptr<char>, out_len: ptr<i64>) -> ('ptr<char>, 'ptr<char>) {
+  let line = sammine_io_file_read_line(f, out_len);
+  (f, line)
 }
 export let file_write(f: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char> {
   sammine_io_file_write(f, content, nbytes)
 }
 
-export let read_file(path: ptr<char>, out_len: ptr<i64>) -> ptr<char> {
+export let read_file(path: ptr<char>, out_len: ptr<i64>) -> 'ptr<char> {
   sammine_io_read_file(path, out_len)
 }
 export let write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {

@@ -1,15 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: lateral_escape_deref_field.mn:27:3
-// CHECK-NEXT:   25|let bad(h: ptr<Holder>) -> i32 {
-// CHECK-NEXT:   26|  let x : i32 = 42;
-// CHECK-NEXT:   27|  (*h).p = &x;
-// CHECK-NEXT:     |   ─────────┬
-// CHECK-NEXT:     |            ╰─ Cannot store non-linear ptr<i32> through pointer dereference — may dangle after scope exit
-// CHECK-NEXT:   28|  return 0;
-// CHECK-NEXT:   29|}
-// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-// CHECK-NEXT: --------------------------------------------------------------------------
+// CHECK: Non-owning pointer in a struct field ('Holder')
 
 // Test: storing a non-linear pointer into a field through a pointer dereference
 // must be rejected — the local dies when the function returns, but the

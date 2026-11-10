@@ -84,6 +84,16 @@
 - `containsLinear()` recursively checks for linear sub-components
 - `check_children_consumed()` at scope exit for each wrapper
 
+### Uses (`check_expr(expr, Use)`)
+- Every child is visited with what its parent does: `Own`, `Read`, `Write`, `TakeAddress`
+- A linear temporary (anything not a place or statement) is only legal where it is owned
+- Writing through a non-linear `ptr`, or taking the address of owned memory, is decided in `check_through_pointer`
+- Lending: a `'ptr` argument to a `ptr` parameter is a `Read`; lending and moving the same value in one call is an error
+
+### Pointer Placement
+- A non-linear `ptr<T>` may only be the whole type of a parameter or local (a view of a view is fine)
+- Checked in `check_placement` for prototypes, externs, struct/enum defs, locals and literals
+
 ### Branch Consistency
 - All branches of if/case must agree — either all consume a linear var or none do
 - Must check children, not just top-level vars

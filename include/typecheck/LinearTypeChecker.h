@@ -125,6 +125,13 @@ class LinearTypeChecker : public sammine_util::Reportee {
   bool check_use_after_consume(VarInfo *info, sammine_util::Location use_loc,
                                const std::string &verb);
 
+  // Report `type` if it holds a non-owning ptr<T> where one is not allowed.
+  // `ptr_allowed_here` says whether `type` itself may be a ptr<T>: true for
+  // parameters and locals, false for returns and anything stored.
+  void check_placement(const Type &type, bool ptr_allowed_here,
+                       sammine_util::Location loc, const std::string &where);
+  void check_prototype_placement(PrototypeAST *proto);
+
   // Register a variable as linear if its type is or contains linear.
   void register_if_linear(const std::string &name, const Type &type,
                           sammine_util::Location loc);

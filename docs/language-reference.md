@@ -748,6 +748,37 @@ let y: i32 = *p;                     // dereference
 std::printf("%d\n", y);              // 42
 ```
 
+### What a Non-Linear Pointer Can Do
+
+A `ptr<T>` is a view: you can look through it, but you don't own what it points
+at. The compiler enforces that:
+
+- **Read-only.** Writing through a `ptr<T>` (`*p = v`, `p[i] = v`, `(*p).f = v`)
+  is an error. Only an owned `'ptr<T>` can be written.
+- **Parameters and locals only.** A `ptr<T>` can't be returned, stored in a
+  struct, tuple, array or enum, or held by a `'ptr<T>`. A view of a view, such
+  as `argv: ptr<ptr<char>>`, is allowed.
+- **Never freed.** Only the owner frees memory.
+
+An owned pointer can be **lent** to a function that takes a `ptr<T>`. The caller
+keeps ownership and still has to free it:
+
+```sammine
+let look(p: ptr<i32>) -> i32 { *p }
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  *b = 7;
+  let v = look(b);      // b is lent, not moved
+  free(b);              // main still owns b
+  return 0;
+}
+```
+
+Lending only happens at a call: `let q: ptr<i32> = b;` is a type mismatch, and
+taking the address of owned memory (`&*b`, `&b[0]`) is an error, since the view
+could outlive a `free`.
+
 ### Pointer Indexing
 
 Heap-allocated buffers can be indexed like arrays:

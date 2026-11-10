@@ -1,17 +1,18 @@
-reuse malloc(size: i64) -> ptr<char>;
-reuse memcpy(dst: ptr<char>, src: ptr<char>, n: i64) -> ptr<char>;
+reuse malloc(size: i64) -> 'ptr<char>;
+// memcpy returns dst, so ownership of the buffer is handed back.
+reuse memcpy(dst: 'ptr<char>, src: ptr<char>, n: i64) -> 'ptr<char>;
 reuse strlen(s: ptr<char>) -> i64;
 
 export struct String {
-  data: ptr<char>,
+  data: 'ptr<char>,
   length: i64,
   cap: i64,
 };
 
 export let new(src: ptr<char>) -> String {
   let sz: i64 = strlen(src);
-  let buf: ptr<char> = malloc(sz);
-  memcpy(buf, src, sz);
+  let buf = malloc(sz);
+  let buf = memcpy(buf, src, sz);
   String { data: buf, length: sz, cap: sz }
 }
 

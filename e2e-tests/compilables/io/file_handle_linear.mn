@@ -8,10 +8,9 @@ let main() -> i32 {
   io::write_file("/tmp/sammine_test_handle.txt", content, 16);
 
   let f: 'ptr<char> = io::open("/tmp/sammine_test_handle.txt", "r");
-  let buf: ptr<char> = "";
   let line_len: i64 = 0;
 
-  let f = io::file_read_line(f, &buf, &line_len);
+  let (f, buf) = io::file_read_line(f, &line_len);
   io::println(buf);
 
   io::close(f);

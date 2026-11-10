@@ -27,21 +27,20 @@ void sammine_io_close(void* handle) {
     if (handle) fclose((FILE*)handle);
 }
 
-// Thread handle through: consume and return the same handle
-void* sammine_io_file_read_line(void* handle, char** out_buf, int64_t* out_len) {
+// Reads the next line from a borrowed handle. Returns a malloc'd buffer the
+// caller owns, or NULL at end of file.
+char* sammine_io_file_read_line(void* handle, int64_t* out_len) {
     char* line = NULL;
     size_t cap = 0;
     ssize_t len = getline(&line, &cap, (FILE*)handle);
     if (len < 0) {
         *out_len = 0;
-        *out_buf = NULL;
         free(line);
-    } else {
-        if (len > 0 && line[len-1] == '\n') line[--len] = '\0';
-        *out_len = (int64_t)len;
-        *out_buf = line;
+        return NULL;
     }
-    return handle;
+    if (len > 0 && line[len-1] == '\n') line[--len] = '\0';
+    *out_len = (int64_t)len;
+    return line;
 }
 
 void* sammine_io_file_write(void* handle, const char* content, int64_t len) {

@@ -1,15 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: linear_nested_struct_struct_return.mn:29:2
-// CHECK-NEXT:   27|  let i : Inner = Inner { p: q };
-// CHECK-NEXT:   28|  let o : Outer = Outer { inner: i, tag: 1 };
-// CHECK-NEXT:   29|  return o;
-// CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return 'o' of type 'Outer': non-linear ptr<i32> in field 'p' in field 'inner' (may reference a local variable)
-// CHECK-NEXT:   30|}
-// CHECK-NEXT:   31|
-// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
-// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
-// CHECK-NEXT: --------------------------------------------------------------------------
+// CHECK: Non-owning pointer in a struct field ('Inner')
 
 // Test: struct wrapping struct wrapping ptr<T> — 2 levels deep
 struct Inner {

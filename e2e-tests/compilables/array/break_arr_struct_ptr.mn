@@ -1,8 +1,8 @@
-// RUN: %sammine_jit --file %full | %check %full
-// CHECK:      7
-// CHECK-NEXT: 42
-// CHECK-NEXT: 13
-// CHECK-NEXT: 99
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Non-owning pointer in a struct field ('Node')
+
+// A non-owning ptr<T> can only be the type of a parameter or local
+// variable, so storing one is rejected.
 
 import std;
 

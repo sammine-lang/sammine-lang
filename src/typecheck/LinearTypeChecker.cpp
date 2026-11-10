@@ -184,6 +184,101 @@ void LinearTypeChecker::check_branch_consistency(
   }
 }
 
+// ── Pointer placement ───────────────────────────────────────────────
+//
+// A non-owning ptr<T> may only be the whole type of a parameter or local
+// variable. It can never be returned or stored in another type, so it can
+// never outlive what it points at.
+
+// True if `type` holds a non-owning pointer where one is not allowed.
+// Function types are checked like prototypes: their parameters may be ptr<T>.
+static bool has_misplaced_pointer(const Type &type, bool ptr_allowed_here) {
+  switch (type.type_kind) {
+  case TypeKind::Pointer: {
+    bool is_owned = type.linearity == Linearity::Linear;
+    if (!is_owned && !ptr_allowed_here)
+      return true;
+    // A view of a view is fine: nothing can be written through a ptr<T>, so
+    // reading the inner pointer only yields another local. Owned memory must
+    // not hold a view, since it can outlive what the view points at.
+    return has_misplaced_pointer(
+        std::get<PointerType>(type.type_data).get_pointee(), /*ptr_allowed_here=*/!is_owned);
+  }
+  case TypeKind::Struct:
+    for (auto &field : std::get<StructType>(type.type_data).get_field_types())
+      if (has_misplaced_pointer(field, /*ptr_allowed_here=*/false))
+        return true;
+    return false;
+  case TypeKind::Tuple: {
+    auto &tuple = std::get<TupleType>(type.type_data);
+    for (size_t i = 0; i < tuple.size(); i++)
+      if (has_misplaced_pointer(tuple.get_element(i), /*ptr_allowed_here=*/false))
+        return true;
+    return false;
+  }
+  case TypeKind::Array:
+    return has_misplaced_pointer(
+        std::get<ArrayType>(type.type_data).get_element(), /*ptr_allowed_here=*/false);
+  case TypeKind::Enum:
+    for (auto &variant : std::get<EnumType>(type.type_data).get_variants())
+      for (auto &payload : variant.payload_types)
+        if (has_misplaced_pointer(payload, /*ptr_allowed_here=*/false))
+          return true;
+    return false;
+  case TypeKind::Function: {
+    auto &fn = std::get<FunctionType>(type.type_data);
+    for (auto &param : fn.get_params_types())
+      if (has_misplaced_pointer(param, /*ptr_allowed_here=*/true))
+        return true;
+    return has_misplaced_pointer(fn.get_return_type(), /*ptr_allowed_here=*/false);
+  }
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F64_t:
+  case TypeKind::F32_t:
+  case TypeKind::Unit:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::String:
+  case TypeKind::Never:
+  case TypeKind::NonExistent:
+  case TypeKind::Poisoned:
+  case TypeKind::Integer:
+  case TypeKind::Flt:
+  case TypeKind::TypeParam:
+  case TypeKind::Generic:
+    return false;
+  }
+  return false;
+}
+
+void LinearTypeChecker::check_placement(const Type &type,
+                                        bool ptr_allowed_here,
+                                        sammine_util::Location loc,
+                                        const std::string &where) {
+  if (!has_misplaced_pointer(type, ptr_allowed_here))
+    return;
+  this->add_error(loc, fmt::format("Non-owning pointer in {} ('{}'): ptr<T> "
+                                   "can only be the type of a parameter or "
+                                   "local variable",
+                                   where, type.to_string()));
+}
+
+void LinearTypeChecker::check_prototype_placement(PrototypeAST *proto) {
+  if (proto->is_generic() || proto->get_type().type_kind != TypeKind::Function)
+    return;
+  auto fn = std::get<FunctionType>(proto->get_type().type_data);
+  auto params = fn.get_params_types();
+  for (size_t i = 0; i < proto->parameterVectors.size() && i < params.size();
+       i++)
+    check_placement(params[i], /*ptr_allowed_here=*/true, proto->parameterVectors[i]->get_location(),
+                    "a parameter type");
+  check_placement(fn.get_return_type(), /*ptr_allowed_here=*/false, proto->get_location(),
+                  "a return type");
+}
+
 // ── Entry point ─────────────────────────────────────────────────────
 
 void LinearTypeChecker::check(ProgramAST *program, const ASTProperties &props) {
@@ -195,6 +290,16 @@ void LinearTypeChecker::check_program(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
     if (auto *func = llvm::dyn_cast<FuncDefAST>(def.get())) {
       check_func(func);
+    } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
+      check_prototype_placement(ext->Prototype.get());
+    } else if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get())) {
+      if (sd->type_params.empty())
+        check_placement(sd->get_type(), /*ptr_allowed_here=*/false, sd->get_location(),
+                        "a struct field");
+    } else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get())) {
+      if (ed->type_params.empty())
+        check_placement(ed->get_type(), /*ptr_allowed_here=*/false, ed->get_location(),
+                        "an enum payload");
     } else if (auto *inst = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
       for (auto &method : inst->methods)
         check_func(method.get());
@@ -207,6 +312,7 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
   if (ast->Prototype->is_generic())
     return;
 
+  check_prototype_placement(ast->Prototype.get());
   push_scope();
 
   // Register linear parameters (including wrapper types with linear fields)
@@ -296,14 +402,17 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     check_case(llvm::cast<CaseExprAST>(expr));
     break;
   case NK::StructLiteralExprAST:
+    check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc, "a struct value");
     move_elements(llvm::cast<StructLiteralExprAST>(expr)->field_values, loc,
                   "moved into struct");
     break;
   case NK::ArrayLiteralExprAST:
+    check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc, "an array value");
     move_elements(llvm::cast<ArrayLiteralExprAST>(expr)->elements, loc,
                   "moved into array");
     break;
   case NK::TupleLiteralExprAST:
+    check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc, "a tuple value");
     move_elements(llvm::cast<TupleLiteralExprAST>(expr)->elements, loc,
                   "moved into tuple");
     break;
@@ -430,6 +539,14 @@ void LinearTypeChecker::move_elements(
 // ── check_var_def ───────────────────────────────────────────────────
 
 void LinearTypeChecker::check_var_def(VarDefAST *ast) {
+  if (ast->is_tuple_destructure) {
+    for (auto &var : ast->destructure_vars)
+      check_placement(var->get_type(), /*ptr_allowed_here=*/true, var->get_location(),
+                      "a local variable");
+  } else {
+    check_placement(ast->get_type(), /*ptr_allowed_here=*/true, ast->get_location(),
+                    "a local variable");
+  }
   if (!ast->Expression)
     return;
 
