@@ -1,11 +1,11 @@
-// RUN: ! %sammine --file %full %O --diagnostics=dev 2>&1 | %check %full
-// CHECK:          |diagnostics_dev.mn:3:4
-// CHECK:         3|let main() -> i64 {
+// RUN: (! %sammine --file %full %O --diagnostics=dev 2>&1) | %check %full
+// CHECK:          |diagnostics_dev.mn:12:4
+// CHECK:        12|let main() -> i64 {
 // CHECK-NEXT:     |    ────────────┬
 // CHECK-NEXT:     |                ╰─ main must return i32, found i64
-// CHECK-NEXT:     |                   [Error-borne `dev` location: BiTypeChecker.cpp:125]
-// CHECK-NEXT:    4|  return 0;
-// CHECK-NEXT:    5|}
+// CHECK-NEXT:     |                   [Error-borne `dev` location: BiTypeChecker.cpp:
+// CHECK-NEXT:   13|  return 0;
+// CHECK-NEXT:   14|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

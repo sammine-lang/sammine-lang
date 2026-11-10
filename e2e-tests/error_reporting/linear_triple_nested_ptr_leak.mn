@@ -1,5 +1,15 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK: Linear variable 'c.*' must be consumed before scope exit
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |linear_triple_nested_ptr_leak.mn:22:2
+// CHECK-NEXT:   20|  *a = 1;
+// CHECK-NEXT:   21|  *b = a;
+// CHECK-NEXT:   22|  *c = b;
+// CHECK-NEXT:     |  ─────┬
+// CHECK-NEXT:     |       ╰─ Linear variable '*c' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:   23|  free(c);
+// CHECK-NEXT:   24|  return 0;
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import std;
 
