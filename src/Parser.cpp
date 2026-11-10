@@ -1438,6 +1438,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
   EXPECT(leftCurly, TokLeftCurly);
 
   auto blockAST = std::make_unique<BlockAST>();
+  blockAST->join_location(leftCurly);
   while (!tokStream->isEnd()) {
     auto [a, a_result] = ParseExpr();
     if (a_result == SUCCESS) {
@@ -1488,6 +1489,7 @@ auto Parser::ParseBlock() -> p<BlockAST> {
 
   auto rightCurly = expect(TokRightCurly, true, TokEOF,
                            "Expected '}' to close statement block");
+  blockAST->join_location(rightCurly);
 
   return {std::move(blockAST), (!rightCurly || block_error) ? FAILED : SUCCESS};
 }
