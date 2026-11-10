@@ -1,0 +1,35 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |break_assign_not_place.mn
+// CHECK-NEXT:   28|  let s = S { x: 1 };
+// CHECK-NEXT:   29|  let t = (1, 2);
+// CHECK-NEXT:   30|  s.x = 2;
+// CHECK-NEXT:     |      ┬
+// CHECK-NEXT:     |      ╰─ Cannot write into 's'. All bindings are immutable; only memory behind a pointer can be written
+// CHECK-NEXT:   31|  t.0 = 5;
+// CHECK-NEXT:     |      ┬
+// CHECK-NEXT:     |      ╰─ Cannot write into 't'. All bindings are immutable; only memory behind a pointer can be written
+// CHECK-NEXT:   32|  f() = 2;
+// CHECK-NEXT:     |      ┬
+// CHECK-NEXT:     |      ╰─ Cannot assign to this expression. Only memory behind a pointer can be written, e.g. '*p', 'p[i]' or '(*p).x'
+// CHECK-NEXT:   33|  1 = 2;
+// CHECK-NEXT:     |    ┬
+// CHECK-NEXT:     |    ╰─ Cannot assign to this expression. Only memory behind a pointer can be written, e.g. '*p', 'p[i]' or '(*p).x'
+// CHECK-NEXT:   34|  return 0;
+// CHECK-NEXT:   35|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+struct S { x: i32, };
+
+let f() -> i32 { 1 }
+
+let main() -> i32 {
+  let s = S { x: 1 };
+  let t = (1, 2);
+  s.x = 2;
+  t.0 = 5;
+  f() = 2;
+  1 = 2;
+  return 0;
+}

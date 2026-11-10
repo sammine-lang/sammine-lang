@@ -4,7 +4,7 @@
 // CHECK-NEXT:    15|  let a: [3]i32 = [1, 2, 3];
 // CHECK-NEXT:    16|  a[0] = 99;
 // CHECK-NEXT:     |       ┬
-// CHECK-NEXT:     |       ╰─ Cannot write to array element. Arrays are immutable values
+// CHECK-NEXT:     |       ╰─ Cannot write into 'a'. All bindings are immutable; only memory behind a pointer can be written
 // CHECK-NEXT:    17|  return 0;
 // CHECK-NEXT:    18|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

@@ -1,0 +1,26 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 1 2 3 4 5
+
+import std;
+
+struct Inner { a: [2]i32, t: (i32, i32), };
+struct Outer { n: i32, inner: Inner, };
+
+let main() -> i32 {
+  let p = alloc<Outer>(2);
+  p[1] = Outer { n: 0, inner: Inner { a: [0, 0], t: (0, 0) } };
+  (*p).n = 1;
+  p[1].n = 2;
+  p[1].inner.a[1] = 3;
+  p[1].inner.t.1 = 4;
+
+  let q = alloc<[2][2]i32>(1);
+  *q = [[0, 0], [0, 0]];
+  (*q)[1][0] = 5;
+
+  std::printf("%d %d %d %d %d\n", (*p).n, p[1].n, p[1].inner.a[1],
+              p[1].inner.t.1, (*q)[1][0]);
+  free(p);
+  free(q);
+  return 0;
+}

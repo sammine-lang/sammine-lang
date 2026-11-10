@@ -660,6 +660,11 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
   if (!ast->RHS->synthesized())
     ast->RHS->accept_vis(this);
 
+  // Checked before the poisoned-operand return: an invalid target is its own
+  // error, e.g. an out-of-bounds write to an immutable array is both.
+  if (ast->Op->is_assign() && !check_assign_target(ast))
+    return ast->set_type(Type::Poisoned());
+
   if (ast->LHS->get_type().is_poisoned() || ast->RHS->get_type().is_poisoned())
     return ast->set_type(Type::Poisoned());
 
@@ -702,6 +707,48 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
                                     ast->RHS->get_type());
 }
 
+// Where a write to `target` lands, following the same path as
+// LinearTypeChecker's Use::Write: an array element or a field is written into
+// its base, while `*p` and `p[i]` reach memory through the pointer `p`.
+static const ExprAST *write_root(const ExprAST *target) {
+  if (auto *idx = llvm::dyn_cast<IndexExprAST>(target);
+      idx && idx->array_expr->get_type().type_kind != TypeKind::Pointer)
+    return write_root(idx->array_expr.get());
+  if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(target))
+    return write_root(field->object_expr.get());
+  return target;
+}
+
+// Bindings are immutable, so an assignment must land in memory behind a
+// pointer. Reports the assignment otherwise, based on where it lands.
+bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
+  auto *target = ast->LHS.get();
+  auto *root = write_root(target);
+  if (llvm::isa<DerefExprAST, IndexExprAST>(root))
+    return true;
+  // A root whose type is unknown has already been reported.
+  if (root->get_type().is_poisoned())
+    return false;
+
+  std::string message;
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(root)) {
+    message =
+        root == target
+            ? fmt::format("Cannot reassign variable '{}'. All bindings are "
+                          "immutable; use 'let {} = ...' to shadow",
+                          var->variableName, var->variableName)
+            : fmt::format("Cannot write into '{}'. All bindings are "
+                          "immutable; only memory behind a pointer can be "
+                          "written",
+                          var->variableName);
+  } else {
+    message = "Cannot assign to this expression. Only memory behind a "
+              "pointer can be written, e.g. '*p', 'p[i]' or '(*p).x'";
+  }
+  this->add_error(ast->Op->get_location(), message);
+  return false;
+}
+
 Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                                                       const Type &lhs_type,
                                                       const Type &rhs_type) {
@@ -718,29 +765,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     return ast->set_type(Type::Bool());
   }
 
-  if (ast->Op->is_assign()) {
-    if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-      this->add_error(
-          ast->Op->get_location(),
-          fmt::format("Cannot reassign variable '{}'. "
-                      "All bindings are immutable; use 'let {} = ...' to shadow",
-                      var->variableName, var->variableName));
-      return ast->set_type(Type::Poisoned());
-    } else if (auto *idx = llvm::dyn_cast<IndexExprAST>(ast->LHS.get())) {
-      auto base_type = idx->array_expr->get_type();
-      // Reject writes to array elements (arrays are immutable values),
-      // but allow writes through dereferenced pointers to arrays
-      // e.g. (*arr_ptr)[i] = val is a pointer write-through, which is valid
-      if (base_type.type_kind == TypeKind::Array &&
-          !llvm::isa<DerefExprAST>(idx->array_expr.get())) {
-        this->add_error(
-            ast->Op->get_location(),
-            "Cannot write to array element. Arrays are immutable values");
-        return ast->set_type(Type::Poisoned());
-      }
-    }
+  if (ast->Op->is_assign())
     return ast->set_type(Type::Unit());
-  }
 
   if (ast->Op->is_logical()) {
     if (lhs_type == Type::Bool() && rhs_type == Type::Bool())

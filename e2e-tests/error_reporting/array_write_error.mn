@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: Cannot write to array element. Arrays are immutable values
+// CHECK: Cannot write into 'a'. All bindings are immutable; only memory behind a pointer can be written
 
 let main() -> i32 {
   let a: [3]i32 = [1, 2, 3];

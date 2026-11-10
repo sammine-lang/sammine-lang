@@ -728,6 +728,10 @@ free(p);                              // deallocate (consumes p)
 std::printf("%d\n", y);               // 42
 ```
 
+Assignment only writes through a pointer: `*p`, `p[i]`, and any field or
+element reached from them, such as `(*p).x`, `p[i].x` or `(*p)[i][j]`. Variables,
+array values and struct values can't be assigned to.
+
 Failing to free a linear pointer is a compile-time error:
 
 ```sammine

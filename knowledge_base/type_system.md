@@ -31,7 +31,7 @@
 - **Comparison** (`==`/`!=`/`<`/`>`/`<=`/`>=`): return `Bool`. Arrays/Pointers: only `==`/`!=` allowed
 - **Logical** (`&&`/`||`): return LHS type (NOT Bool), no typeclass dispatch
 - **Bitwise** (`&`/`|`/`^`/`<<`/`>>`): valid on integers and integer-backed enums, return operand type
-- **Assignment** (`=`): returns `Unit`, checks LHS mutability
+- **Assignment** (`=`): returns `Unit`; `check_assign_target` follows the LHS through array elements and fields (`write_root`) and requires it to land behind a pointer (`*p`, `p[i]`)
 - **Unary negation** (`-`): rejects unsigned types and non-numeric types
 - Polymorphic literal binops: both polymorphic + same kind → skip dispatch, keep polymorphic
 

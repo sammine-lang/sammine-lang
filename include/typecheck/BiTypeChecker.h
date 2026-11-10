@@ -183,6 +183,7 @@ public:
   }
 
   // Binary expression synthesis helper
+  bool check_assign_target(BinaryExprAST *ast);
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);
 

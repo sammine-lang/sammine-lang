@@ -1,5 +1,17 @@
-// RUN: ! %sammine --file %full %O 2>&1 | %check %full
-// CHECK: Cannot write to array element. Arrays are immutable values
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |immutable_array_write_const_oob.mn
+// CHECK-NEXT:   18|let main() -> i32 {
+// CHECK-NEXT:   19|  let a: [3]i32 = [1, 2, 3];
+// CHECK-NEXT:   20|  a[5] = 99;
+// CHECK-NEXT:     |  ──┬
+// CHECK-NEXT:     |    ╰─ Array index out of bounds: index 5 on array of size 3
+// CHECK-NEXT:     |       ┬
+// CHECK-NEXT:     |       ╰─ Cannot write into 'a'. All bindings are immutable; only memory behind a pointer can be written
+// CHECK-NEXT:   21|  return 0;
+// CHECK-NEXT:   22|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 import std;
 

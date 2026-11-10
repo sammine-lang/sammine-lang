@@ -663,12 +663,18 @@ mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
 
   // Index: return GEP pointer to element
   if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(ast)) {
-    auto arr = emitExpr(idx->array_expr.get());
+    auto *base = idx->array_expr.get();
+    auto baseType = base->get_type();
+    // An array element's address comes from its array's address when the
+    // array is itself a place, so (*p)[i][j] is reached through p, not a copy.
+    auto arr = baseType.type_kind == TypeKind::Array &&
+                       llvm::isa<AST::DerefExprAST, AST::IndexExprAST,
+                                 AST::FieldAccessExprAST>(base)
+                   ? emitLValue(base)
+                   : emitExpr(base);
     auto idxVal = emitExpr(idx->index_expr.get());
     if (!arr || !idxVal)
       return nullptr;
-
-    auto baseType = idx->array_expr->get_type();
 
     if (baseType.type_kind == TypeKind::Pointer) {
       auto &ptrData = std::get<PointerType>(baseType.type_data);
@@ -681,6 +687,28 @@ mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
     emitBoundsCheck(indexVal, arrType.get_size(), location);
     arr = ensurePointer(arr, location);
     return emitPtrArrayGEP(arr, idxVal, arrType, location);
+  }
+
+  // Field: return GEP pointer into the struct or tuple's address
+  if (auto *field = llvm::dyn_cast<AST::FieldAccessExprAST>(ast)) {
+    auto *base = field->object_expr.get();
+    auto obj = emitLValue(base);
+    if (!obj)
+      return nullptr;
+
+    auto objType = base->get_type();
+    int32_t fieldIdx;
+    if (objType.type_kind == TypeKind::Tuple) {
+      fieldIdx = static_cast<int32_t>(std::stoul(field->field_name));
+    } else {
+      auto &st = std::get<StructType>(objType.type_data);
+      fieldIdx = static_cast<int32_t>(cautious_value(
+          st.get_field_index(field->field_name), "struct field index"));
+    }
+    return mlir::LLVM::GEPOp::create(
+        builder, location, llvmPtrTy(), convertType(objType), obj,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, fieldIdx},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
   }
 
   imm_error("expression is not assignable", ast->get_location());
