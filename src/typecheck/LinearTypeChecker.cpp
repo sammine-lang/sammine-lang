@@ -245,7 +245,7 @@ static bool is_place_or_statement(const ExprAST *expr) {
 // Every expression is visited with what its parent does with it. A linear
 // temporary has no name to track, so it is only legal where ownership is taken.
 void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
-  if (use.kind == Use::Kind::Read && !is_place_or_statement(expr) &&
+  if (use.kind != Use::Kind::Own && !is_place_or_statement(expr) &&
       expr->get_type().containsLinearTypes()) {
     this->add_error(
         expr->get_location(),
@@ -308,12 +308,16 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
                   "moved into tuple");
     break;
   case NK::DerefExprAST:
-    check_expr(llvm::cast<DerefExprAST>(expr)->operand.get(),
-               Use::reads(loc, "dereference"));
+    check_through_pointer(llvm::cast<DerefExprAST>(expr)->operand.get(), use,
+                          loc, "dereference");
     break;
   case NK::IndexExprAST: {
     auto *index = llvm::cast<IndexExprAST>(expr);
-    check_expr(index->array_expr.get(), Use::reads(loc, "index"));
+    auto *base = index->array_expr.get();
+    if (base->get_type().type_kind == TypeKind::Pointer)
+      check_through_pointer(base, use, loc, "index");
+    else
+      check_expr(base, use.toward_place(loc, "index"));
     read_child(index->index_expr.get());
     break;
   }
@@ -363,10 +367,38 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
 }
 
 void LinearTypeChecker::apply_use(VarInfo *info, Use use) {
-  if (use.kind == Use::Kind::Own)
+  switch (use.kind) {
+  case Use::Kind::Own:
     consume(info, use.loc, use.action);
-  else
+    break;
+  case Use::Kind::Read:
+  case Use::Kind::TakeAddress:
     check_use_after_consume(info, use.loc, use.action);
+    break;
+  case Use::Kind::Write:
+    break; // Overwriting a consumed variable or field is valid.
+  }
+}
+
+// Reaching memory through a pointer: only an owner may write, and a plain
+// pointer into owned memory would still be readable after free.
+void LinearTypeChecker::check_through_pointer(ExprAST *pointer, Use use,
+                                              sammine_util::Location loc,
+                                              const char *verb) {
+  bool is_owned = pointer->get_type().linearity == Linearity::Linear;
+  if (use.kind == Use::Kind::Write && !is_owned) {
+    this->add_error(loc, fmt::format("Cannot write through non-owning pointer "
+                                     "'{}' — only an owned pointer can be "
+                                     "written",
+                                     pointer->get_type().to_string()));
+    return;
+  }
+  if (use.kind == Use::Kind::TakeAddress && is_owned) {
+    this->add_error(loc, "Cannot take the address of memory owned by a linear "
+                         "pointer — it could dangle after free");
+    return;
+  }
+  check_expr(pointer, Use::reads(loc, verb));
 }
 
 void LinearTypeChecker::check_variable(VariableExprAST *ast, Use use) {
@@ -384,8 +416,8 @@ void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast, Use use) {
     apply_use(child, use);
     return;
   }
-  // Non-linear field: the object is only read, even when the field is moved.
-  check_expr(ast->object_expr.get(), Use::reads(use.loc, use.action));
+  // Non-linear field: moving the field only reads the object.
+  check_expr(ast->object_expr.get(), use.toward_place(use.loc, use.action));
 }
 
 void LinearTypeChecker::move_elements(
@@ -551,25 +583,10 @@ static bool involves_deref(ExprAST *expr) {
   return false;
 }
 
-// An assignment target is overwritten rather than read, so a consumed variable
-// or field is a valid target. Pointers on the way to the target are still read.
-void LinearTypeChecker::check_assign_target(ExprAST *target) {
-  if (llvm::isa<VariableExprAST>(target))
-    return;
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(target)) {
-    check_assign_target(fa->object_expr.get());
-    return;
-  }
-  check_expr(target, Use::reads(target->get_location(), "use"));
-}
-
 // ── check_binary ────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
   if (ast->Op->is_assign()) {
-    // Check LHS for deref-after-consume (e.g. free(p); *p = 7)
-    check_assign_target(ast->LHS.get());
-
     // Lateral escape: storing a non-linear pointer through a pointer
     // dereference allows it to outlive the current scope.
     if (involves_deref(ast->LHS.get())) {
@@ -583,6 +600,8 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
         return;
       }
     }
+
+    check_expr(ast->LHS.get(), Use::writes(ast->get_location()));
 
     check_expr(ast->RHS.get(), Use::owns(ast->get_location(), "moved"));
 
@@ -666,7 +685,7 @@ void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
                                 "linear values cannot be aliased"));
     return;
   }
-  check_expr(ast->operand.get(), Use::reads(ast->get_location(), "use"));
+  check_expr(ast->operand.get(), Use::takes_address(ast->get_location()));
 }
 
 // ── check_free ──────────────────────────────────────────────────────

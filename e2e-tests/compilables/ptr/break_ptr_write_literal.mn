@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot write through non-owning pointer
+
+let main() -> i32 {
+  let s: ptr<char> = "hi";
+  *s = 'x';
+  return 0;
+}

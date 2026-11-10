@@ -9,15 +9,18 @@ let read_elem(arr: ptr<[3]i32>, i: i32) -> i32 {
   (*arr)[i]
 }
 
-let write_elem(arr: ptr<[3]i32>, i: i32, val: i32) -> i32 {
+let write_elem(arr: 'ptr<[3]i32>, i: i32, val: i32) -> 'ptr<[3]i32> {
   (*arr)[i] = val;
-  (*arr)[i]
+  arr
 }
 
 let main() -> i32 {
   let a : [3]i32 = [10, 20, 30];
   std::printf("%d\n", read_elem(&a, 0));
   std::printf("%d\n", read_elem(&a, 2));
-  std::printf("%d\n", write_elem(&a, 1, 99));
+  let b = alloc<[3]i32>(1);
+  let b = write_elem(b, 1, 99);
+  std::printf("%d\n", (*b)[1]);
+  free(b);
   return 0;
 }

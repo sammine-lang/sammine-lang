@@ -71,16 +71,30 @@ class LinearTypeChecker : public sammine_util::Reportee {
 
   // What a parent expression does with a child expression.
   struct Use {
-    enum class Kind { Own, Read };
+    enum class Kind { Own, Read, Write, TakeAddress };
     Kind kind;
     sammine_util::Location loc;
-    const char *action; // consume reason for Own, verb for Read
+    const char *action; // consume reason for Own, verb otherwise
 
     static Use owns(sammine_util::Location loc, const char *reason) {
       return {Kind::Own, loc, reason};
     }
     static Use reads(sammine_util::Location loc, const char *verb) {
       return {Kind::Read, loc, verb};
+    }
+    static Use writes(sammine_util::Location loc) {
+      return {Kind::Write, loc, "write"};
+    }
+    static Use takes_address(sammine_util::Location loc) {
+      return {Kind::TakeAddress, loc, "take the address of"};
+    }
+
+    // What this use means for the place an access is made through: writing or
+    // taking an address reaches the place; anything else just reads it.
+    Use toward_place(sammine_util::Location access_loc, const char *verb) const {
+      if (kind == Kind::Write || kind == Kind::TakeAddress)
+        return *this;
+      return reads(access_loc, verb);
     }
   };
 
@@ -89,7 +103,8 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_variable(VariableExprAST *ast, Use use);
   void check_field_access(FieldAccessExprAST *ast, Use use);
   VarInfo *find_field(FieldAccessExprAST *ast);
-  void check_assign_target(ExprAST *target);
+  void check_through_pointer(ExprAST *pointer, Use use,
+                             sammine_util::Location loc, const char *verb);
   void check_var_def(VarDefAST *ast);
   void check_binary(BinaryExprAST *ast);
   void check_call(CallExprAST *ast);
