@@ -48,8 +48,34 @@ class BiTypeCheckerVisitor : public ScopedASTVisitor,
 
 public:
   ASTProperties &props_;
+  // What a name in an expression is bound to. A function and a local can
+  // share a name, and the innermost binding decides which one it means.
+  struct Binding {
+    Type type = Type::NonExistent();
+    bool is_function = false;
+  };
+
   // INFO: x, y, z
-  LexicalStack<Type> id_to_type;
+  LexicalStack<Binding> id_to_type;
+
+  void register_variable(const std::string &name, Type type) {
+    id_to_type.registerNameT(name, Binding{std::move(type), false});
+  }
+  // Functions are top-level definitions, so they are bound in the root scope.
+  void register_function(const std::string &name, Type type) {
+    id_to_type.registerNameTAtRoot(name, Binding{std::move(type), true});
+  }
+  std::optional<Type> lookup_type(const std::string &name) const {
+    if (auto binding = id_to_type.recursive_try_get(name))
+      return binding->type;
+    return std::nullopt;
+  }
+  // Whether `name` is bound to a variable, as opposed to a function, an enum
+  // variant (which is not in id_to_type) or nothing.
+  bool names_variable(const std::string &name) const {
+    auto binding = id_to_type.recursive_try_get(name);
+    return binding && !binding->is_function;
+  }
 
   // INFO: i64, f64 bla bla bla
   LexicalStack<Type> typename_to_type;
@@ -184,6 +210,7 @@ public:
 
   // Binary expression synthesis helper
   bool check_assign_target(BinaryExprAST *ast);
+  bool check_addr_of_operand(AddrOfExprAST *ast);
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);
 

@@ -1,0 +1,42 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |break_addr_of_not_place.mn
+// CHECK-NEXT:   33|let main() -> i32 {
+// CHECK-NEXT:   34|  let x = 1;
+// CHECK-NEXT:   35|  let a = &f();
+// CHECK-NEXT:     |          ─┬
+// CHECK-NEXT:     |           ╰─ Cannot take the address of a temporary value. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   36|  let b = &5;
+// CHECK-NEXT:     |          ─┬
+// CHECK-NEXT:     |           ╰─ Cannot take the address of a temporary value. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   37|  let c = &(x + 1);
+// CHECK-NEXT:     |          ──────┬
+// CHECK-NEXT:     |                ╰─ Cannot take the address of a temporary value. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   38|  let d = &[1, 2][1];
+// CHECK-NEXT:     |          ────────┬
+// CHECK-NEXT:     |                  ╰─ Cannot take the address of a temporary value. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   39|  let e = &f;
+// CHECK-NEXT:     |          ─┬
+// CHECK-NEXT:     |           ╰─ Cannot take the address of 'f'. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   40|  let g = &Red;
+// CHECK-NEXT:     |          ───┬
+// CHECK-NEXT:     |             ╰─ Cannot take the address of 'Color::Red'. Only variables and memory behind a pointer have an address
+// CHECK-NEXT:   41|  return 0;
+// CHECK-NEXT:   42|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+type Color = Red | Green;
+
+let f() -> i32 { 7 }
+
+let main() -> i32 {
+  let x = 1;
+  let a = &f();
+  let b = &5;
+  let c = &(x + 1);
+  let d = &[1, 2][1];
+  let e = &f;
+  let g = &Red;
+  return 0;
+}

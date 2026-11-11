@@ -168,7 +168,7 @@ Type BiTypeCheckerVisitor::synthesize_tuple_destructure(VarDefAST *ast) {
       elem_type = ann_type;
     }
     ast->destructure_vars[i]->set_type(elem_type);
-    id_to_type.registerNameT(ast->destructure_vars[i]->name, elem_type);
+    register_variable(ast->destructure_vars[i]->name, elem_type);
   }
 
   return ast->set_type(Type::Unit());
@@ -202,7 +202,7 @@ Type BiTypeCheckerVisitor::synthesize(VarDefAST *ast) {
     ast->set_type(Type::Poisoned());
   }
 
-  id_to_type.registerNameT(ast->TypedVar->name, ast->get_type());
+  register_variable(ast->TypedVar->name, ast->get_type());
   LOG({
     fmt::print(stderr, "[typecheck] synthesize VarDefAST: '{}' : {} (immutable{})\n",
                ast->TypedVar->name, ast->get_type().to_string(),
@@ -584,7 +584,7 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
 std::optional<ResolvedCall>
 BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
-  auto ty = id_to_type.recursive_try_get(ast->functionName.mangled());
+  auto ty = lookup_type(ast->functionName.mangled());
   if (!ty.has_value()) {
     this->add_error(
         ast->get_location(),
@@ -857,7 +857,7 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->set_type(Type::Char());
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  if (auto ty = id_to_type.recursive_try_get(ast->variableName)) {
+  if (auto ty = lookup_type(ast->variableName)) {
     ast->set_type(*ty);
   } else {
     // Try zero-payload enum variant (e.g., None, Red)
@@ -984,7 +984,7 @@ Type BiTypeCheckerVisitor::synthesize(TypedVarAST *ast) {
     return ast->get_type();
   auto ast_type = resolve_type_expr(ast->type_expr.get());
 
-  id_to_type.registerNameT(ast->name, ast_type);
+  register_variable(ast->name, ast_type);
   return ast->set_type(ast_type);
 }
 
@@ -1014,7 +1014,36 @@ Type BiTypeCheckerVisitor::synthesize(AddrOfExprAST *ast) {
   ast->operand->accept_vis(this);
 
   auto operand_type = ast->operand->accept_synthesis(this);
+  if (!check_addr_of_operand(ast))
+    return ast->set_type(Type::Poisoned());
   return ast->set_type(Type::Pointer(operand_type));
+}
+
+// Only a place has an address: a local binding, memory behind a pointer, or
+// an element or field of a place. Reports the operand otherwise.
+bool BiTypeCheckerVisitor::check_addr_of_operand(AddrOfExprAST *ast) {
+  auto *root = write_root(ast->operand.get());
+  if (llvm::isa<DerefExprAST, IndexExprAST>(root))
+    return true;
+  // A root whose type is unknown has already been reported.
+  if (root->get_type().is_poisoned())
+    return false;
+
+  constexpr auto reason =
+      "Only variables and memory behind a pointer have an address";
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(root)) {
+    // A variable has a stack slot; a function or an enum variant does not.
+    if (names_variable(var->variableName))
+      return true;
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot take the address of '{}'. {}",
+                                var->variableName, reason));
+    return false;
+  }
+  this->add_error(
+      ast->get_location(),
+      fmt::format("Cannot take the address of a temporary value. {}", reason));
+  return false;
 }
 
 Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
@@ -1506,7 +1535,7 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
       return ast->set_type(Type::Poisoned());
   }
 
-  id_to_type.registerNameT(ast->loop_var, resolved);
+  register_variable(ast->loop_var, resolved);
 
   ast->set_type(Type::Unit());
   ast->body->accept_vis(this);
@@ -1598,7 +1627,7 @@ std::optional<Type>
 BiTypeCheckerVisitor::lookup_kernel_input_array(const std::string &name,
                                                 const char *op,
                                                 sammine_util::Location loc) {
-  auto input_type = id_to_type.recursive_try_get(name);
+  auto input_type = lookup_type(name);
   if (!input_type) {
     this->add_error(loc,
                     fmt::format("Unknown variable '{}' in kernel {}", name, op));
@@ -2017,7 +2046,7 @@ Type BiTypeCheckerVisitor::check_arm_bodies(CaseExprAST *ast,
       auto &et = std::get<EnumType>(scrutinee_type.type_data);
       auto &vi = et.get_variant(arm.pattern.variant_index);
       for (size_t i = 0; i < arm.pattern.bindings.size(); i++) {
-        id_to_type.registerNameT(arm.pattern.bindings[i], vi.payload_types[i]);
+        register_variable(arm.pattern.bindings[i], vi.payload_types[i]);
       }
     }
 

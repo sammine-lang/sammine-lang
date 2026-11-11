@@ -31,7 +31,7 @@ void BiTypeCheckerVisitor::pre_register_function(PrototypeAST *ast) {
   else
     types.push_back(resolve_type_expr(ast->return_type_expr.get()));
   auto fn_type = Type::Function(std::move(types), ast->is_var_arg);
-  id_to_type.registerNameT(ast->functionName.mangled(), fn_type);
+  register_function(ast->functionName.mangled(), std::move(fn_type));
 }
 
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
@@ -117,8 +117,7 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   ast->accept_synthesis(this);
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
-  id_to_type.parent_scope()->registerNameT(ast->functionName.mangled(),
-                                           ast->get_type());
+  register_function(ast->functionName.mangled(), ast->get_type());
   if (ast->functionName.get_name() == "main") {
     auto fn_type = std::get<FunctionType>(ast->get_type().type_data);
     auto return_type = fn_type.get_return_type();
