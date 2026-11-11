@@ -120,6 +120,7 @@ void Resolver::inject_definitions(
   // Filter definitions and inject into programAST.
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {
     auto &def = *it;
+    // NameResolver names it after its module.
     def->defining_module = name;
 
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
@@ -128,8 +129,6 @@ void Resolver::inject_definitions(
         continue; // transitive: only need generic defs
       if (!is_transitive && !fd->is_exported && !is_generic)
         continue; // direct: skip non-exported non-generic
-      fd->Prototype->functionName =
-          fd->Prototype->functionName.with_module(name);
 
       if (is_generic) {
         program_vec.insert(program_vec.begin(),
@@ -146,20 +145,16 @@ void Resolver::inject_definitions(
     } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
       if (is_transitive || !ext->is_exported)
         continue;
-      ext->Prototype->functionName =
-          ext->Prototype->functionName.with_module(name);
       program_vec.insert(program_vec.begin(),
                                        std::move(def));
     } else if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (!sd->is_exported)
         continue;
-      sd->struct_name = sd->struct_name.with_module(name);
       program_vec.insert(program_vec.begin(),
                                        std::move(def));
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (!ed->is_exported)
         continue;
-      ed->enum_name = ed->enum_name.with_module(name);
       program_vec.insert(program_vec.begin(),
                                        std::move(def));
     } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {

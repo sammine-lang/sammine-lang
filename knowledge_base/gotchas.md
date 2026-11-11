@@ -7,7 +7,7 @@
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
 - **Generic templates skipped**: BiTypeChecker, LinearTypeChecker, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `convertType()` aborts on it
-- **Module qualification is post-parse**: `default_namespace` parser param is dead code; `with_module()` in Compiler.cpp does qualification
+- **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare, a module's own C bindings keep their C name), references are rewritten to those names. The parser keeps names as written; nothing after scope generation renames anything
 - **`in_kernel_lambda_body`**: must be true inside linalg body builders — prevents alloca/malloc/free emission
 - **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `buildMemrefFromPtr` output
 - **Closures are stack-allocated**: cannot escape defining scope

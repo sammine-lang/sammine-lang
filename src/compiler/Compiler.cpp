@@ -3,6 +3,7 @@
 //
 
 #include "compiler/Compiler.h"
+#include "semantics/NameResolver.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
@@ -137,6 +138,7 @@ void Compiler::parse() {
         break;
       }
 
+  programAST->module = library_name();
   for (auto &def : programAST->DefinitionVec)
     def->defining_module = library_name();
   programAST->module_aliases[library_name()] =
@@ -484,7 +486,8 @@ void Compiler::codegen_mlir() {
         continue;
       std::string cName = ext->Prototype->functionName.mangled();
       std::string mangled =
-          ext->Prototype->functionName.with_module(moduleName).mangled();
+          AST::NameResolver::qualify(ext->Prototype->functionName, moduleName)
+              .mangled();
       auto *fn = llvmModule->getFunction(cName);
       if (!fn || llvmModule->getNamedValue(mangled))
         continue;

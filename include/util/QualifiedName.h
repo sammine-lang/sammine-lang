@@ -118,15 +118,6 @@ public:
       result += "::" + parts_[i].mangled();
     return result;
   }
-
-  // Return a copy with module prepended (if not already qualified)
-  QualifiedName with_module(const std::string &mod) const {
-    if (is_qualified() || mod.empty())
-      return *this;
-    QualifiedName qn;
-    qn.parts_ = {{mod, ""}, parts_.back()};
-    return qn;
-  }
 };
 
 } // namespace sammine_util

@@ -9,7 +9,7 @@
 namespace sammine_lang::AST {
 // pre order
 void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
-  resolver.use_aliases(ast->module_aliases);
+  resolver.use_program(*ast);
 
   // Map import-statement locations to module names so we can tell the user
   // which import introduced a conflicting name.

@@ -433,7 +433,8 @@ mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
 
 std::string
 MLIRGenImpl::mangleName(const sammine_util::QualifiedName &qn) const {
-  return qn.with_module(moduleName).mangled();
+  // NameResolver has already named every definition and reference.
+  return qn.mangled();
 }
 
 // ===--- Expression dispatcher ---===

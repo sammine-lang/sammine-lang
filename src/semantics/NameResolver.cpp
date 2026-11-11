@@ -7,12 +7,44 @@
 //! means.
 namespace sammine_lang::AST {
 
+sammine_util::QualifiedName
+NameResolver::qualify(const sammine_util::QualifiedName &name,
+                      const std::string &module) {
+  if (name.is_qualified() || module.empty())
+    return name;
+  return sammine_util::QualifiedName::from_parts(
+      std::vector<sammine_util::QualifiedName::Part>{{module, ""},
+                                                     name.parts().back()});
+}
+
+void NameResolver::use_program(ProgramAST &program) {
+  module_aliases = program.module_aliases;
+  for (auto &def : program.DefinitionVec) {
+    auto &module = def->defining_module;
+    auto name = [&](sammine_util::QualifiedName &n) { n = qualify(n, module); };
+    if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get()))
+      name(fd->Prototype->functionName);
+    else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
+      name(kd->Prototype->functionName);
+    else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
+      // A module's own C binding is named as C names it: that is its symbol.
+      if (!(ext->is_c_function && module == program.module))
+        name(ext->Prototype->functionName);
+    } else if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get()))
+      name(sd->struct_name);
+    else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get()))
+      name(ed->enum_name);
+    else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
+      name(ta->alias_name);
+  }
+}
+
 std::optional<sammine_util::QualifiedName>
 NameResolver::own_definition(const sammine_util::QualifiedName &name,
                              const ASTContext &where) {
   if (name.is_qualified() || where.module.empty())
     return std::nullopt;
-  auto qualified = name.with_module(where.module);
+  auto qualified = qualify(name, where.module);
   if (scopes.root().queryName(qualified.strip_type_args().mangled()) !=
       nameFound)
     return std::nullopt;

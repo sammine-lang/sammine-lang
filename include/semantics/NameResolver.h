@@ -14,8 +14,10 @@
 
 namespace sammine_lang::AST {
 
-//! Resolves names to the definitions they mean, rewriting each to that
-//! definition's name. A name is resolved in the module whose code it is
+//! The one place names are decided. It names every definition after its
+//! module (shapes::Point), and resolves every name written in code to the
+//! definition it means, rewriting it to that definition's name. Later stages
+//! only read names. A name is resolved in the module whose code it is
 //! (`where.module`), and that module's own definition comes first: code
 //! imported from module M finds M's definitions, which are named M::X in the
 //! importer, and an importer's same-named definition can't capture them.
@@ -32,10 +34,14 @@ public:
                sammine_util::Reportee &reportee)
       : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee) {}
 
-  //! The import aliases of each module whose code is being resolved.
-  void use_aliases(std::map<std::string, ImportAliases> aliases) {
-    module_aliases = std::move(aliases);
-  }
+  //! Name every definition of `program`, and take its modules' import
+  //! aliases, before any name is registered or resolved.
+  void use_program(ProgramAST &program);
+
+  //! `name` as a definition of `module` is named: module::name. A name
+  //! already qualified, or of no module (an executable's), is unchanged.
+  static sammine_util::QualifiedName
+  qualify(const sammine_util::QualifiedName &name, const std::string &module);
 
   //! A type, in a type expression, or the type a struct literal or a
   //! generic names.

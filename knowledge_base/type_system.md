@@ -51,7 +51,7 @@
 
 ### Enums
 - `EnumType`: QualifiedName + VariantInfo vector; nominal equality
-- Type names are canonical: a struct/enum type is named `module::Name` after `DefinitionAST::defining_module` (set by `Compiler::parse` for a library's own defs, by the resolver for imported ones, copied by the monomorphizer), so instance symbols like `Area<shapes::Square>::Area` agree across modules. Source still refers to it by the name it wrote (registered under that). Executables' own types keep bare names
+- Type names are canonical: `NameResolver` names every struct/enum `module::Name` after its `defining_module`, in its own library and in importers alike, so instance symbols like `Area<shapes::Square>::Area` agree across modules. The type checker uses the AST name as the type name. Executables' own types keep bare names
 - `variant_constructors` map: variant_name → (enum_type, index)
 - Construction: qualified path → `get_typename_type(get_qualifier())` → resolve variant
 - Unit variants via `synthesize(VariableExprAST*)` → `variant_constructors` fallback

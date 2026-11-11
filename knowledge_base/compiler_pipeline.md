@@ -26,7 +26,7 @@ lex → parse → imports → definitions → semantics → typecheck → linear
 
 ## Import Path Resolution
 1. CWD → 2. `-I` paths → 3. source file parent dir → 4. `<binary>/../lib/sammine/` (stdlib)
-- Module qualification post-parse via `with_module()`, NOT during parsing
+- Names: the import resolver only records each definition's `defining_module`; `NameResolver::use_program` (scope generation) names every definition after it and resolves every reference. Later stages only read names
 - Diamond dedup via canonical path in `imported_modules` set
 
 ## Error Reporting

@@ -237,6 +237,8 @@ public:
   ProgramAST() : AstBase(NodeKind::ProgramAST) {}
   std::vector<ImportDecl> imports;
   std::vector<std::unique_ptr<DefinitionAST>> DefinitionVec;
+  /// The module being compiled: a library's name, or empty for an executable.
+  std::string module;
   /// The import aliases of each module whose code is in the program: its own
   /// (under its module name, "" for an executable) and each imported one's.
   std::map<std::string, ImportAliases> module_aliases;

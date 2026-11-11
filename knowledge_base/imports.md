@@ -11,7 +11,7 @@
 4. Visibility filter: exported defs + all typeclass decls/instances (direct only)
 5. Non-generic exported FuncDefAST → converted to ExternAST (importer sees declaration, not body)
 6. Generic functions kept as full FuncDefAST (monomorphizer needs body)
-7. Module qualification post-parse via `with_module(name)`
+7. Names: only `defining_module` is set here; `NameResolver` names the definitions
 8. Prepend to `DefinitionVec`
 
 ## Transitive Import Rules
