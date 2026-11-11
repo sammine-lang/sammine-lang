@@ -3,61 +3,50 @@
 
 // Project Euler Problem 16: Power digit sum
 // What is the sum of the digits of the number 2^1000?
-// Uses base-10^9 bignum arithmetic with pointer-based array of i64 chunks.
+// 2^1000 has 302 digits: it is held as 40 base-10^9 chunks in an owned
+// buffer, least significant first.
 
 import std;
 
+let base() -> i64 { 1000000000i64 }
+let chunks() -> i32 { 40 }
+
+// Sets chunks i.. of `n` to zero.
+let clear(n: 'ptr<i64>, i: i32) -> 'ptr<i64> {
+  if i == chunks() { n } else {
+    n[i] = 0i64;
+    clear(n, i + 1)
+  }
+}
+
+// Doubles chunks i.. of `n`, adding `carry` into chunk i.
+let double(n: 'ptr<i64>, i: i32, carry: i64) -> 'ptr<i64> {
+  if i == chunks() { n } else {
+    let val = n[i] * 2i64 + carry;
+    n[i] = val % base();
+    double(n, i + 1, val / base())
+  }
+}
+
+// Doubles `n` `times` times.
+let double_times(n: 'ptr<i64>, times: i32) -> 'ptr<i64> {
+  if times == 0 { n } else { double_times(double(n, 0, 0i64), times - 1) }
+}
+
+let digit_sum(x: i64) -> i64 {
+  if x == 0i64 { 0i64 } else { x % 10i64 + digit_sum(x / 10i64) }
+}
+
+// The digit sum of chunks i.. of `n`.
+let chunk_digit_sum(n: ptr<i64>, i: i32) -> i64 {
+  if i == chunks() { 0i64 } else { digit_sum(n[i]) + chunk_digit_sum(n, i + 1) }
+}
+
 let main() -> i32 {
-  let base: i64 = 1000000000;
-  let dp: 'ptr<i64> = alloc<i64>(40);
-
-  // Initialize array to zero
-  let init_p: 'ptr<i32> = alloc<i32>(1);
-  *init_p = 0;
-  while *init_p < 40 {
-    dp[*init_p] = 0i64;
-    *init_p = *init_p + 1;
-  };
-  free(init_p);
-  dp[0] = 1i64;
-
-  let step_p: 'ptr<i32> = alloc<i32>(1);
-  *step_p = 0;
-  while *step_p < 1000 {
-    let carry_p: 'ptr<i64> = alloc<i64>(1);
-    *carry_p = 0i64;
-    let ip: 'ptr<i32> = alloc<i32>(1);
-    *ip = 0;
-    while *ip < 40 {
-      let val: i64 = dp[*ip] * 2 + *carry_p;
-      dp[*ip] = val % base;
-      *carry_p = val / base;
-      *ip = *ip + 1;
-    };
-    free(ip);
-    free(carry_p);
-    *step_p = *step_p + 1;
-  };
-  free(step_p);
-
-  let sum_p: 'ptr<i64> = alloc<i64>(1);
-  *sum_p = 0i64;
-  let jp: 'ptr<i32> = alloc<i32>(1);
-  *jp = 0;
-  while *jp < 40 {
-    let chunk_p: 'ptr<i64> = alloc<i64>(1);
-    *chunk_p = dp[*jp];
-    while *chunk_p > 0 {
-      *sum_p = *sum_p + *chunk_p % 10;
-      *chunk_p = *chunk_p / 10;
-    };
-    free(chunk_p);
-    *jp = *jp + 1;
-  };
-  free(jp);
-
-  std::printf("%lld\n", *sum_p);
-  free(sum_p);
-  free(dp);
+  let n = clear(alloc<i64>(chunks()), 0);
+  n[0] = 1i64;
+  let n = double_times(n, 1000);
+  std::printf("%lld\n", chunk_digit_sum(n, 0));
+  free(n);
   return 0;
 }
