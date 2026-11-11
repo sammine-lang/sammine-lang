@@ -1,0 +1,20 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7 9 100
+
+// A generic's body is checked where the generic is defined, so a caller's
+// local does not shadow a top-level function the body refers to.
+
+import std;
+
+let seven() -> i32 { 7 }
+let call_seven<T>(v: T) -> i32 { seven() }
+
+let nine() -> i32 { 9 }
+let call_nine<T>(v: T) -> i32 { nine() }
+let via_generic<T>(v: T) -> i32 { let nine = 0; call_nine<T>(v) }
+
+let main() -> i32 {
+  let seven = 100;
+  std::printf("%d %d %d\n", call_seven<i32>(1), via_generic<i32>(1), seven);
+  return 0;
+}

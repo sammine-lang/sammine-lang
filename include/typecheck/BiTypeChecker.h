@@ -84,6 +84,24 @@ public:
   // Monomorphization state: generic registration, dedup, cloning, output
   Monomorphizer monomorphizer;
 
+  // Opens a scope that sees only top-level names. A generic is instantiated
+  // from inside the call that needs it, but its body must be checked where
+  // it is defined, at the top level, not among the caller's locals.
+  class TopLevelScopeGuard {
+    BiTypeCheckerVisitor &visitor_;
+
+  public:
+    explicit TopLevelScopeGuard(BiTypeCheckerVisitor &visitor)
+        : visitor_(visitor) {
+      visitor_.push_ast_context();
+      visitor_.id_to_type.push_context_under_root();
+      visitor_.typename_to_type.push_context_under_root();
+    }
+    ~TopLevelScopeGuard() { visitor_.exit_new_scope(); }
+    TopLevelScopeGuard(const TopLevelScopeGuard &) = delete;
+    TopLevelScopeGuard &operator=(const TopLevelScopeGuard &) = delete;
+  };
+
   virtual void enter_new_scope() override {
     push_ast_context();
     id_to_type.push_context();

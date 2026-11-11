@@ -413,6 +413,7 @@ void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {
       cp.type_bindings);
   if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
                                                         cp.type_bindings)) {
+    TopLevelScopeGuard scope(*this);
     cloned->accept_vis(this);
   }
 }

@@ -306,10 +306,18 @@ public:
   /// Register at the root (bottom) scope — survives Guard pops.
   /// Used for type definitions (struct/enum) which are always top-level.
   void registerNameTAtRoot(const std::string &name, T l) {
+    root().registerNameT(name, l);
+  }
+  /// Push a scope whose parent is the root scope, so lookups from it see
+  /// top-level names but skip every scope opened since.
+  void push_context_under_root() { this->push(LexicalContext<T>(&root())); }
+
+  /// The bottom scope, which holds top-level definitions.
+  LexicalContext<T> &root() {
     auto *ctx = &this->top();
     while (ctx->parent_scope)
       ctx = ctx->parent_scope;
-    ctx->registerNameT(name, l);
+    return *ctx;
   }
   NameQueryResult recursiveQueryName(const std::string &name) const {
     return this->top().recursiveQueryName(name);
