@@ -1,0 +1,42 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4 5 6 7 8 10 46
+
+// Types, typeclasses and instances can be used above where they are
+// declared, as functions can: every struct and enum is declared before any
+// is defined, and an alias is expanded when first needed.
+
+import std;
+
+// An instance and its typeclass above the struct they are for.
+instance Add<Vec2> {
+  let Add(a: Vec2, b: Vec2) -> Vec2 { Vec2 { x: a.x + b.x, y: a.y + b.y } }
+}
+instance Describe<Vec2> {
+  let describe(v: Vec2) -> i32 { v.x * 10 + v.y }
+}
+typeclass Describe<T> {
+  describe(v: T) -> i32;
+}
+
+// A struct whose fields are an enum, aliases, and generics declared below.
+struct S { c: Color, m: Meters, b: Box<Pt>, w: Wrapped, };
+type Meters = Feet;      // an alias of a later alias
+type Feet = i32;
+type Wrapped = Box<i64>;
+type Color = Red | Green(Pt);
+type Shade = Color;      // an alias of an enum names its variants
+struct Box<T> { val: T, };
+struct Pt { x: i32, };
+struct Vec2 { x: i32, y: i32, };
+
+let main() -> i32 {
+  let s = S { c: Color::Green(Pt { x: 4 }), m: 5,
+              b: Box<Pt> { val: Pt { x: 6 } }, w: Box<i64> { val: 7i64 } };
+  let g = case s.c { Green(p) => p.x, Red => 0, };
+  let h: Shade = Shade::Green(Pt { x: 8 });
+  let hv = case h { Green(p) => p.x, Red => 0, };
+  let v = Vec2 { x: 1, y: 2 } + Vec2 { x: 3, y: 4 };
+  std::printf("%d %d %d %ld %d %d %d\n", g, s.m, s.b.val.x, s.w.val, hv,
+              v.x + v.y, describe<Vec2>(v));
+  return 0;
+}

@@ -378,6 +378,16 @@ let main() -> i32 {
 }
 ```
 
+Types can be declared in any order, as functions can: `Outer` could come before `Inner`. The same holds for enums, type aliases, typeclasses and instances.
+
+A type can't refer to itself, by value or through a pointer, directly or through another type. Both of these are errors:
+
+```sammine
+struct Node { v: i32, next: ptr<Node>, };   // 'Node' refers to itself
+type T1 = T2;                               // Type alias 'T1' refers to
+type T2 = T1;                               //   itself through 'T2'
+```
+
 ### Structs as Parameters and Return Values
 
 ```sammine

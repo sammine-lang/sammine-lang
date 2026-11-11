@@ -1,0 +1,23 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: type_refers_to_itself.mn:17:28
+// CHECK-NEXT:   15|// through another type.
+// CHECK-NEXT:   16|
+// CHECK-NEXT:   17|struct Node { v: i32, next: ptr<Node>, };
+// CHECK-NEXT:     |                            ──┬
+// CHECK-NEXT:     |                              ╰─ 'Node' refers to itself here, and a type can't refer to itself
+// CHECK-NEXT:   18|struct A { b: ptr<B>, };
+// CHECK-NEXT:   19|struct B { a: A, };
+// CHECK-NEXT:     |              ┬
+// CHECK-NEXT:     |              ╰─ 'B' refers to itself here, and a type can't refer to itself
+// CHECK-NEXT:   20|
+
+// A type can't refer to itself, by value or through a pointer, directly or
+// through another type.
+
+struct Node { v: i32, next: ptr<Node>, };
+struct A { b: ptr<B>, };
+struct B { a: A, };
+
+let main() -> i32 {
+  return 0;
+}

@@ -185,6 +185,25 @@ public:
   // Pre-register a function signature so later definitions can reference it
   void pre_register_function(PrototypeAST *ast);
 
+  /// Register a struct or enum type by name, with its fields or variants
+  /// filled in later. Returns the type, declaring it only once.
+  Type declare_struct(StructDefAST *ast);
+  Type declare_enum(EnumDefAST *ast);
+  /// Reports and returns true if `type`, written at `where` inside the
+  /// definition of `self`, refers back to `self`.
+  bool refers_to_itself(TypeExprAST *where, const Type &type,
+                        const Type &self);
+  /// Type aliases not expanded yet, and the ones being expanded, outermost
+  /// first.
+  std::unordered_map<std::string, TypeAliasDefAST *> pending_aliases;
+  std::vector<TypeAliasDefAST *> alias_path;
+  /// Expand the not yet expanded alias `name`, as rustc does when an alias is
+  /// first needed. Nullopt if `name` isn't such an alias; poisoned if it
+  /// refers to itself, which is reported here.
+  std::optional<Type> resolve_pending_alias(const std::string &name);
+  /// Register `Alias::Variant` for each variant of an alias of an enum.
+  void register_alias_variants(TypeAliasDefAST *ast);
+
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);
@@ -319,6 +338,8 @@ public:
       }
       auto mangled = simple->name.mangled();
       auto get_type_opt = this->get_typename_type(mangled);
+      if (!get_type_opt)
+        get_type_opt = resolve_pending_alias(mangled);
       if (!get_type_opt.has_value()) {
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",

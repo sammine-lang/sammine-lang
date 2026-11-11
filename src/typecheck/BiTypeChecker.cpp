@@ -2,7 +2,10 @@
 #include "ast/Ast.h"
 #include "typecheck/BuiltinInstances.h"
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 #include "util/Utilities.h"
+#include "llvm/ADT/STLExtras.h"
+#include <functional>
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -38,20 +41,47 @@ void BiTypeCheckerVisitor::pre_register_function(PrototypeAST *ast) {
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   top_level_ast = ast;
 
-  // First pass: register structs, enums, type aliases, typeclass declarations,
-  // and instances so method bodies can reference any type regardless of order.
+  // First pass: register every type, typeclass and instance before checking
+  // any code. As with functions, every type is declared before any is
+  // defined, so a type can use one declared after it.
+  // 1) Declare each struct and enum; register each generic one.
   for (auto &def : ast->DefinitionVec) {
-    if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get()))
-      sd->accept_vis(this);
-    else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get()))
-      ed->accept_vis(this);
-    else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
-      ta->accept_vis(this);
-    else if (auto *tc = llvm::dyn_cast<TypeClassDeclAST>(def.get()))
-      register_typeclass_decl(tc);
-    else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
-      register_typeclass_instance(tci);
+    if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get())) {
+      if (sd->type_params.empty())
+        declare_struct(sd);
+      else
+        sd->accept_vis(this);
+    } else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get())) {
+      if (ed->type_params.empty())
+        declare_enum(ed);
+      else
+        ed->accept_vis(this);
+    }
   }
+  // 2) Resolve type aliases. Like rustc, an alias is expanded when first
+  //    needed, so it can name an alias declared after it
+  //    (resolve_pending_alias).
+  for (auto &def : ast->DefinitionVec)
+    if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
+      pending_aliases[ta->alias_name.mangled()] = ta;
+  for (auto &def : ast->DefinitionVec)
+    if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
+      ta->accept_vis(this);
+  // 3) Fill in each struct's fields and each enum's variants.
+  for (auto &def : ast->DefinitionVec)
+    if (llvm::isa<StructDefAST, EnumDefAST>(def.get()))
+      def->accept_vis(this);
+  // 4) An alias of an enum names its variants too, now that they are known.
+  for (auto &def : ast->DefinitionVec)
+    if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
+      register_alias_variants(ta);
+  // 5) Typeclasses, then their instances.
+  for (auto &def : ast->DefinitionVec)
+    if (auto *tc = llvm::dyn_cast<TypeClassDeclAST>(def.get()))
+      register_typeclass_decl(tc);
+  for (auto &def : ast->DefinitionVec)
+    if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
+      register_typeclass_instance(tci);
 
   // Second pass: pre-register all function signatures so mutual recursion works
   for (auto &def : ast->DefinitionVec) {
@@ -213,28 +243,89 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
     return;
   }
 
-  // Skip if already registered (e.g. by first pass)
-  if (ast->get_type().synthesized())
+  auto type = declare_struct(ast);
+  auto &st = std::get<StructType>(type.type_data);
+  if (st.is_defined())
     return;
 
   std::vector<std::string> field_names;
   std::vector<Type> field_types;
-
   for (auto &member : ast->struct_members) {
     auto ft = resolve_type_expr(member->type_expr.get());
+    if (refers_to_itself(member->type_expr.get(), ft, type))
+      ft = Type::Poisoned();
     field_names.push_back(member->name);
     field_types.push_back(ft);
-    if (ft.is_poisoned()) {
-      ast->set_type(Type::Poisoned());
-      return;
-    }
   }
+  st.define(std::move(field_names), std::move(field_types));
+}
 
-  auto struct_type = Type::Struct(type_name(ast->struct_name, *ast),
-                                  std::move(field_names),
-                                  std::move(field_types));
-  ast->set_type(struct_type);
-  typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), struct_type);
+Type BiTypeCheckerVisitor::declare_struct(StructDefAST *ast) {
+  if (ast->get_type().type_kind == TypeKind::Struct)
+    return ast->get_type();
+  auto type = Type::DeclaredStruct(type_name(ast->struct_name, *ast));
+  ast->set_type(type);
+  typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), type);
+  return type;
+}
+
+Type BiTypeCheckerVisitor::declare_enum(EnumDefAST *ast) {
+  if (ast->get_type().type_kind == TypeKind::Enum)
+    return ast->get_type();
+  auto type = Type::DeclaredEnum(type_name(ast->enum_name, *ast));
+  ast->set_type(type);
+  typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), type);
+  return type;
+}
+
+// Whether `type` contains or points to `self`, through any pointer, array,
+// tuple, function, struct field or enum payload. Reported at `where`.
+// sammine doesn't allow a type that refers to itself.
+bool BiTypeCheckerVisitor::refers_to_itself(TypeExprAST *where,
+                                            const Type &type,
+                                            const Type &self) {
+  std::unordered_set<std::string> seen;
+  std::function<bool(const Type &)> reaches = [&](const Type &t) -> bool {
+    switch (t.type_kind) {
+    case TypeKind::Pointer:
+      return reaches(std::get<PointerType>(t.type_data).get_pointee());
+    case TypeKind::Array:
+      return reaches(std::get<ArrayType>(t.type_data).get_element());
+    case TypeKind::Tuple:
+      return llvm::any_of(
+          std::get<TupleType>(t.type_data).get_element_types(), reaches);
+    case TypeKind::Function: {
+      auto &ft = std::get<FunctionType>(t.type_data);
+      return llvm::any_of(ft.get_params_types(), reaches) ||
+             reaches(ft.get_return_type());
+    }
+    case TypeKind::Struct: {
+      if (t == self)
+        return true;
+      auto &st = std::get<StructType>(t.type_data);
+      return seen.insert(st.get_name().mangled()).second &&
+             llvm::any_of(st.get_field_types(), reaches);
+    }
+    case TypeKind::Enum: {
+      if (t == self)
+        return true;
+      auto &et = std::get<EnumType>(t.type_data);
+      return seen.insert(et.get_name().mangled()).second &&
+             llvm::any_of(et.get_variants(), [&](auto &vi) {
+               return llvm::any_of(vi.payload_types, reaches);
+             });
+    }
+    default:
+      return false;
+    }
+  };
+  if (!reaches(type))
+    return false;
+  this->add_error(where->location,
+                  fmt::format("'{}' refers to itself here, and a type can't "
+                              "refer to itself",
+                              self.to_string()));
+  return true;
 }
 
 void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
@@ -246,6 +337,14 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     }
     return;
   }
+
+  auto enum_type = declare_enum(ast);
+  auto &et = std::get<EnumType>(enum_type.type_data);
+  if (et.is_defined())
+    return;
+  // A variant list that fails a check below is left empty, so the error is
+  // reported once.
+  auto fail = [&] { et.define({}, false, TypeKind::I32_t); };
 
   // Resolve backing type if specified
   TypeKind backing_type = TypeKind::I32_t;
@@ -266,7 +365,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
           fmt::format("Invalid backing type '{}' for type '{}' — must be "
                       "i32, i64, u32, or u64",
                       bt_name, ast->enum_name.mangled()));
-      ast->set_type(Type::Poisoned());
+      fail();
       return;
     }
     // Backing type annotation implies integer-backed
@@ -284,7 +383,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': variant '{}' is missing a "
                         "discriminant value — all variants must have one",
                         ast->enum_name.mangled(), variant.name));
-        ast->set_type(Type::Poisoned());
+        fail();
         return;
       }
       if (!variant.payload_types.empty()) {
@@ -293,7 +392,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': variant '{}' cannot have "
                         "both a discriminant value and type payloads",
                         ast->enum_name.mangled(), variant.name));
-        ast->set_type(Type::Poisoned());
+        fail();
         return;
       }
       auto val = variant.discriminant_value.value();
@@ -303,7 +402,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
             fmt::format("Integer-backed enum '{}': duplicate discriminant "
                         "value {} on variant '{}'",
                         ast->enum_name.mangled(), val, variant.name));
-        ast->set_type(Type::Poisoned());
+        fail();
         return;
       }
       seen_values.insert(val);
@@ -318,20 +417,14 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     info.discriminant_value = variant.discriminant_value;
     for (auto &type_expr : variant.payload_types) {
       auto resolved = resolve_type_expr(type_expr.get());
-      if (resolved.is_poisoned()) {
-        ast->set_type(Type::Poisoned());
-        return;
-      }
+      if (refers_to_itself(type_expr.get(), resolved, enum_type))
+        resolved = Type::Poisoned();
       info.payload_types.push_back(resolved);
     }
     variant_infos.push_back(std::move(info));
   }
 
-  auto enum_type = Type::Enum(type_name(ast->enum_name, *ast),
-                              std::move(variant_infos), ast->is_integer_backed,
-                              backing_type);
-  ast->set_type(enum_type);
-  typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), enum_type);
+  et.define(std::move(variant_infos), ast->is_integer_backed, backing_type);
 
   // Add lattice edge: integer-backed enum → backing type
   if (ast->is_integer_backed) {
@@ -354,7 +447,6 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
 
   // Register variant constructors with qualified keys (enum_name::variant_name)
   // so lookups match the fully-qualified names produced by scope generator
-  auto &et = std::get<EnumType>(enum_type.type_data);
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
     auto qualified_key = ast->enum_name.with_appended({vi.name, ""}).mangled();
@@ -374,21 +466,64 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   auto &tap = props_.type_alias(ast->id());
   if (tap.resolved_type.synthesized())
     return;
+  auto name = ast->alias_name.mangled();
 
+  alias_path.push_back(ast);
   auto resolved = resolve_type_expr(ast->type_expr.get());
+  alias_path.pop_back();
+  pending_aliases.erase(name);
+  // Part of a cycle, already reported.
+  if (tap.resolved_type.synthesized())
+    return;
   if (resolved.is_poisoned()) {
     this->add_error(ast->get_location(),
                     fmt::format("Cannot resolve type '{}' in type alias '{}'",
-                                ast->type_expr->to_string(),
-                                ast->alias_name.mangled()));
+                                ast->type_expr->to_string(), name));
+    tap.resolved_type = Type::Poisoned();
     ast->set_type(Type::Poisoned());
     return;
   }
   tap.resolved_type = resolved;
   ast->set_type(resolved);
-  typename_to_type.registerNameT(ast->alias_name.mangled(), resolved);
+  typename_to_type.registerNameTAtRoot(name, resolved);
+}
 
-  // If the alias resolves to an enum, register variant constructors
+std::optional<Type>
+BiTypeCheckerVisitor::resolve_pending_alias(const std::string &name) {
+  auto it = pending_aliases.find(name);
+  if (it == pending_aliases.end())
+    return std::nullopt;
+  auto *alias = it->second;
+
+  // Already being expanded: the alias refers to itself through the aliases
+  // expanded since.
+  auto start = llvm::find(alias_path, alias);
+  if (start != alias_path.end()) {
+    std::vector<std::string> through;
+    for (auto at = std::next(start); at != alias_path.end(); ++at)
+      through.push_back(fmt::format("'{}'", (*at)->alias_name.mangled()));
+    this->add_error(
+        alias->get_location(),
+        through.empty()
+            ? fmt::format("Type alias '{}' refers to itself", name)
+            : fmt::format("Type alias '{}' refers to itself through {}", name,
+                          fmt::join(through, ", ")));
+    // Every alias in the cycle is unresolvable; nothing else reports it.
+    for (auto at = start; at != alias_path.end(); ++at) {
+      props_.type_alias((*at)->id()).resolved_type = Type::Poisoned();
+      (*at)->set_type(Type::Poisoned());
+      typename_to_type.registerNameTAtRoot((*at)->alias_name.mangled(),
+                                           Type::Poisoned());
+    }
+    return Type::Poisoned();
+  }
+
+  alias->accept_vis(this);
+  return get_typename_type(name);
+}
+
+void BiTypeCheckerVisitor::register_alias_variants(TypeAliasDefAST *ast) {
+  auto resolved = props_.type_alias(ast->id()).resolved_type;
   if (resolved.type_kind == TypeKind::Enum) {
     auto &et = std::get<EnumType>(resolved.type_data);
     for (size_t i = 0; i < et.variant_count(); i++) {

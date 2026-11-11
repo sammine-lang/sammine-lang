@@ -1,0 +1,18 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: type_alias_cycle.mn:12:5
+// CHECK-NEXT:   10|// through.
+// CHECK-NEXT:   11|
+// CHECK-NEXT:   12|type T1 = T2;
+// CHECK-NEXT:     |     ──────┬
+// CHECK-NEXT:     |           ╰─ Type alias 'T1' refers to itself through 'T2', 'T3'
+
+// An alias that refers to itself is reported once, naming the aliases it goes
+// through.
+
+type T1 = T2;
+type T2 = T3;
+type T3 = T1;
+
+let main() -> i32 {
+  return 0;
+}

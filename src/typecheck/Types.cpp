@@ -39,36 +39,62 @@ bool ArrayType::operator==(const ArrayType &t) const {
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
+StructType::StructType(sammine_util::QualifiedName name_)
+    : name(std::move(name_)), body(std::make_shared<Body>()) {}
 StructType::StructType(sammine_util::QualifiedName name_,
                        std::vector<std::string> field_names_,
                        std::vector<Type> field_types_)
-    : name(std::move(name_)), field_names(std::move(field_names_)),
-      field_types(std::move(field_types_)) {}
+    : StructType(std::move(name_)) {
+  define(std::move(field_names_), std::move(field_types_));
+}
+void StructType::define(std::vector<std::string> field_names_,
+                        std::vector<Type> field_types_) const {
+  sammine_util::abort_if_not(!body->defined,
+                             "ICE: struct " + name.mangled() +
+                                 " defined twice");
+  body->field_names = std::move(field_names_);
+  body->field_types = std::move(field_types_);
+  body->defined = true;
+}
 bool StructType::operator==(const StructType &t) const {
   return name.mangled() == t.name.mangled(); // nominal typing
 }
 std::optional<size_t>
 StructType::get_field_index(const std::string &field) const {
-  for (size_t i = 0; i < field_names.size(); i++) {
-    if (field_names[i] == field)
+  for (size_t i = 0; i < body->field_names.size(); i++) {
+    if (body->field_names[i] == field)
       return i;
   }
   return std::nullopt;
 }
-Type StructType::get_field_type(size_t idx) const { return field_types[idx]; }
+Type StructType::get_field_type(size_t idx) const {
+  return body->field_types[idx];
+}
 
+EnumType::EnumType(sammine_util::QualifiedName name_)
+    : name(std::move(name_)), body(std::make_shared<Body>()) {}
 EnumType::EnumType(sammine_util::QualifiedName name_,
                    std::vector<VariantInfo> variants_, bool integer_backed,
                    TypeKind backing_type)
-    : name(std::move(name_)), variants(std::move(variants_)),
-      integer_backed_(integer_backed), backing_type_(backing_type) {}
+    : EnumType(std::move(name_)) {
+  define(std::move(variants_), integer_backed, backing_type);
+}
+void EnumType::define(std::vector<VariantInfo> variants_, bool integer_backed,
+                      TypeKind backing_type) const {
+  sammine_util::abort_if_not(!body->defined,
+                             "ICE: enum " + name.mangled() + " defined twice");
+  body->variants = std::move(variants_);
+  body->integer_backed = integer_backed;
+  body->backing_type = backing_type;
+  body->defined = true;
+}
 bool EnumType::operator==(const EnumType &t) const {
   return name.mangled() == t.name.mangled(); // nominal typing
 }
 std::optional<size_t>
 EnumType::get_variant_index(const std::string &variant_name) const {
-  for (size_t i = 0; i < variants.size(); i++) {
-    if (variants[i].name == variant_name)
+  for (size_t i = 0; i < body->variants.size(); i++) {
+    if (body->variants[i].name == variant_name)
       return i;
   }
   return std::nullopt;

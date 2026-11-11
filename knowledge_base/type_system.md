@@ -19,6 +19,8 @@
 - Bidirectional: `synthesize()` → bottom-up, `postorder_walk()` → top-down consistency
 - Two stacks: `id_to_type` (variables), `typename_to_type` (type names)
 - Three-pass registration: 1) types + typeclasses + aliases 2) function signatures 3) full checking
+- Pass 1 order-independence: declare every struct/enum (`declare_struct`/`declare_enum`, empty shared body) → expand aliases on demand (`resolve_pending_alias`, cycle → "Type alias 'T1' refers to itself through 'T2'") → fill bodies (`StructType::define`/`EnumType::define`) → alias variant constructors → typeclass decls → instances
+- No self-referential types, even through `ptr`: `refers_to_itself` rejects a field/payload reaching its own type (walks pointers, arrays, tuples, functions, other structs/enums)
 
 ### Literals
 - Integer (no decimal) → `Integer`; with decimal → `Flt`

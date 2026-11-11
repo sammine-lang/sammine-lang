@@ -89,21 +89,36 @@ public:
   ArrayType(Type element, size_t size);
 };
 /// Named product type with ordered fields. Name is qualified (e.g. mod::Point).
+/// Equality is by name. The fields are shared by every copy of the type, so a
+/// type can be declared first and its fields filled in once with `define`,
+/// letting types refer to types declared later.
 class StructType {
+  struct Body {
+    std::vector<std::string> field_names;
+    std::vector<Type> field_types;
+    bool defined = false;
+  };
   sammine_util::QualifiedName name;
-  std::vector<std::string> field_names;
-  std::vector<Type> field_types;
+  std::shared_ptr<Body> body;
 
 public:
   bool operator==(const StructType &t) const;
   const sammine_util::QualifiedName &get_name() const { return name; }
   const std::vector<std::string> &get_field_names() const {
-    return field_names;
+    return body->field_names;
   }
-  const std::vector<Type> &get_field_types() const { return field_types; }
+  const std::vector<Type> &get_field_types() const {
+    return body->field_types;
+  }
   std::optional<size_t> get_field_index(const std::string &field) const;
   Type get_field_type(size_t idx) const;
-  size_t field_count() const { return field_names.size(); }
+  size_t field_count() const { return body->field_names.size(); }
+  bool is_defined() const { return body->defined; }
+  /// Fill in the fields of a declared type, for every copy of it.
+  void define(std::vector<std::string> field_names,
+              std::vector<Type> field_types) const;
+  /// A declared type, with its fields not filled in yet.
+  explicit StructType(sammine_util::QualifiedName name);
   StructType(sammine_util::QualifiedName name,
              std::vector<std::string> field_names,
              std::vector<Type> field_types);
@@ -122,20 +137,35 @@ public:
   };
 
 private:
-  std::vector<VariantInfo> variants;
-  bool integer_backed_ = false;
-  TypeKind backing_type_ = TypeKind::I32_t;
+  /// Shared by every copy of the type, as StructType's fields are.
+  struct Body {
+    std::vector<VariantInfo> variants;
+    bool integer_backed = false;
+    TypeKind backing_type = TypeKind::I32_t;
+    bool defined = false;
+  };
+  std::shared_ptr<Body> body;
 
 public:
   bool operator==(const EnumType &t) const;
   const sammine_util::QualifiedName &get_name() const { return name; }
-  const std::vector<VariantInfo> &get_variants() const { return variants; }
+  const std::vector<VariantInfo> &get_variants() const {
+    return body->variants;
+  }
   std::optional<size_t>
   get_variant_index(const std::string &variant_name) const;
-  const VariantInfo &get_variant(size_t idx) const { return variants[idx]; }
-  size_t variant_count() const { return variants.size(); }
-  bool is_integer_backed() const { return integer_backed_; }
-  TypeKind get_backing_type() const { return backing_type_; }
+  const VariantInfo &get_variant(size_t idx) const {
+    return body->variants[idx];
+  }
+  size_t variant_count() const { return body->variants.size(); }
+  bool is_integer_backed() const { return body->integer_backed; }
+  TypeKind get_backing_type() const { return body->backing_type; }
+  bool is_defined() const { return body->defined; }
+  /// Fill in the variants of a declared type, for every copy of it.
+  void define(std::vector<VariantInfo> variants, bool integer_backed,
+              TypeKind backing_type) const;
+  /// A declared type, with its variants not filled in yet.
+  explicit EnumType(sammine_util::QualifiedName name);
   EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants,
            bool integer_backed = false,
            TypeKind backing_type = TypeKind::I32_t);
@@ -219,6 +249,14 @@ struct Type {
                    TypeKind backing_type = TypeKind::I32_t) {
     return Type{TypeKind::Enum, EnumType(std::move(name), std::move(variants),
                                          integer_backed, backing_type)};
+  }
+  /// A struct whose fields are filled in later with StructType::define.
+  static Type DeclaredStruct(sammine_util::QualifiedName name) {
+    return Type{TypeKind::Struct, StructType(std::move(name))};
+  }
+  /// An enum whose variants are filled in later with EnumType::define.
+  static Type DeclaredEnum(sammine_util::QualifiedName name) {
+    return Type{TypeKind::Enum, EnumType(std::move(name))};
   }
   static Type Tuple(std::vector<Type> element_types) {
     return Type{TypeKind::Tuple, TupleType(std::move(element_types))};
