@@ -298,7 +298,7 @@ Top-level definitions are dispatched similarly in `emitDefinition(DefinitionAST*
 
 1. **Runtime function declarations.** Declares `malloc`, `free`, and `exit` as LLVM/Func ops so they are available to `alloc`/`free` emission and bounds-check aborts. Also registers the closure struct type (`sammine.closure`).
 
-2. **Pre-pass 1: Type registration.** Iterates over all `StructDefAST` and `EnumDefAST` nodes to create LLVM struct types (`LLVMStructType::getIdentified`) and store them in the `structTypes` / `enumTypes` maps. This must happen before any function signatures reference these types.
+2. **Pre-pass 1: Type registration.** Iterates over all `StructDefAST` and `EnumDefAST` nodes to create LLVM struct types (`LLVMStructType::getIdentified`) and store them in the `structTypes` / `enumTypes` maps. This must happen before any function signatures reference these types. Like functions, struct types are declared before any is defined: the first loop creates each struct type empty, and a second loop fills in its fields, so a struct can hold another struct defined later in `DefinitionVec` (generic instantiations such as `Box<Pt>` are injected at the front, before `Pt`). An enum's layout only needs payload sizes, so it is complete in the first loop.
 
 3. **Pre-pass 2: Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies). This enables mutual recursion and function-as-value references.
 

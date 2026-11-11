@@ -1,0 +1,34 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      3
+// CHECK-NEXT: 4
+// CHECK-NEXT: 1 2
+// CHECK-NEXT: 5 6
+
+// A generic struct holding the program's own struct or enum by value.
+// Instantiations like Box<Pt> come first in the program's definitions, before
+// Pt, and B needs Box<A> while Box<A> needs A, so codegen declares every
+// struct type before filling in any fields.
+
+import std;
+
+struct Box<T> { val: T, };
+struct Pt { x: i32, };
+type Color = Red | Green(i32);
+struct A { x: i32, };
+struct B { w: Box<A>, n: Box<Box<A>>, };
+
+let main() -> i32 {
+  let p = Box<Pt> { val: Pt { x: 3 } };
+  std::printf("%d\n", p.val.x);
+
+  let c = Box<Color> { val: Color::Green(4) };
+  std::printf("%d\n", case c.val { Green(n) => n, Red => 0, });
+
+  let b = B { w: Box<A> { val: A { x: 1 } },
+              n: Box<Box<A>> { val: Box<A> { val: A { x: 2 } } } };
+  std::printf("%d %d\n", b.w.val.x, b.n.val.val.x);
+
+  let pair = Box<(Pt, Pt)> { val: (Pt { x: 5 }, Pt { x: 6 }) };
+  std::printf("%d %d\n", pair.val.0.x, pair.val.1.x);
+  return 0;
+}

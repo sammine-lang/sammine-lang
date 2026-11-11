@@ -36,7 +36,7 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 - Assignment (`=`) short-circuits before the chain
 
 ## Forward Declarations (`generate()`)
-1. Register types: all StructDef/EnumDef → MLIR types
+1. Register types: all StructDef/EnumDef → MLIR types. Structs are declared first and their fields filled in a second loop, so order never matters (`Box<Pt>` is instantiated at the front, before `Pt`)
 2. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods
 3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
 

@@ -36,7 +36,8 @@ namespace sammine_lang {
 //
 // Three pre-passes before emitting definitions:
 // 1) Declare runtime functions (malloc, free, exit)
-// 2) Register all struct/enum LLVM types (so forward refs work)
+// 2) Register all struct/enum LLVM types (so forward refs work): declare each
+//    struct, then fill in its fields
 // 3) Forward-declare all function signatures (needed for function-as-value
 // refs)
 
@@ -52,20 +53,19 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
 
   // Pre-pass 1: register struct and enum types so that function
-  // forward-declarations can reference them (monomorphized functions may
-  // appear before imported struct definitions in the DefinitionVec).
+  // forward-declarations can reference them. A struct's fields can be any
+  // struct or enum, in any order: generic instantiations come first in the
+  // DefinitionVec, yet Box<Pt> needs Pt. So, as with functions, every struct
+  // type is declared here, and its fields are filled in below. An enum's layout
+  // only needs payload sizes, so it is complete here.
   for (auto &def : program->DefinitionVec) {
     if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
       if (sd->get_type().type_kind == TypeKind::Struct) {
-        auto st = std::get<StructType>(sd->get_type().type_data);
-        llvm::SmallVector<mlir::Type> fieldTypes;
-        for (auto &ft : st.get_field_types())
-          fieldTypes.push_back(convertType(ft));
-        auto structTy = mlir::LLVM::LLVMStructType::getIdentified(
+        auto type = sd->get_type();
+        auto &st = std::get<StructType>(type.type_data);
+        structTypes[type] = mlir::LLVM::LLVMStructType::getIdentified(
             builder.getContext(),
             kStructTypePrefix.str() + st.get_name().mangled());
-        (void)structTy.setBody(fieldTypes, /*isPacked=*/false);
-        structTypes[sd->get_type()] = structTy;
       }
     } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
       if (ed->get_type().type_kind == TypeKind::Enum) {
@@ -91,6 +91,16 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         enumTypes[ed->get_type()] = enumTy;
       }
     }
+  }
+  for (auto &def : program->DefinitionVec) {
+    auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get());
+    if (!sd || sd->get_type().type_kind != TypeKind::Struct)
+      continue;
+    auto type = sd->get_type();
+    llvm::SmallVector<mlir::Type> fieldTypes;
+    for (auto &ft : std::get<StructType>(type.type_data).get_field_types())
+      fieldTypes.push_back(convertType(ft));
+    (void)structTypes[type].setBody(fieldTypes, /*isPacked=*/false);
   }
 
   // Pre-pass 2: forward-declare functions (now that all types are registered).
