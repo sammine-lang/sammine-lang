@@ -3,6 +3,7 @@
 #include "typecheck/BiTypeChecker.h"
 #include "typecheck/Types.h"
 #include "typecheck/UniSubst.h"
+#include "llvm/ADT/STLExtras.h"
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -615,6 +616,20 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
                                   ast->arguments.size()));
       return ResolvedCall::failure();
     }
+    // A pointer passed through `...` has no declared parameter type, so
+    // nothing says C only reads it. sammine memory is immutable: C hands
+    // back what it produces instead of writing into ours.
+    bool lends_address = false;
+    for (auto &arg : llvm::drop_begin(ast->arguments, params.size()))
+      if (llvm::isa<AddrOfExprAST>(arg.get())) {
+        this->add_error(arg->get_location(),
+                        fmt::format("Cannot pass an address through the '...' "
+                                    "of '{}': C could write through it",
+                                    ast->functionName.mangled()));
+        lends_address = true;
+      }
+    if (lends_address)
+      return ResolvedCall::failure();
     return ResolvedCall{callee, {}, func.get_return_type(), ty, false};
   }
 

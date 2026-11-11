@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot pass an address through the '...' of 'sscanf'
+// CHECK: Cannot pass an address through the '...' of 'sscanf'
+
+// C could write through a pointer passed in `...`, into an immutable value
+// or a constant array in read-only memory.
+
+reuse sscanf(s: ptr<char>, fmt: ptr<char>, ...) -> i32;
+
+let main() -> i32 {
+  let v = 1;
+  let a = [10, 20, 30];
+  sscanf("42", "%d", &v);
+  sscanf("42", "%d", &a);
+  v
+}

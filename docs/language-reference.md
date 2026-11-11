@@ -171,6 +171,8 @@ reuse sqrt(x: f64) -> f64;                     // bind to C sqrt()
 reuse printf(fmt: ptr<char>, ...) -> i32;       // varargs supported
 ```
 
+C never writes into sammine memory, because sammine values are immutable. A C function hands back what it produces as its result, including new pointers, and a `ptr<T>` parameter is one C only reads. The compiler cannot see what C does, so a declaration that says otherwise is a bug in the declaration. Passing an address through `...`, as in `sscanf(s, "%d", &v)`, is an error, since nothing declares how C uses it.
+
 Imported modules can re-export C bindings with `export reuse`:
 
 ```sammine
