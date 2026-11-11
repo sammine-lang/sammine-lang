@@ -1,0 +1,16 @@
+// RUN: printf '42 -9000000000 2.5\n' | %sammine_jit --file %full | %check %full
+// RUN: %sammine_jit --file %full < /dev/null | %check %full --check-prefix EMPTY
+// CHECK: 42 -9000000000 2.500000
+// EMPTY: 0 0 0.000000
+
+import io;
+
+let main() -> i32 {
+  io::print_i32(io::read_i32());
+  io::print(" ");
+  io::print_i64(io::read_i64());
+  io::print(" ");
+  io::print_f64(io::read_f64());
+  io::println("");
+  0
+}
