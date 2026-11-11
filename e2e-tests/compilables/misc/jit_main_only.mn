@@ -1,0 +1,12 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: main ran in the JIT
+
+// main is the only function, so the JIT places it at the start of a page.
+// Calling it must not read the memory before it.
+
+reuse puts(s: ptr<char>) -> i32;
+
+let main() -> i32 {
+  puts("main ran in the JIT");
+  return 0;
+}

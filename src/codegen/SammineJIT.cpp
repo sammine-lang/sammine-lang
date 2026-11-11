@@ -109,20 +109,21 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
     return 1;
   }
 
-  auto *mainFn = mainSym->getAddress().toPtr<int (*)(int, char **)>();
-
-  // Build argc/argv from program_args.
-  std::vector<std::string> args_storage;
-  args_storage.push_back("sammine");
-  for (auto &a : jit_args)
-    args_storage.push_back(a);
-
-  std::vector<char *> argv;
-  for (auto &a : args_storage)
-    argv.push_back(a.data());
-  argv.push_back(nullptr);
-
-  exit_code_ = mainFn(static_cast<int>(args_storage.size()), argv.data());
+  // Let the executor call main, with argv as the program name followed by the
+  // --jit-args. Calling the JIT's code through a function pointer from this
+  // file instead makes UBSan's function check read the bytes before main,
+  // which aren't mapped when main starts a page.
+  std::vector<std::string> args{"sammine"};
+  args.insert(args.end(), jit_args.begin(), jit_args.end());
+  auto result = ES->getExecutorProcessControl().runAsMain(
+      mainSym->getAddress(), args);
+  if (!result) {
+    add_error(Location::NonPrintable(),
+              fmt::format("JIT failed to run main: {}",
+                          toString(result.takeError())));
+    return 1;
+  }
+  exit_code_ = *result;
   return exit_code_;
 }
 
