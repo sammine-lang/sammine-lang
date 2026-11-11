@@ -9,8 +9,15 @@
 //! \file Lexer.h
 //! \brief Houses the lexer and the declaration of its method
 #include <memory>
+#include <optional>
+#include <string_view>
 
 namespace sammine_lang {
+
+//! The keyword `word` lexes to, or nullopt for an identifier.
+std::optional<TokenType> keyword_token(std::string_view word);
+//! Whether `tok` is a keyword such as `while` or `let`.
+bool is_keyword(const Token &tok);
 
 //! A Lexer class with holds the core functionality Tokens and Token streams
 class Lexer : public sammine_util::Reportee {

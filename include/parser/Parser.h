@@ -142,6 +142,9 @@ public:
   [[nodiscard]] auto ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypeExpr() -> std::unique_ptr<TypeExprAST>;
   [[nodiscard]] auto ParseTypedVar() -> p<TypedVarAST>;
+  //! Reports a keyword where a name is required, e.g. `let while`, then
+  //! reads it as a name so parsing goes on without follow-up errors.
+  void reject_keyword_name();
 
   // Parse expressions
   [[nodiscard]] auto ParseExpr() -> p<ExprAST>;

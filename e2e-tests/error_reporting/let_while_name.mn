@@ -1,0 +1,54 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |let_while_name.mn:46:11
+// CHECK-NEXT:   44|// reported once, and the compiler keeps going to find the rest.
+// CHECK-NEXT:   45|
+// CHECK-NEXT:   46|struct S { for: i32, };
+// CHECK-NEXT:     |           ^^^
+// CHECK-NEXT:     |           'for' is a reserved word and can't be used as a name
+// CHECK-NEXT:   47|
+// CHECK-NEXT:   48|let case(in: i32) -> i32 { 1 }
+// CHECK-NEXT:     |let_while_name.mn:48:4
+// CHECK-NEXT:   46|struct S { for: i32, };
+// CHECK-NEXT:   47|
+// CHECK-NEXT:   48|let case(in: i32) -> i32 { 1 }
+// CHECK-NEXT:     |    ^^^^
+// CHECK-NEXT:     |    'case' is a reserved word and can't be used as a name
+// CHECK-NEXT:   49|
+// CHECK-NEXT:   50|let main() -> i32 {
+// CHECK-NEXT:     |let_while_name.mn:48:9
+// CHECK-NEXT:   46|struct S { for: i32, };
+// CHECK-NEXT:   47|
+// CHECK-NEXT:   48|let case(in: i32) -> i32 { 1 }
+// CHECK-NEXT:     |         ^^
+// CHECK-NEXT:     |         'in' is a reserved word and can't be used as a name
+// CHECK-NEXT:   49|
+// CHECK-NEXT:   50|let main() -> i32 {
+// CHECK-NEXT:     |let_while_name.mn:51:6
+// CHECK-NEXT:   49|
+// CHECK-NEXT:   50|let main() -> i32 {
+// CHECK-NEXT:   51|  let while = 1;
+// CHECK-NEXT:     |      ^^^^^
+// CHECK-NEXT:     |      'while' is a reserved word and can't be used as a name
+// CHECK-NEXT:   52|  let (a, if) = (1, 2);
+// CHECK-NEXT:   53|  0
+// CHECK-NEXT:     |let_while_name.mn:52:10
+// CHECK-NEXT:   50|let main() -> i32 {
+// CHECK-NEXT:   51|  let while = 1;
+// CHECK-NEXT:   52|  let (a, if) = (1, 2);
+// CHECK-NEXT:     |          ^^
+// CHECK-NEXT:     |          'if' is a reserved word and can't be used as a name
+// CHECK-NEXT:   53|  0
+// CHECK-NEXT:   54|}
+
+// A keyword can't name a binding, function, parameter or field. Each one is
+// reported once, and the compiler keeps going to find the rest.
+
+struct S { for: i32, };
+
+let case(in: i32) -> i32 { 1 }
+
+let main() -> i32 {
+  let while = 1;
+  let (a, if) = (1, 2);
+  0
+}

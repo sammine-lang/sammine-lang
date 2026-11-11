@@ -81,6 +81,44 @@ void Lexer::lexNextToken() {
   }
 }
 
+std::optional<TokenType> keyword_token(std::string_view word) {
+  static const std::unordered_map<std::string_view, TokenType> keywords = {
+    {"fn", TokFunc},
+    {"return", TokReturn},
+    {"struct", TokStruct},
+    {"type", TokType},
+    {"if", TokIf},
+    {"else", TokElse},
+    {"let", TokLet},
+    {"true", TokTrue},
+    {"false", TokFalse},
+    {"reuse", TokReuse},
+    {"export", TokExport},
+    {"ptr", TokPtr},
+    {"alloc", TokAlloc},
+    {"free", TokFree},
+    {"len", TokLen},
+    {"dim", TokDim},
+    {"import", TokImport},
+    {"as", TokAs},
+    {"typeclass", TokTypeclass},
+    {"instance", TokInstance},
+    {"while", TokWhile},
+    {"for", TokFor},
+    {"in", TokIn},
+    {"case", TokCase},
+    {"kernel", TokKernel},
+  };
+  auto it = keywords.find(word);
+  if (it == keywords.end())
+    return std::nullopt;
+  return it->second;
+}
+
+bool is_keyword(const Token &tok) {
+  return keyword_token(tok.lexeme) == tok.tok_type;
+}
+
 size_t Lexer::handleID(size_t i, const std::string &input) {
   if (input[i] == '\'') {
     // Disambiguate: 'ptr<T> (tick for linear pointer) vs 'a' (char literal)
@@ -180,36 +218,9 @@ size_t Lexer::handleID(size_t i, const std::string &input) {
       i = advance(i);
     }
 
-    static const std::unordered_map<std::string, TokenType> keywords = {
-        {"fn", TokFunc},
-        {"return", TokReturn},
-        {"struct", TokStruct},
-        {"type", TokType},
-        {"if", TokIf},
-        {"else", TokElse},
-        {"let", TokLet},
-        {"true", TokTrue},
-        {"false", TokFalse},
-        {"reuse", TokReuse},
-        {"export", TokExport},
-        {"ptr", TokPtr},
-        {"alloc", TokAlloc},
-        {"free", TokFree},
-        {"len", TokLen},
-        {"dim", TokDim},
-        {"import", TokImport},
-        {"as", TokAs},
-        {"typeclass", TokTypeclass},
-        {"instance", TokInstance},
-        {"while", TokWhile},
-        {"for", TokFor},
-        {"in", TokIn},
-        {"case", TokCase},
-        {"kernel", TokKernel},
-    };
-    auto it = keywords.find(IdentifierStr);
-    tokStream->push_back(Token(it != keywords.end() ? it->second : TokID,
-                               IdentifierStr, location));
+    auto keyword = keyword_token(IdentifierStr);
+    tokStream->push_back(Token(keyword.value_or(TokID), IdentifierStr,
+                               location));
   }
 
   return i;

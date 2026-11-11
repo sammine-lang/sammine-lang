@@ -2,6 +2,7 @@
 #include "parser/Parser.h"
 #include "ast/Ast.h"
 #include "fmt/format.h"
+#include "lex/Lexer.h"
 #include "lex/Token.h"
 #include "parser/Combinators.h"
 #include <cstddef>
@@ -610,6 +611,16 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
   return nullptr;
 }
 
+void Parser::reject_keyword_name() {
+  auto tok = tokStream->peek();
+  if (!is_keyword(*tok))
+    return;
+  imm_error(fmt::format("'{}' is a reserved word and can't be used as a name",
+                        tok->lexeme),
+            tok->get_location());
+  tok->tok_type = TokID;
+}
+
 auto Parser::ParseTypedVar() -> p<TypedVarAST> {
   // Migration diagnostic: mut keyword has been removed
   bool saw_mut = false;
@@ -619,6 +630,7 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
     tokStream->consume(); // skip the "mut" identifier
     saw_mut = true;
   }
+  reject_keyword_name();
   auto name = expect(TokenType::TokID);
   if (!name) {
     if (saw_mut) {
@@ -1384,6 +1396,7 @@ auto Parser::ParseForExpr() -> p<ExprAST> {
 }
 
 auto Parser::ParsePrototype() -> p<PrototypeAST> {
+  reject_keyword_name();
   EXPECT(id, TokID);
 
   auto proto_pqn = parseQualifiedNameTail(id, false);
