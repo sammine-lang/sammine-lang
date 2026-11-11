@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: Module 'std' is not imported
+
+// std comes with aliased_user, which imports it, but this file doesn't import
+// std, so it can't name std's definitions.
+
+import aliased_user;
+
+let main() -> i32 {
+  std::printf("hi\n");
+  return 0;
+}

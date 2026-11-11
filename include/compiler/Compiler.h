@@ -33,13 +33,10 @@ class Resolver : public sammine_util::Reportee {
   /// deduplicate transitive chains.
   std::set<std::string> imported_modules;
 
-  /// Recursively import a module's definitions into `programAST`.
-  ///   - Direct imports (is_transitive=false): pull exported defs + all
-  ///     generic defs + link artifact.
-  ///   - Transitive imports (is_transitive=true): only pull generic function
-  ///     defs and type defs needed by the monomorphizer; no link artifact.
+  /// Import a module's definitions into `programAST` and its library into
+  /// the link, then the same for the modules it imports.
   bool import_module(const std::string &name, const Path &src_dir,
-                     const sammine_util::Location &loc, bool is_transitive,
+                     const sammine_util::Location &loc,
                      AST::ProgramAST &programAST,
                      std::vector<std::string> &extra_object_files);
 
@@ -61,7 +58,7 @@ class Resolver : public sammine_util::Reportee {
   void inject_definitions(
       std::vector<std::unique_ptr<AST::DefinitionAST>> &DefinitionVec,
       std::vector<std::unique_ptr<AST::DefinitionAST>> &program_vec,
-      const std::string &name, bool is_transitive);
+      const std::string &name);
 
 public:
   Resolver(const Options &options,

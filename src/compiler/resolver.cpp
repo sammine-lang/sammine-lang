@@ -18,27 +18,29 @@ void Resolver::Resolve(AST::ProgramAST &programAST, const Path &source_dir,
   std::error_code ec;
   if (!prelude.empty() &&
       !std::filesystem::equivalent(prelude, options_.file_arg, ec)) {
-    import_module(prelude_name, source_dir, {}, /*is_transitive=*/false,
-                  programAST, extra_object_files);
+    import_module(prelude_name, source_dir, {}, programAST,
+                  extra_object_files);
     if (has_errors())
       return;
   }
 
   for (auto &import : programAST.imports) {
-    import_module(import.module_name, source_dir, import.location,
-                  /*is_transitive=*/false, programAST, extra_object_files);
+    import_module(import.module_name, source_dir, import.location, programAST,
+                  extra_object_files);
     if (has_errors())
       return;
   }
 }
 
-// Recursively import a module's definitions into `programAST`.
-//   - Direct imports: pull exported defs + all generic defs + link artifact.
-//   - Transitive imports: only pull generic function defs and type defs
-//     needed by the monomorphizer — no link artifact.
+// Import a module and, recursively, the modules it imports. Every module in
+// the graph is imported the same way, whichever reaches it first: all its
+// definitions and its library. Which modules a program can name is decided by
+// its own import aliases (NameResolver), not by what was imported, so a
+// module reached only through another is there for that module's code, such
+// as its generic functions compiled here.
 bool Resolver::import_module(const std::string &name, const Path &src_dir,
                              const sammine_util::Location &loc,
-                             bool is_transitive, AST::ProgramAST &programAST,
+                             AST::ProgramAST &programAST,
                              std::vector<std::string> &extra_object_files) {
   if (imported_modules.contains(name))
     return true;
@@ -46,12 +48,10 @@ bool Resolver::import_module(const std::string &name, const Path &src_dir,
 
   auto mn_path = find_mn(name, src_dir);
   if (mn_path.empty()) {
-    if (!is_transitive) {
-      auto msg = fmt::format("Cannot find module '{}.mn'", name);
-      if (reporter.has_value())
-        reporter->get().immediate_error(msg, loc);
-      add_error(loc, msg);
-    }
+    auto msg = fmt::format("Cannot find module '{}.mn'", name);
+    if (reporter.has_value())
+      reporter->get().immediate_error(msg, loc);
+    add_error(loc, msg);
     return false;
   }
 
@@ -62,21 +62,16 @@ bool Resolver::import_module(const std::string &name, const Path &src_dir,
 
   programAST.module_aliases[name] = AST::import_aliases(mn_program->imports, name);
 
-  // Recursively import this module's own dependencies (transitive).
+  // Its library comes before its imports' in the link: a static archive's
+  // undefined symbols are only looked for in what follows it.
+  traceLinkableArtifacts(name, src_dir, extra_object_files);
+
   auto mod_src_dir = mn_path.parent_path();
-  for (auto &sub_import : mn_program->imports) {
+  for (auto &sub_import : mn_program->imports)
     import_module(sub_import.module_name, mod_src_dir, sub_import.location,
-                  /*is_transitive=*/true, programAST, extra_object_files);
-  }
+                  programAST, extra_object_files);
 
-  // Filter definitions and inject into programAST.
-  inject_definitions(mn_program->DefinitionVec, programAST.DefinitionVec, name,
-                     is_transitive);
-
-  // Track linkable artifact (only for direct imports).
-  if (!is_transitive)
-    traceLinkableArtifacts(name, src_dir, extra_object_files);
-
+  inject_definitions(mn_program->DefinitionVec, programAST.DefinitionVec, name);
   return true;
 }
 
@@ -128,8 +123,7 @@ UP Resolver::get_program_from_file(const Path &file_path,
 void Resolver::inject_definitions(
     std::vector<std::unique_ptr<DefinitionAST>> &DefinitionVec,
     std::vector<std::unique_ptr<DefinitionAST>> &program_vec,
-    const std::string &name,
-    bool is_transitive) {
+    const std::string &name) {
   // Every definition of the module comes, C bindings included, the ones it
   // doesn't export too, marked by is_exported: NameResolver only lets the
   // module's own code name those, and its code compiled here may. A
@@ -142,17 +136,8 @@ void Resolver::inject_definitions(
     // NameResolver names it after its module.
     def->defining_module = name;
 
-    // A transitive import only brings what this program compiles of the
-    // module: generic functions and types.
-    if (is_transitive &&
-        !llvm::isa<AST::FuncDefAST, AST::StructDefAST, AST::EnumDefAST,
-                   AST::TypeAliasDefAST>(def.get()))
-      continue;
-
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!fd->Prototype->is_generic()) {
-        if (is_transitive)
-          continue;
         auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
         ext->is_exported = fd->is_exported;
         ext->defining_module = fd->defining_module;

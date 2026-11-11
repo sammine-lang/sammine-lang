@@ -1,0 +1,11 @@
+// RUN: %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: hello from greet
+
+// aliased_user's generic function, compiled here, calls std's printf, though
+// this file doesn't import std: aliased_user's own imports come with it.
+
+import aliased_user;
+
+let main() -> i32 {
+  return aliased_user::greet<i32>(0);
+}

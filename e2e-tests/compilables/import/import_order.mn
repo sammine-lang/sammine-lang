@@ -1,0 +1,16 @@
+// RUN: %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      hello from greet
+// CHECK-NEXT: and from main
+
+// aliased_user imports std before this file's own import of std does. Every
+// module is imported the same way whichever reaches it first, so std::printf
+// is there for main too.
+
+import aliased_user;
+import std;
+
+let main() -> i32 {
+  aliased_user::greet<i32>(0);
+  std::printf("and from main\n");
+  return 0;
+}

@@ -7,17 +7,16 @@
 ## Import Resolution (`Compiler::resolve_imports`)
 1. Find `.mn` file: CWD → `-I` paths → source dir → stdlib_dir
 2. Diamond dedup via `imported_modules` set (canonical path)
-3. Parse, record the module's import aliases, recursive resolve (sub-imports as transitive)
-4. Every definition comes, private ones too (`is_exported` kept): functions, instances, types, typeclass decls. Only C bindings come only if exported. Transitive imports bring generic functions and types
+3. Parse, record the module's import aliases, trace its library (before its imports', for static link order), then import its own imports the same way
+4. Every definition comes, private ones too (`is_exported` kept): functions, C bindings, instances, types, typeclass decls
 5. Bodies stay in the module (compiled first): a non-generic FuncDefAST becomes an ExternAST. Generic functions keep their bodies (compiled here). An instance becomes `is_declaration` but keeps its method bodies: type-checked here (as its module's code: methods get its `defining_module`) and emitted `available_externally` + `inlinehint`, so they inline but the module's copy is the one linked
 6. Privacy is a naming rule: `NameResolver::check_visible` rejects a private function or type named outside its module (owners table from `use_program`); the type checker rejects a private instance (`private_instances`, `has_instance` compares `enclosing_function->defining_module`, which generic instantiations inherit). A module's own code compiled here (its generic functions) may use both
 7. Names: only `defining_module` is set here; `NameResolver` names the definitions
 8. Prepend to `DefinitionVec`
 
-## Transitive Import Rules
-- Only generic function defs and type defs (structs, enums, aliases) pulled in
-- Non-exposed externs skipped
-- Transitive imports do NOT leak to importers
+## Modules Reached Through Other Modules
+- Imported exactly like the program's own imports, whichever reaches a module first (no reduced "transitive" form), and linked: a module's code compiled here (its generic functions, its instances' copies) may use them
+- The program can't name them: naming needs an import alias of its own, checked by NameResolver ("Module 'std' is not imported")
 
 ## C Bindings (`reuse`)
 - In source, an imported module's binding is named like its other definitions (`std::printf`); its symbol is always its C name (`printf`). Codegen declares that symbol once, however many modules bind it, and calls it directly: no bridge in the library
