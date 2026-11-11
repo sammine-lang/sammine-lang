@@ -5,7 +5,7 @@
 // CHECK:      declare noalias ptr @malloc(i64)
 // CHECK:      declare void @free(ptr)
 // CHECK:      declare void @exit(i32)
-// CHECK:      declare i64 @"Sized<i32>::Sized"()
+// CHECK:      define available_externally i64 @"Sized<i32>::Sized"()
 // CHECK:      define i32 @main(){{.*}}{
 // CHECK-NEXT:   %1 = alloca i32, i64 1, align 4
 // CHECK-NEXT:   store i32 42, ptr %1, align 4
@@ -16,7 +16,7 @@
 // CHECK:      !0 = !{i32 2, !"Debug Info Version", i32 3}
 
 // Pre-optimization IR should contain unoptimized patterns like alloca. The
-// prelude's instances are only declared: definitions.so defines them.
+// prelude's instances are copies to inline: definitions.so defines them.
 
 let main() -> i32 {
   let x: i32 = 42;

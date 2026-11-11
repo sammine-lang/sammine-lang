@@ -131,11 +131,12 @@ void Resolver::inject_definitions(
     const std::string &name,
     bool is_transitive) {
   // Every definition of the module comes, C bindings included, the ones it
-  // doesn't export too, marked by is_exported: NameResolver only lets the module's own code name
-  // those, and its code compiled here (generic functions) may. Function and
-  // instance bodies stay in the module, compiled first, so only their
-  // declarations come; a generic function's body comes, since it is compiled
-  // here for the types it is used with.
+  // doesn't export too, marked by is_exported: NameResolver only lets the
+  // module's own code name those, and its code compiled here may. A
+  // function's body stays in the module, compiled first, so only its
+  // declaration comes. A generic function's body comes, since it is compiled
+  // here for the types it is used with, and so do instance methods', as
+  // copies to inline (emitted available_externally).
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {
     auto &def = *it;
     // NameResolver names it after its module.
@@ -160,8 +161,6 @@ void Resolver::inject_definitions(
       }
     } else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
       tci->is_declaration = true;
-      for (auto &method : tci->methods)
-        method->Block = std::make_unique<AST::BlockAST>();
     }
     program_vec.insert(program_vec.begin(), std::move(def));
   }

@@ -41,7 +41,7 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
 
 ## Symbols
-- `emitFunction(ast, global)`. Library: every function and instance method is global, private ones too (its generic code compiled in another module may call them; privacy is a naming rule). Executable: only `main`. Generic instantiations (`FuncDefAST::is_instantiation`) are always internal, so two modules can both instantiate `vec::push<i32>`
+- `emitFunction(ast, Linkage)`. `Global`: in a library every function and instance method, private ones too (its generic code compiled in another module may call them; privacy is a naming rule); in an executable only `main`. `Internal`: an executable's functions, and generic instantiations (`FuncDefAST::is_instantiation`) everywhere, so two modules can both instantiate `vec::push<i32>`. `AvailableExternally`: an imported instance's methods, copies to inline; MLIRLowering adds `inlinehint` (without it `Iterator<Range>::next` costs 245 against a threshold of 225)
 - Forward declarations start private: an imported instance method is never given a body, and MLIR rejects a public declaration
 - A function an IR test inspects must be in a library (no `main`), or the optimizer may inline or remove it
 

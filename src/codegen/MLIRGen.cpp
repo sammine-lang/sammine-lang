@@ -386,8 +386,9 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
 
 void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
   if (auto *funcDef = llvm::dyn_cast<AST::FuncDefAST>(def))
-    emitFunction(funcDef, /*global=*/!moduleName.empty() &&
-                              !funcDef->is_instantiation);
+    emitFunction(funcDef, !moduleName.empty() && !funcDef->is_instantiation
+                              ? Linkage::Global
+                              : Linkage::Internal);
   else if (auto *externDef = llvm::dyn_cast<AST::ExternAST>(def))
     emitExtern(externDef);
   else if (llvm::isa<AST::StructDefAST>(def))
@@ -400,10 +401,12 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {
     // Emit each instance method as a regular function. An imported instance's
-    // methods were only declared, in the pre-pass; their module defines them.
-    if (!tci->is_declaration)
-      for (auto &method : tci->methods)
-        emitFunction(method.get(), /*global=*/!moduleName.empty());
+    // are copies of its module's, there to inline.
+    auto linkage = tci->is_declaration ? Linkage::AvailableExternally
+                   : moduleName.empty() ? Linkage::Internal
+                                        : Linkage::Global;
+    for (auto &method : tci->methods)
+      emitFunction(method.get(), linkage);
   } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
     emitKernelDef(kd);
   } else {

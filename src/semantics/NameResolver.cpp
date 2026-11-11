@@ -21,6 +21,10 @@ void NameResolver::use_program(ProgramAST &program) {
   module_aliases = program.module_aliases;
   for (auto &def : program.DefinitionVec) {
     auto &module = def->defining_module;
+    // An instance's methods are code of its module.
+    if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
+      for (auto &method : tci->methods)
+        method->defining_module = module;
     auto name = [&](sammine_util::QualifiedName &n) {
       n = qualify(n, module);
       owners[n.strip_type_args().mangled()] = {module, def->is_exported};

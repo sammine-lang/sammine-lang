@@ -115,7 +115,7 @@ void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
 
 // ===--- Function emission ---===
 
-void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, bool global) {
+void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, Linkage linkage) {
   // Skip generic function templates — only monomorphized copies
   if (ast->Prototype->is_generic())
     return;
@@ -137,14 +137,18 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, bool global) {
     theModule.push_back(funcOp);
   }
   // MLIR visibility doesn't reach LLVM, so set the linkage too.
-  if (global || funcName == "main") {
-    funcOp.setVisibility(mlir::SymbolTable::Visibility::Public);
-  } else {
-    funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+  if (funcName == "main")
+    linkage = Linkage::Global;
+  funcOp.setVisibility(linkage == Linkage::Internal
+                           ? mlir::SymbolTable::Visibility::Private
+                           : mlir::SymbolTable::Visibility::Public);
+  if (linkage != Linkage::Global)
     funcOp->setAttr("llvm.linkage",
-                    mlir::LLVM::LinkageAttr::get(builder.getContext(),
-                                                 mlir::LLVM::Linkage::Internal));
-  }
+                    mlir::LLVM::LinkageAttr::get(
+                        builder.getContext(),
+                        linkage == Linkage::Internal
+                            ? mlir::LLVM::Linkage::Internal
+                            : mlir::LLVM::Linkage::AvailableExternally));
 
   // Create entry block with arguments
   auto &entryBlock = *funcOp.addEntryBlock();

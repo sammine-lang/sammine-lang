@@ -1,0 +1,20 @@
+// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// An imported instance's methods are copied in as available_externally
+// functions, so the optimizer can inline them: a for loop over a range calls
+// the prelude's Iterator<Range<i64>, i64>::next, compiled in definitions.so,
+// yet main makes no call to it.
+
+import std;
+
+let main() -> i32 {
+  let acc = alloc<i64>(1);
+  *acc = 0i64;
+  for i in 0i64..1000i64 { *acc = *acc + i; };
+  std::printf("%ld\n", *acc);
+  free(acc);
+  return 0;
+}
+
+// CHECK-LABEL: define noundef i32 @main()
+// CHECK-NOT:     call {{.*}}@"Iterator<Range<i64>, i64>::next"
+// CHECK:         ret i32 0

@@ -9,7 +9,7 @@
 2. Diamond dedup via `imported_modules` set (canonical path)
 3. Parse, record the module's import aliases, recursive resolve (sub-imports as transitive)
 4. Every definition comes, private ones too (`is_exported` kept): functions, instances, types, typeclass decls. Only C bindings come only if exported. Transitive imports bring generic functions and types
-5. Bodies stay in the module (compiled first): a non-generic FuncDefAST becomes an ExternAST, an instance becomes `is_declaration` with its method bodies emptied. Generic functions keep their bodies (compiled here)
+5. Bodies stay in the module (compiled first): a non-generic FuncDefAST becomes an ExternAST. Generic functions keep their bodies (compiled here). An instance becomes `is_declaration` but keeps its method bodies: type-checked here (as its module's code: methods get its `defining_module`) and emitted `available_externally` + `inlinehint`, so they inline but the module's copy is the one linked
 6. Privacy is a naming rule: `NameResolver::check_visible` rejects a private function or type named outside its module (owners table from `use_program`); the type checker rejects a private instance (`private_instances`, `has_instance` compares `enclosing_function->defining_module`, which generic instantiations inherit). A module's own code compiled here (its generic functions) may use both
 7. Names: only `defining_module` is set here; `NameResolver` names the definitions
 8. Prepend to `DefinitionVec`
@@ -43,5 +43,5 @@
 
 - Stdlib dir: `<binary>/../lib/sammine/`
 - Prelude: `Resolver::Resolve` imports `definitions` into every module (libraries too) unless compiling definitions.mn itself. Its names get no module prefix (`NameResolver::kPrelude`, the one exception, in `qualify`), in its own library too, so `Iterator<Range<i32>, i32>::next` matches on both sides
-- `for` calls `Iterator<Range<T>, T>::next` in definitions.so (not inlined across the library: ~1.7x slower loops, until importers get inlinable copies)
+- `for` calls `Iterator<Range<T>, T>::next`, defined in definitions.so; the importer's `available_externally` copy is inlined, so loops cost what they did when the prelude was compiled into each program
 - Stdlib `.mn` files copied to build dir by CMake; generic stdlib code in `STDLIB_COPIED` (can't be pre-compiled)

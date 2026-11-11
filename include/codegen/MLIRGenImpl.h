@@ -193,12 +193,21 @@ public:
 
   // --- Functions/externs/closures/calls (MLIRGenFunction.cpp) ---
   void forwardDeclareFunc(AST::PrototypeAST *proto);
-  /// `global`: other modules can link to it. In a library that is every
-  /// function and instance method, private ones too, since the library's
-  /// generic code compiled in another module may call them; privacy only
-  /// limits who can name them. In an executable only main is, and a generic
-  /// instantiation never is: each module compiles its own.
-  void emitFunction(AST::FuncDefAST *ast, bool global);
+  /// Who a function emitted here is for.
+  enum class Linkage {
+    /// Other modules link to it. In a library that is every function and
+    /// instance method, private ones too, since the library's generic code
+    /// compiled in another module may call them; privacy only limits who can
+    /// name them. In an executable only main is.
+    Global,
+    /// Only this module: an executable's functions, and every module's own
+    /// copy of a generic instantiation.
+    Internal,
+    /// A copy of another module's function, an imported instance's method,
+    /// for the optimizer to inline; never emitted, as the module defines it.
+    AvailableExternally,
+  };
+  void emitFunction(AST::FuncDefAST *ast, Linkage linkage);
   void emitExtern(AST::ExternAST *ast);
   mlir::Value buildClosure(mlir::Value codePtr, mlir::Value envPtr,
                            mlir::Location loc);

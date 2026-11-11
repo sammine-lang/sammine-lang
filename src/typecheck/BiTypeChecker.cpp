@@ -710,15 +710,8 @@ void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
 
 void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
   // Registration already done in first pass — just type-check method bodies.
-  // An imported instance's methods have none here, only their signatures.
-  for (auto &method : ast->methods) {
-    if (ast->is_declaration) {
-      ScopeGuard scope(*this);
-      method->Prototype->accept_vis(this);
-    } else {
-      method->accept_vis(this);
-    }
-  }
+  for (auto &method : ast->methods)
+    method->accept_vis(this);
 }
 
 void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {
