@@ -1,0 +1,39 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      31626
+
+// Project Euler Problem 21: Amicable numbers
+// Let d(n) be the sum of the proper divisors of n. If d(a) = b and d(b) = a
+// with a != b, a and b are amicable. Find the sum of all the amicable
+// numbers under 10000.
+
+import std;
+
+// The sum of the divisors of n from i up to sqrt(n), each paired with n / i.
+let divisor_pairs(n: i32, i: i32) -> i32 {
+  if i * i > n { 0 }
+  else if n % i != 0 { divisor_pairs(n, i + 1) }
+  else if i * i == n { i + divisor_pairs(n, i + 1) }
+  else { i + n / i + divisor_pairs(n, i + 1) }
+}
+
+// The sum of the proper divisors of n: 1 and the pairs from 2 on.
+let d(n: i32) -> i32 {
+  if n < 2 { 0 } else { 1 + divisor_pairs(n, 2) }
+}
+
+let is_amicable(a: i32) -> bool {
+  let b = d(a);
+  b != a && d(b) == a
+}
+
+// The sum of the amicable numbers from a up to, but not including, limit.
+let amicable_sum(a: i32, limit: i32) -> i32 {
+  if a >= limit { 0 }
+  else if is_amicable(a) { a + amicable_sum(a + 1, limit) }
+  else { amicable_sum(a + 1, limit) }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", amicable_sum(2, 10000));
+  return 0;
+}
