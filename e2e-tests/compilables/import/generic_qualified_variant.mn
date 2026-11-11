@@ -1,0 +1,14 @@
+// RUN: %sammine --file %dir/Inputs/shapes_generic.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 20
+
+// An imported generic function names its module's variants through the enum,
+// Shape::Line. Compiled here, the enum is shapes_generic::Shape, and Shape is
+// resolved as it is in its module.
+
+import shapes_generic;
+import std;
+
+let main() -> i32 {
+  std::printf("%ld\n", shapes_generic::line_length<i32>(0));
+  return 0;
+}

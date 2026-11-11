@@ -1,0 +1,8 @@
+export type Shape = Dot | Line(i64);
+
+// Names its variants through the enum, as Shape::Line and Shape::Dot.
+export let line_length<T>(x: T) -> i64 {
+  let s = Shape::Line(20i64);
+  let d = Shape::Dot;
+  case s { Shape::Line(l) => l, Shape::Dot => 0i64, }
+}

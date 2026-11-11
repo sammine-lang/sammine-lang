@@ -1,0 +1,63 @@
+#pragma once
+#include "ast/ASTContext.h"
+#include "ast/Ast.h"
+#include "ast/AstBase.h"
+#include "util/QualifiedName.h"
+#include "util/Utilities.h"
+#include <map>
+#include <optional>
+#include <string>
+#include <vector>
+
+//! \file NameResolver.h
+//! \brief Resolves a name written in a module's code to what it means.
+
+namespace sammine_lang::AST {
+
+//! Resolves names to the definitions they mean, rewriting each to that
+//! definition's name. A name is resolved in the module whose code it is
+//! (`where.module`), and that module's own definition comes first: code
+//! imported from module M finds M's definitions, which are named M::X in the
+//! importer, and an importer's same-named definition can't capture them.
+//!
+//! The names it looks up are the scope generator's: its scopes, whose root
+//! holds the top-level definitions, and its table of variants to enums.
+class NameResolver {
+public:
+  using Scopes = LexicalStack<sammine_util::Location>;
+  using VariantEnums =
+      std::map<std::string, std::vector<sammine_util::QualifiedName>>;
+
+  NameResolver(Scopes &scopes, const VariantEnums &variant_to_enum,
+               sammine_util::Reportee &reportee)
+      : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee) {}
+
+  //! A type, in a type expression, or the type a struct literal or a
+  //! generic names.
+  void resolve_type(TypeExprAST *type, const ASTContext &where);
+  void resolve_type_name(sammine_util::QualifiedName &name,
+                         const ASTContext &where);
+  //! A value: a call's callee or a variable. Reports a name not found, unless
+  //! `has_type_args`: a typeclass method, which the type checker resolves.
+  void resolve_value(sammine_util::QualifiedName &name, bool has_type_args,
+                     bool is_call, sammine_util::Location location,
+                     const ASTContext &where);
+
+private:
+  Scopes &scopes;
+  const VariantEnums &variant_to_enum;
+  sammine_util::Reportee &reportee;
+
+  //! The top-level definition of `where.module` that `name` means, if any.
+  std::optional<sammine_util::QualifiedName>
+  own_definition(const sammine_util::QualifiedName &name,
+                 const ASTContext &where);
+  //! Whether `name` is a local: a parameter or a variable, not a top-level
+  //! definition.
+  bool is_local(const std::string &name);
+  bool is_visible(const std::string &name) const {
+    return scopes.recursiveQueryName(name) == nameFound;
+  }
+};
+
+} // namespace sammine_lang::AST

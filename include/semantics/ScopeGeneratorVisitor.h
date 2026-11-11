@@ -1,6 +1,7 @@
 #pragma once
 #include "ast/Ast.h"
 #include "ast/AstBase.h"
+#include "semantics/NameResolver.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
 namespace sammine_lang::AST {
@@ -18,13 +19,16 @@ public:
   std::map<std::string, std::vector<sammine_util::QualifiedName>>
       variant_to_enum;
 
+  //! Every name this visitor meets is resolved here, in the module whose
+  //! code it is: ctx().module.
+  NameResolver resolver{scope_stack, variant_to_enum, *this};
+
   ScopeGeneratorVisitor() { scope_stack.push_context(); }
-  void qualify_type_expr(TypeExprAST *expr);
-  //! Qualifies the type names an imported struct or enum uses, e.g. a field
-  //! `min: Point` of `shapes::Rect` becomes `min: shapes::Point`.
-  void qualify_imported_types(const sammine_util::QualifiedName &def_name,
-                              const std::vector<std::string> &type_params,
-                              const std::vector<TypeExprAST *> &types);
+
+  //! Names in `def` are written in its module, with `type_params` in scope.
+  void enter_definition(const DefinitionAST &def,
+                        const std::vector<std::string> &type_params);
+  void resolve_type(TypeExprAST *type) { resolver.resolve_type(type, ctx()); }
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
@@ -87,6 +91,7 @@ public:
   virtual void preorder_walk(ExternAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(EnumDefAST *ast) override;
+  virtual void preorder_walk(TypeAliasDefAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;

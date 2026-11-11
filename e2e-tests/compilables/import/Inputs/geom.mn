@@ -1,0 +1,7 @@
+export struct Point { x: i64, };
+
+// Its Point is this module's, wherever the function is compiled.
+export let first_x<T>(t: T) -> i64 {
+  let p = Point { x: 7i64 };
+  p.x
+}

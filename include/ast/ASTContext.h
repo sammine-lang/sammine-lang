@@ -17,10 +17,10 @@ struct ASTContext {
   // Enclosing kernel (null outside kernels)
   KernelDefAST *enclosing_kernel = nullptr;
 
-  // Import context (used by ScopeGeneratorVisitor)
-  bool in_imported_def = false;
-  std::string import_module;
-  std::vector<std::string> generic_type_params;
+  // The module whose code this is, and the type parameters of the enclosing
+  // generic definition (used by ScopeGeneratorVisitor to resolve names)
+  std::string module;
+  std::vector<std::string> type_params;
 
   // Convenience queries
   bool in_function() const { return enclosing_function != nullptr; }

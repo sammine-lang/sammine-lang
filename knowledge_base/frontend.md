@@ -37,15 +37,19 @@
 
 ## ScopeGeneratorVisitor (first semantic pass)
 - Builds lexical symbol table via `LexicalStack<Location>`
-- `ASTContext`: tracks `in_imported_def`, `import_module`, `generic_type_params`
+- `ASTContext`: tracks `module` (the `defining_module` of the definition being walked: whose code this is) and `type_params`, set by `enter_definition`
 
 ### Key behaviors
 - Registers top-level defs (functions, externs, structs, enums, type aliases, kernels)
 - Enum variants: always added to `variant_to_enum`; registered in scope only if not already there
 - Functions registered in **parent** scope (visible at call-site, not inside own body)
-- Unqualified variant calls rewritten to qualified form (e.g. `Red(1)` → `Color::Red(1)`)
 - Case arm bodies NOT walked — payload bindings created by type checker
-- Import qualification: `qualify_type_expr()` called in preorder for CallExprAST (explicit type args), AllocExprAST (type_arg), TypedVarAST (type_expr); `postorder_walk(StructLiteralExprAST*)` qualifies struct_name
+
+### Name resolution (`NameResolver`, semantics/NameResolver.h)
+- Every name position calls the resolver with `ctx()`: type exprs (`resolve_type`: params, lets, returns, alloc, cast, explicit type args, struct/enum members, aliases), struct literals (`resolve_type_name`), callees and variables (`resolve_value`). Adding a name position = one call, no logic
+- Resolved in the module whose code it is: its own definition first (`own_definition`: `M::X` when M was imported), so an imported generic body finds its module's names and an importer's same-named definition can't capture them
+- Values: locals → own module → variants (own module's enums first; `Red(1)` → `Color::Red(1)`) → as written. `X::N` with X not an import (unresolved) resolves X as a type: `Shape::Line` → `M::Shape::Line`
+- Types: type params → builtins → own module → as written
 
 ## GeneralSemanticsVisitor (second semantic pass)
 - Reserved identifiers: names containing `__` rejected (C interop mangling). Checked on: FuncDef, VarDef, StructDef, EnumDef, TypeAliasDef

@@ -101,93 +101,40 @@ void ScopeGeneratorVisitor::visit(ExternAST *ast) {
   ast->walk_with_postorder(this);
   exit_new_scope();
 }
+void ScopeGeneratorVisitor::enter_definition(
+    const DefinitionAST &def, const std::vector<std::string> &type_params) {
+  ctx().module = def.defining_module;
+  ctx().type_params = type_params;
+}
+
+// Where names are written: each is resolved by `resolver`.
+
 void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
-  // For imported externs (qualified function name), qualify type references
-  // in the prototype so that e.g. `String` becomes `str::String`.
-  if (ast->Prototype->functionName.is_qualified()) {
-    ctx().in_imported_def = true;
-    ctx().import_module = ast->Prototype->functionName.get_module();
-    ctx().generic_type_params = {};
-  }
-}
-void ScopeGeneratorVisitor::qualify_imported_types(
-    const sammine_util::QualifiedName &def_name,
-    const std::vector<std::string> &type_params,
-    const std::vector<TypeExprAST *> &types) {
-  if (!def_name.is_qualified())
-    return;
-  push_ast_context();
-  ctx().in_imported_def = true;
-  ctx().import_module = def_name.get_module();
-  ctx().generic_type_params = type_params;
-  for (auto *type : types)
-    qualify_type_expr(type);
-  pop_ast_context();
-}
-void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {
-  std::vector<TypeExprAST *> types;
-  for (auto &member : ast->struct_members)
-    types.push_back(member->type_expr.get());
-  qualify_imported_types(ast->struct_name, ast->type_params, types);
-}
-void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {
-  std::vector<TypeExprAST *> types;
-  for (auto &variant : ast->variants)
-    for (auto &payload : variant.payload_types)
-      types.push_back(payload.get());
-  qualify_imported_types(ast->enum_name, ast->type_params, types);
+  enter_definition(*ast, ast->Prototype->type_params);
 }
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
-  // Detect imported generic function: name is qualified AND is_generic
-  if (ast->Prototype->is_generic() &&
-      ast->Prototype->functionName.is_qualified()) {
-    ctx().in_imported_def = true;
-    ctx().import_module = ast->Prototype->functionName.get_module();
-    ctx().generic_type_params = ast->Prototype->type_params;
-  }
+  enter_definition(*ast, ast->Prototype->type_params);
 }
-void ScopeGeneratorVisitor::qualify_type_expr(TypeExprAST *expr) {
-  if (!expr || !ctx().in_imported_def)
-    return;
-
-  if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(expr)) {
-    // Don't qualify generic type params (T, U, etc.)
-    for (auto &tp : ctx().generic_type_params)
-      if (simple->name.get_name() == tp)
-        return;
-    // Don't qualify builtin types
-    if (is_builtin_type_name(simple->name.get_name()))
-      return;
-    // Qualify if unqualified and the qualified version exists in scope
-    if (!simple->name.is_qualified()) {
-      auto qualified = simple->name.with_module(ctx().import_module);
-      if (can_see(qualified.mangled()) == nameFound &&
-          can_see(simple->name.mangled()) == nameNotFound) {
-        simple->name = qualified;
-      }
-    }
-  } else if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(expr)) {
-    qualify_type_expr(ptr->pointee.get());
-  } else if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(expr)) {
-    qualify_type_expr(arr->element.get());
-  } else if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(expr)) {
-    if (!gen->base_name.is_qualified()) {
-      auto qualified = gen->base_name.with_module(ctx().import_module);
-      if (can_see(qualified.mangled()) == nameFound &&
-          can_see(gen->base_name.mangled()) == nameNotFound) {
-        gen->base_name = qualified;
-      }
-    }
-    for (auto &arg : gen->type_args)
-      qualify_type_expr(arg.get());
-  } else if (auto *func = llvm::dyn_cast<FunctionTypeExprAST>(expr)) {
-    for (auto &param : func->paramTypes)
-      qualify_type_expr(param.get());
-    qualify_type_expr(func->returnType.get());
-  } else if (auto *tup = llvm::dyn_cast<TupleTypeExprAST>(expr)) {
-    for (auto &elem : tup->element_types)
-      qualify_type_expr(elem.get());
-  }
+void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {
+  push_ast_context();
+  enter_definition(*ast, ast->type_params);
+  for (auto &member : ast->struct_members)
+    resolve_type(member->type_expr.get());
+  pop_ast_context();
+}
+void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {
+  push_ast_context();
+  enter_definition(*ast, ast->type_params);
+  for (auto &variant : ast->variants)
+    for (auto &payload : variant.payload_types)
+      resolve_type(payload.get());
+  pop_ast_context();
+}
+void ScopeGeneratorVisitor::preorder_walk(TypeAliasDefAST *ast) {
+  push_ast_context();
+  enter_definition(*ast, {});
+  resolve_type(ast->type_expr.get());
+  pop_ast_context();
 }
 void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
   // get previous scope and register the function name
@@ -207,181 +154,36 @@ void ScopeGeneratorVisitor::preorder_walk(PrototypeAST *ast) {
       register_name(param->name, param->get_location());
     }
   }
-
-  // Qualify return type expression for imported generic functions
-  if (ctx().in_imported_def && ast->return_type_expr) {
-    qualify_type_expr(ast->return_type_expr.get());
-  }
-}
-void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {
-  if (ctx().in_imported_def) {
-    for (auto &type_arg : ast->explicit_type_args) {
-      qualify_type_expr(type_arg.get());
-    }
-  }
-}
-void ScopeGeneratorVisitor::preorder_walk(VariableExprAST *ast) {
-  if (ctx().in_imported_def)
-    for (auto &type_arg : ast->explicit_type_args)
-      qualify_type_expr(type_arg.get());
+  resolve_type(ast->return_type_expr.get());
 }
 void ScopeGeneratorVisitor::preorder_walk(TypedVarAST *ast) {
-  if (ctx().in_imported_def && ast->type_expr) {
-    qualify_type_expr(ast->type_expr.get());
-  }
+  resolve_type(ast->type_expr.get());
 }
 void ScopeGeneratorVisitor::preorder_walk(AllocExprAST *ast) {
-  if (ctx().in_imported_def && ast->type_arg) {
-    qualify_type_expr(ast->type_arg.get());
-  }
+  resolve_type(ast->type_arg.get());
 }
 void ScopeGeneratorVisitor::preorder_walk(CastExprAST *ast) {
-  if (ctx().in_imported_def && ast->target_type)
-    qualify_type_expr(ast->target_type.get());
+  resolve_type(ast->target_type.get());
 }
-// post order
+void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {
+  for (auto &type_arg : ast->explicit_type_args)
+    resolve_type(type_arg.get());
+}
+void ScopeGeneratorVisitor::preorder_walk(VariableExprAST *ast) {
+  for (auto &type_arg : ast->explicit_type_args)
+    resolve_type(type_arg.get());
+}
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
-  // Qualify call names with explicit type args in imported generic bodies
-  // (must run BEFORE the early return below)
-  if (!ast->explicit_type_args.empty() && ctx().in_imported_def &&
-      !ast->functionName.is_qualified()) {
-    auto qualified = ast->functionName.with_module(ctx().import_module);
-    if (can_see(qualified.mangled()) == nameFound) {
-      ast->functionName = qualified;
-    }
-  }
-  // Type class calls (e.g. sizeof<i32>()) have explicit type args and are
-  // resolved by the type checker, not by scope lookup.
-  if (!ast->explicit_type_args.empty())
-    return;
-
-  if (ast->functionName.is_unresolved()) {
-    // Allow qualified names where the prefix is an enum name in scope
-    // (e.g. Color::Red) — variant resolution deferred to type checker
-    if (can_see(ast->functionName.get_module()) == nameFound)
-      return;
-    add_error(ast->get_location(), fmt::format("Module '{}' is not imported",
-                                               ast->functionName.get_module()));
-    return;
-  }
-
-  // Rewrite unqualified enum variant names to qualified form
-  if (!ast->functionName.is_qualified()) {
-    auto it = variant_to_enum.find(ast->functionName.get_name());
-    if (it != variant_to_enum.end()) {
-      auto &enum_names = it->second;
-      if (enum_names.size() > 1) {
-        add_error(
-            ast->get_location(),
-            fmt::format(
-                "[SCOPE]: Variant name '{}' is ambiguous — "
-                "multiple enums define this variant. "
-                "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
-                ast->functionName.get_name(), ast->functionName.get_name()));
-        return;
-      }
-      // Build qualified name: enum parts + variant name
-      auto parts = enum_names[0].parts();
-      parts.push_back({ast->functionName.get_name(), ""});
-      ast->functionName =
-          sammine_util::QualifiedName::from_parts(std::move(parts));
-      return;
-    }
-  }
-
-  auto var_name = ast->functionName.mangled();
-  if (can_see(var_name) == nameNotFound) {
-    // Try qualifying with import module prefix for imported generic bodies
-    if (ctx().in_imported_def && !ast->functionName.is_qualified()) {
-      auto qualified = ast->functionName.with_module(ctx().import_module);
-      if (can_see(qualified.mangled()) == nameFound) {
-        ast->functionName = qualified;
-        return;
-      }
-    }
-    if (ast->functionName.is_qualified() &&
-        can_see(ast->functionName.get_qualifier()) == nameFound)
-      return;
-    add_error(ast->get_location(),
-              fmt::format("[SCOPE]: The called name {} for the call expression "
-                          "is not found before",
-                          ast->functionName.mangled()));
-  }
+  resolver.resolve_value(ast->functionName, !ast->explicit_type_args.empty(),
+                         /*is_call=*/true, ast->get_location(), ctx());
 }
-
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
-  // A qualified name: a module's function (std::printf) or an enum's variant
-  // (Color::Red, dummy_enum::dummy::A).
-  if (ast->variableName.is_qualified()) {
-    // A generic enum's variant (Option<i32>::None) is resolved by the type
-    // checker, which instantiates the enum.
-    if (!ast->explicit_type_args.empty())
-      return;
-    auto &name = ast->variableName;
-    if (name.is_unresolved()) {
-      // The prefix may be an enum in scope rather than a module alias.
-      if (can_see(name.get_module()) != nameFound)
-        add_error(
-            ast->get_location(),
-            fmt::format("Module '{}' is not imported", name.get_module()));
-      return;
-    }
-    if (can_see(name.mangled()) == nameNotFound &&
-        can_see(name.get_qualifier()) == nameNotFound)
-      add_error(ast->get_location(),
-                fmt::format("The name {} is not found before",
-                            name.with_alias().mangled()));
-    return;
-  }
-
-  auto var_name = ast->variableName.mangled();
-
-  // Check if this is an unqualified enum variant reference
-  auto vit = variant_to_enum.find(var_name);
-  if (vit != variant_to_enum.end()) {
-    auto &enum_names = vit->second;
-    if (enum_names.size() > 1) {
-      add_error(ast->get_location(),
-                fmt::format(
-                    "[SCOPE]: Variant name '{}' is ambiguous — "
-                    "multiple enums define this variant. "
-                    "Use qualified syntax (e.g., EnumName::{}) to disambiguate",
-                    var_name, var_name));
-      return;
-    }
-    // Rewrite to qualified form: e.g., "A" → "Color::A" or
-    // "dummy_enum::dummy::A"
-    auto parts = enum_names[0].parts();
-    parts.push_back({var_name, ""});
-    ast->variableName =
-        sammine_util::QualifiedName::from_parts(std::move(parts));
-    return;
-  }
-
-  if (can_see(var_name) == nameNotFound) {
-    // Try qualifying with import module prefix for imported generic bodies
-    if (ctx().in_imported_def) {
-      auto qualified =
-          sammine_util::QualifiedName::qualified(ctx().import_module, var_name);
-      if (can_see(qualified.mangled()) == nameFound) {
-        ast->variableName = qualified;
-        return;
-      }
-    }
-    add_error(ast->get_location(),
-              fmt::format("The variable named {} for the variable expression "
-                          "is not found before",
-                          var_name));
-  }
+  resolver.resolve_value(ast->variableName, !ast->explicit_type_args.empty(),
+                         /*is_call=*/false, ast->get_location(), ctx());
 }
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
-  // Qualify struct names in imported generic function bodies
-  if (ctx().in_imported_def && !ast->struct_name.is_qualified()) {
-    auto qualified = ast->struct_name.with_module(ctx().import_module);
-    if (can_see(qualified.mangled()) == nameFound &&
-        can_see(ast->struct_name.mangled()) == nameNotFound) {
-      ast->struct_name = qualified;
-    }
-  }
+  resolver.resolve_type_name(ast->struct_name, ctx());
+  for (auto &type_arg : ast->explicit_type_args)
+    resolve_type(type_arg.get());
 }
 } // namespace sammine_lang::AST

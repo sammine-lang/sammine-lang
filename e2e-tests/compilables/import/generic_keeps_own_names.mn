@@ -1,0 +1,16 @@
+// RUN: %sammine --file %dir/Inputs/geom.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 7
+
+// An imported generic function is compiled here, but its names still mean
+// what they mean in its module: its Point is geom::Point, not this file's
+// Point.
+
+import geom;
+import std;
+
+struct Point { y: i32, z: i32, };
+
+let main() -> i32 {
+  std::printf("%ld\n", geom::first_x<i32>(0));
+  return 0;
+}
