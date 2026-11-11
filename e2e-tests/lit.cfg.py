@@ -9,6 +9,8 @@ build_dir = lit_config.params.get('build_dir', os.getcwd())
 
 sammine_exe = os.path.join(bin_dir, "sammine")
 sammine_check = os.path.join(bin_dir, "SammineCheck")
+# C compiler for tests that link C code, e.g. to check the C calling convention.
+c_compiler = lit_config.params.get('cc', shutil.which('cc') or 'cc')
 
 config.name = "Sammine Lang end-to-end testsuite"
 
@@ -27,6 +29,7 @@ config.test_exec_root = build_dir
 config.substitutions.append(('%sammine_jit', sammine_exe + ' --jit'))
 config.substitutions.append(('%sammine', sammine_exe))
 config.substitutions.append(('%check', sammine_check))
+config.substitutions.append(('%cc', c_compiler))
 config.substitutions.append(('%dir', '$(dirname %s)'))
 config.substitutions.append(('%full', '%s'))
 config.substitutions.append(('%base', '$(basename %s .mn)'))

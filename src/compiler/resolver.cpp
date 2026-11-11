@@ -136,6 +136,7 @@ void Resolver::inject_definitions(
         // Non-generic exported → extern
         auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
         ext->is_exported = fd->is_exported;
+        ext->is_c_function = false;
         program_vec.insert(program_vec.begin(),
                                          std::move(ext));
       }

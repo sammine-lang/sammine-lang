@@ -6,6 +6,7 @@ add_custom_target(e2e-tests
     COMMAND lit --succinct -j ${LIT_WORKERS} ${CMAKE_SOURCE_DIR}/e2e-tests --verbose
         --param bin_dir=${CMAKE_BINARY_DIR}/bin
         --param build_dir=${CMAKE_CURRENT_BINARY_DIR}
+        --param cc=${CMAKE_C_COMPILER}
     DEPENDS tests sammine SammineCheck stdlib
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )

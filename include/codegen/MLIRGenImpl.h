@@ -192,6 +192,7 @@ public:
   void forwardDeclareFunc(AST::PrototypeAST *proto);
   void emitFunction(AST::FuncDefAST *ast);
   void emitExtern(AST::ExternAST *ast);
+  bool returnsThroughMemory(const Type &cReturnType);
   mlir::Value buildClosure(mlir::Value codePtr, mlir::Value envPtr,
                            mlir::Location loc);
   mlir::LLVM::LLVMFunctionType getClosureFuncType(const FunctionType &ft);

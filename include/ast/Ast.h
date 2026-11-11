@@ -307,6 +307,10 @@ public:
 class ExternAST : public DefinitionAST {
 public:
   std::unique_ptr<PrototypeAST> Prototype;
+  // A `reuse` declaration names a C function, which follows the C calling
+  // convention. An exported function of an imported sammine module is also
+  // declared as an ExternAST, but it follows sammine's own convention.
+  bool is_c_function = true;
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype_)
       : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype_)) {

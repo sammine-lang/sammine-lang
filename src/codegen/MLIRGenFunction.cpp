@@ -4,6 +4,7 @@
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/BuiltinTypes.h"
+#include "mlir/Interfaces/DataLayoutInterfaces.h"
 
 #include "llvm/ADT/SmallVector.h"
 
@@ -217,15 +218,28 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   auto location = loc(ast);
   builder.setInsertionPointToEnd(theModule.getBody());
 
+  // C returns a struct over 16 bytes through a pointer the caller passes as
+  // a hidden first argument, marked sret. LLVM leaves this to the frontend.
+  auto retType = std::get<FunctionType>(ast->Prototype->get_type().type_data)
+                     .get_return_type();
+  if (ast->is_c_function && returnsThroughMemory(retType)) {
+    llvm::SmallVector<mlir::Type, 4> paramTypes{llvmPtrTy()};
+    for (auto &param : ast->Prototype->parameterVectors)
+      paramTypes.push_back(convertType(param->get_type()));
+    auto fnTy = mlir::LLVM::LLVMFunctionType::get(
+        llvmVoidTy(), paramTypes, ast->Prototype->is_var_arg);
+    auto funcOp =
+        mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
+    funcOp.setArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName(),
+                      mlir::TypeAttr::get(convertType(retType)));
+    return;
+  }
+
   if (ast->Prototype->is_var_arg) {
     // Vararg C functions must use LLVM dialect (func dialect has no varargs)
     llvm::SmallVector<mlir::Type, 4> paramTypes;
     for (auto &param : ast->Prototype->parameterVectors)
       paramTypes.push_back(convertType(param->get_type()));
-    // Return type
-    auto funcTypeData =
-        std::get<FunctionType>(ast->Prototype->get_type().type_data);
-    auto retType = funcTypeData.get_return_type();
     mlir::Type llvmRetType;
     if (retType.type_kind == TypeKind::Unit)
       llvmRetType = llvmVoidTy();
@@ -241,6 +255,14 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
   }
+}
+
+bool MLIRGenImpl::returnsThroughMemory(const Type &cReturnType) {
+  if (cReturnType.type_kind != TypeKind::Struct &&
+      cReturnType.type_kind != TypeKind::Tuple)
+    return false;
+  auto size = mlir::DataLayout(theModule).getTypeSize(convertType(cReturnType));
+  return size.getFixedValue() > 16;
 }
 
 // ===--- Call emission ---===
@@ -411,6 +433,16 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
 
   // If callee is an llvm.func (C function), use llvm.call
   if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
+    // A struct returned through memory: pass a buffer first, load from it.
+    mlir::Value resultBuf;
+    if (llvmFunc.getNumArguments() > 0)
+      if (auto sretTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
+              0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
+        resultBuf = emitAllocaOne(sretTy.getValue(), location);
+        operands.insert(operands.begin(), resultBuf);
+        resultTypes.clear();
+      }
+
     // C default argument promotion: float → double for variadic args
     auto fnTy = llvmFunc.getFunctionType();
     if (fnTy.isVarArg()) {
@@ -425,6 +457,9 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
                                                  callee, operands);
     if (fnTy.isVarArg())
       llvmCallOp.setVarCalleeType(fnTy);
+    if (resultBuf)
+      return mlir::LLVM::LoadOp::create(
+          builder, location, convertType(ast->get_type()), resultBuf);
     if (llvmCallOp.getNumResults() > 0)
       return llvmCallOp.getResult();
     return nullptr;
