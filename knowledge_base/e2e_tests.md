@@ -39,6 +39,10 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 
 Other: `error_reporting/` (39 error message regression tests), `euler/` (Project Euler integration tests)
 
+## Known Bugs
+- A test of behaviour that doesn't work yet carries `// XFAIL: *`: lit counts it as an expected failure, then reports XPASS (a failure) once it passes, so remove the line with the fix
+- Currently: `error_reporting/compare_{struct,tuple,enum,struct_array}_no_instance.mn` (comparing a type with no comparison instance crashes codegen; should report "No instance of Equal<...>")
+
 ## Gotchas
 - `if/else` as statements need trailing `;`
 - Auxiliary inputs in `Inputs/` dirs excluded from lit discovery

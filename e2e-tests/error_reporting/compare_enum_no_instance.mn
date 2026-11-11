@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Equal<Color>
+// XFAIL: *
+
+// == goes through the Equal typeclass, as + goes through Add, and Color has no
+// instance. Today codegen crashes on it instead.
+
+type Color = Red | Green;
+
+let main() -> i32 {
+  let same = Color::Red == Color::Green;
+  return 0;
+}

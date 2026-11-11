@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Equal<P>
+// XFAIL: *
+
+// == goes through the Equal typeclass, as + goes through Add, and P has no
+// instance. Today codegen crashes on it instead.
+
+struct P { x: i32, };
+
+let main() -> i32 {
+  let same = P { x: 1 } == P { x: 1 };
+  return 0;
+}

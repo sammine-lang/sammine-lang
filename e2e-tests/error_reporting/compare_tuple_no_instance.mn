@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Equal<(i32, i32)>
+// XFAIL: *
+
+// == goes through the Equal typeclass, as + goes through Add, and (i32, i32) has no
+// instance. Today codegen crashes on it instead.
+
+
+
+let main() -> i32 {
+  let same = (1i32, 2i32) == (1i32, 2i32);
+  return 0;
+}
