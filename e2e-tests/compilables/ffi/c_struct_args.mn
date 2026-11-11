@@ -1,0 +1,20 @@
+// RUN: %cc -fPIC -c %dir/Inputs/c_struct_args_runtime.c -o %T/c_struct_args_runtime.o && %sammine --file %dir/Inputs/c_struct_args.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      three 9 10 20 30
+// CHECK-NEXT: four_i32 1 2 3 4
+// CHECK-NEXT: three_f32 0.5 1.5 2.5
+// CHECK-NEXT: i32_f32 7 3.5
+// CHECK-NEXT: chars abc
+
+// C takes a struct over 16 bytes as a pointer to a copy (byval), and a
+// smaller one in registers, packed into 8-byte chunks.
+
+import c_struct_args as c;
+
+let main() -> i32 {
+  c::take_three(9, c::Three { a: 10i64, b: 20i64, c: 30i64 });
+  c::take_four_i32(c::FourI32 { a: 1, b: 2, c: 3, d: 4 });
+  c::take_three_f32(c::ThreeF32 { x: 0.5f32, y: 1.5f32, z: 2.5f32 });
+  c::take_i32_f32(c::I32F32 { a: 7, x: 3.5f32 });
+  c::take_chars(c::Chars { a: 'a', b: 'b', c: 'c' });
+  return 0;
+}

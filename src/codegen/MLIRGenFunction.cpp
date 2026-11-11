@@ -218,27 +218,61 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   auto location = loc(ast);
   builder.setInsertionPointToEnd(theModule.getBody());
 
-  // C returns a struct in registers, as the type cabi::registerType gives,
-  // or through a pointer the caller passes as a hidden first argument,
-  // marked sret. LLVM leaves this to the frontend.
+  // C moves a struct in registers, as the type cabi::registerType gives, or
+  // through memory: a returned one through a pointer the caller passes as a
+  // hidden first argument (sret), an argument as a pointer to a copy
+  // (byval). LLVM leaves this to the frontend.
   auto retType = std::get<FunctionType>(ast->Prototype->get_type().type_data)
                      .get_return_type();
-  if (ast->is_c_function && (retType.type_kind == TypeKind::Struct ||
-                             retType.type_kind == TypeKind::Tuple)) {
-    auto structTy = convertType(retType);
-    auto regTy = cabi::registerType(structTy, mlir::DataLayout(theModule));
+  auto &params = ast->Prototype->parameterVectors;
+  auto is_struct = [](const Type &type) {
+    return type.type_kind == TypeKind::Struct ||
+           type.type_kind == TypeKind::Tuple;
+  };
+  if (ast->is_c_function &&
+      (is_struct(retType) || llvm::any_of(params, [&](auto &param) {
+         return is_struct(param->get_type());
+       }))) {
+    mlir::DataLayout layout(theModule);
     llvm::SmallVector<mlir::Type, 4> paramTypes;
-    if (!regTy)
-      paramTypes.push_back(llvmPtrTy());
-    for (auto &param : ast->Prototype->parameterVectors)
-      paramTypes.push_back(convertType(param->get_type()));
-    auto fnTy = mlir::LLVM::LLVMFunctionType::get(
-        regTy ? regTy : llvmVoidTy(), paramTypes, ast->Prototype->is_var_arg);
+    mlir::Type cRetType = llvmVoidTy();
+    mlir::Type sretType;
+    if (is_struct(retType)) {
+      auto structTy = convertType(retType);
+      if (auto regTy = cabi::registerType(structTy, layout)) {
+        cRetType = regTy;
+      } else {
+        sretType = structTy;
+        paramTypes.push_back(llvmPtrTy());
+      }
+    } else if (retType.type_kind != TypeKind::Unit) {
+      cRetType = convertType(retType);
+    }
+
+    llvm::SmallVector<std::pair<unsigned, mlir::Type>> byvalTypes;
+    for (auto &param : params) {
+      auto paramTy = convertType(param->get_type());
+      if (is_struct(param->get_type())) {
+        if (auto regTy = cabi::registerType(paramTy, layout)) {
+          paramTy = regTy;
+        } else {
+          byvalTypes.push_back({paramTypes.size(), paramTy});
+          paramTy = llvmPtrTy();
+        }
+      }
+      paramTypes.push_back(paramTy);
+    }
+
+    auto fnTy = mlir::LLVM::LLVMFunctionType::get(cRetType, paramTypes,
+                                                  ast->Prototype->is_var_arg);
     auto funcOp =
         mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
-    if (!regTy)
+    if (sretType)
       funcOp.setArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName(),
-                        mlir::TypeAttr::get(structTy));
+                        mlir::TypeAttr::get(sretType));
+    for (auto &[index, byvalType] : byvalTypes)
+      funcOp.setArgAttr(index, mlir::LLVM::LLVMDialect::getByValAttrName(),
+                        mlir::TypeAttr::get(byvalType));
     return;
   }
 
@@ -441,8 +475,26 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
         operands.insert(operands.begin(), resultBuf);
       }
 
-    // C default argument promotion: float → double for variadic args
+    // A struct argument goes in its register form or, if byval, as a pointer
+    // to a copy. Both reach the declared type through a stack slot.
     auto fnTy = llvmFunc.getFunctionType();
+    for (unsigned i = 0; i < fnTy.getNumParams() && i < operands.size(); i++) {
+      if (!mlir::isa<mlir::LLVM::LLVMStructType>(operands[i].getType()))
+        continue;
+      auto byvalTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
+          i, mlir::LLVM::LLVMDialect::getByValAttrName());
+      auto slotTy = byvalTy ? byvalTy.getValue() : fnTy.getParamType(i);
+      if (operands[i].getType() == slotTy && !byvalTy)
+        continue;
+      auto slot = emitAllocaOne(slotTy, location);
+      mlir::LLVM::StoreOp::create(builder, location, operands[i], slot);
+      operands[i] =
+          byvalTy ? slot
+                  : mlir::LLVM::LoadOp::create(builder, location, slotTy, slot)
+                        .getResult();
+    }
+
+    // C default argument promotion: float → double for variadic args
     if (fnTy.isVarArg()) {
       unsigned fixedCount = fnTy.getNumParams();
       for (unsigned i = fixedCount; i < operands.size(); i++) {
@@ -454,6 +506,15 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
     // The declaration's types, which differ from sammine's for a struct.
     auto llvmCallOp =
         mlir::LLVM::CallOp::create(builder, location, llvmFunc, operands);
+    // The call needs the declaration's sret and byval too: LLVM's optimizer
+    // reads them from the call, and without them drops the stores that fill
+    // a byval copy.
+    if (auto declArgAttrs = llvmFunc.getArgAttrsAttr()) {
+      llvm::SmallVector<mlir::Attribute> callArgAttrs(declArgAttrs.begin(),
+                                                      declArgAttrs.end());
+      callArgAttrs.resize(operands.size(), builder.getDictionaryAttr({}));
+      llvmCallOp.setArgAttrsAttr(builder.getArrayAttr(callArgAttrs));
+    }
     if (!resultBuf && llvmCallOp.getNumResults() == 0)
       return nullptr;
     auto semTy = convertType(ast->get_type());

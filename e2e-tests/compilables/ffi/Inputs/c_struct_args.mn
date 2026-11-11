@@ -1,0 +1,11 @@
+export struct Three { a: i64, b: i64, c: i64, };
+export struct FourI32 { a: i32, b: i32, c: i32, d: i32, };
+export struct ThreeF32 { x: f32, y: f32, z: f32, };
+export struct I32F32 { a: i32, x: f32, };
+export struct Chars { a: char, b: char, c: char, };
+
+export reuse take_three(k: i32, t: Three) -> unit;
+export reuse take_four_i32(f: FourI32) -> unit;
+export reuse take_three_f32(f: ThreeF32) -> unit;
+export reuse take_i32_f32(m: I32F32) -> unit;
+export reuse take_chars(c: Chars) -> unit;
