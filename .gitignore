@@ -79,3 +79,4 @@ venv/
 llvm-build.log
 log.txt
 compile_commands.json
+pad.txt
