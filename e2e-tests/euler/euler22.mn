@@ -1,0 +1,114 @@
+// RUN: %sammine_jit --file %full --jit-args %dir/Inputs/0022_names.txt | %check %full
+// CHECK: 871198282
+
+// Project Euler Problem 22: Names scores
+// Sort the 5163 names in the file alphabetically, then score each one as its
+// alphabetical value (A = 1, ..., Z = 26, summed) times its position in the
+// sorted list. Find the total of all the scores.
+
+import io;
+import str;
+import std;
+
+// The file is "MARY","PATRICIA",...: each quote and comma becomes a NUL, so
+// each name is a C string in the buffer.
+let split(buf: 'ptr<char>, n: i64) -> 'ptr<char> {
+  for i in 0i64..n {
+    if buf[i] == '"' || buf[i] == ',' { buf[i] = '\0'; };
+  };
+  buf
+}
+
+// Whether a name starts at position i: a letter after a NUL or at the start.
+let starts_name(buf: ptr<char>, i: i64) -> bool {
+  buf[i] != '\0' && (i == 0i64 || buf[i - 1i64] == '\0')
+}
+
+let count_names(buf: ptr<char>, n: i64, i: i64) -> i64 {
+  if i >= n { 0i64 }
+  else if starts_name(buf, i) { 1i64 + count_names(buf, n, i + 1i64) }
+  else { count_names(buf, n, i + 1i64) }
+}
+
+// A String for each name in buf from position i on, stored from index k on.
+let collect(buf: ptr<char>, n: i64, i: i64, k: i64,
+            names: 'ptr<str::String>) -> 'ptr<str::String> {
+  if i >= n { names }
+  else if starts_name(buf, i) {
+    names[k] = str::new(&buf[i]);
+    collect(buf, n, i + 1i64, k + 1i64, names)
+  } else { collect(buf, n, i + 1i64, k, names) }
+}
+
+// order[k] = k for k from k on.
+let identity(order: 'ptr<i64>, k: i64, count: i64) -> 'ptr<i64> {
+  if k >= count { order }
+  else {
+    order[k] = k;
+    identity(order, k + 1i64, count)
+  }
+}
+
+// One step of insertion sort: moves the index at position j down until the
+// name it points at doesn't sort before the one in front of it.
+let insert(names: ptr<str::String>, order: 'ptr<i64>, j: i64) -> 'ptr<i64> {
+  if j == 0i64 { order }
+  else if &names[order[j - 1i64]] > &names[order[j]] {
+    let moved = order[j];
+    order[j] = order[j - 1i64];
+    order[j - 1i64] = moved;
+    insert(names, order, j - 1i64)
+  } else { order }
+}
+
+let sort(names: ptr<str::String>, order: 'ptr<i64>, j: i64,
+         count: i64) -> 'ptr<i64> {
+  if j >= count { order }
+  else { sort(names, insert(names, order, j), j + 1i64, count) }
+}
+
+// A = 1, B = 2, ..., summed over the name's letters from position c on.
+let value(name: ptr<str::String>, c: i64) -> i64 {
+  if c >= (*name).length { 0i64 }
+  else { ((*name).data[c] as i64 - 'A' as i64 + 1i64) + value(name, c + 1i64) }
+}
+
+// The scores of the names from sorted position k on.
+let score(names: ptr<str::String>, order: ptr<i64>, k: i64,
+          count: i64) -> i64 {
+  if k >= count { 0i64 }
+  else {
+    (k + 1i64) * value(&names[order[k]], 0i64) +
+        score(names, order, k + 1i64, count)
+  }
+}
+
+let delete_all(names: 'ptr<str::String>, k: i64,
+               count: i64) -> 'ptr<str::String> {
+  if k >= count { names }
+  else {
+    str::delete(names[k]);
+    delete_all(names, k + 1i64, count)
+  }
+}
+
+let main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
+  case io::read_file(argv[1]) {
+    Line(buf, n) => {
+      let buf = split(buf, n);
+      let count = count_names(buf, n, 0i64);
+      let names = collect(buf, n, 0i64, 0i64, alloc<str::String>(count));
+      let order = sort(names, identity(alloc<i64>(count), 0i64, count), 1i64,
+                       count);
+      std::printf("%ld\n", score(names, order, 0i64, count));
+      free(order);
+      free(delete_all(names, 0i64, count));
+      free(buf);
+      0
+    },
+    Eof => {
+      std::printf("could not read the names\n");
+      1
+    },
+  }
+}

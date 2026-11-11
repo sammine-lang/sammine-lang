@@ -37,7 +37,7 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 | `types/` | Type system (records, etc.) |
 | `vec/` | Vec<T> stdlib: new, push, delete, linear ownership |
 
-Other: `error_reporting/` (39 error message regression tests), `euler/` (Project Euler integration tests)
+Other: `error_reporting/` (39 error message regression tests), `euler/` (Project Euler integration tests; data files in `euler/Inputs/`, passed with `--jit-args %dir/Inputs/...`)
 
 ## Known Bugs
 - A test of behaviour that doesn't work yet carries `// XFAIL: *`: lit counts it as an expected failure, then reports XPASS (a failure) once it passes, so remove the line with the fix
