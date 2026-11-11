@@ -156,11 +156,16 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   // functions may be registered under their module-qualified name (e.g.
   // "mylib::foo"). Try both the bare name and the module-qualified name.
   if (ast->get_type().type_kind == TypeKind::Function) {
+    // A sammine function is a func.func; a C function taking or returning a
+    // struct, or a variadic one, is an llvm.func. The wrapper calls either.
+    auto isFunction = [&](const std::string &name) {
+      return theModule.lookupSymbol<mlir::func::FuncOp>(name) ||
+             theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(name);
+    };
     auto funcName = ast->variableName;
-    if (!theModule.lookupSymbol<mlir::func::FuncOp>(funcName) &&
-        !moduleName.empty())
+    if (!isFunction(funcName) && !moduleName.empty())
       funcName = moduleName + "::" + funcName;
-    if (theModule.lookupSymbol<mlir::func::FuncOp>(funcName)) {
+    if (isFunction(funcName)) {
       auto ft = std::get<FunctionType>(ast->get_type().type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);
       auto ptrTy = llvmPtrTy();

@@ -91,6 +91,14 @@ void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
                                             const Type &retType,
                                             mlir::ValueRange args,
                                             mlir::Location location) {
+  if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
+    auto result = emitCCall(llvmFunc, {args.begin(), args.end()}, retType,
+                            location);
+    mlir::LLVM::ReturnOp::create(builder, location,
+                                 result ? mlir::ValueRange{result}
+                                        : mlir::ValueRange{});
+    return;
+  }
   if (retType.type_kind == TypeKind::Unit) {
     mlir::func::CallOp::create(builder, location, callee, mlir::TypeRange{},
                                args);
@@ -431,6 +439,78 @@ MLIRGenImpl::emitIndirectCall(AST::CallExprAST *ast,
   return callOp.getResult();
 }
 
+// Calls the C function `llvmFunc` with sammine values, as C passes them: a
+// struct argument in its register form or as a byval copy, and a struct
+// result in its register form or through an sret buffer. Returns the result
+// as `semRetType`, or nullptr for none.
+mlir::Value MLIRGenImpl::emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
+                                   llvm::SmallVector<mlir::Value, 4> operands,
+                                   const Type &semRetType,
+                                   mlir::Location location) {
+  // A struct returned through memory: pass a buffer first, load from it.
+  mlir::Value resultBuf;
+  if (llvmFunc.getNumArguments() > 0)
+    if (auto sretTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
+            0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
+      resultBuf = emitAllocaOne(sretTy.getValue(), location);
+      operands.insert(operands.begin(), resultBuf);
+    }
+
+  // A struct argument goes in its register form or, if byval, as a pointer
+  // to a copy. Both reach the declared type through a stack slot.
+  auto fnTy = llvmFunc.getFunctionType();
+  for (unsigned i = 0; i < fnTy.getNumParams() && i < operands.size(); i++) {
+    if (!mlir::isa<mlir::LLVM::LLVMStructType>(operands[i].getType()))
+      continue;
+    auto byvalTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
+        i, mlir::LLVM::LLVMDialect::getByValAttrName());
+    auto slotTy = byvalTy ? byvalTy.getValue() : fnTy.getParamType(i);
+    if (operands[i].getType() == slotTy && !byvalTy)
+      continue;
+    auto slot = emitAllocaOne(slotTy, location);
+    mlir::LLVM::StoreOp::create(builder, location, operands[i], slot);
+    operands[i] =
+        byvalTy ? slot
+                : mlir::LLVM::LoadOp::create(builder, location, slotTy, slot)
+                      .getResult();
+  }
+
+  // C default argument promotion: float → double for variadic args
+  if (fnTy.isVarArg()) {
+    unsigned fixedCount = fnTy.getNumParams();
+    for (unsigned i = fixedCount; i < operands.size(); i++) {
+      if (operands[i].getType().isF32())
+        operands[i] = mlir::LLVM::FPExtOp::create(
+            builder, location, builder.getF64Type(), operands[i]);
+    }
+  }
+  // The declaration's types, which differ from sammine's for a struct.
+  auto llvmCallOp =
+      mlir::LLVM::CallOp::create(builder, location, llvmFunc, operands);
+  // The call needs the declaration's sret and byval too: LLVM's optimizer
+  // reads them from the call, and without them drops the stores that fill
+  // a byval copy.
+  if (auto declArgAttrs = llvmFunc.getArgAttrsAttr()) {
+    llvm::SmallVector<mlir::Attribute> callArgAttrs(declArgAttrs.begin(),
+                                                    declArgAttrs.end());
+    callArgAttrs.resize(operands.size(), builder.getDictionaryAttr({}));
+    llvmCallOp.setArgAttrsAttr(builder.getArrayAttr(callArgAttrs));
+  }
+  if (!resultBuf && llvmCallOp.getNumResults() == 0)
+    return nullptr;
+  auto semTy = convertType(semRetType);
+  if (resultBuf)
+    return mlir::LLVM::LoadOp::create(builder, location, semTy, resultBuf);
+  // A struct returned in registers comes back as its register type; it
+  // reaches the struct type through memory.
+  auto result = llvmCallOp.getResult();
+  if (result.getType() == semTy)
+    return result;
+  auto slot = emitAllocaOne(result.getType(), location);
+  mlir::LLVM::StoreOp::create(builder, location, result, slot);
+  return mlir::LLVM::LoadOp::create(builder, location, semTy, slot);
+}
+
 mlir::Value
 MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
                             llvm::SmallVector<mlir::Value, 4> &operands,
@@ -464,71 +544,9 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
   if (ast->get_type().type_kind != TypeKind::Unit)
     resultTypes.push_back(convertType(ast->get_type()));
 
-  // If callee is an llvm.func (C function), use llvm.call
-  if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee)) {
-    // A struct returned through memory: pass a buffer first, load from it.
-    mlir::Value resultBuf;
-    if (llvmFunc.getNumArguments() > 0)
-      if (auto sretTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
-              0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
-        resultBuf = emitAllocaOne(sretTy.getValue(), location);
-        operands.insert(operands.begin(), resultBuf);
-      }
-
-    // A struct argument goes in its register form or, if byval, as a pointer
-    // to a copy. Both reach the declared type through a stack slot.
-    auto fnTy = llvmFunc.getFunctionType();
-    for (unsigned i = 0; i < fnTy.getNumParams() && i < operands.size(); i++) {
-      if (!mlir::isa<mlir::LLVM::LLVMStructType>(operands[i].getType()))
-        continue;
-      auto byvalTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
-          i, mlir::LLVM::LLVMDialect::getByValAttrName());
-      auto slotTy = byvalTy ? byvalTy.getValue() : fnTy.getParamType(i);
-      if (operands[i].getType() == slotTy && !byvalTy)
-        continue;
-      auto slot = emitAllocaOne(slotTy, location);
-      mlir::LLVM::StoreOp::create(builder, location, operands[i], slot);
-      operands[i] =
-          byvalTy ? slot
-                  : mlir::LLVM::LoadOp::create(builder, location, slotTy, slot)
-                        .getResult();
-    }
-
-    // C default argument promotion: float → double for variadic args
-    if (fnTy.isVarArg()) {
-      unsigned fixedCount = fnTy.getNumParams();
-      for (unsigned i = fixedCount; i < operands.size(); i++) {
-        if (operands[i].getType().isF32())
-          operands[i] = mlir::LLVM::FPExtOp::create(
-              builder, location, builder.getF64Type(), operands[i]);
-      }
-    }
-    // The declaration's types, which differ from sammine's for a struct.
-    auto llvmCallOp =
-        mlir::LLVM::CallOp::create(builder, location, llvmFunc, operands);
-    // The call needs the declaration's sret and byval too: LLVM's optimizer
-    // reads them from the call, and without them drops the stores that fill
-    // a byval copy.
-    if (auto declArgAttrs = llvmFunc.getArgAttrsAttr()) {
-      llvm::SmallVector<mlir::Attribute> callArgAttrs(declArgAttrs.begin(),
-                                                      declArgAttrs.end());
-      callArgAttrs.resize(operands.size(), builder.getDictionaryAttr({}));
-      llvmCallOp.setArgAttrsAttr(builder.getArrayAttr(callArgAttrs));
-    }
-    if (!resultBuf && llvmCallOp.getNumResults() == 0)
-      return nullptr;
-    auto semTy = convertType(ast->get_type());
-    if (resultBuf)
-      return mlir::LLVM::LoadOp::create(builder, location, semTy, resultBuf);
-    // A struct returned in registers comes back as its register type; it
-    // reaches the struct type through memory.
-    auto result = llvmCallOp.getResult();
-    if (result.getType() == semTy)
-      return result;
-    auto slot = emitAllocaOne(result.getType(), location);
-    mlir::LLVM::StoreOp::create(builder, location, result, slot);
-    return mlir::LLVM::LoadOp::create(builder, location, semTy, slot);
-  }
+  // A C function goes through llvm.call, with C's way of moving structs.
+  if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee))
+    return emitCCall(llvmFunc, operands, ast->get_type(), location);
 
   auto callOp = mlir::func::CallOp::create(
       builder, location, llvm::StringRef(callee), resultTypes, operands);

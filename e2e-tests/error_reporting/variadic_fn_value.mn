@@ -1,0 +1,23 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |variadic_fn_value.mn:20:10
+// CHECK-NEXT:   18|
+// CHECK-NEXT:   19|let main() -> i32 {
+// CHECK-NEXT:   20|  let p = printf;
+// CHECK-NEXT:     |          ─────┬
+// CHECK-NEXT:     |               ╰─ 'printf' is variadic, so it can't be used as a value; call it directly
+// CHECK-NEXT:   21|  p("%d\n", 3);
+// CHECK-NEXT:   22|  0
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+// A function value only carries the declared parameters, so a variadic C
+// function would lose its extra arguments. It must be called directly.
+
+reuse printf(fmt: ptr<char>, ...) -> i32;
+
+let main() -> i32 {
+  let p = printf;
+  p("%d\n", 3);
+  0
+}

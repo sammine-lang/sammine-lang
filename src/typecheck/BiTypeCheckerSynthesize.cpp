@@ -595,6 +595,9 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
 
   props_.call(ast->id()).callee_func_type = ty;
 
+  // Already reported, e.g. a variadic function bound to a variable.
+  if (ty->is_poisoned())
+    return ResolvedCall::failure();
   if (ty->type_kind != TypeKind::Function) {
     this->add_error(
         ast->get_location(),
@@ -873,6 +876,16 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
   if (auto ty = lookup_type(ast->variableName)) {
+    // A function value only carries the declared parameters, so the extra
+    // arguments of a variadic C function would be lost.
+    if (ty->type_kind == TypeKind::Function &&
+        std::get<FunctionType>(ty->type_data).is_var_arg()) {
+      this->add_error(ast->get_location(),
+                      fmt::format("'{}' is variadic, so it can't be used as a "
+                                  "value; call it directly",
+                                  ast->variableName));
+      return ast->set_type(Type::Poisoned());
+    }
     ast->set_type(*ty);
   } else {
     // Try zero-payload enum variant (e.g., None, Red)

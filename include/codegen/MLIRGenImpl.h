@@ -198,6 +198,9 @@ public:
   std::string getOrCreateClosureWrapper(const std::string &funcName,
                                         const FunctionType &ft);
   mlir::Value emitCallExpr(AST::CallExprAST *ast);
+  mlir::Value emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
+                        llvm::SmallVector<mlir::Value, 4> operands,
+                        const Type &semRetType, mlir::Location location);
   mlir::Value emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
                              llvm::SmallVector<mlir::Value, 4> &operands,
                              mlir::Location location);

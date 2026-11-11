@@ -1,0 +1,36 @@
+// RUN: %cc -fPIC -c %dir/Inputs/c_struct_return_runtime.c -o %T/c_struct_return_runtime.o && %cc -fPIC -c %dir/Inputs/c_struct_args_runtime.c -o %T/c_struct_args_runtime.o && %sammine --file %dir/Inputs/c_struct_return.mn %O && %sammine --file %dir/Inputs/c_struct_args.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      5 6
+// CHECK-NEXT: 1 2 3
+// CHECK-NEXT: four_i32 1 2 3 4
+// CHECK-NEXT: 2 3
+
+// C functions that take or return structs, used as function values: the
+// value's wrapper passes and returns structs as C does, like a direct call.
+
+import std;
+import c_struct_return as c;
+import c_struct_args as a;
+
+struct LDiv { quot: i64, rem: i64, };
+reuse ldiv(n: i64, d: i64) -> LDiv;
+
+let call2(f: (i64) -> c::Two, n: i64) -> c::Two { f(n) }
+let call3(f: (i64, i64) -> c::Three, x: i64, y: i64) -> c::Three { f(x, y) }
+let take(f: (a::FourI32) -> unit, v: a::FourI32) -> unit { f(v) }
+let divide(f: (i64, i64) -> LDiv) -> LDiv { f(11i64, 4i64) }
+
+let main() -> i32 {
+  // In registers, 16 bytes.
+  let t = call2(c::make_two, 5i64);
+  std::printf("%ld %ld\n", t.a, t.b);
+  // Through a hidden sret pointer, 24 bytes.
+  let r = call3(c::make_three, 1i64, 2i64);
+  std::printf("%ld %ld %ld\n", r.a, r.b, r.c);
+  // A struct argument in its register form.
+  take(a::take_four_i32, a::FourI32 { a: 1, b: 2, c: 3, d: 4 });
+  // Declared in this file and named without a module.
+  let g = ldiv;
+  let q = divide(g);
+  std::printf("%ld %ld\n", q.quot, q.rem);
+  0
+}
