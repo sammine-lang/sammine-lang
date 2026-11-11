@@ -114,7 +114,6 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_free(FreeExprAST *ast);
   void check_return(ReturnStmtAST *ast);
   void check_if(IfExprAST *ast);
-  void check_while(WhileExprAST *ast);
   void check_for(ForExprAST *ast);
   void check_loop_body(std::function<void()> check_body);
   void check_case(CaseExprAST *ast);

@@ -1,31 +1,25 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: break_scope_alloc_in_while.mn:24:4
-// CHECK-NEXT:   22|  *ip = 0;
-// CHECK-NEXT:   23|  while (*ip < 1) {
-// CHECK-NEXT:   24|    let q = alloc<i32>(1);
+// CHECK:          |break_scope_alloc_in_for.mn:20:4
+// CHECK-NEXT:   18|let main() -> i32 {
+// CHECK-NEXT:   19|  for i in 0..1 {
+// CHECK-NEXT:   20|    let q = alloc<i32>(1);
 // CHECK-NEXT:     |    ───────────────────┬
 // CHECK-NEXT:     |                       ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:   25|    *q = 42;
-// CHECK-NEXT:   26|    *ip = *ip + 1;
+// CHECK-NEXT:   21|    *q = 42;
+// CHECK-NEXT:   22|  };
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
 
-// CORRECT: Linear pointer allocated inside while body is caught at
-// function scope exit. Even though while's restore() doesn't remove
-// the variable, pop_scope_and_check() catches it.
+// A linear pointer allocated inside a loop body must be consumed there.
 
 import std;
 
 let main() -> i32 {
-  let ip: 'ptr<i32> = alloc<i32>(1);
-  *ip = 0;
-  while (*ip < 1) {
+  for i in 0..1 {
     let q = alloc<i32>(1);
     *q = 42;
-    *ip = *ip + 1;
   };
-  free(ip);
   std::printf("done\n");
   return 0;
 }

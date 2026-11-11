@@ -392,8 +392,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::IfExprAST:
     check_if(llvm::cast<IfExprAST>(expr));
     break;
-  case NK::WhileExprAST:
-    check_while(llvm::cast<WhileExprAST>(expr));
+  case NK::WhileExprAST: // rejected by the type checker, so never reached
     break;
   case NK::ForExprAST:
     check_for(llvm::cast<ForExprAST>(expr));
@@ -1038,15 +1037,6 @@ void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
 
   // Restore state (loop might run 0 times, so outer state is unchanged)
   restore(before);
-}
-
-// ── check_while ─────────────────────────────────────────────────────
-
-void LinearTypeChecker::check_while(WhileExprAST *ast) {
-  check_loop_body([&] {
-    check_expr(ast->condition.get(), Use::reads(ast->get_location(), "use"));
-    check_block(ast->body.get(), Type::Unit());
-  });
 }
 
 // ── check_for ───────────────────────────────────────────────────────

@@ -84,7 +84,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
   | **let_expr**
   | **return_expr**
   | **if_expr**
-  | **while_expr**
+  | **for_expr**
   | **case_expr**
 
 **let_expr** ::= `let` **typed_var** `=` **expr**
@@ -94,7 +94,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 
 **if_expr** ::= `if` **expr** **block** (`else` (`if` **expr**)? **block**)?
 
-**while_expr** ::= `while` **expr** **block**
+**for_expr** ::= `for` ID `in` **expr** `..` **expr** **block**    *end is exclusive*
 
 **case_expr** ::= `case` **expr** `{` **case_arm** (`,` **case_arm**)* `,`? `}`
 
@@ -135,7 +135,7 @@ Operator precedence (low to high):
   | `(` **expr** (`,` **expr**)+ `)`          *tuple literal*
   | `(` **expr** `)`                          *parenthesized*
   | ID                                        *variable reference*
-  | **if_expr** | **while_expr** | **case_expr**
+  | **if_expr** | **for_expr** | **case_expr**
   | ID (`::` ID)? (`<` **type** (`,` **type**)* `>`)? `(` **arg_list**? `)`   *function call*
   | ID (`<` **type** (`,` **type**)* `>`)? `{` **field_init** (`,` **field_init**)* `}`  *struct literal*
   | `[` **expr** (`,` **expr**)* `]`          *array literal*

@@ -1460,22 +1460,16 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   return ast->set_type(st.get_field_type(idx.value()));
 }
 
+// sammine has no while loop: with immutable bindings its condition could only
+// change through memory behind a pointer. The parser still builds one so it
+// can be reported here, and so a later pass can suggest the `for` loop or
+// recursion it should be.
 Type BiTypeCheckerVisitor::synthesize(WhileExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
-
-  if (!ast->condition || !ast->body)
-    return ast->set_type(Type::Poisoned());
-
-  ast->condition->accept_vis(this);
-  ast->body->accept_vis(this);
-  auto cond_type = ast->condition->accept_synthesis(this);
-  if (cond_type != Type::Bool() && cond_type != Type::Poisoned()) {
-    this->add_error(ast->condition->get_location(),
-                    fmt::format("while condition must be bool, found {}",
-                                cond_type.to_string()));
-  }
-  return ast->set_type(Type::Unit());
+  this->add_error(ast->get_location(), "sammine has no 'while' loop: use "
+                                       "'for i in a..b' or recursion");
+  return ast->set_type(Type::Poisoned());
 }
 
 Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {

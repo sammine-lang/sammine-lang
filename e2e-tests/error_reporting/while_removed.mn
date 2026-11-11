@@ -1,0 +1,24 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |while_removed.mn:19:2
+// CHECK-NEXT:   17|  let i = alloc<i32>(1);
+// CHECK-NEXT:   18|  *i = 3;
+// CHECK-NEXT:   19|  while *i > 0 {
+// CHECK-NEXT:     |  ─────────────┬
+// CHECK-NEXT:     |               ╰─ sammine has no 'while' loop: use 'for i in a..b' or recursion
+// CHECK-NEXT:   20|    *i = *i - 1;
+// CHECK-NEXT:   21|  };
+// CHECK-NEXT:   22|  free(i);
+// CHECK-NEXT:   23|  0
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+let main() -> i32 {
+  let i = alloc<i32>(1);
+  *i = 3;
+  while *i > 0 {
+    *i = *i - 1;
+  };
+  free(i);
+  0
+}

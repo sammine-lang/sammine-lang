@@ -4,15 +4,11 @@
 import std;
 
 let main() -> i32 {
-  let ip: 'ptr<i32> = alloc<i32>(1);
-  *ip = 0;
-  while *ip < 3 {
+  for i in 0..3 {
     let p = alloc<i32>(1);
-    *p = *ip;
+    *p = i;
     free(p);
-    *ip = *ip + 1;
   };
-  free(ip);
   std::printf("done\n");
   return 0;
 }

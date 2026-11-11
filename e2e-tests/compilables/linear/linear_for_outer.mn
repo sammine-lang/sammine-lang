@@ -1,30 +1,24 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: linear_while_outer.mn
-// CHECK-NEXT:   19|
-// CHECK-NEXT:   20|let main() -> i32 {
-// CHECK-NEXT:   21|  let p = alloc<i32>(1);
+// CHECK:          |linear_for_outer.mn
+// CHECK-NEXT:   17|
+// CHECK-NEXT:   18|let main() -> i32 {
+// CHECK-NEXT:   19|  let p = alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────────────┬
 // CHECK-NEXT:     |                     ╰─ Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:   22|  let ip: 'ptr<i32> = alloc<i32>(1);
-// CHECK-NEXT:   23|  *ip = 0;
-// CHECK-NEXT:   24|  while *ip < 3 {
-// CHECK-NEXT:   25|    free(p);
+// CHECK-NEXT:   20|  for i in 0..3 {
+// CHECK-NEXT:   21|    free(p);
 // CHECK-NEXT:     |    ─────┬
 // CHECK-NEXT:     |         ╰─ Cannot consume linear variable 'p' inside a loop (defined outside the loop)
-// CHECK-NEXT:   26|    *ip = *ip + 1;
-// CHECK-NEXT:   27|  };
+// CHECK-NEXT:   22|  };
+// CHECK-NEXT:   23|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let p = alloc<i32>(1);
-  let ip: 'ptr<i32> = alloc<i32>(1);
-  *ip = 0;
-  while *ip < 3 {
+  for i in 0..3 {
     free(p);
-    *ip = *ip + 1;
   };
-  free(ip);
   return 0;
 }

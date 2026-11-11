@@ -210,34 +210,17 @@ if x > 3 {
 };
 ```
 
-### While Loops
+### Loops
+
+sammine has no `while` loop. Bindings are immutable, so a loop condition could only change through memory behind a pointer. Loop over a range with `for`, and write any other loop as recursion, passing the changing state as arguments:
 
 ```sammine
-let i = alloc<i32>(1);
-*i = 5;
-while *i > 0 {
-  std::printf("%d\n", *i);
-  *i = *i - 1;
-};
-free(i);
-```
-
-Loops can be nested:
-
-```sammine
-let i = alloc<i32>(1);
-*i = 1;
-while *i <= 2 {
-  let j = alloc<i32>(1);
-  *j = 1;
-  while *j <= 2 {
-    std::printf("%d %d\n", *i, *j);
-    *j = *j + 1;
-  };
-  free(j);
-  *i = *i + 1;
-};
-free(i);
+let countdown(i: i32) -> unit {
+  if i > 0 {
+    std::printf("%d\n", i);
+    countdown(i - 1)
+  }
+}
 ```
 
 ### For Loops
