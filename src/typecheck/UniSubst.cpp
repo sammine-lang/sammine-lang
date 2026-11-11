@@ -14,7 +14,18 @@ bool contains_type_param(const Type &type, const std::string &param_name) {
   return found;
 }
 
+static Type substitute_parts(const Type &type, const TypeBindings &bindings);
+
+// A type built from substituted parts keeps its own linearity: 'ptr<T> stays
+// owning. A type parameter becomes what it is bound to, linearity and all.
 Type substitute(const Type &type, const TypeBindings &bindings) {
+  auto result = substitute_parts(type, bindings);
+  if (type.type_kind != TypeKind::TypeParam)
+    result.linearity = type.linearity;
+  return result;
+}
+
+static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
   switch (type.type_kind) {
   case TypeKind::TypeParam: {
     auto name = std::get<std::string>(type.type_data);

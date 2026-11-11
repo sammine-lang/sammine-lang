@@ -589,14 +589,17 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
   props_.call(ast->id()).resolved_name = key.to_generic_name(ast->functionName);
   props_.call(ast->id()).type_bindings = bindings;
-  props_.call(ast->id()).callee_func_type = generic_type;
+  // The instance's signature: what the call passes and gets back, as the
+  // linear checker and codegen read it.
+  auto instance_type = substitute(generic_type, bindings);
+  props_.call(ast->id()).callee_func_type = instance_type;
 
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
   return ResolvedCall{format_generic_call_name(ast->written_name,
                                                type_params, bindings),
                       std::move(expected), std::move(result),
-                      substitute(generic_type, bindings), false};
+                      std::move(instance_type), false};
 }
 
 std::optional<ResolvedCall>
