@@ -30,10 +30,6 @@ namespace sammine_lang {
   }
 }
 namespace sammine_lang {
-int parseOption(CLI::App&app,int argc, char *argv[] ) {
-  CLI11_PARSE(app, argc, argv);
-  return 0;
-}
 Options::Options(int argc, char *argv[]) {
   CLI::App app{"sammine"};
   auto *input_group = app.add_option_group("Input");
@@ -95,8 +91,12 @@ Options::Options(int argc, char *argv[]) {
       ->default_str("shared");
 
   argv0 = argv[0];
-  if (parseOption(app, argc, argv) != 0) {
-    has_error = true;
+  // CLI11 signals --help, like a bad flag, with an exception. app.exit
+  // prints what it asks for and gives the exit code: 0 for --help.
+  try {
+    app.parse(argc, argv);
+  } catch (const CLI::ParseError &e) {
+    exit_code = app.exit(e);
     return;
   }
   lib_format = parse_lib_format(lib_format_raw);

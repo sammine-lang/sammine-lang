@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -41,6 +42,9 @@ public:
 
 
   bool has_error = false;
+  // Set when parsing the command line already finished the run, e.g. with
+  // --help: exit with this code without compiling.
+  std::optional<int> exit_code;
   bool from_string = false; 
   void infer(const std::string &output_dir_raw); 
 };

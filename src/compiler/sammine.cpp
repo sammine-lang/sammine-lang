@@ -24,6 +24,8 @@ int main(int argc, char *argv[]) {
   signal(SIGSEGV, handler);
 
   sammine_lang::Options options(argc, argv);
+  if (options.exit_code)
+    return *options.exit_code;
   if (options.has_error)
     return 1;
 

@@ -1,0 +1,5 @@
+// RUN: %sammine --help | %check %full
+// CHECK: Usage:
+// CHECK: --str
+
+// --help prints the usage and exits 0, without compiling anything.
