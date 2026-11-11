@@ -451,6 +451,9 @@ struct Type {
   bool containsLinearTypes() const {
     if (linearity == Linearity::Linear)
       return true;
+    // A view owns nothing, whatever it points at.
+    if (type_kind == TypeKind::Pointer)
+      return false;
     bool found = false;
     forEachInnerType([&](const Type &inner) {
       if (inner.containsLinearTypes())

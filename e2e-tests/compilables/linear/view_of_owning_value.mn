@@ -1,0 +1,19 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 1 0
+
+// A view, ptr<T>, owns nothing, even of a value that owns memory: here a Box
+// whose field is an owning 'ptr. Comparing two views only reads them, and the
+// Box is still freed after.
+
+import std;
+
+struct Box { p: 'ptr<i32>, };
+
+let main() -> i32 {
+  let a = Box { p: alloc<i32>(1) };
+  let b = Box { p: alloc<i32>(1) };
+  std::printf("%d %d\n", &a == &a, &a == &b);
+  free(a.p);
+  free(b.p);
+  return 0;
+}
