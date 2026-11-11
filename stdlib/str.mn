@@ -3,6 +3,9 @@ reuse malloc(size: i64) -> 'ptr<char>;
 reuse memcpy(dst: 'ptr<char>, src: ptr<char>, n: i64) -> 'ptr<char>;
 reuse strlen(s: ptr<char>) -> i64;
 
+// `data` is always NUL-terminated. `cap` counts the characters that fit,
+// like Vec's cap; the buffer holds one more byte for the terminator, so
+// every allocation here is `cap + 1` bytes.
 export struct String {
   data: 'ptr<char>,
   length: i64,
@@ -11,8 +14,9 @@ export struct String {
 
 export let new(src: ptr<char>) -> String {
   let sz: i64 = strlen(src);
-  let buf = malloc(sz);
-  let buf = memcpy(buf, src, sz);
+  // Copy the terminator along with the characters.
+  let buf = malloc(sz + 1i64);
+  let buf = memcpy(buf, src, sz + 1i64);
   String { data: buf, length: sz, cap: sz }
 }
 

@@ -1,0 +1,14 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: text = hello
+
+// str::new must copy the terminating NUL, so the data prints as a C string.
+
+import std;
+import str;
+
+let main() -> i32 {
+  let s: str::String = str::new("hello");
+  std::printf("text = %s\n", s.data);
+  str::delete(s);
+  return 0;
+}
