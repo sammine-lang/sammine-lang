@@ -134,6 +134,8 @@ class Compiler {
   int64_t context_radius = 2;
   State state_ = State::Running;
   bool has_main = false;
+  /// The library's name (its file's stem), or empty for an executable.
+  std::string library_name() const;
   int jit_exit_code_ = 0;
 
   void lex();

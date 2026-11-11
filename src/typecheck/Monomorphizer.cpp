@@ -419,6 +419,7 @@ Monomorphizer::clone_enum(EnumDefAST *generic,
                                              std::move(cloned_variants));
   result->is_integer_backed = generic->is_integer_backed;
   result->backing_type_name = generic->backing_type_name;
+  result->defining_module = generic->defining_module;
   // type_params left empty — this is a concrete instantiation
   bindings_ = nullptr;
   return result;
@@ -437,6 +438,7 @@ Monomorphizer::clone_struct(StructDefAST *generic,
 
   auto result = std::make_unique<StructDefAST>(
       new_name, generic->get_location(), std::move(cloned_members));
+  result->defining_module = generic->defining_module;
   // type_params left empty — this is a concrete instantiation
   bindings_ = nullptr;
   return result;

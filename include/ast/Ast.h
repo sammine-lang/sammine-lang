@@ -198,6 +198,10 @@ public:
 class DefinitionAST : public AstBase, public Printable {
 public:
   bool is_exported = false;
+  /// The library this definition comes from: the library being compiled, or
+  /// the module it was imported from. Empty for an executable's own
+  /// definitions.
+  std::string defining_module;
 
   DefinitionAST(NodeKind kind_) : AstBase(kind_) {}
   static bool classof(const AstBase *node) {

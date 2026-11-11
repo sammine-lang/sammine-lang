@@ -136,6 +136,15 @@ void Compiler::parse() {
         has_main = true;
         break;
       }
+
+  for (auto &def : programAST->DefinitionVec)
+    def->defining_module = library_name();
+}
+
+std::string Compiler::library_name() const {
+  if (has_main)
+    return "";
+  return std::filesystem::path(options_.file_arg).stem().string();
 }
 
 // Stage 3: Resolve `import` declarations by parsing .mn files on the fly.
@@ -424,8 +433,7 @@ void Compiler::codegen_mlir() {
   }
   mlirCtx.appendDialectRegistry(registry);
 
-  std::string stem = std::filesystem::path(options_.file_arg).stem().string();
-  std::string moduleName = has_main ? "" : stem;
+  std::string moduleName = library_name();
 
   auto mlirResult =
       mlirGen(mlirCtx, programAST.get(), moduleName, options_.file_arg,

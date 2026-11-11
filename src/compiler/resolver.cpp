@@ -119,6 +119,7 @@ void Resolver::inject_definitions(
   // Filter definitions and inject into programAST.
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {
     auto &def = *it;
+    def->defining_module = name;
 
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       bool is_generic = fd->Prototype->is_generic();

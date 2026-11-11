@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: library_type_name.mn:15:2
+// CHECK-NEXT:   13|
+// CHECK-NEXT:   14|export let get_y(p: Point) -> i32 {
+// CHECK-NEXT:   15|  p.y
+// CHECK-NEXT:     |  ──┬
+// CHECK-NEXT:     |    ╰─ Struct 'library_type_name::Point' has no field named 'y'
+
+// A library's types are named after the library, as code importing it names
+// them: this file has no main, so Point is library_type_name::Point.
+
+struct Point { x: i32, };
+
+export let get_y(p: Point) -> i32 {
+  p.y
+}

@@ -192,6 +192,16 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   ast->Prototype->accept_vis(this);
 }
 
+// A struct or enum type is named after the library that defines it, as code
+// importing that library names it, so the type has one name in every module.
+// Code in the library itself still refers to it by `name`.
+static sammine_util::QualifiedName type_name(const sammine_util::QualifiedName &name,
+                                             const DefinitionAST &def) {
+  if (def.defining_module.empty() || name.is_qualified())
+    return name;
+  return name.with_module(def.defining_module);
+}
+
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Generic struct: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
@@ -220,7 +230,8 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
     }
   }
 
-  auto struct_type = Type::Struct(ast->struct_name, std::move(field_names),
+  auto struct_type = Type::Struct(type_name(ast->struct_name, *ast),
+                                  std::move(field_names),
                                   std::move(field_types));
   ast->set_type(struct_type);
   typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), struct_type);
@@ -316,8 +327,9 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
     variant_infos.push_back(std::move(info));
   }
 
-  auto enum_type = Type::Enum(ast->enum_name, std::move(variant_infos),
-                              ast->is_integer_backed, backing_type);
+  auto enum_type = Type::Enum(type_name(ast->enum_name, *ast),
+                              std::move(variant_infos), ast->is_integer_backed,
+                              backing_type);
   ast->set_type(enum_type);
   typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), enum_type);
 
