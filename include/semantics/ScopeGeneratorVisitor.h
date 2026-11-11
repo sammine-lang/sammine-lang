@@ -20,6 +20,11 @@ public:
 
   ScopeGeneratorVisitor() { scope_stack.push_context(); }
   void qualify_type_expr(TypeExprAST *expr);
+  //! Qualifies the type names an imported struct or enum uses, e.g. a field
+  //! `min: Point` of `shapes::Rect` becomes `min: shapes::Point`.
+  void qualify_imported_types(const sammine_util::QualifiedName &def_name,
+                              const std::vector<std::string> &type_params,
+                              const std::vector<TypeExprAST *> &types);
 
   // INFO: CheckAndReg means: Check if there's redefinition, if not, register
   // INFO: Check for castable means: Check if the name existed, if not, register
@@ -80,6 +85,8 @@ public:
   virtual void preorder_walk(ProgramAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(ExternAST *ast) override;
+  virtual void preorder_walk(StructDefAST *ast) override;
+  virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;

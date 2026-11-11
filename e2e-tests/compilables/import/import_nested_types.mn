@@ -1,0 +1,19 @@
+// RUN: %sammine --file %dir/Inputs/shapes.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      4
+// CHECK-NEXT: 20
+
+// An imported struct's field types and an imported enum's payload types
+// name other types of the same module, unqualified.
+
+import std;
+import shapes;
+
+let main() -> i32 {
+  let r = shapes::Rect {
+    min: shapes::Point { x: 1, y: 2 },
+    max: shapes::Point { x: 5, y: 7 },
+  };
+  std::printf("%d\n", shapes::width(r));
+  std::printf("%d\n", shapes::area(shapes::Shape::Box(r)));
+  0
+}

@@ -110,6 +110,33 @@ void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
     ctx().generic_type_params = {};
   }
 }
+void ScopeGeneratorVisitor::qualify_imported_types(
+    const sammine_util::QualifiedName &def_name,
+    const std::vector<std::string> &type_params,
+    const std::vector<TypeExprAST *> &types) {
+  if (!def_name.is_qualified())
+    return;
+  push_ast_context();
+  ctx().in_imported_def = true;
+  ctx().import_module = def_name.get_module();
+  ctx().generic_type_params = type_params;
+  for (auto *type : types)
+    qualify_type_expr(type);
+  pop_ast_context();
+}
+void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {
+  std::vector<TypeExprAST *> types;
+  for (auto &member : ast->struct_members)
+    types.push_back(member->type_expr.get());
+  qualify_imported_types(ast->struct_name, ast->type_params, types);
+}
+void ScopeGeneratorVisitor::preorder_walk(EnumDefAST *ast) {
+  std::vector<TypeExprAST *> types;
+  for (auto &variant : ast->variants)
+    for (auto &payload : variant.payload_types)
+      types.push_back(payload.get());
+  qualify_imported_types(ast->enum_name, ast->type_params, types);
+}
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
   // Detect imported generic function: name is qualified AND is_generic
   if (ast->Prototype->is_generic() &&

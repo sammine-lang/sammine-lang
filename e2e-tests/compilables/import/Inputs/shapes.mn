@@ -1,0 +1,12 @@
+// Exported types whose fields and payloads use other exported types.
+export struct Point { x: i32, y: i32, };
+export struct Rect { min: Point, max: Point, };
+export type Shape = Dot(Point) | Box(Rect);
+
+export let width(r: Rect) -> i32 { r.max.x - r.min.x }
+export let area(s: Shape) -> i32 {
+  case s {
+    Dot(p) => 0,
+    Box(r) => (r.max.x - r.min.x) * (r.max.y - r.min.y),
+  }
+}
