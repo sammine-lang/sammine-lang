@@ -133,8 +133,9 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
   }
 
   // If the variable is in the symbol table, handle it normally
-  if (symbolTable.recursiveQueryName(ast->variableName) != nameNotFound) {
-    auto val = symbolTable.recursive_get_from_name(ast->variableName);
+  if (symbolTable.recursiveQueryName(ast->variableName.mangled()) !=
+      nameNotFound) {
+    auto val = symbolTable.recursive_get_from_name(ast->variableName.mangled());
 
     // Array vars are !llvm.ptr (alloca to LLVMArrayType) — return the
     // pointer directly; downstream consumers use GEP to index into it.
@@ -162,7 +163,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
       return theModule.lookupSymbol<mlir::func::FuncOp>(name) ||
              theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(name);
     };
-    auto funcName = ast->variableName;
+    auto funcName = ast->variableName.mangled();
     if (!isFunction(funcName) && !moduleName.empty())
       funcName = moduleName + "::" + funcName;
     if (isFunction(funcName)) {
@@ -176,7 +177,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     }
   }
 
-  imm_error(fmt::format("unknown variable '{}'", ast->variableName),
+  imm_error(fmt::format("unknown variable '{}'", ast->variableName.mangled()),
             ast->get_location());
 }
 

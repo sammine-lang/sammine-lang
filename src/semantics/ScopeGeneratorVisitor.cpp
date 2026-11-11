@@ -301,8 +301,27 @@ void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
 }
 
 void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
+  // A qualified name: a module's function (std::printf) or an enum's variant
+  // (Color::Red, dummy_enum::dummy::A).
+  if (ast->variableName.is_qualified()) {
+    auto &name = ast->variableName;
+    if (name.is_unresolved()) {
+      // The prefix may be an enum in scope rather than a module alias.
+      if (can_see(name.get_module()) != nameFound)
+        add_error(
+            ast->get_location(),
+            fmt::format("Module '{}' is not imported", name.get_module()));
+      return;
+    }
+    if (can_see(name.mangled()) == nameNotFound &&
+        can_see(name.get_qualifier()) == nameNotFound)
+      add_error(ast->get_location(),
+                fmt::format("The name {} is not found before",
+                            name.with_alias().mangled()));
+    return;
+  }
 
-  auto var_name = ast->variableName;
+  auto var_name = ast->variableName.mangled();
 
   // Check if this is an unqualified enum variant reference
   auto vit = variant_to_enum.find(var_name);
@@ -322,7 +341,7 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
     auto parts = enum_names[0].parts();
     parts.push_back({var_name, ""});
     ast->variableName =
-        sammine_util::QualifiedName::from_parts(std::move(parts)).mangled();
+        sammine_util::QualifiedName::from_parts(std::move(parts));
     return;
   }
 
@@ -332,7 +351,7 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
       auto qualified =
           sammine_util::QualifiedName::qualified(ctx().import_module, var_name);
       if (can_see(qualified.mangled()) == nameFound) {
-        ast->variableName = qualified.mangled();
+        ast->variableName = qualified;
         return;
       }
     }

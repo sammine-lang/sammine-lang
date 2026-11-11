@@ -754,11 +754,12 @@ bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
         root == target
             ? fmt::format("Cannot reassign variable '{}'. All bindings are "
                           "immutable; use 'let {} = ...' to shadow",
-                          var->variableName, var->variableName)
+                          var->variableName.mangled(),
+                          var->variableName.mangled())
             : fmt::format("Cannot write into '{}'. All bindings are "
                           "immutable; only memory behind a pointer can be "
                           "written",
-                          var->variableName);
+                          var->variableName.mangled());
   } else {
     message = "Cannot assign to this expression. Only memory behind a "
               "pointer can be written, e.g. '*p', 'p[i]' or '(*p).x'";
@@ -875,7 +876,7 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->set_type(Type::Char());
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  if (auto ty = lookup_type(ast->variableName)) {
+  if (auto ty = lookup_type(ast->variableName.mangled())) {
     // A function value only carries the declared parameters, so the extra
     // arguments of a variadic C function would be lost.
     if (ty->type_kind == TypeKind::Function &&
@@ -883,13 +884,13 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
       this->add_error(ast->get_location(),
                       fmt::format("'{}' is variadic, so it can't be used as a "
                                   "value; call it directly",
-                                  ast->variableName));
+                                  ast->variableName.mangled()));
       return ast->set_type(Type::Poisoned());
     }
     ast->set_type(*ty);
   } else {
     // Try zero-payload enum variant (e.g., None, Red)
-    auto it = variant_constructors.find(ast->variableName);
+    auto it = variant_constructors.find(ast->variableName.mangled());
     if (it != variant_constructors.end()) {
       auto &[enum_type, variant_idx] = it->second;
       auto &et = std::get<EnumType>(enum_type.type_data);
@@ -899,14 +900,21 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
         props_.variable(ast->id()).enum_variant_index = variant_idx;
         return ast->set_type(enum_type);
       }
+      // A variant with a payload needs its arguments, e.g. Circle(1).
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Enum variant '{}' expects {} arguments, got 0",
+                      ast->variableName.mangled(), vi.payload_types.size()));
+      return ast->set_type(Type::Poisoned());
     }
-    this->add_error(ast->get_location(),
-                    fmt::format("Variable '{}' not found", ast->variableName));
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Variable '{}' not found", ast->variableName.mangled()));
     ast->set_type(Type::Poisoned());
   }
   LOG({
     fmt::print(stderr, "[typecheck] synthesize VariableExprAST: '{}' -> {}\n",
-               ast->variableName, ast->get_type().to_string());
+               ast->variableName.mangled(), ast->get_type().to_string());
   });
   return ast->get_type();
 }
@@ -1061,11 +1069,11 @@ bool BiTypeCheckerVisitor::check_addr_of_operand(AddrOfExprAST *ast) {
       "Only variables and memory behind a pointer have an address";
   if (auto *var = llvm::dyn_cast<VariableExprAST>(root)) {
     // A variable has a stack slot; a function or an enum variant does not.
-    if (names_variable(var->variableName))
+    if (names_variable(var->variableName.mangled()))
       return true;
     this->add_error(ast->get_location(),
                     fmt::format("Cannot take the address of '{}'. {}",
-                                var->variableName, reason));
+                                var->variableName.mangled(), reason));
     return false;
   }
   this->add_error(

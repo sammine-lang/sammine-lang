@@ -946,7 +946,7 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
         for (auto &arg : call->arguments)
           new_args.push_back(std::move(arg));
       } else if (auto *var = llvm::dyn_cast<VariableExprAST>(RHS.get())) {
-        qn = sammine_util::QualifiedName::local(var->variableName);
+        qn = var->variableName;
         qn_loc = var->get_location();
       } else {
         report_error("Right-hand side of |> must be a function name or call",
@@ -1082,13 +1082,16 @@ auto Parser::ParseIdentifierExpr() -> p<ExprAST> {
     return {std::move(call), SUCCESS};
   }
   if (result == NONCOMMITTED) {
-    // Qualified name without args (e.g. Color::Red) — preserve as CallExprAST
-    // so the qualified name isn't lost
-    if (qn.is_qualified()) {
+    // A qualified name without parentheses names a value, e.g. a function
+    // `std::printf` or a variant `Color::Red`. With type arguments
+    // (`Option<i32>::None`) it stays a call, which instantiates the generic.
+    if (qn.is_qualified() && !explicit_type_args.empty()) {
       auto call = std::make_unique<CallExprAST>(qn, qn_loc);
       call->explicit_type_args = std::move(explicit_type_args);
       return {std::move(call), SUCCESS};
     }
+    if (qn.is_qualified())
+      return {std::make_unique<VariableExprAST>(qn, qn_loc), SUCCESS};
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   }
   return {nullptr, FAILED};

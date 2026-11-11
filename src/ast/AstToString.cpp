@@ -136,7 +136,9 @@ std::string CharExprAST::to_string() const {
   return "'" + escape_char(value) + "'";
 }
 
-std::string VariableExprAST::to_string() const { return variableName; }
+std::string VariableExprAST::to_string() const {
+  return variableName.mangled();
+}
 
 std::string UnitExprAST::to_string() const { return "()"; }
 

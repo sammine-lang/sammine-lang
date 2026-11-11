@@ -653,7 +653,7 @@ mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
 
   // Variable: return its alloca
   if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
-    return symbolTable.recursive_get_from_name(var->variableName);
+    return symbolTable.recursive_get_from_name(var->variableName.mangled());
 
   // Dereference: lvalue of *p is the value of p
   if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))

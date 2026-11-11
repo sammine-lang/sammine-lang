@@ -250,7 +250,8 @@ void AstPrinterVisitor::visit(NumberExprAST *ast) {
 
 void AstPrinterVisitor::visit(VariableExprAST *ast) {
   generic_preprint(ast);
-  add_to_rep(fmt::format("(var_name, type): (\"{}\", {})", ast->variableName,
+  add_to_rep(fmt::format("(var_name, type): (\"{}\", {})",
+                         ast->variableName.mangled(),
                          ast->get_type().to_string()));
   generic_postprint();
 }

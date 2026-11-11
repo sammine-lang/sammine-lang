@@ -192,7 +192,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::VariableExprAST: {
     auto *var = llvm::cast<VariableExprAST>(expr);
-    result = std::make_unique<VariableExprAST>(make_tok(var->variableName));
+    result = std::make_unique<VariableExprAST>(var->variableName,
+                                               var->get_location());
     break;
   }
   case NodeKind::CallExprAST: {

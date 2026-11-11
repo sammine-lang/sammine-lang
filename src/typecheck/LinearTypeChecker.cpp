@@ -510,13 +510,14 @@ void LinearTypeChecker::check_through_pointer(ExprAST *pointer, Use use,
 }
 
 void LinearTypeChecker::check_variable(VariableExprAST *ast, Use use) {
-  if (auto *info = find_linear(ast->variableName))
+  if (auto *info = find_linear(ast->variableName.mangled()))
     apply_use(info, use);
 }
 
 VarInfo *LinearTypeChecker::find_field(FieldAccessExprAST *ast) {
   auto *obj = llvm::dyn_cast<VariableExprAST>(ast->object_expr.get());
-  return obj ? find_child(obj->variableName, ast->field_name) : nullptr;
+  return obj ? find_child(obj->variableName.mangled(), ast->field_name)
+             : nullptr;
 }
 
 void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast, Use use) {
@@ -561,7 +562,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
 
   // Propagate closure captures through variable-to-variable assignment
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->Expression.get())) {
-    auto it = closure_captures_.find(var->variableName);
+    auto it = closure_captures_.find(var->variableName.mangled());
     if (it != closure_captures_.end())
       closure_captures_[ast->TypedVar->name] = it->second;
   }
@@ -577,7 +578,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
       [&](const std::vector<std::unique_ptr<ExprAST>> &elements) {
         for (auto &elem : elements) {
           if (auto *v = llvm::dyn_cast<VariableExprAST>(elem.get())) {
-            auto it = closure_captures_.find(v->variableName);
+            auto it = closure_captures_.find(v->variableName.mangled());
             if (it != closure_captures_.end()) {
               closure_captures_[ast->TypedVar->name] = it->second;
               return;
@@ -725,7 +726,7 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
     if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
       if (auto *lhs_var =
               llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
-        auto *child = find_child(lhs_var->variableName, "*");
+        auto *child = find_child(lhs_var->variableName.mangled(), "*");
         if (child) {
           if (child->state == VarState::Unconsumed &&
               ast->RHS->get_type().linearity == Linearity::Linear) {
@@ -744,14 +745,14 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
 
     // LHS: check for overwrite without consuming, or re-register
     if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-      auto *lhs_info = find_linear(lhs_var->variableName);
+      auto *lhs_info = find_linear(lhs_var->variableName.mangled());
       if (lhs_info && ast->RHS->get_type().linearity == Linearity::Linear) {
         if (lhs_info->state == VarState::Unconsumed) {
           this->add_error(
               ast->get_location(),
               fmt::format("Reassigning linear variable '{}' without "
                           "consuming its previous value",
-                          lhs_var->variableName));
+                          lhs_var->variableName.mangled()));
           return;
         }
         lhs_info->state = VarState::Unconsumed;
@@ -806,7 +807,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
 
 VarInfo *LinearTypeChecker::find_tracked(ExprAST *expr) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
-    return find_linear(var->variableName);
+    return find_linear(var->variableName.mangled());
   if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr))
     return find_field(fa);
   return nullptr;
@@ -841,10 +842,10 @@ void LinearTypeChecker::check_free(FreeExprAST *ast) {
   auto *operand = ast->operand.get();
   VarInfo *target = nullptr;
   if (auto *var = llvm::dyn_cast<VariableExprAST>(operand)) {
-    target = find_linear(var->variableName);
+    target = find_linear(var->variableName.mangled());
   } else if (auto *deref = llvm::dyn_cast<DerefExprAST>(operand)) {
     if (auto *base = llvm::dyn_cast<VariableExprAST>(deref->operand.get()))
-      target = find_child(base->variableName, "*");
+      target = find_child(base->variableName.mangled(), "*");
   } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(operand)) {
     target = find_field(fa);
   }
@@ -884,7 +885,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
     return;
 
   if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->return_expr.get())) {
-    if (find_linear(var->variableName)) {
+    if (find_linear(var->variableName.mangled())) {
       // Returning a linear pointer (or wrapper): ownership transfers to caller
       check_expr(var, Use::owns(ast->get_location(), "returned"));
       return;
@@ -895,12 +896,12 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
       this->add_error(ast->get_location(),
                       fmt::format("Cannot return '{}' of type '{}': {} "
                                   "(may reference a local variable)",
-                                  var->variableName,
+                                  var->variableName.mangled(),
                                   var->get_type().to_string(), *path));
       return;
     }
     // Returning a closure — check if any captured arg contains a pointer
-    auto it = closure_captures_.find(var->variableName);
+    auto it = closure_captures_.find(var->variableName.mangled());
     if (it != closure_captures_.end()) {
       for (auto &captured : it->second) {
         if (captured.containsNonLinearPtr()) {
@@ -909,7 +910,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
               fmt::format(
                   "Cannot return '{}' — it is a closure that captured a "
                   "non-linear pointer (may dangle after return)",
-                  var->variableName));
+                  var->variableName.mangled()));
           return;
         }
       }
@@ -922,7 +923,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
       [&](const std::vector<std::unique_ptr<ExprAST>> &elements) -> bool {
     for (auto &elem : elements) {
       if (auto *v = llvm::dyn_cast<VariableExprAST>(elem.get())) {
-        auto it = closure_captures_.find(v->variableName);
+        auto it = closure_captures_.find(v->variableName.mangled());
         if (it != closure_captures_.end()) {
           for (auto &captured : it->second) {
             if (captured.containsNonLinearPtr()) {
@@ -931,7 +932,7 @@ void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
                   fmt::format("Cannot return a value containing '{}' — it is "
                               "a closure that captured a non-linear pointer "
                               "(may dangle after return)",
-                              v->variableName));
+                              v->variableName.mangled()));
               check_expr(ast->return_expr.get(), Use::owns(ast->get_location(), "returned"));
               return true;
             }

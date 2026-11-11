@@ -634,13 +634,19 @@ public:
 };
 class VariableExprAST : public ExprAST {
 public:
-  std::string variableName;
+  //! The name the value is referred to by, e.g. `x`, `printf`, `std::printf`
+  //! or `Color::Red`.
+  sammine_util::QualifiedName variableName;
   VariableExprAST(std::shared_ptr<Token> var)
       : ExprAST(NodeKind::VariableExprAST) {
     join_location(var);
     if (var)
-      variableName = var->lexeme;
+      variableName = sammine_util::QualifiedName::local(var->lexeme);
   };
+  VariableExprAST(sammine_util::QualifiedName name, sammine_util::Location loc)
+      : ExprAST(NodeKind::VariableExprAST), variableName(std::move(name)) {
+    this->location = loc;
+  }
 
   std::string to_string() const override;
   AST_NODE_METHODS("VariableExprAST", NodeKind::VariableExprAST)

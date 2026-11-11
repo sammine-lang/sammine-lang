@@ -11,6 +11,7 @@ namespace AST {
 class SimpleTypeExprAST;
 class TypeAliasDefAST;
 class CallExprAST;
+class VariableExprAST;
 class StructLiteralExprAST;
 struct CasePattern;
 } // namespace AST
@@ -41,6 +42,7 @@ private:
   friend class sammine_lang::AST::SimpleTypeExprAST;
   friend class sammine_lang::AST::TypeAliasDefAST;
   friend class sammine_lang::AST::CallExprAST;
+  friend class sammine_lang::AST::VariableExprAST;
   friend class sammine_lang::AST::StructLiteralExprAST;
   friend struct sammine_lang::AST::CasePattern;
 
