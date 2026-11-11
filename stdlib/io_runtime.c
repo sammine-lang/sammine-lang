@@ -7,12 +7,13 @@
 void sammine_io_eprint(const char* s)   { fputs(s, stderr); }
 void sammine_io_eprintln(const char* s) { fprintf(stderr, "%s\n", s); }
 
-// stdin — returns malloc'd buffer (caller owns), strips trailing \n
+// stdin — returns malloc'd buffer (caller owns), strips trailing \n.
+// At end of input, returns NULL with a length of -1.
 char* sammine_io_read_line(int64_t* out_len) {
     char* line = NULL;
     size_t cap = 0;
     ssize_t len = getline(&line, &cap, stdin);
-    if (len < 0) { *out_len = 0; free(line); return NULL; }
+    if (len < 0) { *out_len = -1; free(line); return NULL; }
     if (len > 0 && line[len-1] == '\n') line[--len] = '\0';
     *out_len = (int64_t)len;
     return line;
@@ -28,13 +29,13 @@ void sammine_io_close(void* handle) {
 }
 
 // Reads the next line from a borrowed handle. Returns a malloc'd buffer the
-// caller owns, or NULL at end of file.
+// caller owns, or NULL with a length of -1 at end of file.
 char* sammine_io_file_read_line(void* handle, int64_t* out_len) {
     char* line = NULL;
     size_t cap = 0;
     ssize_t len = getline(&line, &cap, (FILE*)handle);
     if (len < 0) {
-        *out_len = 0;
+        *out_len = -1;
         free(line);
         return NULL;
     }
@@ -48,7 +49,8 @@ void* sammine_io_file_write(void* handle, const char* content, int64_t len) {
     return handle;
 }
 
-// Convenience (open + operate + close in one call)
+// Convenience (open + operate + close in one call). Returns NULL with a
+// length of -1 if the file cannot be read.
 char* sammine_io_read_file(const char* path, int64_t* out_len) {
     FILE* f = fopen(path, "rb");
     if (!f) { *out_len = -1; return NULL; }

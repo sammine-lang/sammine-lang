@@ -1,0 +1,12 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: missing
+
+import io;
+
+let main() -> i32 {
+  case io::read_file("/nonexistent/sammine_no_such_file.txt") {
+    Line(data, n) => free(data),
+    Eof => io::println("missing"),
+  };
+  0
+}

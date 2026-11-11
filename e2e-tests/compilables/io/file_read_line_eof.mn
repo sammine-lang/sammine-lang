@@ -1,0 +1,31 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: first
+// CHECK-NEXT: eof
+
+import io;
+
+let main() -> i32 {
+  io::write_file("/tmp/sammine_test_eof.txt", "first\n", 6);
+  let f = io::open("/tmp/sammine_test_eof.txt", "r");
+
+  let (f, first) = io::file_read_line(f);
+  case first {
+    Line(line, n) => {
+      io::println(line);
+      free(line);
+    },
+    Eof => io::println("eof"),
+  };
+
+  let (f, second) = io::file_read_line(f);
+  case second {
+    Line(line, n) => {
+      io::println(line);
+      free(line);
+    },
+    Eof => io::println("eof"),
+  };
+
+  io::close(f);
+  0
+}

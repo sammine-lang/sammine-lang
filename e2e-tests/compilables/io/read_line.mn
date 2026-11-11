@@ -1,13 +1,19 @@
 // RUN: echo "hello stdin" | %sammine_jit --file %full | %check %full
-// CHECK:      got: hello stdin
+// CHECK:      got: hello stdin (11)
 
 import io;
 
 let main() -> i32 {
-  let line_len: i64 = 0;
-  let line = io::read_line(&line_len);
-  io::print("got: ");
-  io::println(line);
-  free(line);
+  case io::read_line() {
+    Line(line, n) => {
+      io::print("got: ");
+      io::print(line);
+      io::print(" (");
+      io::print_i64(n);
+      io::println(")");
+      free(line);
+    },
+    Eof => io::println("eof"),
+  };
   0
 }

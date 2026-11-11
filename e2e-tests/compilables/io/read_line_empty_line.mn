@@ -1,0 +1,19 @@
+// RUN: echo "" | %sammine_jit --file %full | %check %full
+// CHECK: line of length 0
+
+// An empty line is still a line, not end of input.
+
+import io;
+
+let main() -> i32 {
+  case io::read_line() {
+    Line(line, n) => {
+      io::print("line of length ");
+      io::print_i64(n);
+      io::println("");
+      free(line);
+    },
+    Eof => io::println("eof"),
+  };
+  0
+}

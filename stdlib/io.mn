@@ -22,24 +22,42 @@ export let print_bool(b: bool) -> unit { if b { printf("true") } else { printf("
 export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
 export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
-export let read_line(out_len: ptr<i64>) -> 'ptr<char> { sammine_io_read_line(out_len) }
+// What a read produced: a buffer the caller owns and its length, or Eof when
+// there was nothing to read.
+export type ReadResult = Line('ptr<char>, i64) | Eof;
+
+// The runtime signals "nothing to read" with a NULL buffer and a negative
+// length. Freeing NULL does nothing, but it consumes the owned pointer.
+let to_read_result(buf: 'ptr<char>, n: i64) -> ReadResult {
+  if n < 0i64 { free(buf); Eof } else { Line(buf, n) }
+}
+
+export let read_line() -> ReadResult {
+  let n: i64 = 0i64;
+  let buf = sammine_io_read_line(&n);
+  to_read_result(buf, n)
+}
 export let read_i32() -> i32 { let v: i32 = 0; scanf("%d", &v); v }
 export let read_i64() -> i64 { let v: i64 = 0i64; scanf("%ld", &v); v }
 export let read_f64() -> f64 { let v: f64 = 0.0; scanf("%lf", &v); v }
 
 export let open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char> { sammine_io_open(path, mode) }
 export let close(f: 'ptr<char>) -> unit { sammine_io_close(f) }
-// Returns the file handle back with the line, which the caller owns.
-export let file_read_line(f: 'ptr<char>, out_len: ptr<i64>) -> ('ptr<char>, 'ptr<char>) {
-  let line = sammine_io_file_read_line(f, out_len);
-  (f, line)
+// Returns the file handle back with the next line.
+export let file_read_line(f: 'ptr<char>) -> ('ptr<char>, ReadResult) {
+  let n: i64 = 0i64;
+  let buf = sammine_io_file_read_line(f, &n);
+  (f, to_read_result(buf, n))
 }
 export let file_write(f: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char> {
   sammine_io_file_write(f, content, nbytes)
 }
 
-export let read_file(path: ptr<char>, out_len: ptr<i64>) -> 'ptr<char> {
-  sammine_io_read_file(path, out_len)
+// Eof if the file cannot be read.
+export let read_file(path: ptr<char>) -> ReadResult {
+  let n: i64 = 0i64;
+  let buf = sammine_io_read_file(path, &n);
+  to_read_result(buf, n)
 }
 export let write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
   sammine_io_write_file(path, content, nbytes)

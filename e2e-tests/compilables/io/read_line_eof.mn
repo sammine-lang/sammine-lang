@@ -1,0 +1,12 @@
+// RUN: %sammine_jit --file %full < /dev/null | %check %full
+// CHECK: eof
+
+import io;
+
+let main() -> i32 {
+  case io::read_line() {
+    Line(line, n) => free(line),
+    Eof => io::println("eof"),
+  };
+  0
+}
