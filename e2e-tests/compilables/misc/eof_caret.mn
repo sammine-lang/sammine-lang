@@ -1,6 +1,9 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |eof_caret.mn:6:29
-// CHECK:         6|let main() -> i32 { return 0;
-// CHECK-NEXT:     |                             ^
-// CHECK-NEXT:     |                             Expected '}' to close statement block
+// CHECK:          |eof_caret.mn:9:29
+// CHECK:         9|let main() -> i32 { return 0;
+// CHECK-NEXT:     |                             ┬
+// CHECK-NEXT:     |                             ╰─ Expected '}' to close statement block
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 { return 0;

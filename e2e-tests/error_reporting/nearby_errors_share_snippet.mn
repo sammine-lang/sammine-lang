@@ -1,0 +1,39 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |nearby_errors_share_snippet.mn:29:6
+// CHECK-NEXT:   27|
+// CHECK-NEXT:   28|let main() -> i32 {
+// CHECK-NEXT:   29|  let while = 1;
+// CHECK-NEXT:     |      ────┬
+// CHECK-NEXT:     |          ╰─ 'while' is a reserved word and can't be used as a name
+// CHECK-NEXT:   30|  let for = 2;
+// CHECK-NEXT:     |      ──┬
+// CHECK-NEXT:     |        ╰─ 'for' is a reserved word and can't be used as a name
+// CHECK-NEXT:   31|  0
+// CHECK-NEXT:   32|}
+// CHECK-NEXT: --------------------------------------------------------------------------
+// CHECK-NEXT:     |nearby_errors_share_snippet.mn:39:6
+// CHECK-NEXT:   37|
+// CHECK-NEXT:   38|
+// CHECK-NEXT:   39|let f(case: i32) -> i32 { 1 }
+// CHECK-NEXT:     |      ───┬
+// CHECK-NEXT:     |         ╰─ 'case' is a reserved word and can't be used as a name
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+// Errors whose surrounding lines overlap are shown in one code snippet under
+// one file header. An error further away starts its own snippet, with its
+// own file:line:col header.
+
+let main() -> i32 {
+  let while = 1;
+  let for = 2;
+  0
+}
+
+// Far enough away that its context doesn't touch the errors above.
+
+
+
+
+let f(case: i32) -> i32 { 1 }

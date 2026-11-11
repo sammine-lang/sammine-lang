@@ -34,40 +34,23 @@ using namespace AST;
 using namespace sammine_util;
 class Parser : public Reportee {
   Location last_exhaustible_loc = Location::NonPrintable();
-  void imm_error(const std::string &msg,
-                 Location loc = Location::NonPrintable(),
-                 std::source_location src = std::source_location::current()) {
+  // Errors are collected, not printed, so the compiler reports them together
+  // and errors on nearby lines share one code snippet.
+  void
+  report_error(const std::string &msg, Location loc = Location::NonPrintable(),
+               std::source_location src = std::source_location::current()) {
     if (loc == Location::NonPrintable())
       loc = last_exhaustible_loc;
-    if (reporter.has_value()) {
-      reporter->get().immediate_error(msg, loc, src);
-    }
-    this->error_count++;
-  }
-  void imm_diag(const std::string &msg, Location loc = Location::NonPrintable(),
-                std::source_location src = std::source_location::current()) {
-    if (loc == Location::NonPrintable())
-      loc = last_exhaustible_loc;
-    if (reporter.has_value()) {
-      reporter->get().immediate_diag(msg, loc, src);
-    }
-  }
-  void imm_warn(const std::string &msg, Location loc = Location::NonPrintable(),
-                std::source_location src = std::source_location::current()) {
-    if (loc == Location::NonPrintable())
-      loc = last_exhaustible_loc;
-    if (reporter.has_value()) {
-      reporter->get().immediate_warn(msg, loc, src);
-    }
+    add_error(loc, msg, src);
   }
   void emit_if_uncommitted(
       ParserError result, const std::string &msg, Location loc,
       std::source_location src = std::source_location::current()) {
     if (result == NONCOMMITTED)
-      imm_error(msg, loc, src);
+      report_error(msg, loc, src);
   }
 
-  /// expect() + imm_error() in one call. Returns the token on success,
+  /// expect() + report_error() in one call. Returns the token on success,
   /// nullptr (with error reported) on failure.
   auto expectOrError(TokenType tokType, const std::string &msg, Location loc,
                      std::source_location src =
@@ -75,7 +58,7 @@ class Parser : public Reportee {
       -> std::shared_ptr<Token> {
     auto tok = expect(tokType);
     if (!tok)
-      imm_error(msg, loc, src);
+      report_error(msg, loc, src);
     return tok;
   }
 
@@ -118,7 +101,6 @@ private:
   }
 
 public:
-  std::optional<std::reference_wrapper<Reporter>> reporter;
   std::shared_ptr<TokenStream> tokStream;
   std::map<std::string, std::string> alias_to_module;
   [[nodiscard]] auto ParseImport() -> std::optional<AST::ImportDecl>;
@@ -211,15 +193,9 @@ public:
   int pending_deref = 0;
   std::shared_ptr<Token> pending_deref_tok;
 
-  [[nodiscard]] Parser(
-      std::optional<std::reference_wrapper<Reporter>> reporter_ = std::nullopt,
-      const std::string &default_namespace = "")
-      : reporter(reporter_) {}
-  [[nodiscard]] Parser(
-      std::shared_ptr<TokenStream> tokStream_,
-      std::optional<std::reference_wrapper<Reporter>> reporter_ = std::nullopt,
-      const std::string &default_namespace = "")
-      : reporter(reporter_), tokStream(tokStream_) {}
+  [[nodiscard]] Parser(std::shared_ptr<TokenStream> tokStream_,
+                       const std::string &default_namespace = "")
+      : tokStream(tokStream_) {}
 
   [[nodiscard]] auto Parse() -> u<ProgramAST>;
 };

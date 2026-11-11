@@ -1,20 +1,17 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: unterminated_char.mn:20:2
-// CHECK-NEXT:    18|
-// CHECK-NEXT:    19|let main() -> i32 {
-// CHECK-NEXT:    20|  let c: char = 'a;
-// CHECK-NEXT:     |  ^^^
-// CHECK-NEXT:     |  Expected an expression in variable definition
-// CHECK-NEXT:    21|  return 0;
-// CHECK-NEXT:    22|}
-// CHECK-NEXT: unterminated_char.mn:20:16
-// CHECK-NEXT:    18|
-// CHECK-NEXT:    19|let main() -> i32 {
-// CHECK-NEXT:    20|  let c: char = 'a;
-// CHECK-NEXT:     |                ^
-// CHECK-NEXT:     |                Expected '}' to close statement block
-// CHECK-NEXT:    21|  return 0;
-// CHECK-NEXT:    22|}
+// CHECK:          |unterminated_char.mn
+// CHECK-NEXT:   15|
+// CHECK-NEXT:   16|let main() -> i32 {
+// CHECK-NEXT:   17|  let c: char = 'a;
+// CHECK-NEXT:     |  ──┬
+// CHECK-NEXT:     |    ╰─ Expected an expression in variable definition
+// CHECK-NEXT:     |                ┬
+// CHECK-NEXT:     |                ╰─ Expected '}' to close statement block
+// CHECK-NEXT:   18|  return 0;
+// CHECK-NEXT:   19|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 let main() -> i32 {
   let c: char = 'a;

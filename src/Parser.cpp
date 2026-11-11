@@ -95,7 +95,7 @@ auto Parser::ParseImport() -> std::optional<AST::ImportDecl> {
   }
 
   if (!expect(TokSemiColon))
-    imm_error("Missing ';' after import statement", decl.location);
+    report_error("Missing ';' after import statement", decl.location);
   return decl;
 }
 
@@ -124,9 +124,9 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
     return programAST;
   }
   if (!tokStream->isEnd())
-    imm_error("Unexpected token — expected 'let', 'struct', 'type', "
-              "'import', 'reuse', or 'typeclass'",
-              tokStream->currentLocation());
+    report_error("Unexpected token — expected 'let', 'struct', 'type', "
+                 "'import', 'reuse', or 'typeclass'",
+                 tokStream->currentLocation());
   return programAST;
 }
 
@@ -144,8 +144,8 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
       &Parser::ParseReuseDef, &Parser::ParseFuncDef);
 
   if (is_exported && result.uncommitted()) {
-    imm_error("Expected 'let', 'struct', 'type', or 'reuse' after 'export'",
-              export_tok->get_location());
+    report_error("Expected 'let', 'struct', 'type', or 'reuse' after 'export'",
+                 export_tok->get_location());
     result.status = FAILED;
   }
 
@@ -186,13 +186,13 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
                    : fmt::format(
                          "Expected '}}' to close struct '{}' after member '{}'",
                          struct_tok->lexeme, struct_members.back()->name);
-    imm_error(msg, err_loc);
+    report_error(msg, err_loc);
 
     return {nullptr, FAILED};
   }
   if (!expect(TokSemiColon))
-    imm_error("Missing ';' — struct definitions must end with '};'",
-              right_curly->get_location());
+    report_error("Missing ';' — struct definitions must end with '};'",
+                 right_curly->get_location());
 
   auto struct_def = std::make_unique<StructDefAST>(
       struct_pqn.qn, struct_pqn.location, std::move(struct_members));
@@ -245,12 +245,13 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   if (!is_enum) {
     auto type_expr = ParseTypeExpr();
     if (!type_expr) {
-      imm_error("Expected type expression in type alias", id->get_location());
+      report_error("Expected type expression in type alias",
+                   id->get_location());
       return {nullptr, FAILED};
     }
     if (!expect(TokSemiColon))
-      imm_error("Missing ';' — type aliases must end with ';'",
-                id->get_location());
+      report_error("Missing ';' — type aliases must end with ';'",
+                   id->get_location());
     auto alias = std::make_unique<TypeAliasDefAST>(id, std::move(type_expr));
     return {std::move(alias), SUCCESS};
   }
@@ -270,9 +271,9 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
       if (tokStream->peek()->tok_type != TokRightParen) {
         // Negative discriminant: Foo(-1) — not supported
         if (tokStream->peek()->tok_type == TokSUB) {
-          imm_error("Negative discriminant values are not supported in "
-                    "integer-backed enums",
-                    tokStream->peek()->get_location());
+          report_error("Negative discriminant values are not supported in "
+                       "integer-backed enums",
+                       tokStream->peek()->get_location());
           return {nullptr, FAILED};
         }
         // Integer discriminant: Foo(42)
@@ -281,7 +282,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
           size_t pos = 0;
           int64_t val = std::stoll(num_tok->lexeme, &pos);
           if (pos != num_tok->lexeme.size()) {
-            imm_error(
+            report_error(
                 fmt::format("Expected integer discriminant in variant '{}', "
                             "got '{}'",
                             variant.name, num_tok->lexeme),
@@ -294,9 +295,9 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
           auto [types, ok] = comma_separated<TypeExprAST>(
               [&] { return ParseTypeExpr(); }, *this);
           if (!ok || types.empty()) {
-            imm_error(fmt::format("Expected type in payload of variant '{}'",
-                                  variant.name),
-                      variant.location);
+            report_error(fmt::format("Expected type in payload of variant '{}'",
+                                     variant.name),
+                         variant.location);
             return {nullptr, FAILED};
           }
           variant.payload_types = std::move(types);
@@ -316,8 +317,9 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   }
 
   if (!expect(TokSemiColon))
-    imm_error("Missing ';' — enum definitions must end with ';'",
-              variants.empty() ? id->get_location() : variants.back().location);
+    report_error("Missing ';' — enum definitions must end with ';'",
+                 variants.empty() ? id->get_location()
+                                  : variants.back().location);
 
   auto enum_def = std::make_unique<EnumDefAST>(enum_pqn.qn, enum_pqn.location,
                                                std::move(variants));
@@ -375,8 +377,9 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   EXPECT(let, TokenType::TokLet);
   // Migration diagnostic: mut keyword has been removed
   if (tokStream->peek()->tok_type == TokID && tokStream->peek()->lexeme == "mut") {
-    imm_error("The 'mut' keyword has been removed; all bindings are immutable",
-              tokStream->peek()->get_location());
+    report_error(
+        "The 'mut' keyword has been removed; all bindings are immutable",
+        tokStream->peek()->get_location());
     tokStream->consume(); // skip the "mut" identifier
   }
 
@@ -385,16 +388,16 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     std::vector<std::unique_ptr<TypedVarAST>> vars;
     auto [first_var, first_result] = ParseTypedVar();
     if (first_result != SUCCESS) {
-      imm_error("Expected variable name in destructuring pattern",
-                lparen->get_location());
+      report_error("Expected variable name in destructuring pattern",
+                   lparen->get_location());
       return {nullptr, FAILED};
     }
     vars.push_back(std::move(first_var));
     while (expect(TokenType::TokComma)) {
       auto [next_var, next_result] = ParseTypedVar();
       if (next_result != SUCCESS) {
-        imm_error("Expected variable name after ',' in destructuring",
-                  lparen->get_location());
+        report_error("Expected variable name after ',' in destructuring",
+                     lparen->get_location());
         return {nullptr, FAILED};
       }
       vars.push_back(std::move(next_var));
@@ -403,20 +406,20 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
             lparen->get_location());
     auto assign_tok = expect(TokenType::TokASSIGN, true, TokSemiColon);
     if (!assign_tok) {
-      imm_error("Expected '=' after destructuring pattern",
-                lparen->get_location());
+      report_error("Expected '=' after destructuring pattern",
+                   lparen->get_location());
       return {nullptr, FAILED};
     }
     auto [expr, result] = ParseExpr();
     if (result != SUCCESS) {
-      imm_error("Expected expression in destructuring variable definition",
-                let->get_location());
+      report_error("Expected expression in destructuring variable definition",
+                   let->get_location());
       return {nullptr, FAILED};
     }
     auto semicolon = expect(TokenType::TokSemiColon, true);
     if (!semicolon) {
-      imm_error("Missing ';' after variable definition",
-                tokStream->currentLocation());
+      report_error("Missing ';' after variable definition",
+                   tokStream->currentLocation());
       return {nullptr, FAILED};
     }
     return {std::make_unique<VarDefAST>(let, std::move(vars), std::move(expr)),
@@ -431,17 +434,17 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
   }
   auto assign_tok = expect(TokenType::TokASSIGN, true, TokSemiColon);
   if (!assign_tok) {
-    imm_error("Missing '=' in variable definition — syntax is "
-              "'let name: type = value;'",
-              typedVar->get_location());
+    report_error("Missing '=' in variable definition — syntax is "
+                 "'let name: type = value;'",
+                 typedVar->get_location());
     return {nullptr, FAILED};
   }
   auto [expr, result] = ParseExpr();
   if (result != SUCCESS) {
-    imm_error(result == NONCOMMITTED
-                  ? "Expected an expression in variable definition"
-                  : "Incomplete expression in variable definition",
-              let->get_location());
+    report_error(result == NONCOMMITTED
+                     ? "Expected an expression in variable definition"
+                     : "Incomplete expression in variable definition",
+                 let->get_location());
     return {nullptr, FAILED};
   }
   auto semicolon = expect(TokenType::TokSemiColon, true);
@@ -449,8 +452,8 @@ auto Parser::ParseVarDef() -> p<ExprAST> {
     return {std::make_unique<VarDefAST>(let, std::move(typedVar),
                                         std::move(expr)),
             SUCCESS};
-  imm_error("Missing ';' after variable definition",
-            tokStream->currentLocation());
+  report_error("Missing ';' after variable definition",
+               tokStream->currentLocation());
   return {nullptr, FAILED};
 }
 
@@ -477,20 +480,20 @@ auto Parser::parseTypeParams(Location err_loc)
     return {params, false};
   auto first = expect(TokID);
   if (!first) {
-    imm_error("Expected type parameter name after '<'", err_loc);
+    report_error("Expected type parameter name after '<'", err_loc);
     return {params, true};
   }
   params.push_back(first->lexeme);
   while (expect(TokComma)) {
     auto next = expect(TokID);
     if (!next) {
-      imm_error("Expected type parameter name after ','", err_loc);
+      report_error("Expected type parameter name after ','", err_loc);
       return {params, true};
     }
     params.push_back(next->lexeme);
   }
   if (!consumeClosingAngleBracket()) {
-    imm_error("Expected '>' after type parameter list", err_loc);
+    report_error("Expected '>' after type parameter list", err_loc);
     return {params, true};
   }
   return {params, false};
@@ -509,19 +512,19 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
   if (tick || tokStream->peek()->tok_type == TokenType::TokPtr) {
     auto ptr_tok = expect(TokenType::TokPtr);
     if (!ptr_tok) {
-      imm_error("Expected 'ptr' after tick (') for linear pointer type",
-                tick->get_location());
+      report_error("Expected 'ptr' after tick (') for linear pointer type",
+                   tick->get_location());
       return nullptr;
     }
     EXPECT_ERROR_OF(_lt, TokLESS, "Expected '<' after 'ptr'",
                     ptr_tok->get_location(), nullptr);
     auto inner = ParseTypeExpr();
     if (!inner) {
-      imm_error("Expected type inside 'ptr<...>'", ptr_tok->get_location());
+      report_error("Expected type inside 'ptr<...>'", ptr_tok->get_location());
       return nullptr;
     }
     if (!consumeClosingAngleBracket()) {
-      imm_error("Expected '>' to close 'ptr<...>'", ptr_tok->get_location());
+      report_error("Expected '>' to close 'ptr<...>'", ptr_tok->get_location());
       return nullptr;
     }
     bool is_linear = tick != nullptr;
@@ -540,8 +543,8 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
                     lbracket->get_location(), nullptr);
     auto elem = ParseTypeExpr();
     if (!elem) {
-      imm_error("Expected element type after '[SIZE]'",
-                lbracket->get_location());
+      report_error("Expected element type after '[SIZE]'",
+                   lbracket->get_location());
       return nullptr;
     }
     auto result = std::make_unique<ArrayTypeExprAST>(std::move(elem), arr_size);
@@ -555,8 +558,8 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
       auto [parsed, ok] =
           comma_separated<TypeExprAST>([&] { return ParseTypeExpr(); }, *this);
       if (!ok || parsed.empty()) {
-        imm_error("Expected type in parenthesized type expression",
-                  lparen->get_location());
+        report_error("Expected type in parenthesized type expression",
+                     lparen->get_location());
         return nullptr;
       }
       types = std::move(parsed);
@@ -567,8 +570,8 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
     if (expect(TokenType::TokArrow)) {
       auto retType = ParseTypeExpr();
       if (!retType) {
-        imm_error("Expected return type after '->' in function type",
-                  lparen->get_location());
+        report_error("Expected return type after '->' in function type",
+                     lparen->get_location());
         return nullptr;
       }
       auto result = std::make_unique<FunctionTypeExprAST>(std::move(types),
@@ -583,8 +586,8 @@ auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
       return result;
     }
     // Single element in parens with no arrow is not valid as a type
-    imm_error("Expected '->' for function type or ',' for tuple type",
-              lparen->get_location());
+    report_error("Expected '->' for function type or ',' for tuple type",
+                 lparen->get_location());
     return nullptr;
   }
   if (auto id = expect(TokenType::TokID)) {
@@ -615,9 +618,10 @@ void Parser::reject_keyword_name() {
   auto tok = tokStream->peek();
   if (!is_keyword(*tok))
     return;
-  imm_error(fmt::format("'{}' is a reserved word and can't be used as a name",
-                        tok->lexeme),
-            tok->get_location());
+  report_error(
+      fmt::format("'{}' is a reserved word and can't be used as a name",
+                  tok->lexeme),
+      tok->get_location());
   tok->tok_type = TokID;
 }
 
@@ -625,8 +629,9 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
   // Migration diagnostic: mut keyword has been removed
   bool saw_mut = false;
   if (tokStream->peek()->tok_type == TokID && tokStream->peek()->lexeme == "mut") {
-    imm_error("The 'mut' keyword has been removed; all bindings are immutable",
-              tokStream->peek()->get_location());
+    report_error(
+        "The 'mut' keyword has been removed; all bindings are immutable",
+        tokStream->peek()->get_location());
     tokStream->consume(); // skip the "mut" identifier
     saw_mut = true;
   }
@@ -644,7 +649,7 @@ auto Parser::ParseTypedVar() -> p<TypedVarAST> {
     return {std::make_unique<TypedVarAST>(name), SUCCESS};
   auto type_expr = ParseTypeExprTopLevel();
   if (!type_expr) {
-    imm_error("Expected type name after token `:`", colon->get_location());
+    report_error("Expected type name after token `:`", colon->get_location());
     return {nullptr, FAILED};
   }
   return {std::make_unique<TypedVarAST>(name, std::move(type_expr)),
@@ -658,8 +663,8 @@ auto Parser::ParseUnaryPrefixExpr(TokenType opTok, const std::string &opStr)
   if (result == SUCCESS)
     return {std::make_unique<NodeT>(tok, std::move(operand)), SUCCESS};
   if (result == NONCOMMITTED) {
-    imm_error(fmt::format("Expected expression after '{}'", opStr),
-              tok->get_location());
+    report_error(fmt::format("Expected expression after '{}'", opStr),
+                 tok->get_location());
     return {nullptr, FAILED};
   }
   return {nullptr, FAILED};
@@ -685,7 +690,7 @@ auto Parser::ParseDerefExpr() -> p<ExprAST> {
     return {std::make_unique<DerefExprAST>(star_tok, std::move(operand)),
             SUCCESS};
   if (result == NONCOMMITTED) {
-    imm_error("Expected expression after '*'", star_tok->get_location());
+    report_error("Expected expression after '*'", star_tok->get_location());
     return {nullptr, FAILED};
   }
   return {nullptr, FAILED};
@@ -699,8 +704,8 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
           fmt::format("Expected '(' after '{}'", name), kw_tok->get_location());
   auto [operand, result] = ParseExpr();
   if (result == NONCOMMITTED) {
-    imm_error(fmt::format("Expected expression inside {}()", name),
-              kw_tok->get_location());
+    report_error(fmt::format("Expected expression inside {}()", name),
+                 kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (result != SUCCESS) {
@@ -717,11 +722,11 @@ auto Parser::ParseAllocExpr() -> p<ExprAST> {
 
   auto type_arg = ParseTypeExpr();
   if (!type_arg) {
-    imm_error("Expected type in alloc<...>", kw_tok->get_location());
+    report_error("Expected type in alloc<...>", kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (!consumeClosingAngleBracket()) {
-    imm_error("Expected '>' to close alloc<...>", kw_tok->get_location());
+    report_error("Expected '>' to close alloc<...>", kw_tok->get_location());
     return {nullptr, FAILED};
   }
 
@@ -730,7 +735,8 @@ auto Parser::ParseAllocExpr() -> p<ExprAST> {
           kw_tok->get_location());
   auto [operand, result] = ParseExpr();
   if (result == NONCOMMITTED) {
-    imm_error("Expected expression inside alloc<T>()", kw_tok->get_location());
+    report_error("Expected expression inside alloc<T>()",
+                 kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (result != SUCCESS)
@@ -747,8 +753,8 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
   std::vector<u<ExprAST>> elements;
   auto [first, first_result] = ParseExpr();
   if (first_result == NONCOMMITTED) {
-    imm_error("Expected at least one element in array literal",
-              left_bracket->get_location());
+    report_error("Expected at least one element in array literal",
+                 left_bracket->get_location());
     return {nullptr, FAILED};
   }
   if (first_result != SUCCESS) {
@@ -759,8 +765,8 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
     tokStream->consume();
     auto [end_expr, end_result] = ParseExpr();
     if (end_result != SUCCESS) {
-      imm_error("Expected expression after '...' in range",
-                left_bracket->get_location());
+      report_error("Expected expression after '...' in range",
+                   left_bracket->get_location());
       return {nullptr, FAILED};
     }
     REQUIRE(_rb, TokRightBracket, "Expected ']' to close range expression",
@@ -781,8 +787,8 @@ auto Parser::ParseArrayLiteralExpr() -> p<ExprAST> {
       continue;
     }
     if (elem_result == NONCOMMITTED)
-      imm_error("Expected expression after ',' in array literal",
-                left_bracket->get_location());
+      report_error("Expected expression after ',' in array literal",
+                   left_bracket->get_location());
     return {nullptr, FAILED};
   }
   REQUIRE(_rb, TokRightBracket, "Expected ']' to close array literal",
@@ -849,7 +855,7 @@ auto Parser::parsePostfixOps(u<ExprAST> expr) -> p<ExprAST> {
     if (auto lb = expect(TokenType::TokLeftBracket)) {
       auto [idx, idx_result] = ParseExpr();
       if (idx_result == NONCOMMITTED) {
-        imm_error("Expected expression inside '[]'", lb->get_location());
+        report_error("Expected expression inside '[]'", lb->get_location());
         return {nullptr, FAILED};
       }
       if (idx_result != SUCCESS) {
@@ -864,8 +870,8 @@ auto Parser::parsePostfixOps(u<ExprAST> expr) -> p<ExprAST> {
       if (!field_tok)
         field_tok = expect(TokNum);
       if (!field_tok) {
-        imm_error("Expected field name or tuple index after '.'",
-                  dot->get_location());
+        report_error("Expected field name or tuple index after '.'",
+                     dot->get_location());
         return {nullptr, FAILED};
       }
       expr = std::make_unique<FieldAccessExprAST>(std::move(expr), field_tok);
@@ -907,8 +913,8 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
     // Parse the RHS as a primary
     auto [RHS, right_result] = ParsePrimaryExpr();
     if (right_result != SUCCESS) {
-      imm_error("Expected right-hand side expression after binary operator",
-                binOpToken->get_location());
+      report_error("Expected right-hand side expression after binary operator",
+                   binOpToken->get_location());
       return {nullptr, FAILED};
     }
 
@@ -920,8 +926,8 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
       RHS = std::move(nested.node);
       right_result = nested.status;
       if (right_result != SUCCESS) {
-        imm_error("Incomplete right-hand expression after binary operator",
-                  binOpToken->get_location());
+        report_error("Incomplete right-hand expression after binary operator",
+                     binOpToken->get_location());
         return {nullptr, right_result};
       }
     }
@@ -943,8 +949,8 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
         qn = sammine_util::QualifiedName::local(var->variableName);
         qn_loc = var->get_location();
       } else {
-        imm_error("Right-hand side of |> must be a function name or call",
-                  binOpToken->get_location());
+        report_error("Right-hand side of |> must be a function name or call",
+                     binOpToken->get_location());
         return {nullptr, FAILED};
       }
 
@@ -989,14 +995,14 @@ auto Parser::ParseStructLiteralExpr(
          tokStream->peek()->tok_type != TokEOF) {
     auto field_id = expect(TokID);
     if (!field_id) {
-      imm_error("Expected field name in struct literal",
-                tokStream->currentLocation());
+      report_error("Expected field name in struct literal",
+                   tokStream->currentLocation());
       had_error = true;
       break;
     }
     auto colon = expect(TokColon);
     if (!colon) {
-      imm_error(
+      report_error(
           fmt::format("Expected ':' after field name '{}'", field_id->lexeme),
           field_id->get_location());
       had_error = true;
@@ -1004,7 +1010,7 @@ auto Parser::ParseStructLiteralExpr(
     }
     auto [val, val_result] = ParseExpr();
     if (val_result == NONCOMMITTED) {
-      imm_error(
+      report_error(
           fmt::format("Expected expression for field '{}'", field_id->lexeme),
           colon->get_location());
       had_error = true;
@@ -1178,13 +1184,13 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
       pattern.location = minus_tok->get_location() | num_tok->get_location();
       return pattern;
     }
-    imm_error("Expected number after '-' in case pattern",
-              minus_tok->get_location());
+    report_error("Expected number after '-' in case pattern",
+                 minus_tok->get_location());
     return std::nullopt;
   }
 
   if (pat_tok->tok_type != TokID) {
-    imm_error("Expected pattern in case arm", pat_tok->get_location());
+    report_error("Expected pattern in case arm", pat_tok->get_location());
     return std::nullopt;
   }
 
@@ -1197,8 +1203,8 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
     auto [type_args, ok] =
         comma_separated<TypeExprAST>([&] { return ParseTypeExpr(); }, *this);
     if (!ok || type_args.empty() || !consumeClosingAngleBracket()) {
-      imm_error("Expected type arguments in generic enum pattern",
-                prefix_tok->get_location());
+      report_error("Expected type arguments in generic enum pattern",
+                   prefix_tok->get_location());
       return std::nullopt;
     }
     // Build type_args string separately from enum_prefix
@@ -1324,8 +1330,8 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
           "Expected '}' to close case expression", case_tok->get_location());
 
   if (arms.empty()) {
-    imm_error("Case expression must have at least one arm",
-              case_tok->get_location());
+    report_error("Case expression must have at least one arm",
+                 case_tok->get_location());
   }
 
   return {std::make_unique<CaseExprAST>(case_tok, std::move(scrutinee),
@@ -1429,7 +1435,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   auto return_type_expr = ParseTypeExprTopLevel();
   bool has_return_type = return_type_expr != nullptr;
   if (!has_return_type)
-    imm_error("Expected a return type after '->'", arrow->get_location());
+    report_error("Expected a return type after '->'", arrow->get_location());
   auto proto = std::make_unique<PrototypeAST>(proto_pqn.qn, proto_pqn.location,
                                               std::move(return_type_expr),
                                               std::move(params));
@@ -1442,7 +1448,7 @@ auto Parser::ParsePrototypeWithSemi(const std::string &semi_msg)
     -> p<PrototypeAST> {
   auto result = ParsePrototype();
   if (result.ok() && !expect(TokSemiColon))
-    imm_error(semi_msg, tokStream->currentLocation());
+    report_error(semi_msg, tokStream->currentLocation());
   return result;
 }
 
@@ -1466,9 +1472,10 @@ auto Parser::ParseBlock() -> p<BlockAST> {
         blockAST->Statements.back()->is_statement = false;
         break;
       }
-      imm_error(fmt::format("Missing ';' after expression — found '{}' instead",
-                            tok->lexeme),
-                tok->get_location());
+      report_error(
+          fmt::format("Missing ';' after expression — found '{}' instead",
+                      tok->lexeme),
+          tok->get_location());
       blockAST->Statements.push_back(std::move(a));
       tokStream->exhaust_until(TokSemiColon);
       continue;
@@ -1515,7 +1522,7 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
 
   auto [expr, result] = ParseExpr(); // Parse inner expression
   if (result == FAILED) {
-    imm_error("Incomplete expression after '('", tok_left->get_location());
+    report_error("Incomplete expression after '('", tok_left->get_location());
     return {std::unique_ptr<UnitExprAST>(), FAILED};
   }
 
@@ -1526,8 +1533,8 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
     while (expect(TokComma)) {
       auto [next_expr, next_result] = ParseExpr();
       if (next_result != SUCCESS) {
-        imm_error("Expected expression after ',' in tuple",
-                  tok_left->get_location());
+        report_error("Expected expression after ',' in tuple",
+                     tok_left->get_location());
         return {nullptr, FAILED};
       }
       elements.push_back(std::move(next_expr));
@@ -1560,7 +1567,7 @@ auto Parser::ParseParams() -> ParamsResult {
     tokStream->consume();
     auto rightParen = expect(TokRightParen, true);
     if (!rightParen) {
-      imm_error("Expected ')' after '...'", leftParen->get_location());
+      report_error("Expected ')' after '...'", leftParen->get_location());
       return {{}, FAILED, true};
     }
     return {{}, SUCCESS, true};
@@ -1580,7 +1587,7 @@ auto Parser::ParseParams() -> ParamsResult {
 
   auto rightParen = expect(TokRightParen, true);
   if (!rightParen) {
-    imm_error("Expected ')' after parameters", leftParen->get_location());
+    report_error("Expected ')' after parameters", leftParen->get_location());
     return {std::move(vec), FAILED, var_arg};
   }
   return {std::move(vec), parse_error ? FAILED : SUCCESS, var_arg};
@@ -1596,7 +1603,7 @@ auto Parser::ParseArguments() -> ListResult<ExprAST> {
 
   auto rightParen = expect(TokRightParen, true);
   if (!rightParen) {
-    imm_error("Expected ')' after arguments", leftParen->get_location());
+    report_error("Expected ')' after arguments", leftParen->get_location());
     return {std::move(vec), FAILED};
   }
   return {std::move(vec), parse_error ? FAILED : SUCCESS};
@@ -1610,7 +1617,8 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
   auto [type_params, tp_error] = parseTypeParams(name_tok->get_location());
   if (tp_error || type_params.empty()) {
     if (type_params.empty())
-      imm_error("Expected '<' after type class name", name_tok->get_location());
+      report_error("Expected '<' after type class name",
+                   name_tok->get_location());
     return {nullptr, FAILED};
   }
   REQUIRE(_lc, TokLeftCurly, "Expected '{' after type class declaration",
@@ -1638,12 +1646,12 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   auto [type_exprs, te_ok] =
       comma_separated<TypeExprAST>([&] { return ParseTypeExpr(); }, *this);
   if (!te_ok || type_exprs.empty()) {
-    imm_error("Expected type in instance declaration", kw->get_location());
+    report_error("Expected type in instance declaration", kw->get_location());
     return {nullptr, FAILED};
   }
 
   if (!consumeClosingAngleBracket()) {
-    imm_error("Expected '>' to close instance type", kw->get_location());
+    report_error("Expected '>' to close instance type", kw->get_location());
     return {nullptr, FAILED};
   }
   REQUIRE(_lc, TokLeftCurly,
@@ -1673,8 +1681,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
 
   // TODO: support generics for kernel functions
   if (proto->is_generic()) {
-    imm_error("Generic kernel functions are not yet supported",
-              proto->get_location());
+    report_error("Generic kernel functions are not yet supported",
+                 proto->get_location());
     return {nullptr, FAILED};
   }
 
@@ -1704,8 +1712,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
       // Parse lambda: (params) -> RetType { body }
       auto params_result = ParseParams();
       if (params_result.status != SUCCESS) {
-        imm_error("Expected lambda parameter list in 'map'",
-                  map_tok->get_location());
+        report_error("Expected lambda parameter list in 'map'",
+                     map_tok->get_location());
         return {nullptr, FAILED};
       }
 
@@ -1715,8 +1723,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
 
       auto ret_type = ParseTypeExprTopLevel();
       if (!ret_type) {
-        imm_error("Expected return type after '->' in 'map' lambda",
-                  map_tok->get_location());
+        report_error("Expected return type after '->' in 'map' lambda",
+                     map_tok->get_location());
         return {nullptr, FAILED};
       }
 
@@ -1726,8 +1734,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
 
       auto [block, block_status] = ParseBlock();
       if (block_status != SUCCESS) {
-        imm_error("Expected block body for 'map' lambda",
-                  map_tok->get_location());
+        report_error("Expected block body for 'map' lambda",
+                     map_tok->get_location());
         return {nullptr, FAILED};
       }
       REQUIRE(_map_rp, TokRightParen, "Expected ')' to close 'map'",
@@ -1756,8 +1764,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
       auto op_type = tokStream->peek()->tok_type;
       if (op_type != TokADD && op_type != TokSUB && op_type != TokMUL &&
           op_type != TokDIV) {
-        imm_error("Expected operator (+, -, *, /) in 'reduce'",
-                  tokStream->currentLocation());
+        report_error("Expected operator (+, -, *, /) in 'reduce'",
+                     tokStream->currentLocation());
         return {nullptr, FAILED};
       }
       auto op_tok = tokStream->consume();
@@ -1767,8 +1775,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
 
       auto [identity, identity_status] = ParseExpr();
       if (identity_status != SUCCESS) {
-        imm_error("Expected identity value expression in 'reduce'",
-                  op_tok->get_location());
+        report_error("Expected identity value expression in 'reduce'",
+                     op_tok->get_location());
         return {nullptr, FAILED};
       }
 
@@ -1778,8 +1786,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
       exprs.push_back(std::make_unique<KernelReduceExprAST>(
           reduce_tok, std::move(input_name), op_tok, std::move(identity)));
     } else {
-      imm_error("Expected expression inside kernel body",
-                tokStream->currentLocation());
+      report_error("Expected expression inside kernel body",
+                   tokStream->currentLocation());
       tokStream->exhaust_until(TokRightCurly);
       break;
     }
@@ -1905,9 +1913,9 @@ auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,
   } else {
     // TODO: Add error reporting after this point.
     if (!message.empty() && tokStream->peek()->tok_type != TokEOF) {
-      imm_error(message, tokStream->currentLocation());
+      report_error(message, tokStream->currentLocation());
     } else if (!message.empty()) {
-      imm_error(message, currentToken->get_location());
+      report_error(message, currentToken->get_location());
     }
     if (exhausts) {
       last_exhaustible_loc = currentToken->get_location();

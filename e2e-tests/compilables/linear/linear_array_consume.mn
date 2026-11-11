@@ -1,12 +1,12 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |linear_array_consume.mn
+// CHECK:          |linear_array_consume.mn:21:2
 // CHECK-NEXT:   19|let main() -> i32 {
 // CHECK-NEXT:   20|  let p = alloc<i32>(1);
 // CHECK-NEXT:   21|  let a : [1]'ptr<i32> = [p];
-// CHECK-NEXT:     |                          ┬
-// CHECK-NEXT:     |                          ╰─ 'p' was moved into array here
 // CHECK-NEXT:     |  ────────────────────────┬
 // CHECK-NEXT:     |                          ╰─ Linear variable 'a[*]' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                          ┬
+// CHECK-NEXT:     |                          ╰─ 'p' was moved into array here
 // CHECK-NEXT:   22|  free(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into array previously

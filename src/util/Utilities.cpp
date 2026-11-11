@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <map>
+#include <optional>
 #include <string_view>
 namespace sammine_util {
 auto get_string_from_file(Reportee &reportee, const std::string &file_name,
@@ -320,10 +321,15 @@ static void render_clusters(const std::vector<Cluster> &clusters,
     first = false;
 
     std::map<int64_t, std::vector<LineAnnotation>> line_anns;
+    // Where the cluster's first error is, for its header.
+    std::optional<std::pair<int64_t, int64_t>> first_row_col;
 
     for (size_t gi : cluster.group_indices) {
       const auto &g = groups[gi];
       Locator locator(g.loc.as_pair(), context_radius, diag_data);
+      auto row_col = locator.get_row_col();
+      if (!first_row_col || row_col < *first_row_col)
+        first_row_col = row_col;
       int64_t row, cs, ce;
       if (locator.is_on_singular_line()) {
         std::tie(row, cs, ce) = locator.get_start_end_of_singular_line_token();
@@ -345,16 +351,16 @@ static void render_clusters(const std::vector<Cluster> &clusters,
       line_anns[row].push_back({cs, ce, std::move(msgs), g.kind});
     }
 
+    // Errors on one line point at it left to right.
+    for (auto &[row, anns] : line_anns)
+      std::stable_sort(anns.begin(), anns.end(),
+                       [](const LineAnnotation &a, const LineAnnotation &b) {
+                         return a.col_start < b.col_start;
+                       });
+
     Reporter::print_fmt(Reporter::LINE_COLOR, "    |");
-    if (cluster.group_indices.size() == 1) {
-      Locator locator(groups[cluster.group_indices[0]].loc.as_pair(),
-                      context_radius, diag_data);
-      auto [row, col] = locator.get_row_col();
-      Reporter::print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", diag_file,
-                          row + 1, col);
-    } else {
-      Reporter::print_fmt(fmt::terminal_color::blue, "{}\n", diag_file);
-    }
+    Reporter::print_fmt(fmt::terminal_color::blue, "{}:{}:{}\n", diag_file,
+                        first_row_col->first + 1, first_row_col->second);
 
     for (int64_t i = cluster.line_start; i <= cluster.line_end; i++) {
       Reporter::print_fmt(Reporter::LINE_COLOR, "{:>4}|", i + 1);

@@ -120,7 +120,7 @@ void Compiler::parse() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start parsing stage...\n");
   });
-  Parser psr = Parser(tokStream, reporter, mod_name);
+  Parser psr = Parser(tokStream, mod_name);
 
   auto result = psr.Parse();
   programAST = std::move(result);

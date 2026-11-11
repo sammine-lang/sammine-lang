@@ -1,11 +1,14 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: ptr_extra_close.mn:10:6
-// CHECK:         9|let main() -> i32 {
-// CHECK-NEXT:    10|  let p : ptr<i32>> = alloc<i32>(1);
-// CHECK-NEXT:     |      ^^^^^^^
-// CHECK-NEXT:     |      Missing '=' in variable definition — syntax is 'let name: type = value;'
-// CHECK-NEXT:    11|  return 0;
-// CHECK-NEXT:    12|}
+// CHECK:          |ptr_extra_close.mn:13:6
+// CHECK:        12|let main() -> i32 {
+// CHECK-NEXT:   13|  let p : ptr<i32>> = alloc<i32>(1);
+// CHECK-NEXT:     |      ──────┬
+// CHECK-NEXT:     |            ╰─ Missing '=' in variable definition — syntax is 'let name: type = value;'
+// CHECK-NEXT:   14|  return 0;
+// CHECK-NEXT:   15|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   let p : ptr<i32>> = alloc<i32>(1);
   return 0;

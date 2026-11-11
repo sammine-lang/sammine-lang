@@ -1,11 +1,14 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: int_enum_negative.mn:10:13
-// CHECK:         9|
-// CHECK-NEXT:    10|type Foo = A(-1) | B(2);
-// CHECK-NEXT:     |             ^
-// CHECK-NEXT:     |             Negative discriminant values are not supported in integer-backed enums
-// CHECK-NEXT:    11|
-// CHECK-NEXT:    12|let main() -> i32 {
+// CHECK:          |int_enum_negative.mn:13:13
+// CHECK:        12|
+// CHECK-NEXT:   13|type Foo = A(-1) | B(2);
+// CHECK-NEXT:     |             ┬
+// CHECK-NEXT:     |             ╰─ Negative discriminant values are not supported in integer-backed enums
+// CHECK-NEXT:   14|
+// CHECK-NEXT:   15|let main() -> i32 {
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 type Foo = A(-1) | B(2);
 

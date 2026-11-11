@@ -1,11 +1,14 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: enum_discriminant_payload.mn:10:16
-// CHECK:         9|
-// CHECK-NEXT:    10|type Bad: i32 = Foo(1, i32);
-// CHECK-NEXT:     |                ^^^
-// CHECK-NEXT:     |                Expected ')' to close payload of variant 'Foo'
-// CHECK-NEXT:    11|
-// CHECK-NEXT:    12|let main() -> i32 {
+// CHECK:          |enum_discriminant_payload.mn:13:16
+// CHECK:        12|
+// CHECK-NEXT:   13|type Bad: i32 = Foo(1, i32);
+// CHECK-NEXT:     |                ──┬
+// CHECK-NEXT:     |                  ╰─ Expected ')' to close payload of variant 'Foo'
+// CHECK-NEXT:   14|
+// CHECK-NEXT:   15|let main() -> i32 {
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 type Bad: i32 = Foo(1, i32);
 

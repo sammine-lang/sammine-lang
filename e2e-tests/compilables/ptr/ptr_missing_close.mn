@@ -1,25 +1,22 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: ptr_missing_close.mn:24:10
-// CHECK:         23|let main() -> i32 {
-// CHECK-NEXT:    24|  let p : ptr<i32 = alloc<i32>(1);
-// CHECK-NEXT:     |          ^^^
-// CHECK-NEXT:     |          Expected '>' to close 'ptr<...>'
-// CHECK-NEXT:    25|  return 0;
-// CHECK-NEXT:    26|}
-// CHECK-NEXT: ptr_missing_close.mn:24:8
-// CHECK:         23|let main() -> i32 {
-// CHECK-NEXT:    24|  let p : ptr<i32 = alloc<i32>(1);
-// CHECK-NEXT:     |        ^
-// CHECK-NEXT:     |        Expected type name after token `:`
-// CHECK-NEXT:    25|  return 0;
-// CHECK-NEXT:    26|}
-// CHECK-NEXT: ptr_missing_close.mn:24:18
-// CHECK:         23|let main() -> i32 {
-// CHECK-NEXT:    24|  let p : ptr<i32 = alloc<i32>(1);
-// CHECK-NEXT:     |                  ^
-// CHECK-NEXT:     |                  Expected '}' to close statement block
-// CHECK-NEXT:    25|  return 0;
-// CHECK-NEXT:    26|}
+// CHECK:          |ptr_missing_close.mn:21:8
+// CHECK-NEXT:   19|
+// CHECK-NEXT:   20|let main() -> i32 {
+// CHECK-NEXT:   21|  let p : ptr<i32 = alloc<i32>(1);
+// CHECK-NEXT:     |        ┬
+// CHECK-NEXT:     |        ╰─ Expected type name after token `:`
+// CHECK-NEXT:     |          ──┬
+// CHECK-NEXT:     |            ╰─ Expected '>' to close 'ptr<...>'
+// CHECK-NEXT:     |                  ┬
+// CHECK-NEXT:     |                  ╰─ Expected '}' to close statement block
+// CHECK-NEXT:   22|  return 0;
+// CHECK-NEXT:   23|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+// `ptr<i32` is missing its closing '>'.
+
 let main() -> i32 {
   let p : ptr<i32 = alloc<i32>(1);
   return 0;
