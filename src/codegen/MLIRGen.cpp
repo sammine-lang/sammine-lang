@@ -475,6 +475,8 @@ mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
     return emitAddrOfExpr(llvm::cast<AST::AddrOfExprAST>(ast));
   case NK::AllocExprAST:
     return emitAllocExpr(llvm::cast<AST::AllocExprAST>(ast));
+  case NK::CastExprAST:
+    return emitCastExpr(llvm::cast<AST::CastExprAST>(ast));
   case NK::FreeExprAST:
     return emitFreeExpr(llvm::cast<AST::FreeExprAST>(ast));
   case NK::StructLiteralExprAST:

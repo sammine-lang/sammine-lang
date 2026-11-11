@@ -40,8 +40,36 @@ inline std::optional<TokenType> operator_of_class(std::string_view class_name) {
   return std::nullopt;
 }
 
+/// The typeclass `x as T` goes through, as `Convert<From, T>`.
+inline constexpr std::string_view kConvertClass = "Convert";
+
+/// True if `Convert<from, to>` is built in: between any two number types,
+/// and between char and the integer types. Like C, a conversion to a narrower
+/// integer type keeps the low bits. A float to an integer drops the fraction
+/// and saturates: NaN gives 0, and a value out of range the type's min or max.
+inline bool is_builtin_conversion(const Type &from, const Type &to) {
+  auto is_number = [](const Type &t) {
+    return t.is_numeric() && !t.is_polymorphic_numeric();
+  };
+  auto is_int = [](const Type &t) {
+    return t.is_integer() && !t.is_polymorphic_numeric();
+  };
+  bool from_char = from.type_kind == TypeKind::Char;
+  bool to_char = to.type_kind == TypeKind::Char;
+  if (from_char && to_char)
+    return true;
+  if (from_char)
+    return is_int(to);
+  if (to_char)
+    return is_int(from);
+  return is_number(from) && is_number(to);
+}
+
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
+  if (key.name == kConvertClass)
+    return key.type_args.size() == 2 &&
+           is_builtin_conversion(key.type_args[0], key.type_args[1]);
   auto op = operator_of_class(key.name);
   if (!op || key.type_args.size() != 1)
     return false;

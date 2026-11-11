@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: as_no_instance.mn:10:15
+// CHECK-NEXT:    8|
+// CHECK-NEXT:    9|let main() -> i32 {
+// CHECK-NEXT:   10|  let x: f64 = 'a' as f64;
+// CHECK-NEXT:     |               ─────────┬
+// CHECK-NEXT:     |                        ╰─ Cannot convert char to f64 with 'as': no instance of Convert<char, f64>
+
+let main() -> i32 {
+  let x: f64 = 'a' as f64;
+  return 0;
+}

@@ -66,6 +66,7 @@ public:
   virtual void visit(AddrOfExprAST *ast) override;
   virtual void visit(AllocExprAST *ast) override;
   virtual void visit(FreeExprAST *ast) override;
+  virtual void visit(CastExprAST *ast) override;
   virtual void visit(ArrayLiteralExprAST *ast) override;
   virtual void visit(RangeExprAST *ast) override;
   virtual void visit(IndexExprAST *ast) override;
@@ -344,6 +345,12 @@ void AstPrinterVisitor::visit(AddrOfExprAST *ast) {
 }
 
 void AstPrinterVisitor::visit(AllocExprAST *ast) {
+  generic_preprintln(ast);
+  safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  generic_postprint();
+}
+
+void AstPrinterVisitor::visit(CastExprAST *ast) {
   generic_preprintln(ast);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
   generic_postprint();

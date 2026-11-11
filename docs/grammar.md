@@ -106,9 +106,11 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 
 ## Binary Expressions (Precedence Climbing)
 
-**binary_expr** ::= **unary_expr** (**binop** **unary_expr**)*
+**binary_expr** ::= **cast_expr** (**binop** **cast_expr**)*
 
-Operator precedence (low to high):
+**cast_expr** ::= **unary_expr** (`as` **type**)*
+
+Operator precedence (low to high). `as` binds tighter than all of these:
 
 | Prec | Operators | Description |
 |------|-----------|-------------|

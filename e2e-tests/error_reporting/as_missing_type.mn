@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: as_missing_type.mn:12:2
+// CHECK-NEXT:   10|
+// CHECK-NEXT:   11|let main() -> i32 {
+// CHECK-NEXT:   12|  let x = 1 as;
+// CHECK-NEXT:     |  ──┬
+// CHECK-NEXT:     |    ╰─ Incomplete expression in variable definition
+// CHECK-NEXT:     |            ─┬
+// CHECK-NEXT:     |             ╰─ Expected a type after 'as'
+
+let main() -> i32 {
+  let x = 1 as;
+  return 0;
+}

@@ -1,0 +1,9 @@
+// `as` inside a module.
+export let percent(part: i32, whole: i32) -> f64 {
+  part as f64 * 100.0 / whole as f64
+}
+
+// A generic function, instantiated in the importing module.
+export let widened<T>(x: T) -> i64 {
+  x as i64
+}

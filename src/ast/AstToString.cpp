@@ -218,6 +218,10 @@ std::string AllocExprAST::to_string() const {
   return "alloc<" + type_arg->to_string() + ">(" + operand->to_string() + ")";
 }
 
+std::string CastExprAST::to_string() const {
+  return operand->to_string() + " as " + target_type->to_string();
+}
+
 std::string FreeExprAST::to_string() const {
   return "free(" + operand->to_string() + ")";
 }

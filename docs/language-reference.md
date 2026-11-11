@@ -291,9 +291,47 @@ std::printf("%d\n", -x);        // -5
 std::printf("%d\n", -(-x));     // 5
 ```
 
+### Conversions with `as`
+
+`x as T` converts `x` to the type `T`:
+
+```sammine
+let letter_value(c: char) -> i32 {
+  c as i32 - 'A' as i32 + 1          // 'C' gives 3
+}
+
+let average(total: i64, count: i32) -> f64 {
+  total as f64 / count as f64
+}
+```
+
+Between the number types, and between `char` and the integer types, the conversion is built in:
+
+- **Widening an integer** keeps its value: a signed type, or `char`, extends its sign, and an unsigned type fills with zeros.
+- **Narrowing an integer** keeps the low bits, like C: `5000000000i64 as i32` is `705032704`.
+- **Float to integer** drops the fraction and saturates: `2.9 as i32` is `2`, NaN gives `0`, and a value out of range gives the type's min or max.
+- **Integer to float, and float to float,** round to the nearest value the target holds.
+
+A literal takes the type it is converted to when it can, so `5000000000 as i64` keeps its value. `as` binds tighter than every binary operator and looser than the prefix operators, so `a * b as i64` is `a * (b as i64)` and `-x as u32` is `(-x) as u32`.
+
+`as` goes through the `Convert<From, To>` typeclass, so any other pair converts through a user's instance:
+
+```sammine
+struct Celsius { val: f64, };
+struct Fahrenheit { val: f64, };
+
+instance Convert<Celsius, Fahrenheit> {
+  let Convert(x: Celsius) -> Fahrenheit {
+    Fahrenheit { val: x.val * 9.0 / 5.0 + 32.0 }
+  }
+}
+
+let f = Celsius { val: 100.0 } as Fahrenheit;   // 212
+```
+
 ### Operator Precedence
 
-From lowest to highest precedence:
+From lowest to highest precedence. `as` binds tighter than all of these.
 
 | Prec | Operators | Description |
 |------|-----------|-------------|
@@ -636,6 +674,8 @@ std::printf("%d %d\n", v3.x, v3.y);     // 30 40
 
 The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
 
+**`Convert<From, To>`** -- conversion, used by `as` (see [Conversions with `as`](#conversions-with-as)). It is built in between the number types, and between `char` and the integer types, so `Convert<char, i32>('a')` is `'a' as i32`.
+
 **`Indexer<Collection, Element>`** -- custom indexing:
 
 ```sammine
@@ -952,7 +992,7 @@ export reuse printf(fmt: ptr<char>, ...) -> i32;
 
 ### Standard Library Modules
 
-- **`definitions`** (auto-loaded) -- automatically included in all executables. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Hash`, `Indexer`) with instances for primitive types, and `Option<T>`.
+- **`definitions`** (auto-loaded) -- automatically included in all executables. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Convert`, `Hash`, `Indexer`) with instances for primitive types, and `Option<T>`.
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('ptr<char>, i64) | Eof`: the buffer, which the caller must free, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` also hands back the file handle, as `(f, result)`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)

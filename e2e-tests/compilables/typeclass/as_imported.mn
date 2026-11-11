@@ -1,0 +1,16 @@
+// RUN: %sammine --file %dir/Inputs/conversions.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      25.000000
+// CHECK-NEXT: 3
+// CHECK-NEXT: 97
+
+// `as` in an imported module, and in an imported generic function.
+
+import conversions;
+import std;
+
+let main() -> i32 {
+  std::printf("%f\n", conversions::percent(1, 4));
+  std::printf("%ld\n", conversions::widened<f64>(3.7));
+  std::printf("%ld\n", conversions::widened<char>('a'));
+  return 0;
+}

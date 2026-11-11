@@ -51,6 +51,7 @@ enum class NodeKind {
   AddrOfExprAST,
   AllocExprAST,
   FreeExprAST,
+  CastExprAST,
   ArrayLiteralExprAST,
   RangeExprAST,
   IndexExprAST,
@@ -204,6 +205,9 @@ public:
   virtual void visit(FreeExprAST *ast);
   virtual void preorder_walk(FreeExprAST *ast) {}
   virtual void postorder_walk(FreeExprAST *ast) {}
+  virtual void visit(CastExprAST *ast);
+  virtual void preorder_walk(CastExprAST *ast) {}
+  virtual void postorder_walk(CastExprAST *ast) {}
 
   virtual void visit(ArrayLiteralExprAST *ast);
   virtual void preorder_walk(ArrayLiteralExprAST *ast) {}
@@ -420,6 +424,7 @@ public:
   virtual Type synthesize(AddrOfExprAST *ast) = 0;
   virtual Type synthesize(AllocExprAST *ast) = 0;
   virtual Type synthesize(FreeExprAST *ast) = 0;
+  virtual Type synthesize(CastExprAST *ast) = 0;
   virtual Type synthesize(ArrayLiteralExprAST *ast) = 0;
   virtual Type synthesize(RangeExprAST *ast) = 0;
   virtual Type synthesize(IndexExprAST *ast) = 0;

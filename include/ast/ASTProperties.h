@@ -32,6 +32,11 @@ struct BinaryProps {
   std::optional<sammine_util::QualifiedName> resolved_op_method;
 };
 
+struct CastProps {
+  /// The Convert<From, To> instance the cast goes through.
+  std::optional<MonomorphizedKey> instance;
+};
+
 struct TypeAliasProps {
   Type resolved_type = Type::NonExistent();
 };
@@ -49,6 +54,7 @@ class ASTProperties {
   std::unordered_map<NodeId, CallProps> call_props_;
   std::unordered_map<NodeId, VariableProps> variable_props_;
   std::unordered_map<NodeId, BinaryProps> binary_props_;
+  std::unordered_map<NodeId, CastProps> cast_props_;
   std::unordered_map<NodeId, TypeAliasProps> type_alias_props_;
   std::unordered_map<NodeId, TypeClassInstanceProps> type_class_instance_props_;
   std::unordered_map<NodeId, ForProps> for_props_;
@@ -59,6 +65,7 @@ public:
   CallProps &call(NodeId id) { return call_props_[id]; }
   VariableProps &variable(NodeId id) { return variable_props_[id]; }
   BinaryProps &binary(NodeId id) { return binary_props_[id]; }
+  CastProps &cast(NodeId id) { return cast_props_[id]; }
   TypeAliasProps &type_alias(NodeId id) { return type_alias_props_[id]; }
   ForProps &for_loop(NodeId id) { return for_props_[id]; }
   TypeClassInstanceProps &type_class_instance(NodeId id) {
@@ -77,6 +84,10 @@ public:
   const BinaryProps *binary(NodeId id) const {
     auto it = binary_props_.find(id);
     return it != binary_props_.end() ? &it->second : nullptr;
+  }
+  const CastProps *cast(NodeId id) const {
+    auto it = cast_props_.find(id);
+    return it != cast_props_.end() ? &it->second : nullptr;
   }
   const TypeAliasProps *type_alias(NodeId id) const {
     auto it = type_alias_props_.find(id);

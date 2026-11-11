@@ -703,6 +703,24 @@ public:
   std::string to_string() const override;
   AST_NODE_METHODS("FreeExprAST", NodeKind::FreeExprAST)
 };
+/// `operand as T`, which converts through the `Convert<From, T>` instance.
+class CastExprAST : public ExprAST {
+public:
+  std::unique_ptr<ExprAST> operand;
+  std::unique_ptr<TypeExprAST> target_type;
+  explicit CastExprAST(std::unique_ptr<ExprAST> operand_,
+                       std::shared_ptr<Token> as_tok,
+                       std::unique_ptr<TypeExprAST> target_type_)
+      : ExprAST(NodeKind::CastExprAST), operand(std::move(operand_)),
+        target_type(std::move(target_type_)) {
+    this->join_location(this->operand.get())->join_location(as_tok);
+    if (this->target_type)
+      this->join_location(this->target_type->location);
+  }
+  std::string to_string() const override;
+  AST_NODE_METHODS("CastExprAST", NodeKind::CastExprAST)
+};
+
 class ArrayLiteralExprAST : public ExprAST {
 public:
   std::vector<std::unique_ptr<ExprAST>> elements;

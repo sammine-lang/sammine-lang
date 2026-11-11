@@ -35,6 +35,13 @@
 - **Unary negation** (`-`): rejects unsigned types and non-numeric types
 - Polymorphic literal binops: both polymorphic + same kind → skip dispatch, keep polymorphic
 
+### Conversions (`as`)
+- `CastExprAST` (`operand as T`), parsed by `ParseCastExpr` around every binary operand: tighter than binops, looser than prefix `-`/`*`/`&`
+- Goes through `Convert<From, To>` (declared in `definitions.mn`); `CastProps::instance` holds the key
+- Built in (`is_builtin_conversion`): number ↔ number, char ↔ integer. Codegen: `emitNumberConversion` (sext/zext by source signedness, trunc, `llvm.fpto[su]i.sat` so NaN → 0 and out of range clamps)
+- A polymorphic literal operand takes `T` if compatible, else its default (i32/f64)
+- Linear checker: operand is owned when its type contains linear types, else read
+
 ### Indexing
 - `arr[i]` → element type; static bounds checking for constant indices
 - `ptr<T>[i]` → `T`; no bounds checking

@@ -157,7 +157,7 @@ std::unique_ptr<BlockAST> Monomorphizer::clone_block(BlockAST *block) {
 // NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
 // VariableExprAST, CallExprAST, BinaryExprAST, ReturnStmtAST,
 // VarDefAST, IfExprAST, UnitExprAST, DerefExprAST, AddrOfExprAST,
-// AllocExprAST, FreeExprAST, ArrayLiteralExprAST, RangeExprAST, IndexExprAST,
+// AllocExprAST, CastExprAST, FreeExprAST, ArrayLiteralExprAST, RangeExprAST, IndexExprAST,
 // LenExprAST, UnaryNegExprAST, StructLiteralExprAST, FieldAccessExprAST,
 // CaseExprAST, WhileExprAST, TupleLiteralExprAST
 std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
@@ -272,6 +272,13 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
     result = std::make_unique<AllocExprAST>(
         make_tok("alloc"), clone_type_expr(alloc->type_arg.get()),
         clone_expr(alloc->operand.get()));
+    break;
+  }
+  case NodeKind::CastExprAST: {
+    auto *cast = llvm::cast<CastExprAST>(expr);
+    result = std::make_unique<CastExprAST>(
+        clone_expr(cast->operand.get()), make_tok("as"),
+        clone_type_expr(cast->target_type.get()));
     break;
   }
   case NodeKind::FreeExprAST: {

@@ -1,0 +1,39 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      212.000000
+// CHECK-NEXT: 42
+
+// `as` calls a user's Convert instance, and moves a value that owns memory
+// into it.
+
+import std;
+
+struct Celsius { val: f64, };
+struct Fahrenheit { val: f64, };
+
+instance Convert<Celsius, Fahrenheit> {
+  let Convert(x: Celsius) -> Fahrenheit {
+    Fahrenheit { val: x.val * 9.0 / 5.0 + 32.0 }
+  }
+}
+
+struct Boxed { p: 'ptr<i32>, };
+struct Plain { n: i32, };
+
+instance Convert<Boxed, Plain> {
+  let Convert(x: Boxed) -> Plain {
+    let n = *x.p;
+    free(x.p);
+    Plain { n: n }
+  }
+}
+
+let main() -> i32 {
+  let f = Celsius { val: 100.0 } as Fahrenheit;
+  std::printf("%f\n", f.val);
+
+  let p = alloc<i32>(1);
+  *p = 42;
+  let plain = Boxed { p: p } as Plain;
+  std::printf("%d\n", plain.n);
+  return 0;
+}

@@ -1,6 +1,7 @@
 #include "ast/Ast.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
+#include "typecheck/BuiltinInstances.h"
 
 using sammine_util::cautious_at;
 using sammine_util::cautious_value;
@@ -917,6 +918,38 @@ mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
       mlir::ValueRange{totalSize.getResult()});
 
   return mallocOp.getResult();
+}
+
+mlir::Value MLIRGenImpl::emitBuiltinConvert(mlir::Value value,
+                                            const Type &from, const Type &to,
+                                            mlir::Location location) {
+  return emitNumberConversion(builder, location, value, convertType(to),
+                              isUnsignedIntegerType(from),
+                              isUnsignedIntegerType(to));
+}
+
+mlir::Value MLIRGenImpl::emitCastExpr(AST::CastExprAST *ast) {
+  auto *cp = props_.cast(ast->id());
+  sammine_util::abort_if_not(cp && cp->instance,
+                             "ICE: 'as' without a Convert instance");
+  auto value = emitRValue(ast->operand.get());
+  if (!value)
+    return nullptr;
+
+  auto &key = *cp->instance;
+  auto location = loc(ast);
+  if (is_builtin_instance(key))
+    return emitBuiltinConvert(value, key.type_args[0], key.type_args[1],
+                              location);
+
+  auto callee = mangleName(key.to_typeclass_name(std::string(kConvertClass)));
+  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(callee);
+  if (!funcOp || funcOp.getNumResults() != 1)
+    imm_error(fmt::format("can't call '{}' for 'as'", callee),
+              ast->get_location());
+  return mlir::func::CallOp::create(builder, location, funcOp,
+                                    mlir::ValueRange{value})
+      .getResult(0);
 }
 
 mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {

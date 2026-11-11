@@ -447,6 +447,15 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::UnaryNegExprAST:
     read_child(llvm::cast<UnaryNegExprAST>(expr)->operand.get());
     break;
+  case NK::CastExprAST: {
+    // The operand is passed to Convert, which owns what it is given.
+    auto *operand = llvm::cast<CastExprAST>(expr)->operand.get();
+    if (operand->get_type().containsLinearTypes())
+      check_expr(operand, Use::owns(loc, "converted"));
+    else
+      read_child(operand);
+    break;
+  }
   case NK::NumberExprAST:
   case NK::StringExprAST:
   case NK::BoolExprAST:

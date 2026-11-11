@@ -630,6 +630,9 @@ mlir::Value MLIRGenImpl::emitBuiltinInstanceCall(AST::CallExprAST *ast,
   }
 
   auto location = loc(ast);
+  if (key.name == kConvertClass)
+    return emitBuiltinConvert(operands[0], key.type_args[0], key.type_args[1],
+                              location);
   if (auto op = operator_of_class(key.name)) {
     auto &type = key.type_args[0];
     if (isFloatType(type))

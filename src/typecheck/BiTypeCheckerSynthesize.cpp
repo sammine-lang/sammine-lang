@@ -1123,6 +1123,44 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
   return ast->get_type();
 }
 
+// `x as T` goes through the instance Convert<From, T>. A literal, which has
+// no type of its own yet, takes T when it can, so `5000000000 as i64` keeps
+// its value, and its default type (i32 or f64) otherwise. So do the literals
+// inside an array or tuple.
+Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  ast->operand->accept_vis(this);
+  auto from = ast->operand->accept_synthesis(this);
+  auto to = resolve_type_expr(ast->target_type.get());
+  if (from.is_poisoned() || to.is_poisoned())
+    return ast->set_type(Type::Poisoned());
+  if (from.is_never())
+    return ast->set_type(Type::Never());
+
+  auto settled = from.is_polymorphic_numeric() &&
+                         type_map_ordering.structurally_compatible(to, from)
+                     ? to
+                     : default_polymorphic_type(from);
+  if (!(settled == from)) {
+    resolve_literal_type(ast->operand.get(), settled);
+    from = settled;
+  }
+
+  MonomorphizedKey key{std::string(kConvertClass), {from, to}};
+  if (!has_instance(key)) {
+    add_error(ast->get_location(),
+              fmt::format("Cannot convert {} to {} with 'as': no instance "
+                          "of Convert<{}>",
+                          from.to_string(), to.to_string(),
+                          key.type_args_string()));
+    return ast->set_type(Type::Poisoned());
+  }
+  props_.cast(ast->id()).instance = key;
+  return ast->set_type(to);
+}
+
 Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();

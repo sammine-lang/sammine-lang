@@ -263,6 +263,10 @@ public:
   mlir::Value emitAddrOfExpr(AST::AddrOfExprAST *ast);
   mlir::Value emitAllocExpr(AST::AllocExprAST *ast);
   mlir::Value emitFreeExpr(AST::FreeExprAST *ast);
+  mlir::Value emitCastExpr(AST::CastExprAST *ast);
+  /// A built-in Convert<from, to>: one conversion instruction, or none.
+  mlir::Value emitBuiltinConvert(mlir::Value value, const Type &from,
+                                 const Type &to, mlir::Location location);
   mlir::Value emitStructLiteralExpr(AST::StructLiteralExprAST *ast);
   mlir::Value emitFieldAccessExpr(AST::FieldAccessExprAST *ast);
   mlir::Value emitEnumConstructor(AST::CallExprAST *ast);

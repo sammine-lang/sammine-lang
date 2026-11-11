@@ -93,6 +93,7 @@ public:
   virtual void preorder_walk(VariableExprAST *ast) override;
   virtual void preorder_walk(TypedVarAST *ast) override;
   virtual void preorder_walk(AllocExprAST *ast) override;
+  virtual void preorder_walk(CastExprAST *ast) override;
 
   // post order — only non-empty overrides
   using ScopedASTVisitor::postorder_walk;

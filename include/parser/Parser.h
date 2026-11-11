@@ -132,6 +132,9 @@ public:
   [[nodiscard]] auto ParseExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParsePrimaryExpr() -> p<ExprAST>;
   [[nodiscard]] auto parsePostfixOps(u<ExprAST> expr) -> p<ExprAST>;
+  /// An operand of a binary operator: a primary expression followed by any
+  /// number of `as T`.
+  [[nodiscard]] auto ParseCastExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseBinaryExpr(int prededence, u<ExprAST> LHS)
       -> p<ExprAST>;
 

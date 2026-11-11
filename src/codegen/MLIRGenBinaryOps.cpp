@@ -64,4 +64,41 @@ mlir::Value emitFloatArithOp(mlir::OpBuilder &builder, mlir::Location location,
   }
 }
 
+mlir::Value emitNumberConversion(mlir::OpBuilder &builder,
+                                 mlir::Location location, mlir::Value value,
+                                 mlir::Type to, bool from_unsigned,
+                                 bool to_unsigned) {
+  auto from = value.getType();
+  if (from == to)
+    return value;
+
+  auto from_int = mlir::dyn_cast<mlir::IntegerType>(from);
+  auto to_int = mlir::dyn_cast<mlir::IntegerType>(to);
+  if (from_int && to_int) {
+    if (from_int.getWidth() > to_int.getWidth())
+      return mlir::arith::TruncIOp::create(builder, location, to, value);
+    if (from_unsigned)
+      return mlir::arith::ExtUIOp::create(builder, location, to, value);
+    return mlir::arith::ExtSIOp::create(builder, location, to, value);
+  }
+  if (from_int) {
+    if (from_unsigned)
+      return mlir::arith::UIToFPOp::create(builder, location, to, value);
+    return mlir::arith::SIToFPOp::create(builder, location, to, value);
+  }
+  // Saturate, so every float has a defined result: NaN becomes 0 and a value
+  // out of range becomes the type's min or max. Plain fptosi gives poison.
+  if (to_int)
+    return mlir::LLVM::CallIntrinsicOp::create(
+               builder, location, to,
+               builder.getStringAttr(to_unsigned ? "llvm.fptoui.sat"
+                                                 : "llvm.fptosi.sat"),
+               mlir::ValueRange{value})
+        .getResult(0);
+  if (mlir::cast<mlir::FloatType>(from).getWidth() >
+      mlir::cast<mlir::FloatType>(to).getWidth())
+    return mlir::arith::TruncFOp::create(builder, location, to, value);
+  return mlir::arith::ExtFOp::create(builder, location, to, value);
+}
+
 } // namespace sammine_lang

@@ -42,6 +42,12 @@ typeclass Mod<T> {
   Mod(a: T, b: T) -> T;
 }
 
+// `x as To` converts through this. The compiler provides the instances
+// between the number types, and between char and the integer types.
+typeclass Convert<From, To> {
+  Convert(x: From) -> To;
+}
+
 typeclass Hash<T> {
   Hash(val: T) -> u64;
 }

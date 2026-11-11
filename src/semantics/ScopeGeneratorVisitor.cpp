@@ -235,6 +235,10 @@ void ScopeGeneratorVisitor::preorder_walk(AllocExprAST *ast) {
     qualify_type_expr(ast->type_arg.get());
   }
 }
+void ScopeGeneratorVisitor::preorder_walk(CastExprAST *ast) {
+  if (ctx().in_imported_def && ast->target_type)
+    qualify_type_expr(ast->target_type.get());
+}
 // post order
 void ScopeGeneratorVisitor::postorder_walk(CallExprAST *ast) {
   // Qualify call names with explicit type args in imported generic bodies

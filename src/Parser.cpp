@@ -882,10 +882,30 @@ auto Parser::parsePostfixOps(u<ExprAST> expr) -> p<ExprAST> {
   return {std::move(expr), SUCCESS};
 }
 
+// `as` binds tighter than every binary operator and looser than the prefix
+// operators, so `-x as u32` is `(-x) as u32` and `a * b as i64` is
+// `a * (b as i64)`.
+auto Parser::ParseCastExpr() -> p<ExprAST> {
+  auto result = ParsePrimaryExpr();
+  if (!result.ok())
+    return result;
+  auto expr = std::move(result.node);
+  while (auto as_tok = expect(TokAs)) {
+    auto target = ParseTypeExpr();
+    if (!target) {
+      report_error("Expected a type after 'as'", as_tok->get_location());
+      return {nullptr, FAILED};
+    }
+    expr = std::make_unique<CastExprAST>(std::move(expr), as_tok,
+                                         std::move(target));
+  }
+  return {std::move(expr), SUCCESS};
+}
+
 // Parse a full expression: primary + optional binary operators (precedence
 // climbing).
 auto Parser::ParseExpr() -> p<ExprAST> {
-  auto [LHS, left_result] = ParsePrimaryExpr();
+  auto [LHS, left_result] = ParseCastExpr();
   if (left_result == NONCOMMITTED)
     return {std::move(LHS), NONCOMMITTED};
   if (left_result != SUCCESS) {
@@ -910,8 +930,8 @@ auto Parser::ParseBinaryExpr(int precedence, u<ExprAST> LHS) -> p<ExprAST> {
 
     auto binOpToken = tokStream->consume(); // Consume the operator
 
-    // Parse the RHS as a primary
-    auto [RHS, right_result] = ParsePrimaryExpr();
+    // Parse the RHS as an operand
+    auto [RHS, right_result] = ParseCastExpr();
     if (right_result != SUCCESS) {
       report_error("Expected right-hand side expression after binary operator",
                    binOpToken->get_location());

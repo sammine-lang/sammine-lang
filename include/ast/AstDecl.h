@@ -34,6 +34,7 @@ class DerefExprAST;
 class AddrOfExprAST;
 class AllocExprAST;
 class FreeExprAST;
+class CastExprAST;
 class ArrayLiteralExprAST;
 class RangeExprAST;
 class IndexExprAST;
