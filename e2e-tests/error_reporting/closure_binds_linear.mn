@@ -1,0 +1,22 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: closure_binds_linear.mn:20:17
+// CHECK-NEXT:   18|let main() -> i32 {
+// CHECK-NEXT:   19|  let p = alloc<i64>(1);
+// CHECK-NEXT:   20|  let f = set_to(p);
+// CHECK-NEXT:     |                 ┬
+// CHECK-NEXT:     |                 ╰─ Cannot bind 'p' of linear type ''ptr<i64>' into a partial application of 'set_to': the closure can be called more than once
+// CHECK-NOT:  must be consumed
+
+// A closure can be called any number of times, so it can't own a value:
+// each call would hand p on again, and two calls would free it twice.
+
+let set_to(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
+  p[0] = v;
+  p
+}
+
+let main() -> i32 {
+  let p = alloc<i64>(1);
+  let f = set_to(p);
+  0
+}

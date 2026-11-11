@@ -1,0 +1,24 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 42
+
+// A function value owns nothing, even when it takes and returns owning
+// pointers: step is a parameter that is only called, never consumed.
+
+import std;
+
+let set(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
+  p[0] = v;
+  p
+}
+
+let twice(step: ('ptr<i64>, i64) -> 'ptr<i64>, p: 'ptr<i64>) -> 'ptr<i64> {
+  let q = step(p, 40i64);
+  step(q, 42i64)
+}
+
+let main() -> i32 {
+  let p = twice(set, alloc<i64>(1));
+  std::printf("%ld\n", p[0]);
+  free(p);
+  0
+}

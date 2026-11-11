@@ -797,7 +797,19 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
     bool is_variadic = !params.empty() && i >= params.size();
     bool takes_ownership =
         !is_variadic && (params.empty() || params[i].containsLinearTypes());
-    if (auto *info = find_tracked(arg))
+    // A closure can be called any number of times, and each call would hand
+    // the bound value on again.
+    auto *info = find_tracked(arg);
+    if (cp && cp->is_partial && takes_ownership)
+      this->add_error(
+          arg->get_location(),
+          fmt::format("Cannot bind {} of linear type '{}' into a partial "
+                      "application of '{}': the closure can be called more "
+                      "than once",
+                      info ? fmt::format("'{}'", info->name) : "a value",
+                      arg->get_type().to_string(),
+                      ast->written_name.mangled()));
+    if (info)
       (takes_ownership ? moved : lent).push_back(info);
     check_expr(arg, takes_ownership ? Use::owns(loc, "passed to function")
                                     : Use::reads(loc, "use"));
