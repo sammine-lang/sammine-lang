@@ -157,7 +157,7 @@ std::string Compiler::library_name() const {
 // the Resolver's responsibility.
 void Compiler::resolve_imports() {
   SAMMINE_ZONE_NAMED("imports");
-  if (has_error() || programAST->imports.empty())
+  if (has_error())
     return;
 
   LOG({
@@ -175,50 +175,6 @@ void Compiler::resolve_imports() {
   if (rs.has_errors())
     set_error();
   reporter.report(rs);
-}
-
-// Stage 4: Load stdlib/definitions.mn (builtin type defs). Executables only.
-void Compiler::load_definitions() {
-  SAMMINE_ZONE_NAMED("definitions");
-  if (has_error() || !has_main)
-    return;
-
-  // Find definitions.mn in stdlib_dir
-  std::filesystem::path def_path;
-  if (!options_.stdlib_dir.empty())
-    def_path = options_.stdlib_dir / "definitions.mn";
-
-  if (def_path.empty() || !std::filesystem::exists(def_path))
-    return;
-
-  LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-               "Start load definitions stage...\n");
-  });
-
-  auto contents =
-      sammine_util::get_string_from_file(reportee, def_path.string());
-  if (!contents) {
-    set_error();
-    return;
-  }
-  std::string def_input = std::move(*contents);
-  Lexer def_lexer(def_input);
-  auto def_tok_stream = def_lexer.getTokenStream();
-  Parser def_parser(def_tok_stream);
-  auto def_program = def_parser.Parse();
-
-  if (def_parser.has_errors()) {
-    fmt::print(stderr, "Warning: failed to parse {}\n", def_path.string());
-    return;
-  }
-
-  // Prepend definitions to user's program
-  for (auto it = def_program->DefinitionVec.rbegin();
-       it != def_program->DefinitionVec.rend(); ++it) {
-    programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
-                                     std::move(*it));
-  }
 }
 
 // Stage 5: Two semantic sub-passes:
@@ -768,7 +724,6 @@ int Compiler::start() {
       {"lex", &Compiler::lex},
       {"parse", &Compiler::parse},
       {"imports", &Compiler::resolve_imports},
-      {"definitions", &Compiler::load_definitions},
       {"semantics", &Compiler::semantics},
       {"typecheck", &Compiler::typecheck},
       {"linear_check", &Compiler::linear_check},

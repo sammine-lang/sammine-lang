@@ -3,6 +3,7 @@
 #include "compiler/Options.h"
 #include "fmt/core.h"
 #include "parser/Parser.h"
+#include "semantics/NameResolver.h"
 
 namespace sammine_lang {
 
@@ -11,6 +12,18 @@ namespace sammine_lang {
 // orchestration lives here so Compiler::resolve_imports is a thin driver.
 void Resolver::Resolve(AST::ProgramAST &programAST, const Path &source_dir,
                        std::vector<std::string> &extra_object_files) {
+  // Every module imports the prelude, except the prelude itself.
+  std::string prelude_name(AST::NameResolver::kPrelude);
+  auto prelude = find_mn(prelude_name, source_dir);
+  std::error_code ec;
+  if (!prelude.empty() &&
+      !std::filesystem::equivalent(prelude, options_.file_arg, ec)) {
+    import_module(prelude_name, source_dir, {}, /*is_transitive=*/false,
+                  programAST, extra_object_files);
+    if (has_errors())
+      return;
+  }
+
   for (auto &import : programAST.imports) {
     import_module(import.module_name, source_dir, import.location,
                   /*is_transitive=*/false, programAST, extra_object_files);

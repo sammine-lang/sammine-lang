@@ -39,9 +39,10 @@
 | `io.mn` | Typed print/println, file I/O, stdin readers, stderr |
 | `str.mn` | `String` struct (data, length, cap), new/delete |
 | `vec.mn` | Generic `Vec<T>` (data: 'ptr<T>, length, cap), new/push/delete; internal grow_buf |
-| `definitions.mn` | Typeclasses (Sized, Add, Sub, Mul, Div, Mod, Hash, Indexer), Sized instances, `type Option<T>` |
+| `definitions.mn` | The prelude: typeclasses (Sized, Add, Sub, Mul, Div, Mod, Convert, Hash, Indexer, Iterator), exported Sized/Iterator<Range> instances, `type Option<T>`, `struct Range<T>`. Compiled to definitions.so/.a first; other stdlib modules depend on it |
 | `io_runtime.c` | C runtime for io module |
 
 - Stdlib dir: `<binary>/../lib/sammine/`
-- `definitions.mn` loaded as stage 4 (executables only, unconditional) — NOT via `import`
+- Prelude: `Resolver::Resolve` imports `definitions` into every module (libraries too) unless compiling definitions.mn itself. Its names get no module prefix (`NameResolver::kPrelude`, the one exception, in `qualify`), in its own library too, so `Iterator<Range<i32>, i32>::next` matches on both sides
+- `for` calls `Iterator<Range<T>, T>::next` in definitions.so (not inlined across the library: ~1.7x slower loops, until importers get inlinable copies)
 - Stdlib `.mn` files copied to build dir by CMake; generic stdlib code in `STDLIB_COPIED` (can't be pre-compiled)

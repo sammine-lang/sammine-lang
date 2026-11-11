@@ -1,0 +1,26 @@
+// A library using the prelude: a for loop, Option, and instances of the
+// prelude's typeclasses on its own type.
+
+export struct Money { cents: i64, };
+
+export instance Add<Money> {
+  let Add(a: Money, b: Money) -> Money { Money { cents: a.cents + b.cents } }
+}
+
+export instance Convert<Money, f64> {
+  let Convert(m: Money) -> f64 { m.cents as f64 / 100.0 }
+}
+
+// The sum of 0, 1, ..., n - 1 cents.
+export let total(n: i64) -> Money {
+  let acc = alloc<i64>(1);
+  *acc = 0i64;
+  for i in 0i64..n { *acc = *acc + i; };
+  let m = Money { cents: *acc };
+  free(acc);
+  m
+}
+
+export let first_over(limit: i64, n: i64) -> Option<i64> {
+  if n > limit { Option<i64>::Some(n) } else { Option<i64>::None }
+}

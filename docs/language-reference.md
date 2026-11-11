@@ -1010,7 +1010,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 
 ### Standard Library Modules
 
-- **`definitions`** (auto-loaded) -- automatically included in all executables. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Convert`, `Hash`, `Indexer`) with instances for primitive types, and `Option<T>`.
+- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`.
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('ptr<char>, i64) | Eof`: the buffer, which the caller must free, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` also hands back the file handle, as `(f, result)`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)

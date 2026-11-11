@@ -2,11 +2,11 @@
 
 ## Stages
 ```
-lex → parse → imports → definitions → semantics → typecheck → linear_check → dump_ast → codegen → optimize → emit_obj → emit_library → link
+lex → parse → imports → semantics → typecheck → linear_check → dump_ast → codegen → optimize → emit_obj → emit_library → link
 ```
 - Orchestrated by `Compiler::start()`. Error in any stage → `should_stop()` → skip rest.
 - `--check` sets state to `Finished` (exit 0) before codegen — skips codegen/optimize/emit/link
-- `definitions`: executables only — prepends `stdlib/definitions.mn`
+- `imports`: every module implicitly imports the prelude `definitions` (except definitions.mn itself), then its own imports
 - `semantics`: ScopeGenerator → GeneralSemantics (two sub-passes)
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec
 - `codegen`: init 10 MLIR dialects (Arith, Func, LLVM, SCF, CF, MemRef, Linalg, Tensor, Bufferization, Affine) + bufferization interfaces → `mlirGen()` → `lowerMLIRToLLVMIR()`
@@ -16,7 +16,7 @@ lex → parse → imports → definitions → semantics → typecheck → linear
 
 ## Library vs Executable
 - `has_main` detected during parse (scan for `FuncDefAST` named "main")
-- Executables: definitions → emit_obj → link. `--lib` ignored.
+- Executables: emit_obj → link. `--lib` ignored.
 - Libraries: `--lib=static` → `.a` (fat, bundles transitive deps); `--lib` → `.so`
 
 ## 2-Module Architecture

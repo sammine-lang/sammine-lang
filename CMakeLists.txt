@@ -84,8 +84,11 @@ add_subdirectory(tools)
 set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
+# definitions is the prelude, which every other module imports, so it is
+# compiled first.
+set(STDLIB_PRELUDE definitions)
 set(STDLIB_COMPILED std str io)
-set(STDLIB_COPIED definitions.mn vec.mn)
+set(STDLIB_COPIED vec.mn)
 set(STDLIB_C_RUNTIME_io io_runtime.c)
 
 # Helper: compile a C runtime file to a PIC object in STDLIB_DIR.
@@ -127,8 +130,12 @@ function(stdlib_add_module mod extra_deps)
       PARENT_SCOPE)
 endfunction()
 
+stdlib_add_module(${STDLIB_PRELUDE} "")
+set(STDLIB_PRELUDE_OUTPUTS ${STDLIB_DIR}/${STDLIB_PRELUDE}.so
+    ${STDLIB_DIR}/${STDLIB_PRELUDE}.a ${STDLIB_DIR}/${STDLIB_PRELUDE}.mn)
+
 foreach(mod ${STDLIB_COMPILED})
-  set(_extra_deps "")
+  set(_extra_deps ${STDLIB_PRELUDE_OUTPUTS})
   if(STDLIB_C_RUNTIME_${mod})
     stdlib_compile_c_runtime(${STDLIB_C_RUNTIME_${mod}} _obj)
     list(APPEND _extra_deps ${_obj})

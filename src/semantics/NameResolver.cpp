@@ -10,7 +10,7 @@ namespace sammine_lang::AST {
 sammine_util::QualifiedName
 NameResolver::qualify(const sammine_util::QualifiedName &name,
                       const std::string &module) {
-  if (name.is_qualified() || module.empty())
+  if (name.is_qualified() || module.empty() || module == kPrelude)
     return name;
   return sammine_util::QualifiedName::from_parts(
       std::vector<sammine_util::QualifiedName::Part>{{module, ""},

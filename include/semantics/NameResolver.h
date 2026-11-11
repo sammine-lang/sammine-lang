@@ -38,8 +38,15 @@ public:
   //! aliases, before any name is registered or resolved.
   void use_program(ProgramAST &program);
 
+  //! The prelude, stdlib/definitions.mn: every other module imports it
+  //! without writing `import`, as Rust's prelude is, and its names are used
+  //! without a prefix (Option, not definitions::Option), everywhere,
+  //! including in its own library, so symbols built from them agree.
+  static constexpr std::string_view kPrelude = "definitions";
+
   //! `name` as a definition of `module` is named: module::name. A name
-  //! already qualified, or of no module (an executable's), is unchanged.
+  //! already qualified, of no module (an executable's) or of the prelude, is
+  //! unchanged.
   static sammine_util::QualifiedName
   qualify(const sammine_util::QualifiedName &name, const std::string &module);
 

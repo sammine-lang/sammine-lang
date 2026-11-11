@@ -1,0 +1,21 @@
+// RUN: %sammine --file %dir/Inputs/prelude_user.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      4950
+// CHECK-NEXT: 50.500000
+// CHECK-NEXT: 7 none
+
+// A library can use the prelude as a program can: for loops, Option, and
+// instances of the prelude's typeclasses, used here through + and as.
+
+import prelude_user;
+import std;
+
+let main() -> i32 {
+  let m = prelude_user::total(100i64);
+  std::printf("%ld\n", m.cents);
+  let more = m + prelude_user::Money { cents: 100i64 };
+  std::printf("%f\n", more as f64);
+  let a = case prelude_user::first_over(5i64, 7i64) { Some(x) => x, None => 0i64, };
+  let b = case prelude_user::first_over(5i64, 3i64) { Some(x) => "some", None => "none", };
+  std::printf("%ld %s\n", a, b);
+  return 0;
+}

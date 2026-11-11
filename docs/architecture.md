@@ -14,7 +14,7 @@ The compiler is orchestrated by `Compiler::start()` in `src/compiler/Compiler.cp
 
 **resolve_imports** -- For each `import` declaration, the compiler searches CWD, `-I` paths, the source file's directory, and the stdlib directory for a `.mn` file. Found modules are parsed on the fly (no separate interface files). Exported functions become `ExternAST` nodes, while generic functions are copied wholesale so the monomorphizer can instantiate them. Transitive imports are resolved recursively; generic functions and exported type definitions (structs, enums, type aliases) propagate transitively, while non-generic functions, externs, and typeclass declarations/instances do not. Each direct import also searches for a pre-compiled `.so` or `.a` artifact to link against.
 
-**load_definitions** -- If the program has a `main` function, the compiler loads `definitions.mn` from the stdlib directory and prepends its definitions to the program's `DefinitionVec`. This injects compiler-known type definitions and helper functions.
+The prelude, `definitions.mn`, is imported this way by every module, library or executable, without an `import` line (except when compiling `definitions.mn` itself). Its names are used without a module prefix (`NameResolver::qualify` gives them none), and its exported instances are compiled into `definitions.so`.
 
 **semantics** -- Two visitor passes run in sequence. First, `ScopeGeneratorVisitor` (`src/semantics/ScopeGeneratorVisitor.cpp`) walks the AST to build a lexical symbol table, registering top-level names (functions, structs, enums, type aliases) and detecting duplicates. It also qualifies imported names with their module prefix and registers enum variant names for unqualified access. Second, `GeneralSemanticsVisitor` (`src/semantics/GeneralSemanticsVisitor.cpp`) performs semantic checks that do not require type information, such as validating that `return` appears only inside functions.
 
@@ -68,7 +68,7 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 |-----------|---------|
 | `e2e-tests/` | End-to-end tests using LLVM `lit` + `FileCheck`. Subdirectories under `compilables/` organized by feature: `arith/`, `array/`, `control/`, `enums/`, `func/`, `functions/`, `generics/`, `import/`, `io/`, `linear/`, `misc/`, `ptr/`, `type_inference/`, `typeclass/`, `types/`, `vec/`, etc. Error reporting tests in `error_reporting/`. Project Euler solutions in `euler/`. |
 | `unit-tests/` | GoogleTest-based unit tests for the lexer and parser. |
-| `stdlib/` | Standard library: `definitions.mn` (auto-loaded builtins), `std.mn`, `io.mn`, `io_runtime.c`, `vec.mn`, `str.mn`. |
+| `stdlib/` | Standard library: `definitions.mn` (the prelude, imported by every module), `std.mn`, `io.mn`, `io_runtime.c`, `vec.mn`, `str.mn`. |
 | `knowledge_base/` | Developer documentation for each compiler subsystem. |
 
 ---

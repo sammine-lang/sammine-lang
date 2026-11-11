@@ -141,7 +141,6 @@ class Compiler {
   void lex();
   void parse();
   void resolve_imports();
-  void load_definitions();
   void semantics();
   void typecheck();
   void linear_check();
