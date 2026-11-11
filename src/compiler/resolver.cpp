@@ -130,8 +130,8 @@ void Resolver::inject_definitions(
     std::vector<std::unique_ptr<DefinitionAST>> &program_vec,
     const std::string &name,
     bool is_transitive) {
-  // Every definition of the module comes, the ones it doesn't export too,
-  // marked by is_exported: NameResolver only lets the module's own code name
+  // Every definition of the module comes, C bindings included, the ones it
+  // doesn't export too, marked by is_exported: NameResolver only lets the module's own code name
   // those, and its code compiled here (generic functions) may. Function and
   // instance bodies stay in the module, compiled first, so only their
   // declarations come; a generic function's body comes, since it is compiled
@@ -158,10 +158,6 @@ void Resolver::inject_definitions(
         ext->is_c_function = false;
         def = std::move(ext);
       }
-    } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
-      // A C binding is only part of the module's interface if exported.
-      if (!ext->is_exported)
-        continue;
     } else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
       tci->is_declaration = true;
       for (auto &method : tci->methods)

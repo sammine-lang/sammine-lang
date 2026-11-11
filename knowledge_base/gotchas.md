@@ -62,7 +62,7 @@
 
 ## Codegen Gotchas
 - `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not supported
-- MLIR IFunc creation happens at Compiler level on lowered LLVM IR, not during MLIR gen
+- A C binding's symbol is its C name in every module (`std::printf` is `@printf`): `emitExtern` records it in `c_symbols`, and calls and function values look it up there
 - Kernel wrappers get `noinline` to preserve LICM (LLVM can hoist calls when ptr args are loop-invariant)
 - `GreenInterner` is NOT movable (pmr limitation) — always `make_unique`
 - CST and AST diverge where parser desugars (pipe, `**` double deref, implicit returns)

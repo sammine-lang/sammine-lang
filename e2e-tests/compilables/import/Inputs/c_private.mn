@@ -1,0 +1,5 @@
+// A private C binding: only this module's code can name it.
+reuse strlen(s: ptr<char>) -> i64;
+
+// Compiled in the module that uses it, where it still calls strlen.
+export let length_of<T>(s: ptr<char>, tag: T) -> i64 { strlen(s) }

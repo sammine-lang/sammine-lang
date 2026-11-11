@@ -255,9 +255,16 @@ void markCExtensions(FuncOp funcOp, AST::PrototypeAST *proto,
 } // namespace
 
 void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
+  // A C binding's symbol is its C name in every module that declares it:
+  // std::printf is printf. Calls find it through c_symbols.
   std::string funcName = ast->Prototype->functionName.mangled();
+  if (ast->is_c_function) {
+    c_symbols[funcName] = ast->Prototype->functionName.get_name();
+    funcName = ast->Prototype->functionName.get_name();
+  }
 
-  // Skip if already declared (e.g. by declareRuntimeFunctions)
+  // Skip if already declared (e.g. by declareRuntimeFunctions, or by another
+  // module's binding of the same C function)
   if (theModule.lookupSymbol(funcName))
     return;
 
@@ -668,11 +675,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
                                       ? *cp->resolved_name
                                       : ast->functionName);
 
-  // Imported C externs are declared with their base name (e.g. "printf")
-  if (!theModule.lookupSymbol(callee)) {
-    if (theModule.lookupSymbol(ast->functionName.get_name()))
-      callee = ast->functionName.get_name();
-  }
+  if (auto it = c_symbols.find(callee); it != c_symbols.end())
+    callee = it->second;
 
   // Check if callee is a kernel wrapper (takes arrays by ptr, not by value)
   bool isKernelWrapper = false;

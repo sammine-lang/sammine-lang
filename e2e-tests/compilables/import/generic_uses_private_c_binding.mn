@@ -1,0 +1,14 @@
+// RUN: %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 5
+
+// An imported generic function calls its module's private C binding. A C
+// binding's symbol is its C name in every module, so the call reaches C's
+// strlen from here.
+
+import c_private;
+import std;
+
+let main() -> i32 {
+  std::printf("%ld\n", c_private::length_of<i32>("hello", 0));
+  return 0;
+}

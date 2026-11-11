@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: 'c_private::strlen' is private to module 'c_private'
+
+// A module's private C binding can't be named from outside it.
+
+import c_private;
+
+let main() -> i32 {
+  let n = c_private::strlen("hello");
+  return 0;
+}

@@ -19,10 +19,9 @@
 - Non-exposed externs skipped
 - Transitive imports do NOT leak to importers
 
-## C:: Extern Handling
-- Multiple modules can declare `reuse printf(...)` — duplicates allowed
-- C:: fallback: if `module::func` not found, tries `C::func`
-- `reuse` syntax: no `C::` prefix in source — compiler adds it internally
+## C Bindings (`reuse`)
+- In source, an imported module's binding is named like its other definitions (`std::printf`); its symbol is always its C name (`printf`). Codegen declares that symbol once, however many modules bind it, and calls it directly: no bridge in the library
+- Imported like any definition, private ones too, so a module's generic code compiled elsewhere can call its private bindings; naming a private one from outside is an error
 
 ## Linkable Artifacts
 - Search per module: if Static → `.a` → `.so`; else `.so` → `.a`

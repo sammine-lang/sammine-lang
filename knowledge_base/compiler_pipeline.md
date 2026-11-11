@@ -11,7 +11,7 @@ lex → parse → imports → semantics → typecheck → linear_check → dump_
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec
 - `codegen`: init 10 MLIR dialects (Arith, Func, LLVM, SCF, CF, MemRef, Linalg, Tensor, Bufferization, Affine) + bufferization interfaces → `mlirGen()` → `lowerMLIRToLLVMIR()`
 - `optimize`: LLVM PassBuilder with O2
-- `emit_library`: IFunc bridge for library exports (mangled module name → C symbol via GlobalIFunc)
+- `emit_library`: writes the `.so`/`.a`
 - `link`: `clang++` (fallback `g++`) with `io_runtime.o`
 
 ## Library vs Executable

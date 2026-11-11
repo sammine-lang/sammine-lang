@@ -153,10 +153,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
     return val;
   }
 
-  // Not in symbol table — check if it's a module-level function used as a
-  // value. VariableExprAST stores a bare name (e.g. "foo"), but top-level
-  // functions may be registered under their module-qualified name (e.g.
-  // "mylib::foo"). Try both the bare name and the module-qualified name.
+  // Not in symbol table — check if it's a top-level function used as a value.
   if (ast->get_type().type_kind == TypeKind::Function) {
     // A sammine function is a func.func; a C function taking or returning a
     // struct, or a variadic one, is an llvm.func. The wrapper calls either.
@@ -165,8 +162,8 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
              theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(name);
     };
     auto funcName = ast->variableName.mangled();
-    if (!isFunction(funcName) && !moduleName.empty())
-      funcName = moduleName + "::" + funcName;
+    if (auto it = c_symbols.find(funcName); it != c_symbols.end())
+      funcName = it->second;
     if (isFunction(funcName)) {
       auto ft = std::get<FunctionType>(ast->get_type().type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);

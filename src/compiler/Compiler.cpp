@@ -3,7 +3,6 @@
 //
 
 #include "compiler/Compiler.h"
-#include "semantics/NameResolver.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
@@ -61,8 +60,6 @@
 #include "util/Utilities.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
-#include "llvm/IR/GlobalIFunc.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
@@ -430,38 +427,6 @@ void Compiler::codegen_mlir() {
                "MLIR lowering to LLVM IR failed\n");
     set_error();
     return;
-  }
-
-  // Create IFuncs for exported C externs in library modules.
-  // Externs are declared with their C name (@printf), but importers look for
-  // the mangled name (@module$printf). IFuncs bridge that gap.
-  if (!moduleName.empty()) {
-    for (auto &def : programAST->DefinitionVec) {
-      auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get());
-      if (!ext)
-        continue;
-      std::string cName = ext->Prototype->functionName.mangled();
-      std::string mangled =
-          AST::NameResolver::qualify(ext->Prototype->functionName, moduleName)
-              .mangled();
-      auto *fn = llvmModule->getFunction(cName);
-      if (!fn || llvmModule->getNamedValue(mangled))
-        continue;
-
-      auto *ptrTy = llvm::PointerType::get(*resPtr->Context, 0);
-      auto *resolverTy = llvm::FunctionType::get(ptrTy, false);
-      auto *resolver =
-          llvm::Function::Create(resolverTy, llvm::Function::InternalLinkage,
-                                 "resolve_" + mangled, llvmModule.get());
-      auto *entry =
-          llvm::BasicBlock::Create(*resPtr->Context, "entry", resolver);
-      llvm::IRBuilder<> irBuilder(entry);
-      irBuilder.CreateRet(fn);
-
-      llvm::GlobalIFunc::create(fn->getFunctionType(), 0,
-                                llvm::GlobalValue::ExternalLinkage, mangled,
-                                resolver, llvmModule.get());
-    }
   }
 
   llvmModule->setDataLayout(resPtr->Module->getDataLayout());

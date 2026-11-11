@@ -54,6 +54,9 @@ public:
   mlir::ModuleOp kernelModule;
   mlir::OpBuilder builder;
   std::string moduleName;
+  /// Each C binding's name in source (std::printf) → its symbol, its C name
+  /// (printf). Calls and function values use the symbol.
+  std::unordered_map<std::string, std::string> c_symbols;
   std::string fileName;
   sammine_util::Reporter::DiagnosticData diagnosticData;
   sammine_util::Reporter reporter;
