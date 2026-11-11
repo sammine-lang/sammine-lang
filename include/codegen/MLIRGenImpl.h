@@ -241,6 +241,8 @@ public:
   mlir::Value emitUnitExpr(AST::UnitExprAST *ast);
   mlir::Value emitVariableExpr(AST::VariableExprAST *ast);
   mlir::Value emitBinaryExpr(AST::BinaryExprAST *ast);
+  mlir::Value emitShortCircuit(AST::BinaryExprAST *ast,
+                               mlir::Location location);
 
   // Binary expression handlers (return non-null = handled)
   mlir::Value emitBinaryAssign(AST::BinaryExprAST *ast,

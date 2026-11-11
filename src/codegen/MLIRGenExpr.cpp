@@ -335,14 +335,7 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
     return emitComparison(ast->Op->tok_type, lhs, rhs, ast->LHS->get_type(),
                           location);
 
-  switch (ast->Op->tok_type) {
-  case TokAND:
-    return mlir::arith::AndIOp::create(builder, location, lhs, rhs).getResult();
-  case TokOR:
-    return mlir::arith::OrIOp::create(builder, location, lhs, rhs).getResult();
-  default:
-    return nullptr;
-  }
+  return nullptr;
 }
 
 mlir::Value MLIRGenImpl::emitBinaryEnumBitwise(AST::BinaryExprAST *ast,
@@ -383,6 +376,8 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
   if (ast->Op->is_assign())
     return emitBinaryAssign(ast, location);
+  if (ast->Op->is_logical())
+    return emitShortCircuit(ast, location);
 
   mlir::Value lhs = emitExpr(ast->LHS.get());
   mlir::Value rhs = emitExpr(ast->RHS.get());
@@ -406,6 +401,40 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
   imm_error(fmt::format("unsupported binary operator '{}'", ast->Op->lexeme),
             ast->get_location());
+}
+
+// a && b evaluates b only when a is true, a || b only when a is false; the
+// other way the result is a.
+mlir::Value MLIRGenImpl::emitShortCircuit(AST::BinaryExprAST *ast,
+                                          mlir::Location location) {
+  auto lhs = emitExpr(ast->LHS.get());
+  if (!lhs)
+    return nullptr;
+
+  auto *parentRegion = builder.getInsertionBlock()->getParent();
+  auto *rhsBlock = addBlockTo(parentRegion);
+  auto *mergeBlock = new mlir::Block();
+  mergeBlock->addArgument(lhs.getType(), location);
+
+  if (ast->Op->tok_type == TokAND)
+    mlir::cf::CondBranchOp::create(builder, location, lhs, rhsBlock,
+                                   mlir::ValueRange{}, mergeBlock,
+                                   mlir::ValueRange{lhs});
+  else
+    mlir::cf::CondBranchOp::create(builder, location, lhs, mergeBlock,
+                                   mlir::ValueRange{lhs}, rhsBlock,
+                                   mlir::ValueRange{});
+
+  builder.setInsertionPointToStart(rhsBlock);
+  auto rhs = emitExpr(ast->RHS.get());
+  if (!rhs)
+    return nullptr;
+  mlir::cf::BranchOp::create(builder, location, mergeBlock,
+                             mlir::ValueRange{rhs});
+
+  parentRegion->push_back(mergeBlock);
+  builder.setInsertionPointToStart(mergeBlock);
+  return mergeBlock->getArgument(0);
 }
 
 mlir::Value MLIRGenImpl::emitUnaryNegExpr(AST::UnaryNegExprAST *ast) {

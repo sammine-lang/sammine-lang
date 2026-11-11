@@ -769,6 +769,15 @@ void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
         lhs_info->def_location = ast->get_location();
       }
     }
+  } else if (ast->Op->is_logical()) {
+    // The right side runs only on one path, like an if without an else.
+    auto read = Use::reads(ast->get_location(), "use");
+    check_expr(ast->LHS.get(), read);
+    auto before = snapshot();
+    check_expr(ast->RHS.get(), read);
+    auto after = snapshot();
+    restore(before);
+    check_branch_consistency(before, {after, before}, ast->get_location());
   } else {
     auto read = Use::reads(ast->get_location(), "use");
     check_expr(ast->LHS.get(), read);

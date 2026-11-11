@@ -1,0 +1,34 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      and false
+// CHECK-NEXT: right
+// CHECK-NEXT: and true
+// CHECK-NEXT: or true
+// CHECK-NEXT: right
+// CHECK-NEXT: or false
+// CHECK-NEXT: in bounds 0
+
+// && and || evaluate their right side only when the left doesn't decide:
+// the guard keeps xs[3] from being read.
+
+import std;
+
+let right(x: bool) -> bool {
+  std::printf("right\n");
+  x
+}
+
+let show(name: ptr<char>, x: bool) -> unit {
+  if x { std::printf("%s true\n", name); } else { std::printf("%s false\n", name); };
+}
+
+let main() -> i32 {
+  show("and", false && right(true));
+  show("and", true && right(true));
+  show("or", true || right(false));
+  show("or", false || right(false));
+  let xs = [1i64, 2i64, 3i64];
+  let i = 3i64;
+  let ok = i < 3i64 && xs[i] > 0i64;
+  std::printf("in bounds %d\n", ok);
+  0
+}

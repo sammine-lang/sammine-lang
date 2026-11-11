@@ -1,0 +1,21 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:      break_short_circuit_consume.mn:19:11
+// CHECK-NEXT:   17|let main() -> i32 {
+// CHECK-NEXT:   18|  let p = alloc<i64>(1);
+// CHECK-NEXT:   19|  let ok = 1 == 2 && done(p);
+// CHECK-NEXT:     |           ───────────────┬
+// CHECK-NEXT:     |                          ╰─ Linear variable 'p' is consumed in some branches but not others
+
+// The right side of && runs only when the left is true, so p would be freed
+// on one path and leaked on the other.
+
+let done(p: 'ptr<i64>) -> bool {
+  free(p);
+  true
+}
+
+let main() -> i32 {
+  let p = alloc<i64>(1);
+  let ok = 1 == 2 && done(p);
+  0
+}

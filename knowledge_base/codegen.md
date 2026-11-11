@@ -32,8 +32,8 @@
 Two chains use `optional`-return: non-null = handled, nullptr = "not my job", loop over `static constexpr Handler handlers[]`.
 
 - **`emitVarDef`**: TupleDestructure → Array → Scalar
-- **`emitBinaryExpr`**: IntArith → FloatArith → Comparison → EnumBitwise → TypeclassOp
-- Assignment (`=`) short-circuits before the chain
+- **`emitBinaryExpr`**: TypeclassOp → IntArith → FloatArith → Comparison → EnumBitwise (a user's instance first: its type may have built-in operators too)
+- Assignment (`=`) and `&&`/`||` are handled before the chain: `emitShortCircuit` branches on the LHS and evaluates the RHS in its own block, so `i < n && xs[i] > 0` never reads `xs[n]`. The linear checker treats that RHS as a branch that may not run (consuming there is "consumed in some branches but not others")
 
 ## Forward Declarations (`generate()`)
 1. Register types: all StructDef/EnumDef → MLIR types. Structs are declared first and their fields filled in a second loop, so order never matters (`Box<Pt>` is instantiated at the front, before `Pt`)
