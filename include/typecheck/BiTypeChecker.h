@@ -187,7 +187,8 @@ public:
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);
-  void register_builtin_op_instances();
+  /// True if `key` is an instance, whether built in or written in source.
+  bool has_instance(const MonomorphizedKey &key) const;
 
   // Monomorphize and type-check the generic function a call resolved to.
   void instantiate_generic_callee(CallExprAST *ast);

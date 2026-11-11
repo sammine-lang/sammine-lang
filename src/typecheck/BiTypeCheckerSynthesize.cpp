@@ -1,6 +1,7 @@
 #include "ast/Ast.h"
 #include "fmt/format.h"
 #include "typecheck/BiTypeChecker.h"
+#include "typecheck/BuiltinInstances.h"
 #include "typecheck/Types.h"
 #include "typecheck/UniSubst.h"
 #include "llvm/ADT/STLExtras.h"
@@ -463,7 +464,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   auto &[tc_bindings, tc_type_args] = *resolved_args;
 
   MonomorphizedKey tc_key{class_name, tc_type_args};
-  if (!type_class_instances.contains(tc_key)) {
+  if (!has_instance(tc_key)) {
     add_error(ast->get_location(),
               fmt::format("No instance of {}<{}>", class_name,
                           tc_key.type_args_string()));
@@ -496,6 +497,8 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   auto resolved_name = tc_key.to_typeclass_name(method_name);
   props_.call(ast->id()).resolved_name = resolved_name;
   props_.call(ast->id()).is_typeclass_call = true;
+  if (is_builtin_instance(tc_key))
+    props_.call(ast->id()).builtin_instance = tc_key;
 
   auto [expected, result] = resolve_generic_signature(
       method_proto, params, func_type.get_return_type(), tc_bindings);
@@ -825,26 +828,17 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   }
 
   // Arithmetic operators dispatch through typeclasses
-  static const std::unordered_map<int, std::pair<std::string, std::string>>
-      op_to_class = {
-          {TokADD, {"Add", "Add"}}, {TokSUB, {"Sub", "Sub"}},
-          {TokMUL, {"Mul", "Mul"}}, {TokDIV, {"Div", "Div"}},
-          {TokMOD, {"Mod", "Mod"}},
-      };
-
-  auto it = op_to_class.find(ast->Op->tok_type);
-  if (it != op_to_class.end()) {
-    auto &[class_name, method_name] = it->second;
-    MonomorphizedKey tc_key{class_name, {lhs_type}};
-    if (!type_class_instances.contains(tc_key)) {
+  if (auto class_name = class_of_operator(ast->Op->tok_type)) {
+    MonomorphizedKey tc_key{std::string(*class_name), {lhs_type}};
+    if (!has_instance(tc_key)) {
       add_error(ast->Op->get_location(),
                 fmt::format("No instance of {}<{}> — cannot use '{}' on this "
                             "type",
-                            class_name, lhs_type.to_string(), ast->Op->lexeme));
+                            *class_name, lhs_type.to_string(), ast->Op->lexeme));
       return ast->set_type(Type::Poisoned());
     }
     props_.binary(ast->id()).resolved_op_method =
-        tc_key.to_typeclass_name(method_name);
+        tc_key.to_typeclass_name(tc_key.name);
     return ast->set_type(lhs_type);
   }
 
@@ -1561,8 +1555,7 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
           .to_generic_name(sammine_util::QualifiedName::from_parts({"Range"}))
           .mangled());
   if (!range_type ||
-      !type_class_instances.contains(
-          MonomorphizedKey{"Iterator", {*range_type, resolved}})) {
+      !has_instance(MonomorphizedKey{"Iterator", {*range_type, resolved}})) {
     this->add_error(
         ast->get_location(),
         fmt::format("No Iterator instance for Range with element type {}",

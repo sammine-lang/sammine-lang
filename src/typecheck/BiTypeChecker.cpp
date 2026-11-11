@@ -1,5 +1,6 @@
 #include "typecheck/BiTypeChecker.h"
 #include "ast/Ast.h"
+#include "typecheck/BuiltinInstances.h"
 #include "fmt/format.h"
 #include "util/Utilities.h"
 
@@ -51,11 +52,6 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
     else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
       register_typeclass_instance(tci);
   }
-
-  // Register compiler-builtin operator instances for primitive types
-  // (Add/Sub/Mul/Div/Mod on i32, i64, f64, char) — no source bodies,
-  // codegen emits inline ops for these.
-  register_builtin_op_instances();
 
   // Second pass: pre-register all function signatures so mutual recursion works
   for (auto &def : ast->DefinitionVec) {
@@ -522,6 +518,12 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 
   MonomorphizedKey tc_key{ast->class_name, tcip.concrete_types};
 
+  if (is_builtin_instance(tc_key)) {
+    this->add_error(ast->get_location(),
+                    fmt::format("{}<{}> is built in and can't be redefined",
+                                ast->class_name, tc_key.type_args_string()));
+    return;
+  }
   if (type_class_instances.contains(tc_key)) {
     this->add_error(ast->get_location(),
                     fmt::format("Duplicate instance of {}<{}>", ast->class_name,
@@ -537,31 +539,8 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   type_class_instances.insert(tc_key);
 }
 
-void BiTypeCheckerVisitor::register_builtin_op_instances() {
-  struct BuiltinEntry {
-    std::string class_name;
-    std::vector<Type> types;
-  };
-
-  static const BuiltinEntry entries[] = {
-      {"Add",
-       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
-        Type::F64_t(), Type::F32_t()}},
-      {"Sub",
-       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
-        Type::F64_t(), Type::F32_t()}},
-      {"Mul",
-       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
-        Type::F64_t(), Type::F32_t()}},
-      {"Div",
-       {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t(),
-        Type::F64_t(), Type::F32_t()}},
-      {"Mod", {Type::I32_t(), Type::I64_t(), Type::U32_t(), Type::U64_t()}},
-  };
-
-  for (auto &[name, types] : entries)
-    for (auto &t : types)
-      type_class_instances.insert(MonomorphizedKey{name, {t}});
+bool BiTypeCheckerVisitor::has_instance(const MonomorphizedKey &key) const {
+  return is_builtin_instance(key) || type_class_instances.contains(key);
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {

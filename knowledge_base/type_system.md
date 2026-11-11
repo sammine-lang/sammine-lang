@@ -64,6 +64,7 @@
 - Mangling: `MonomorphizedKey::to_typeclass_name(method)` → `Add<i32>::add`
 - Dispatch supports both `sizeof<i32>()` (unqualified) and `Add<i32>::add(x,y)` (qualified)
 - Both set `resolved_name` + `is_typeclass_call` on `CallProps`
+- Built-in instances (`Add<i32>` etc.) have no source: `is_builtin_instance()` in `typecheck/BuiltinInstances.h` decides them, and `kOperatorClasses` there maps each operator to its class. Look instances up with `has_instance()`, never `type_class_instances` directly. A call to one sets `CallProps::builtin_instance`, and codegen emits the instruction (`emitBuiltinInstanceCall`). Redefining one is an error
 
 ## Monomorphized Generics
 - Generic call → `unify()` type args → `substitute()` return type → `Monomorphizer::instantiate()` deep-clones AST → type-check clone → inject at front

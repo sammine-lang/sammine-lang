@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Add<i32> is built in and can't be redefined
+
+instance Add<i32> {
+  let Add(a: i32, b: i32) -> i32 { a }
+}
+
+let main() -> i32 {
+  return 0;
+}

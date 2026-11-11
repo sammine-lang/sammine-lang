@@ -16,6 +16,9 @@ struct CallProps {
   std::optional<sammine_util::QualifiedName> resolved_name;
   TypeBindings type_bindings;
   bool is_typeclass_call = false;
+  /// Set when the typeclass call reaches an instance the compiler provides,
+  /// such as Add<i32>, which has no function to call.
+  std::optional<MonomorphizedKey> builtin_instance;
   bool is_enum_constructor = false;
   size_t enum_variant_index = 0;
 };

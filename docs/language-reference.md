@@ -634,6 +634,8 @@ let v3: Vec2 = v1 + v2;                 // uses Add<Vec2>
 std::printf("%d %d\n", v3.x, v3.y);     // 30 40
 ```
 
+The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
+
 **`Indexer<Collection, Element>`** -- custom indexing:
 
 ```sammine

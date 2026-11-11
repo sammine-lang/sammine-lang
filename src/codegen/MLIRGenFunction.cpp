@@ -1,5 +1,7 @@
 #include "codegen/MLIRGenImpl.h"
 #include "codegen/CABI.h"
+#include "codegen/MLIRGenBinaryOps.h"
+#include "typecheck/BuiltinInstances.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -617,11 +619,37 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
   return nullptr;
 }
 
+mlir::Value MLIRGenImpl::emitBuiltinInstanceCall(AST::CallExprAST *ast,
+                                                 const MonomorphizedKey &key) {
+  llvm::SmallVector<mlir::Value, 2> operands;
+  for (auto &arg : ast->arguments) {
+    auto val = emitRValue(arg.get());
+    if (!val)
+      return nullptr;
+    operands.push_back(val);
+  }
+
+  auto location = loc(ast);
+  if (auto op = operator_of_class(key.name)) {
+    auto &type = key.type_args[0];
+    if (isFloatType(type))
+      return emitFloatArithOp(builder, location, operands[0], operands[1], *op);
+    return emitIntArithOp(builder, location, operands[0], operands[1], *op,
+                          isUnsignedIntegerType(type));
+  }
+  imm_error(fmt::format("no code for built-in instance {}<{}>", key.name,
+                        key.type_args_string()),
+            ast->get_location());
+}
+
 mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
   // Enum constructor — handled separately
   auto *cp = props_.call(ast->id());
   if (cp && cp->is_enum_constructor)
     return emitEnumConstructor(ast);
+  // An instance the compiler provides has no function to call.
+  if (cp && cp->builtin_instance)
+    return emitBuiltinInstanceCall(ast, *cp->builtin_instance);
 
   auto location = loc(ast);
 

@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      7
+// CHECK-NEXT: -3
+// CHECK-NEXT: 3000000000
+// CHECK-NEXT: 2147483648
+// CHECK-NEXT: 1
+// CHECK-NEXT: 2.500000
+// CHECK-NEXT: 2.250000
+
+// Built-in instances can be called by name, like any other instance, and do
+// what the operator does.
+
+import std;
+
+let main() -> i32 {
+  std::printf("%d\n", Add<i32>(3, 4));
+  std::printf("%d\n", Sub<i32>(1, 4));
+  std::printf("%ld\n", Mul<i64>(1000000i64, 3000i64));
+  // Unsigned division, so the high bit is not a sign.
+  std::printf("%u\n", Div<u32>(4294967295u32, 2u32) + 1u32);
+  std::printf("%d\n", Add<i32>::Add(Mod<i32>(10, 3), 0));
+  std::printf("%f\n", Div<f64>(5.0, 2.0));
+  std::printf("%f\n", Mul<f32>(1.5f32, 1.5f32));
+  return 0;
+}

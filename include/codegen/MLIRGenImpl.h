@@ -207,6 +207,10 @@ public:
   mlir::Value emitPartialApplication(AST::CallExprAST *ast,
                                      const std::string &calleeName,
                                      llvm::ArrayRef<mlir::Value> boundArgs);
+  /// A call to an instance the compiler provides, such as Add<i32>(a, b),
+  /// emitted as the instruction itself.
+  mlir::Value emitBuiltinInstanceCall(AST::CallExprAST *ast,
+                                      const MonomorphizedKey &key);
   mlir::Value emitIndirectCall(AST::CallExprAST *ast,
                                llvm::ArrayRef<mlir::Value> operands);
   void emitFuncCallAndLLVMReturn(llvm::StringRef callee, const Type &retType,
