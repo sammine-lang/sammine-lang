@@ -18,4 +18,19 @@ namespace sammine_lang::cabi {
 //! memory.
 mlir::Type registerType(mlir::Type structTy, const mlir::DataLayout &layout);
 
+//! The registers C passes arguments in: 6 integer and 8 floating point.
+inline constexpr unsigned kIntegerArgRegisters = 6;
+inline constexpr unsigned kFloatArgRegisters = 8;
+
+//! How many integer and floating-point registers an argument takes.
+struct Registers {
+  unsigned integer = 0;
+  unsigned floating = 0;
+};
+
+//! The registers for an argument of `type`: a scalar, or a struct's register
+//! type from registerType. A struct only goes in registers if all of them
+//! are free; otherwise C passes it on the stack.
+Registers registersFor(mlir::Type type);
+
 } // namespace sammine_lang::cabi

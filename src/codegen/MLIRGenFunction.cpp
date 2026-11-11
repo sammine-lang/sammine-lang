@@ -229,7 +229,8 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   // C moves a struct in registers, as the type cabi::registerType gives, or
   // through memory: a returned one through a pointer the caller passes as a
   // hidden first argument (sret), an argument as a pointer to a copy
-  // (byval). LLVM leaves this to the frontend.
+  // (byval). An argument struct also goes through memory when the registers
+  // it needs are no longer all free. LLVM leaves this to the frontend.
   auto retType = std::get<FunctionType>(ast->Prototype->get_type().type_data)
                      .get_return_type();
   auto &params = ast->Prototype->parameterVectors;
@@ -257,18 +258,34 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
       cRetType = convertType(retType);
     }
 
+    // Registers still free for arguments; the sret pointer takes one.
+    cabi::Registers free{cabi::kIntegerArgRegisters,
+                         cabi::kFloatArgRegisters};
+    if (sretType)
+      free.integer--;
+    auto take = [&](const cabi::Registers &needed) {
+      free.integer -= std::min(free.integer, needed.integer);
+      free.floating -= std::min(free.floating, needed.floating);
+    };
+
     llvm::SmallVector<std::pair<unsigned, mlir::Type>> byvalTypes;
     for (auto &param : params) {
       auto paramTy = convertType(param->get_type());
-      if (is_struct(param->get_type())) {
-        if (auto regTy = cabi::registerType(paramTy, layout)) {
-          paramTy = regTy;
-        } else {
-          byvalTypes.push_back({paramTypes.size(), paramTy});
-          paramTy = llvmPtrTy();
-        }
+      if (!is_struct(param->get_type())) {
+        take(cabi::registersFor(paramTy));
+        paramTypes.push_back(paramTy);
+        continue;
       }
-      paramTypes.push_back(paramTy);
+      auto regTy = cabi::registerType(paramTy, layout);
+      auto needed = regTy ? cabi::registersFor(regTy) : cabi::Registers{};
+      if (regTy && needed.integer <= free.integer &&
+          needed.floating <= free.floating) {
+        take(needed);
+        paramTypes.push_back(regTy);
+      } else {
+        byvalTypes.push_back({paramTypes.size(), paramTy});
+        paramTypes.push_back(llvmPtrTy());
+      }
     }
 
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(cRetType, paramTypes,

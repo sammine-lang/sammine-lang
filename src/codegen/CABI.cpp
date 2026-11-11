@@ -76,4 +76,20 @@ mlir::Type registerType(mlir::Type structTy, const mlir::DataLayout &layout) {
                                                 {low, chunkType(fields, 8, ctx)});
 }
 
+Registers registersFor(mlir::Type type) {
+  Registers regs;
+  if (auto st = mlir::dyn_cast<mlir::LLVM::LLVMStructType>(type)) {
+    for (auto field : st.getBody()) {
+      auto field_regs = registersFor(field);
+      regs.integer += field_regs.integer;
+      regs.floating += field_regs.floating;
+    }
+  } else if (mlir::isa<mlir::FloatType>(type)) {
+    regs.floating = 1;
+  } else {
+    regs.integer = 1;
+  }
+  return regs;
+}
+
 } // namespace sammine_lang::cabi

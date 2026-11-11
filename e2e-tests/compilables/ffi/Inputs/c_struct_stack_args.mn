@@ -1,0 +1,9 @@
+export struct Two { a: i64, b: i64, };
+export struct TwoF64 { x: f64, y: f64, };
+export struct Three { a: i64, b: i64, c: i64, };
+
+export reuse after_six_ints(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, t: Two) -> unit;
+export reuse after_five_ints(a: i64, b: i64, c: i64, d: i64, e: i64, t: Two) -> unit;
+export reuse after_eight_doubles(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, g: f64, h: f64, t: TwoF64) -> unit;
+export reuse after_seven_doubles(a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, g: f64, t: TwoF64) -> unit;
+export reuse sret_then_five(a: i64, b: i64, c: i64, d: i64, e: i64, t: Two) -> Three;

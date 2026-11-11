@@ -1,0 +1,25 @@
+// RUN: %cc -fPIC -c %dir/Inputs/c_struct_stack_args_runtime.c -o %T/c_struct_stack_args_runtime.o && %sammine --file %dir/Inputs/c_struct_stack_args.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      six 21 12
+// CHECK-NEXT: five 15 34
+// CHECK-NEXT: eight 3.6 56.0
+// CHECK-NEXT: seven 2.8 78.0
+// CHECK-NEXT: sret 15 7 8
+
+// C gets 6 integer and 8 floating-point registers for arguments. A struct
+// that would go in registers but doesn't fit in the ones left goes on the
+// stack whole.
+
+import std;
+import c_struct_stack_args as c;
+
+let main() -> i32 {
+  c::after_six_ints(1i64, 2i64, 3i64, 4i64, 5i64, 6i64, c::Two { a: 1i64, b: 2i64 });
+  c::after_five_ints(1i64, 2i64, 3i64, 4i64, 5i64, c::Two { a: 3i64, b: 4i64 });
+  c::after_eight_doubles(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8,
+                         c::TwoF64 { x: 5.0, y: 6.0 });
+  c::after_seven_doubles(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+                         c::TwoF64 { x: 7.0, y: 8.0 });
+  let r = c::sret_then_five(1i64, 2i64, 3i64, 4i64, 5i64, c::Two { a: 7i64, b: 8i64 });
+  std::printf("sret %ld %ld %ld\n", r.a, r.b, r.c);
+  0
+}
