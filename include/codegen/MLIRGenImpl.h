@@ -333,6 +333,10 @@ public:
   /// nullptr if `type` has none.
   mlir::Value emitComparison(TokenType op, mlir::Value lhs, mlir::Value rhs,
                              const Type &type, mlir::Location location);
+  /// Whether two values of the enum `type` are the same variant with equal
+  /// payloads, as an i1.
+  mlir::Value emitEnumEquality(mlir::Value lhs, mlir::Value rhs,
+                               const Type &type, mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
                                   const Type &arrType, TokenType tok,
                                   mlir::Location location);

@@ -75,13 +75,23 @@ inline bool is_builtin_conversion(const Type &from, const Type &to) {
 }
 
 /// True if `==` and `!=` are built in for `t`: numbers (untyped literals
-/// too), char, bool, pointers, and arrays of those but arrays.
+/// too), char, bool, pointers, arrays of those but arrays, and enums whose
+/// payloads are those. Two enum values are equal when they are the same
+/// variant with equal payloads.
 inline bool is_builtin_equality(const Type &t) {
   switch (t.type_kind) {
   case TypeKind::Char:
   case TypeKind::Bool:
   case TypeKind::Pointer:
     return true;
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(t.type_data);
+    for (auto &variant : et.get_variants())
+      for (auto &payload : variant.payload_types)
+        if (!is_builtin_equality(payload))
+          return false;
+    return true;
+  }
   case TypeKind::Array: {
     auto element = std::get<ArrayType>(t.type_data).get_element();
     return element.type_kind != TypeKind::Array &&

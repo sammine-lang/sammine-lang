@@ -257,7 +257,7 @@ if a < b { std::printf("less\n"); }
 else { std::printf("not less\n"); };
 ```
 
-Each goes through its own typeclass, as `+` goes through `Add` (see [Builtin Typeclasses](#builtin-typeclasses)): `<` through `Less`, `>` through `Greater`, `<=` through `LessEqual`, `>=` through `GreaterEqual`, `==` through `Equal` and `!=` through `NotEqual`. Numbers and `char` can be compared every way, and `bool`, pointers and arrays of those with `==` and `!=`. Any other type, a struct, tuple or enum, needs an instance: comparing values without one is an error ("No instance of Equal<P>").
+Each goes through its own typeclass, as `+` goes through `Add` (see [Builtin Typeclasses](#builtin-typeclasses)): `<` through `Less`, `>` through `Greater`, `<=` through `LessEqual`, `>=` through `GreaterEqual`, `==` through `Equal` and `!=` through `NotEqual`. Numbers and `char` can be compared every way, and `bool`, pointers, arrays of those and enums with `==` and `!=`. Two values of an enum are equal when they are the same variant with equal payloads, so `A(7) == B(7)` is false; an enum whose payloads can't be compared with `==` has no built-in `==` either. Any other type, such as a struct or tuple, needs an instance: comparing values without one is an error ("No instance of Equal<P>").
 
 ### Logical
 
@@ -686,7 +686,7 @@ std::printf("%d %d\n", v3.x, v3.y);     // 30 40
 
 The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
 
-**`Less<T>`**, **`Greater<T>`**, **`LessEqual<T>`**, **`GreaterEqual<T>`**, **`Equal<T>`**, **`NotEqual<T>`** -- comparison, used by `<`, `>`, `<=`, `>=`, `==` and `!=`. Each method takes two `T`s and returns `bool`. They are built in for the number types and `char`, and `Equal` and `NotEqual` also for `bool`, pointers and arrays of those. Each operator only needs its own instance:
+**`Less<T>`**, **`Greater<T>`**, **`LessEqual<T>`**, **`GreaterEqual<T>`**, **`Equal<T>`**, **`NotEqual<T>`** -- comparison, used by `<`, `>`, `<=`, `>=`, `==` and `!=`. Each method takes two `T`s and returns `bool`. They are built in for the number types and `char`, and `Equal` and `NotEqual` also for `bool`, pointers, arrays of those, and enums whose payloads have them. Each operator only needs its own instance:
 
 ```sammine
 struct Version { major: i32, minor: i32, };

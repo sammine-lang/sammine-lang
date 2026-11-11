@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Less<Color>
+
+// Enums have built-in == and !=, but no order.
+
+type Color = Red | Green;
+
+let main() -> i32 {
+  let before = Color::Red < Color::Green;
+  return 0;
+}

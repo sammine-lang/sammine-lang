@@ -1,12 +1,13 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: No instance of Equal<Color>
+// CHECK: No instance of Equal<Shape>
 
-// == goes through the Equal typeclass, as + goes through Add, and Color has no
-// instance.
+// == goes through the Equal typeclass, as + goes through Add. It is built in
+// for an enum only if its payloads have it, and P, a struct, doesn't.
 
-type Color = Red | Green;
+struct P { x: i32, };
+type Shape = Dot(P) | Empty;
 
 let main() -> i32 {
-  let same = Color::Red == Color::Green;
+  let same = Shape::Empty == Shape::Empty;
   return 0;
 }

@@ -232,7 +232,95 @@ mlir::Value MLIRGenImpl::emitComparison(TokenType op, mlir::Value lhs,
   }
   if (type.type_kind == TypeKind::Array)
     return emitArrayComparison(lhs, rhs, type, op, location);
+  if (type.type_kind == TypeKind::Enum &&
+      (op == TokEQUAL || op == TokNOTEqual)) {
+    auto equal = emitEnumEquality(lhs, rhs, type, location);
+    if (op == TokEQUAL)
+      return equal;
+    auto one = mlir::arith::ConstantIntOp::create(builder, location, 1, 1);
+    return mlir::arith::XOrIOp::create(builder, location, equal, one)
+        .getResult();
+  }
   return nullptr;
+}
+
+// Same variant, and equal payloads. Only the payload of the variant the tag
+// names is compared: the other variants' bytes were never written.
+mlir::Value MLIRGenImpl::emitEnumEquality(mlir::Value lhs, mlir::Value rhs,
+                                          const Type &type,
+                                          mlir::Location location) {
+  auto &et = std::get<EnumType>(type.type_data);
+  if (et.is_integer_backed())
+    return mlir::arith::CmpIOp::create(builder, location,
+                                       mlir::arith::CmpIPredicate::eq, lhs, rhs)
+        .getResult();
+
+  auto enumTy = cautious_at(enumTypes, type, "enumTypes");
+  auto inMemory = [&](mlir::Value value) {
+    auto alloca = emitAllocaOne(enumTy, location);
+    mlir::LLVM::StoreOp::create(builder, location, value, alloca);
+    return alloca;
+  };
+  auto lhsPtr = inMemory(lhs);
+  auto rhsPtr = inMemory(rhs);
+  auto fieldPtr = [&](mlir::Value ptr, int32_t field) {
+    return mlir::LLVM::GEPOp::create(
+        builder, location, llvmPtrTy(), enumTy, ptr,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, field},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+  };
+  auto i32Ty = builder.getI32Type();
+  auto lhsTag =
+      mlir::LLVM::LoadOp::create(builder, location, i32Ty, fieldPtr(lhsPtr, 0));
+  auto rhsTag =
+      mlir::LLVM::LoadOp::create(builder, location, i32Ty, fieldPtr(rhsPtr, 0));
+  mlir::Value equal = mlir::arith::CmpIOp::create(
+      builder, location, mlir::arith::CmpIPredicate::eq, lhsTag, rhsTag);
+
+  auto i1 = [&](bool value) -> mlir::Value {
+    return mlir::arith::ConstantIntOp::create(builder, location, value ? 1 : 0,
+                                              1);
+  };
+  mlir::Value payloadsEqual = i1(true);
+  for (size_t v = 0; v < et.variant_count(); v++) {
+    auto &variant = et.get_variant(v);
+    if (variant.payload_types.empty())
+      continue;
+    auto lhsPayload = fieldPtr(lhsPtr, 1);
+    auto rhsPayload = fieldPtr(rhsPtr, 1);
+    mlir::Value variantEqual = i1(true);
+    int64_t byteOffset = 0;
+    for (auto &fieldType : variant.payload_types) {
+      auto offset = static_cast<int32_t>(
+          advancePayloadOffset(byteOffset, fieldType));
+      auto at = [&](mlir::Value payload) -> mlir::Value {
+        return mlir::LLVM::GEPOp::create(
+            builder, location, llvmPtrTy(), builder.getI8Type(), payload,
+            llvm::ArrayRef<mlir::LLVM::GEPArg>{offset},
+            mlir::LLVM::GEPNoWrapFlags::inbounds);
+      };
+      // An array is compared through its address; anything else by value.
+      auto value = [&](mlir::Value ptr) -> mlir::Value {
+        if (fieldType.type_kind == TypeKind::Array)
+          return ptr;
+        return mlir::LLVM::LoadOp::create(builder, location,
+                                          convertType(fieldType), ptr);
+      };
+      auto fieldEqual =
+          emitComparison(TokEQUAL, value(at(lhsPayload)), value(at(rhsPayload)),
+                         fieldType, location);
+      variantEqual = mlir::arith::AndIOp::create(builder, location,
+                                                 variantEqual, fieldEqual);
+    }
+    auto isVariant = mlir::arith::CmpIOp::create(
+        builder, location, mlir::arith::CmpIPredicate::eq, lhsTag,
+        mlir::arith::ConstantIntOp::create(builder, location, i32Ty,
+                                           static_cast<int64_t>(v)));
+    payloadsEqual = mlir::arith::SelectOp::create(builder, location, isVariant,
+                                                  variantEqual, payloadsEqual);
+  }
+  return mlir::arith::AndIOp::create(builder, location, equal, payloadsEqual)
+      .getResult();
 }
 
 mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,

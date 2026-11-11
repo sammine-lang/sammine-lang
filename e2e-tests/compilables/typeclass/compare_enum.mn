@@ -1,0 +1,34 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      1 0
+// CHECK-NEXT: 1 0 0
+// CHECK-NEXT: 1 0 0
+// CHECK-NEXT: 1 0
+// CHECK-NEXT: 1 0
+// CHECK-NEXT: 0 1
+
+// Two values of one enum type are equal when they are the same variant with
+// equal payloads: A(7) is not B(7). == and != are built in for enums whose
+// payloads have them.
+
+import std;
+
+type Color = Red | Green;
+type Pick = A(i64) | B(i64);
+type Level: i32 = Low(1) | High(2);
+type Wrapped = Has(Pick) | Empty;
+
+let main() -> i32 {
+  std::printf("%d %d\n", Color::Red == Color::Red, Color::Red == Color::Green);
+  std::printf("%d %d %d\n", Pick::A(7i64) == Pick::A(7i64),
+              Pick::A(7i64) == Pick::A(8i64), Pick::A(7i64) == Pick::B(7i64));
+  let some: Option<i32> = Some(3);
+  let none: Option<i32> = None;
+  std::printf("%d %d %d\n", some == Option<i32>::Some(3), some == none,
+              none == some);
+  std::printf("%d %d\n", Level::Low == Level::Low, Level::Low == Level::High);
+  std::printf("%d %d\n", Wrapped::Has(Pick::B(1i64)) == Wrapped::Has(Pick::B(1i64)),
+              Wrapped::Has(Pick::B(1i64)) == Wrapped::Empty);
+  std::printf("%d %d\n", Pick::A(1i64) != Pick::A(1i64),
+              Pick::A(1i64) != Pick::B(1i64));
+  return 0;
+}
