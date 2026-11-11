@@ -47,7 +47,7 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `src/lex/` | `Lexer.cpp` | Lexer implementation. Produces `TokenStream`. |
 | `include/lex/` | `Lexer.h`, `Token.h` | Token types, `TokenType` enum, `Token` class. |
 | `src/` | `Parser.cpp` | Recursive-descent parser. |
-| `include/parser/` | `Parser.h` | Parser class, precedence table, `alias_to_module` map for imports. |
+| `include/parser/` | `Parser.h` | Parser class, precedence table. Names are parsed as written; `NameResolver` resolves them. |
 | `src/ast/` | `Ast.cpp`, `AstToString.cpp`, `AstPrinterVisitor.cpp` | AST node method bodies, `to_string()` implementations, tree printer. |
 | `include/ast/` | `Ast.h`, `AstBase.h`, `AstDecl.h`, `ASTProperties.h` | All AST node classes, visitor base classes, externalized properties. |
 | `src/semantics/` | `ScopeGeneratorVisitor.cpp`, `GeneralSemanticsVisitor.cpp` | Scope/name resolution, general semantic checks. |

@@ -86,12 +86,9 @@ auto Parser::ParseImport() -> std::optional<AST::ImportDecl> {
                     as_tok->get_location(), std::nullopt);
     decl.alias = alias_id->lexeme;
     decl.location = import_tok->get_location() | alias_id->get_location();
-    alias_to_module[decl.alias] = decl.module_name;
   } else {
     decl.alias = "";
     decl.location = import_tok->get_location() | module_id->get_location();
-    // Auto-alias: `import math;` allows `math::add` syntax
-    alias_to_module[decl.module_name] = decl.module_name;
   }
 
   if (!expect(TokSemiColon))
@@ -160,7 +157,7 @@ auto Parser::ParseStructDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'struct'",
           struct_tok->get_location());
 
-  auto struct_pqn = parseQualifiedNameTail(id, false);
+  auto struct_pqn = parseQualifiedNameTail(id);
 
   // Parse optional type parameters: struct Pair<T, U> { ... };
   auto [struct_type_params, tp_error] = parseTypeParams(id->get_location());
@@ -207,7 +204,7 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   REQUIRE(id, TokID, "Expected an identifier after 'type'",
           type_tok->get_location());
 
-  auto enum_pqn = parseQualifiedNameTail(id, false);
+  auto enum_pqn = parseQualifiedNameTail(id);
 
   // Parse optional type parameters: type Option<T> = ...
   auto [enum_type_params, tp_error] = parseTypeParams(id->get_location());
@@ -1251,25 +1248,7 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
   } else {
     // Unified: handles unqualified, 2-segment (Enum::Variant),
     // and 3-segment (Module::Enum::Variant)
-    auto pqn = parseQualifiedNameTail(prefix_tok, false);
-    // For 3-segment module::enum::variant, resolve the module alias
-    if (pqn.qn.depth() == 3) {
-      auto &parts = pqn.qn.parts();
-      auto it = alias_to_module.find(parts[0].name);
-      bool unresolved = (it == alias_to_module.end());
-      std::optional<std::string> module_alias;
-      std::string resolved_mod;
-      if (unresolved) {
-        resolved_mod = parts[0].name;
-      } else {
-        module_alias = parts[0].name;
-        resolved_mod = it->second;
-      }
-      pqn.qn = sammine_util::QualifiedName::from_parts(
-          std::vector<sammine_util::QualifiedName::Part>{
-              {resolved_mod, ""}, parts[1], parts[2]},
-          unresolved, std::move(module_alias));
-    }
+    auto pqn = parseQualifiedNameTail(prefix_tok);
     pattern.variant_name = pqn.qn;
     pattern.location = pqn.location;
   }
@@ -1425,7 +1404,7 @@ auto Parser::ParsePrototype() -> p<PrototypeAST> {
   reject_keyword_name();
   EXPECT(id, TokID);
 
-  auto proto_pqn = parseQualifiedNameTail(id, false);
+  auto proto_pqn = parseQualifiedNameTail(id);
 
   // Parse optional explicit type parameters: <T, U, ...>
   auto [type_params, tp_error] = parseTypeParams(id->get_location());
@@ -1824,8 +1803,8 @@ auto Parser::ParseKernelDef() -> p<DefinitionAST> {
 // Parse `::id` tail after an initial ID. Resolves module aliases (e.g. `m::add`
 // where `m` was aliased via `import math as m`). Used for calls and struct
 // literals.
-auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
-                                    bool resolve_alias) -> ParsedQualifiedName {
+auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok)
+    -> ParsedQualifiedName {
   std::vector<std::string> parts = {first_tok->lexeme};
   Location loc = first_tok->get_location();
 
@@ -1844,21 +1823,7 @@ auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
 
   if (parts.size() == 1)
     return {sammine_util::QualifiedName::local(parts[0]), loc};
-
-  bool unresolved = false;
-  std::optional<std::string> module_alias;
-  if (resolve_alias) {
-    auto it = alias_to_module.find(parts[0]);
-    if (it != alias_to_module.end()) {
-      module_alias = parts[0]; // save original alias (e.g. "h")
-      parts[0] = it->second;   // resolve to module name (e.g. "typed_helper")
-    } else
-      unresolved = true;
-  }
-
-  return {sammine_util::QualifiedName::from_parts(std::move(parts), unresolved,
-                                                  std::move(module_alias)),
-          loc};
+  return {sammine_util::QualifiedName::from_parts(std::move(parts)), loc};
 }
 
 // Speculatively parse `<Type, ...>` after a name. Uses rollback if the `<`

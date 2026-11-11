@@ -1,0 +1,13 @@
+// RUN: %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: hello from greet
+
+// An imported generic function is compiled here, but its names use its own
+// module's import aliases: out::printf is std::printf, though this file
+// has no alias out.
+
+import std;
+import aliased_user;
+
+let main() -> i32 {
+  return aliased_user::greet<i32>(0);
+}

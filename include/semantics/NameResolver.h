@@ -32,10 +32,16 @@ public:
                sammine_util::Reportee &reportee)
       : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee) {}
 
+  //! The import aliases of each module whose code is being resolved.
+  void use_aliases(std::map<std::string, ImportAliases> aliases) {
+    module_aliases = std::move(aliases);
+  }
+
   //! A type, in a type expression, or the type a struct literal or a
   //! generic names.
   void resolve_type(TypeExprAST *type, const ASTContext &where);
   void resolve_type_name(sammine_util::QualifiedName &name,
+                         sammine_util::Location location,
                          const ASTContext &where);
   //! A value: a call's callee or a variable. Reports a name not found, unless
   //! `has_type_args`: a typeclass method, which the type checker resolves.
@@ -47,7 +53,13 @@ private:
   Scopes &scopes;
   const VariantEnums &variant_to_enum;
   sammine_util::Reportee &reportee;
+  std::map<std::string, ImportAliases> module_aliases;
 
+  //! What the first part of a qualified name means: one of the module's
+  //! import aliases, rewritten to that module (m::f → math::f), or else a type
+  //! of the module's own (Shape::Line → shapes::Shape::Line). False if it is
+  //! neither, leaving `name` as written.
+  bool resolve_head(sammine_util::QualifiedName &name, const ASTContext &where);
   //! The top-level definition of `where.module` that `name` means, if any.
   std::optional<sammine_util::QualifiedName>
   own_definition(const sammine_util::QualifiedName &name,

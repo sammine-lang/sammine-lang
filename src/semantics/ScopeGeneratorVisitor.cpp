@@ -9,6 +9,7 @@
 namespace sammine_lang::AST {
 // pre order
 void ScopeGeneratorVisitor::preorder_walk(ProgramAST *ast) {
+  resolver.use_aliases(ast->module_aliases);
 
   // Map import-statement locations to module names so we can tell the user
   // which import introduced a conflicting name.
@@ -182,7 +183,7 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
                          /*is_call=*/false, ast->get_location(), ctx());
 }
 void ScopeGeneratorVisitor::postorder_walk(StructLiteralExprAST *ast) {
-  resolver.resolve_type_name(ast->struct_name, ctx());
+  resolver.resolve_type_name(ast->struct_name, ast->get_location(), ctx());
   for (auto &type_arg : ast->explicit_type_args)
     resolve_type(type_arg.get());
 }

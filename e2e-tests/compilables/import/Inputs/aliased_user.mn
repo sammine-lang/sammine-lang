@@ -1,0 +1,8 @@
+import std as out;
+
+// Uses this module's alias for std, out, which the program importing it
+// doesn't have.
+export let greet<T>(x: T) -> i32 {
+  out::printf("hello from greet\n");
+  0
+}

@@ -28,8 +28,38 @@ bool NameResolver::is_local(const std::string &name) {
   return false;
 }
 
+bool NameResolver::resolve_head(sammine_util::QualifiedName &name,
+                                const ASTContext &where) {
+  auto parts = name.parts();
+  if (auto aliases = module_aliases.find(where.module);
+      aliases != module_aliases.end())
+    if (auto it = aliases->second.find(parts.front().name);
+        it != aliases->second.end()) {
+      parts.front().name = it->second;
+      name = sammine_util::QualifiedName::from_parts(std::move(parts));
+      return true;
+    }
+  auto head = sammine_util::QualifiedName::from_parts(
+      std::vector<sammine_util::QualifiedName::Part>{parts.front()});
+  if (auto own = own_definition(head, where)) {
+    auto resolved = own->parts();
+    resolved.insert(resolved.end(), std::next(parts.begin()), parts.end());
+    name = sammine_util::QualifiedName::from_parts(std::move(resolved));
+    return true;
+  }
+  return false;
+}
+
 void NameResolver::resolve_type_name(sammine_util::QualifiedName &name,
+                                     sammine_util::Location location,
                                      const ASTContext &where) {
+  // A module's type, m::Point.
+  if (name.is_qualified()) {
+    if (!resolve_head(name, where) && !is_visible(name.get_module()))
+      reportee.add_error(location, fmt::format("Module '{}' is not imported",
+                                               name.get_module()));
+    return;
+  }
   if (llvm::is_contained(where.type_params, name.mangled()) ||
       is_builtin_type_name(name.get_name()))
     return;
@@ -41,13 +71,13 @@ void NameResolver::resolve_type(TypeExprAST *type, const ASTContext &where) {
   if (!type)
     return;
   if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(type)) {
-    resolve_type_name(simple->name, where);
+    resolve_type_name(simple->name, simple->location, where);
   } else if (auto *ptr = llvm::dyn_cast<PointerTypeExprAST>(type)) {
     resolve_type(ptr->pointee.get(), where);
   } else if (auto *arr = llvm::dyn_cast<ArrayTypeExprAST>(type)) {
     resolve_type(arr->element.get(), where);
   } else if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(type)) {
-    resolve_type_name(gen->base_name, where);
+    resolve_type_name(gen->base_name, gen->location, where);
     for (auto &arg : gen->type_args)
       resolve_type(arg.get(), where);
   } else if (auto *func = llvm::dyn_cast<FunctionTypeExprAST>(type)) {
@@ -64,28 +94,20 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
                                  bool has_type_args, bool is_call,
                                  sammine_util::Location location,
                                  const ASTContext &where) {
-  // X::N where X isn't an imported module: X is a type, e.g. the enum of the
-  // variant Shape::Line, resolved as a type is.
-  if (name.is_unresolved()) {
-    auto parts = name.parts();
-    auto head = sammine_util::QualifiedName::from_parts(
-        std::vector<sammine_util::QualifiedName::Part>{parts.front()});
-    if (auto own = own_definition(head, where)) {
-      auto resolved = own->parts();
-      resolved.insert(resolved.end(), std::next(parts.begin()), parts.end());
-      name = sammine_util::QualifiedName::from_parts(std::move(resolved));
+  // A module's name, m::f, or a variant through its enum, Color::Red.
+  if (name.is_qualified()) {
+    auto written = name;
+    bool head_known = resolve_head(name, where);
+    // A typeclass method or a generic enum's variant: the type checker
+    // resolves it.
+    if (has_type_args)
       return;
-    }
-    if (!has_type_args && !is_visible(name.get_module()))
+    if (!head_known && !is_visible(name.get_module())) {
       reportee.add_error(location, fmt::format("Module '{}' is not imported",
                                                name.get_module()));
-    return;
-  }
-
-  // An import's name, m::f, or an enum's variant, Color::Red.
-  if (name.is_qualified()) {
-    if (has_type_args || is_visible(name.mangled()) ||
-        is_visible(name.get_qualifier()))
+      return;
+    }
+    if (is_visible(name.mangled()) || is_visible(name.get_qualifier()))
       return;
     reportee.add_error(
         location, is_call
@@ -93,7 +115,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
                                     "expression is not found before",
                                     name.mangled())
                       : fmt::format("The name {} is not found before",
-                                    name.with_alias().mangled()));
+                                    written.mangled()));
     return;
   }
 

@@ -556,7 +556,7 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
       resolve_literal_type(ast->arguments[i].get(), arg_type);
       if (!unify(params[i], arg_type, bindings)) {
         auto call_name = format_generic_call_name(
-            ast->functionName.with_alias(), type_params, bindings);
+            ast->written_name, type_params, bindings);
         auto expected = substitute(params[i], bindings);
         this->add_error(ast->arguments[i]->get_location(),
                         fmt::format("Type mismatch in argument {} of '{}': "
@@ -592,7 +592,7 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
-  return ResolvedCall{format_generic_call_name(ast->functionName.with_alias(),
+  return ResolvedCall{format_generic_call_name(ast->written_name,
                                                type_params, bindings),
                       std::move(expected), std::move(result),
                       substitute(generic_type, bindings), false};
@@ -622,7 +622,7 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
 
   auto func = std::get<FunctionType>(ty->type_data);
   auto params = func.get_params_types();
-  auto callee = ast->functionName.with_alias().mangled();
+  auto callee = ast->written_name.mangled();
 
   // Variadic functions: accept any number of args >= fixed params
   if (func.is_var_arg()) {
@@ -1386,13 +1386,6 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
 
   for (auto &val : ast->field_values)
     val->accept_vis(this);
-
-  if (ast->struct_name.is_unresolved()) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Module '{}' is not imported",
-                                ast->struct_name.get_module()));
-    return ast->set_type(Type::Poisoned());
-  }
 
   auto type_opt = get_typename_type(ast->struct_name.mangled());
 

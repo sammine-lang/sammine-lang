@@ -102,7 +102,6 @@ private:
 
 public:
   std::shared_ptr<TokenStream> tokStream;
-  std::map<std::string, std::string> alias_to_module;
   [[nodiscard]] auto ParseImport() -> std::optional<AST::ImportDecl>;
   [[nodiscard]] auto ParseProgram() -> u<ProgramAST>;
 
@@ -171,12 +170,9 @@ public:
                             const std::string &message = "")
       -> std::shared_ptr<Token>;
 
-  /// Greedily consume ::ID pairs after an already-consumed first TokID.
-  /// \param first_tok     The already-consumed TokID token
-  /// \param resolve_alias If true, resolve first segment through
-  /// alias_to_module
-  [[nodiscard]] auto parseQualifiedNameTail(std::shared_ptr<Token> first_tok,
-                                            bool resolve_alias = true)
+  /// Greedily consume ::ID pairs after an already-consumed first TokID. The
+  /// name is kept as written; NameResolver decides what it means.
+  [[nodiscard]] auto parseQualifiedNameTail(std::shared_ptr<Token> first_tok)
       -> ParsedQualifiedName;
 
   /// Speculatively parse <TypeExpr, ...> after a qualified name.

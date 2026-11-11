@@ -139,6 +139,8 @@ void Compiler::parse() {
 
   for (auto &def : programAST->DefinitionVec)
     def->defining_module = library_name();
+  programAST->module_aliases[library_name()] =
+      AST::import_aliases(programAST->imports, library_name());
 }
 
 std::string Compiler::library_name() const {

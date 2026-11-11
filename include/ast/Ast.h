@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include "ast/AstBase.h"
 #include "ast/AstDecl.h"
 #include "util/QualifiedName.h"
@@ -216,11 +217,29 @@ struct ImportDecl {
   sammine_util::Location location;
 };
 
+/// The names a module refers to other modules by → those modules: each
+/// import's alias, or its module's name without one, and the module's own
+/// name.
+using ImportAliases = std::map<std::string, std::string>;
+inline ImportAliases import_aliases(const std::vector<ImportDecl> &imports,
+                                    const std::string &self) {
+  ImportAliases aliases;
+  if (!self.empty())
+    aliases[self] = self;
+  for (auto &import : imports)
+    aliases[import.alias.empty() ? import.module_name : import.alias] =
+        import.module_name;
+  return aliases;
+}
+
 class ProgramAST : public AstBase, public Printable {
 public:
   ProgramAST() : AstBase(NodeKind::ProgramAST) {}
   std::vector<ImportDecl> imports;
   std::vector<std::unique_ptr<DefinitionAST>> DefinitionVec;
+  /// The import aliases of each module whose code is in the program: its own
+  /// (under its module name, "" for an executable) and each imported one's.
+  std::map<std::string, ImportAliases> module_aliases;
   AST_NODE_METHODS("ProgramAST", NodeKind::ProgramAST)
 };
 
@@ -571,7 +590,10 @@ public:
 class CallExprAST : public ExprAST {
 
 public:
+  /// What the callee is: NameResolver rewrites it to the definition's name.
   sammine_util::QualifiedName functionName;
+  /// The callee as the source wrote it (h::double_it), for error messages.
+  sammine_util::QualifiedName written_name;
   std::vector<std::unique_ptr<AST::ExprAST>> arguments;
   std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   explicit CallExprAST(
@@ -579,7 +601,8 @@ public:
       std::vector<std::unique_ptr<AST::ExprAST>> arguments_ = {})
       : ExprAST(NodeKind::CallExprAST),
         functionName(
-            sammine_util::QualifiedName::local(tok ? tok->lexeme : "")) {
+            sammine_util::QualifiedName::local(tok ? tok->lexeme : "")),
+        written_name(functionName) {
     join_location(tok);
     for (auto &arg : arguments_)
       if (arg)
@@ -589,7 +612,8 @@ public:
   explicit CallExprAST(
       sammine_util::QualifiedName qn, sammine_util::Location loc,
       std::vector<std::unique_ptr<AST::ExprAST>> arguments_ = {})
-      : ExprAST(NodeKind::CallExprAST), functionName(std::move(qn)) {
+      : ExprAST(NodeKind::CallExprAST), functionName(std::move(qn)),
+        written_name(functionName) {
     this->location = loc;
     for (auto &arg : arguments_)
       if (arg)

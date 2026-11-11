@@ -47,6 +47,8 @@ bool Resolver::import_module(const std::string &name, const Path &src_dir,
   if (!mn_program)
     return false;
 
+  programAST.module_aliases[name] = AST::import_aliases(mn_program->imports, name);
+
   // Recursively import this module's own dependencies (transitive).
   auto mod_src_dir = mn_path.parent_path();
   for (auto &sub_import : mn_program->imports) {
@@ -100,7 +102,6 @@ UP Resolver::get_program_from_file(const Path &file_path,
   Lexer mn_lexer(mn_input, si);
   auto mn_tok_stream = mn_lexer.getTokenStream();
   Parser mn_parser(mn_tok_stream);
-  mn_parser.alias_to_module[name] = name;
   auto mn_program = mn_parser.Parse();
 
   if (mn_parser.has_errors()) {

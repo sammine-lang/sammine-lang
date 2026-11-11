@@ -7,7 +7,7 @@
 ## Import Resolution (`Compiler::resolve_imports`)
 1. Find `.mn` file: CWD → `-I` paths → source dir → stdlib_dir
 2. Diamond dedup via `imported_modules` set (canonical path)
-3. Parse, register self-alias, recursive resolve (sub-imports as transitive)
+3. Parse, record the module's import aliases, recursive resolve (sub-imports as transitive)
 4. Visibility filter: exported defs + all typeclass decls/instances (direct only)
 5. Non-generic exported FuncDefAST → converted to ExternAST (importer sees declaration, not body)
 6. Generic functions kept as full FuncDefAST (monomorphizer needs body)
@@ -28,9 +28,9 @@
 - Search per module: if Static → `.a` → `.so`; else `.so` → `.a`
 - Directory order: CWD → `-I` → source dir → stdlib dir
 
-## Parser Aliases
-- Pre-registered: `C` → `C`, `sammine` → `sammine`
-- `import math as m;` → `alias_to_module[m] = math`
+## Import Aliases
+- `import math as m;` → `m` means math; `import math;` → `math` means math; a module's own name means itself (`AST::import_aliases`)
+- Kept per module in `ProgramAST::module_aliases` (the program's by Compiler::parse, each import's by the import resolver), so `NameResolver` reads a name with the aliases of the module that wrote it
 
 ## Stdlib
 | File | Purpose |

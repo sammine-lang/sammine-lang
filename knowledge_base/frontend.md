@@ -14,7 +14,7 @@
 - `ParsePrimaryExpr()`: unary/keyword parsers first, then `ParseIdentifierExpr` (handles both calls and variables), then literals. Postfix `[index]` and `.field` via `parsePostfixOps()`
 - `ParseDefinition()`: TypeClassDecl, TypeClassInstance, KernelDef, StructDef, EnumDef, ReuseDef, FuncDef
 - Pipe `|>`: desugared to `f(x)` at parse time (precedence 1, lowest)
-- `parseQualifiedNameTail(first_tok, resolve_alias=true)`: greedy `::ID` chain consumer, used everywhere
+- `parseQualifiedNameTail(first_tok)`: greedy `::ID` chain consumer, used everywhere. Names are kept as written: the parser resolves nothing, `NameResolver` does
 
 ### Speculative Parsing
 - `parseExplicitTypeArgsTail()`: tries `<Type, ...>` after a name; rollback if not type args
@@ -50,6 +50,8 @@
 - Resolved in the module whose code it is: its own definition first (`own_definition`: `M::X` when M was imported), so an imported generic body finds its module's names and an importer's same-named definition can't capture them
 - Values: locals → own module → variants (own module's enums first; `Red(1)` → `Color::Red(1)`) → as written. `X::N` with X not an import (unresolved) resolves X as a type: `Shape::Line` → `M::Shape::Line`
 - Types: type params → builtins → own module → as written
+- Qualified paths (`resolve_head`): the first part is one of the writing module's import aliases → that module (`ProgramAST::module_aliases`, from each module's imports, filled by Compiler::parse and the import resolver), else the module's own type (`Shape::Line`); else "Module 'X' is not imported"
+- `CallExprAST::written_name` keeps the callee as written (`h::double_it`) for error messages; `functionName` is what it resolved to
 
 ## GeneralSemanticsVisitor (second semantic pass)
 - Reserved identifiers: names containing `__` rejected (C interop mangling). Checked on: FuncDef, VarDef, StructDef, EnumDef, TypeAliasDef

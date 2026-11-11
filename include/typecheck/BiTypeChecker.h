@@ -330,12 +330,6 @@ public:
       return *type_expr->resolved_type;
 
     if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(type_expr)) {
-      if (simple->name.is_unresolved()) {
-        this->add_error(type_expr->location,
-                        fmt::format("Module '{}' is not imported",
-                                    simple->name.get_module()));
-        return Type::Poisoned();
-      }
       auto mangled = simple->name.mangled();
       auto get_type_opt = this->get_typename_type(mangled);
       if (!get_type_opt)

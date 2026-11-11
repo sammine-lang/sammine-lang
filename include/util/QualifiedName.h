@@ -27,9 +27,7 @@ struct QualifiedName {
   };
 
 private:
-  std::vector<Part> parts_;                 // [{math,""}, {Color,""}, {Red,""}]
-  std::optional<std::string> module_alias_; // original alias before resolution
-  bool unresolved_ = false;
+  std::vector<Part> parts_; // [{math,""}, {Color,""}, {Red,""}]
 
   // local() is restricted to parsing/AST construction only.
   static QualifiedName local(std::string name) {
@@ -55,36 +53,20 @@ public:
     return qn;
   }
 
-  static QualifiedName unresolved_qualified(std::string alias,
-                                            std::string name) {
-    QualifiedName qn;
-    qn.parts_ = {{std::move(alias), ""}, {std::move(name), ""}};
-    qn.unresolved_ = true;
-    return qn;
-  }
-
   // Convenience: create from plain strings (no type args)
-  static QualifiedName
-  from_parts(std::vector<std::string> names, bool unresolved = false,
-             std::optional<std::string> module_alias = std::nullopt) {
+  static QualifiedName from_parts(std::vector<std::string> names) {
     QualifiedName qn;
     qn.parts_.clear();
     qn.parts_.reserve(names.size());
     for (auto &n : names)
       qn.parts_.push_back({std::move(n), ""});
-    qn.unresolved_ = unresolved;
-    qn.module_alias_ = std::move(module_alias);
     return qn;
   }
 
   // Create from structured Parts (with type args)
-  static QualifiedName
-  from_parts(std::vector<Part> parts, bool unresolved = false,
-             std::optional<std::string> module_alias = std::nullopt) {
+  static QualifiedName from_parts(std::vector<Part> parts) {
     QualifiedName qn;
     qn.parts_ = std::move(parts);
-    qn.unresolved_ = unresolved;
-    qn.module_alias_ = std::move(module_alias);
     return qn;
   }
 
@@ -128,7 +110,6 @@ public:
 
   // Query methods
   bool is_qualified() const { return parts_.size() > 1; }
-  bool is_unresolved() const { return unresolved_; }
 
   // String representation — includes type_args in each part
   std::string mangled() const {
@@ -136,16 +117,6 @@ public:
     for (size_t i = 1; i < parts_.size(); i++)
       result += "::" + parts_[i].mangled();
     return result;
-  }
-
-  // Return a copy with the original alias swapped back in
-  QualifiedName with_alias() const {
-    if (module_alias_) {
-      auto copy = *this;
-      copy.parts_[0].name = *module_alias_;
-      return copy;
-    }
-    return *this;
   }
 
   // Return a copy with module prepended (if not already qualified)
