@@ -1,0 +1,5 @@
+// `double_plus_one` calls functions of its own module, which are named
+// with the module prefix when the module is compiled as a library.
+let double(x: i32) -> i32 { x * 2 }
+export let plus_one(x: i32) -> i32 { x + 1 }
+export let double_plus_one(x: i32) -> i32 { plus_one(double(x)) }

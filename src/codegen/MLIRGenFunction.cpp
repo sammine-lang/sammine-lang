@@ -445,12 +445,12 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
 
   auto location = loc(ast);
 
-  // Resolve callee name first — needed to detect kernel wrappers.
-  std::string callee;
-  if (cp && cp->resolved_name.has_value())
-    callee = cp->resolved_name->mangled();
-  else
-    callee = ast->functionName.mangled();
+  // Resolve callee name first — needed to detect kernel wrappers. Name it as
+  // its definition is named, so a call inside a library module reaches the
+  // module-qualified function.
+  std::string callee = mangleName(cp && cp->resolved_name.has_value()
+                                      ? *cp->resolved_name
+                                      : ast->functionName);
 
   // Imported C externs are declared with their base name (e.g. "printf")
   if (!theModule.lookupSymbol(callee)) {

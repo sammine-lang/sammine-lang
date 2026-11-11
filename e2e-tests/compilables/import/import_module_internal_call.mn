@@ -1,0 +1,10 @@
+// RUN: %sammine --file %dir/Inputs/calls_own_helper.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      7
+
+import calls_own_helper;
+import std;
+
+let main() -> i32 {
+  std::printf("%d\n", calls_own_helper::double_plus_one(3));
+  return 0;
+}
