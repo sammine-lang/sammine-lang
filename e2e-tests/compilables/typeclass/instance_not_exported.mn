@@ -1,0 +1,12 @@
+// RUN: %sammine --file %dir/Inputs/shapes.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: Area<shapes::Circle> is private to module 'shapes'
+
+// A module's instance that isn't exported can't be used from another module.
+
+import shapes;
+import std;
+
+let main() -> i32 {
+  std::printf("%f\n", Area<shapes::Circle>(shapes::Circle { r: 1.0 }));
+  return 0;
+}

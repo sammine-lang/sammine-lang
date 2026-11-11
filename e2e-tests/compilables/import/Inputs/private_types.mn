@@ -1,0 +1,22 @@
+// A library whose exported functions and structs use its private types.
+
+struct Hidden { v: i64, };
+type Shape = Dot | Line(i64);
+type Count = i64;
+struct Wrap<T> { inner: T, };
+
+export struct Pub { h: Hidden, n: Count, };
+
+// A generic function is compiled in the module that uses it, so that module
+// needs these types to compile it.
+export let in_body<T>(x: T) -> i64 {
+  let h = Hidden { v: 3i64 };
+  let w = Wrap<i64> { inner: 10i64 };
+  let s = Line(20i64);
+  let length = case s { Line(l) => l, Dot => 0i64, };
+  h.v + w.inner + length
+}
+
+export let make() -> Hidden { Hidden { v: 4i64 } }
+
+export let make_pub() -> Pub { Pub { h: Hidden { v: 5i64 }, n: 6i64 } }

@@ -1,5 +1,6 @@
 // RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
 // Each built-in `as` is one instruction, chosen by the signedness of each side.
+// The functions aren't exported, so they're internal.
 
 let i32_to_i64(x: i32) -> i64 { x as i64 }
 let u32_to_u64(x: u32) -> u64 { x as u64 }
@@ -17,26 +18,26 @@ let main() -> i32 {
   return 0;
 }
 
-// CHECK-LABEL: define i64 @i32_to_i64(
+// CHECK-LABEL: define internal i64 @i32_to_i64(
 // CHECK:         sext i32 %{{.*}} to i64
-// CHECK-LABEL: define i64 @u32_to_u64(
+// CHECK-LABEL: define internal i64 @u32_to_u64(
 // CHECK:         zext i32 %{{.*}} to i64
-// CHECK-LABEL: define i32 @char_to_i32(
+// CHECK-LABEL: define internal i32 @char_to_i32(
 // CHECK:         sext i8 %{{.*}} to i32
-// CHECK-LABEL: define i8 @i64_to_char(
+// CHECK-LABEL: define internal i8 @i64_to_char(
 // CHECK:         trunc i64 %{{.*}} to i8
-// CHECK-LABEL: define double @u32_to_f64(
+// CHECK-LABEL: define internal double @u32_to_f64(
 // CHECK:         uitofp i32 %{{.*}} to double
-// CHECK-LABEL: define float @i64_to_f32(
+// CHECK-LABEL: define internal float @i64_to_f32(
 // CHECK:         sitofp i64 %{{.*}} to float
-// CHECK-LABEL: define i32 @f64_to_i32(
+// CHECK-LABEL: define internal i32 @f64_to_i32(
 // CHECK:         call i32 @llvm.fptosi.sat.i32.f64(double
-// CHECK-LABEL: define i64 @f32_to_u64(
+// CHECK-LABEL: define internal i64 @f32_to_u64(
 // CHECK:         call i64 @llvm.fptoui.sat.i64.f32(float
-// CHECK-LABEL: define double @f32_to_f64(
+// CHECK-LABEL: define internal double @f32_to_f64(
 // CHECK:         fpext float %{{.*}} to double
-// CHECK-LABEL: define float @f64_to_f32(
+// CHECK-LABEL: define internal float @f64_to_f32(
 // CHECK:         fptrunc double %{{.*}} to float
-// CHECK-LABEL: define i32 @i32_to_u32(
+// CHECK-LABEL: define internal i32 @i32_to_u32(
 // CHECK-NOT:     {{sext|zext|trunc}}
 // CHECK:         ret i32

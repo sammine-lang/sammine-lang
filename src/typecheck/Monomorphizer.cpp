@@ -393,6 +393,8 @@ Monomorphizer::clone_func(FuncDefAST *generic,
   auto result =
       std::make_unique<FuncDefAST>(std::move(proto), std::move(block));
   result->set_location(generic->get_location());
+  result->defining_module = generic->defining_module;
+  result->is_instantiation = true;
   bindings_ = nullptr;
   return result;
 }

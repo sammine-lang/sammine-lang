@@ -117,62 +117,44 @@ void Resolver::inject_definitions(
     std::vector<std::unique_ptr<DefinitionAST>> &program_vec,
     const std::string &name,
     bool is_transitive) {
-  // Filter definitions and inject into programAST.
+  // Every definition of the module comes, the ones it doesn't export too,
+  // marked by is_exported: NameResolver only lets the module's own code name
+  // those, and its code compiled here (generic functions) may. Function and
+  // instance bodies stay in the module, compiled first, so only their
+  // declarations come; a generic function's body comes, since it is compiled
+  // here for the types it is used with.
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {
     auto &def = *it;
     // NameResolver names it after its module.
     def->defining_module = name;
 
-    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      bool is_generic = fd->Prototype->is_generic();
-      if (is_transitive && !is_generic)
-        continue; // transitive: only need generic defs
-      if (!is_transitive && !fd->is_exported && !is_generic)
-        continue; // direct: skip non-exported non-generic
+    // A transitive import only brings what this program compiles of the
+    // module: generic functions and types.
+    if (is_transitive &&
+        !llvm::isa<AST::FuncDefAST, AST::StructDefAST, AST::EnumDefAST,
+                   AST::TypeAliasDefAST>(def.get()))
+      continue;
 
-      if (is_generic) {
-        program_vec.insert(program_vec.begin(),
-                                         std::move(def));
-      } else {
-        // Non-generic exported → extern
+    if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
+      if (!fd->Prototype->is_generic()) {
+        if (is_transitive)
+          continue;
         auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
         ext->is_exported = fd->is_exported;
         ext->defining_module = fd->defining_module;
         ext->is_c_function = false;
-        program_vec.insert(program_vec.begin(),
-                                         std::move(ext));
+        def = std::move(ext);
       }
     } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
-      if (is_transitive || !ext->is_exported)
+      // A C binding is only part of the module's interface if exported.
+      if (!ext->is_exported)
         continue;
-      program_vec.insert(program_vec.begin(),
-                                       std::move(def));
-    } else if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (!sd->is_exported)
-        continue;
-      program_vec.insert(program_vec.begin(),
-                                       std::move(def));
-    } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (!ed->is_exported)
-        continue;
-      program_vec.insert(program_vec.begin(),
-                                       std::move(def));
-    } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {
-      if (!ta->is_exported)
-        continue;
-      program_vec.insert(program_vec.begin(),
-                                       std::move(def));
-    } else if (llvm::isa<AST::TypeClassDeclAST>(def.get())) {
-      if (!is_transitive) {
-        program_vec.insert(program_vec.begin(),
-                                         std::move(def));
-      }
-    } else if (llvm::isa<AST::TypeClassInstanceAST>(def.get())) {
-      if (!is_transitive) {
-        program_vec.insert(program_vec.begin(),
-                                         std::move(def));
-      }
+    } else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
+      tci->is_declaration = true;
+      for (auto &method : tci->methods)
+        method->Block = std::make_unique<AST::BlockAST>();
     }
+    program_vec.insert(program_vec.begin(), std::move(def));
   }
 }
 void Resolver::traceLinkableArtifacts(

@@ -1,0 +1,18 @@
+// RUN: %sammine --file %dir/Inputs/private_types.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 33 4 5 6
+
+// A library's private types (a struct, an enum, an alias and a generic
+// struct) can be used by the library's code wherever it is compiled, and
+// their values can reach other modules: through an exported generic
+// function's body, an exported function's result, and an exported struct's
+// fields.
+
+import private_types;
+import std;
+
+let main() -> i32 {
+  let p = private_types::make_pub();
+  std::printf("%ld %ld %ld %ld\n", private_types::in_body<i32>(0),
+              private_types::make().v, p.h.v, p.n);
+  return 0;
+}

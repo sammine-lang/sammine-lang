@@ -990,15 +990,23 @@ math::multiply(3, 4);
 
 ### Exporting from Modules
 
-Use `export` to make definitions visible to importers. `export` works with functions, structs, enums, and C bindings:
+Use `export` to make definitions visible to importers. `export` works with functions, structs, enums, typeclass instances, and C bindings:
 
 ```sammine
 // In math.mn:
 export let add(a: i32, b: i32) -> i32 { a + b }
 export struct Point { x: i32, y: i32, };
 export type Color = Red | Green | Blue;
+typeclass Norm<T> { Norm(x: T) -> i32; }
+export instance Norm<Point> { let Norm(p: Point) -> i32 { p.x + p.y } }
 export reuse printf(fmt: ptr<char>, ...) -> i32;
 ```
+
+An exported function or instance is compiled in its own module, and an importer calls that compiled code, so the module must be compiled first. Its body can use the module's definitions that aren't exported.
+
+A function, instance or type that isn't exported is private to its module: other modules can't name or use it ("'vec::grow_buf' is private to module 'vec'"). An exported function or struct can still use the module's private types, in its body, signature or fields, and their values can reach other modules, which just can't write their names.
+
+A generic function is compiled in each module that uses it, for the types it is used with, so its source comes along with the import. It still has to be exported to be called from another module. It counts as its module's own code wherever it is compiled, so an exported generic function can use its module's private functions and instances, as `vec::push` calls `vec`'s own `grow_buf`.
 
 ### Standard Library Modules
 

@@ -466,8 +466,9 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   MonomorphizedKey tc_key{class_name, tc_type_args};
   if (!has_instance(tc_key)) {
     add_error(ast->get_location(),
-              fmt::format("No instance of {}<{}>", class_name,
-                          tc_key.type_args_string()));
+              missing_instance(tc_key,
+                               fmt::format("No instance of {}<{}>", class_name,
+                                           tc_key.type_args_string())));
     return ResolvedCall::failure();
   }
 
@@ -832,9 +833,11 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     MonomorphizedKey tc_key{std::string(*class_name), {lhs_type}};
     if (!has_instance(tc_key)) {
       add_error(ast->Op->get_location(),
-                fmt::format("No instance of {}<{}> — cannot use '{}' on this "
-                            "type",
-                            *class_name, lhs_type.to_string(), ast->Op->lexeme));
+                missing_instance(
+                    tc_key, fmt::format("No instance of {}<{}> — cannot use "
+                                        "'{}' on this type",
+                                        *class_name, lhs_type.to_string(),
+                                        ast->Op->lexeme)));
       return ast->set_type(Type::Poisoned());
     }
     props_.binary(ast->id()).resolved_op_method =
@@ -1151,10 +1154,11 @@ Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
   MonomorphizedKey key{std::string(kConvertClass), {from, to}};
   if (!has_instance(key)) {
     add_error(ast->get_location(),
-              fmt::format("Cannot convert {} to {} with 'as': no instance "
-                          "of Convert<{}>",
-                          from.to_string(), to.to_string(),
-                          key.type_args_string()));
+              missing_instance(
+                  key, fmt::format("Cannot convert {} to {} with 'as': no "
+                                   "instance of Convert<{}>",
+                                   from.to_string(), to.to_string(),
+                                   key.type_args_string())));
     return ast->set_type(Type::Poisoned());
   }
   props_.cast(ast->id()).instance = key;

@@ -1,0 +1,20 @@
+typeclass Area<T> {
+  Area(x: T) -> f64;
+}
+
+export struct Square { side: f64, };
+export struct Circle { r: f64, };
+
+// Not exported: only this module's own code can call it.
+let squared(x: f64) -> f64 { x * x }
+
+// Exported: importers can use it. Its body stays here, so it can call
+// squared.
+export instance Area<Square> {
+  let Area(s: Square) -> f64 { squared(s.side) }
+}
+
+// Not exported: only this module can use it.
+instance Area<Circle> {
+  let Area(c: Circle) -> f64 { squared(c.r) * 3.0 }
+}

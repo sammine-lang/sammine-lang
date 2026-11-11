@@ -54,12 +54,29 @@ public:
   void resolve_value(sammine_util::QualifiedName &name, bool has_type_args,
                      bool is_call, sammine_util::Location location,
                      const ASTContext &where);
+  //! A case pattern's variant written through its enum, Shape::Dot.
+  void resolve_variant(sammine_util::QualifiedName &name,
+                       sammine_util::Location location,
+                       const ASTContext &where);
 
 private:
   Scopes &scopes;
   const VariantEnums &variant_to_enum;
   sammine_util::Reportee &reportee;
   std::map<std::string, ImportAliases> module_aliases;
+  //! Each top-level definition's module, and whether it exports it.
+  struct Owner {
+    std::string module;
+    bool exported;
+  };
+  std::map<std::string, Owner> owners;
+
+  //! Reports `name` if what it resolved to, or the enum of a variant it
+  //! names, is private to a module other than `where.module`. A definition
+  //! of a module that isn't exported can only be named by that module's own
+  //! code, wherever it is compiled.
+  void check_visible(const sammine_util::QualifiedName &name,
+                     sammine_util::Location location, const ASTContext &where);
 
   //! What the first part of a qualified name means: one of the module's
   //! import aliases, rewritten to that module (m::f → math::f), or else a type

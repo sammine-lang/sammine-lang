@@ -386,7 +386,8 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
 
 void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
   if (auto *funcDef = llvm::dyn_cast<AST::FuncDefAST>(def))
-    emitFunction(funcDef);
+    emitFunction(funcDef, /*global=*/!moduleName.empty() &&
+                              !funcDef->is_instantiation);
   else if (auto *externDef = llvm::dyn_cast<AST::ExternAST>(def))
     emitExtern(externDef);
   else if (llvm::isa<AST::StructDefAST>(def))
@@ -398,9 +399,11 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
   else if (llvm::isa<AST::TypeClassDeclAST>(def))
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {
-    // Emit each instance method as a regular function
-    for (auto &method : tci->methods)
-      emitFunction(method.get());
+    // Emit each instance method as a regular function. An imported instance's
+    // methods were only declared, in the pre-pass; their module defines them.
+    if (!tci->is_declaration)
+      for (auto &method : tci->methods)
+        emitFunction(method.get(), /*global=*/!moduleName.empty());
   } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
     emitKernelDef(kd);
   } else {

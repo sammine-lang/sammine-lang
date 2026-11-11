@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --file %full -I %dir/Inputs | %check %full
+// RUN: %sammine --file %dir/Inputs/has_instance.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
 // CHECK:      32
 // CHECK-NEXT: 64
 

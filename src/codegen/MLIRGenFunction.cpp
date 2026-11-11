@@ -21,11 +21,12 @@ void MLIRGenImpl::forwardDeclareFunc(AST::PrototypeAST *proto) {
   auto funcName = mangleName(proto->functionName);
   if (!theModule.lookupSymbol(funcName)) {
     builder.setInsertionPointToEnd(theModule.getBody());
+    // Private until emitFunction gives it a body and decides who can link to
+    // it. One that never gets a body, an imported instance method, must stay
+    // private: MLIR doesn't allow a public declaration.
     auto funcOp =
         mlir::func::FuncOp::create(builder.getUnknownLoc(), funcName, funcType);
-    funcOp.setVisibility(moduleName.empty()
-                             ? mlir::SymbolTable::Visibility::Private
-                             : mlir::SymbolTable::Visibility::Public);
+    funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
   }
 }
@@ -114,7 +115,7 @@ void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
 
 // ===--- Function emission ---===
 
-void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
+void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, bool global) {
   // Skip generic function templates — only monomorphized copies
   if (ast->Prototype->is_generic())
     return;
@@ -135,11 +136,15 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
                                         funcType);
     theModule.push_back(funcOp);
   }
-  // Make main and library-module functions public, everything else private
-  if (funcName == "main" || !moduleName.empty())
+  // MLIR visibility doesn't reach LLVM, so set the linkage too.
+  if (global || funcName == "main") {
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Public);
-  else
+  } else {
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
+    funcOp->setAttr("llvm.linkage",
+                    mlir::LLVM::LinkageAttr::get(builder.getContext(),
+                                                 mlir::LLVM::Linkage::Internal));
+  }
 
   // Create entry block with arguments
   auto &entryBlock = *funcOp.addEntryBlock();

@@ -40,6 +40,11 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 2. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods
 3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
 
+## Symbols
+- `emitFunction(ast, global)`. Library: every function and instance method is global, private ones too (its generic code compiled in another module may call them; privacy is a naming rule). Executable: only `main`. Generic instantiations (`FuncDefAST::is_instantiation`) are always internal, so two modules can both instantiate `vec::push<i32>`
+- Forward declarations start private: an imported instance method is never given a body, and MLIR rejects a public declaration
+- A function an IR test inspects must be in a library (no `main`), or the optimizer may inline or remove it
+
 ## Closures & Partial Application
 - Fat pointer: `{ code_ptr, env_ptr }`
 - Three call paths: direct (zero overhead), partial (env struct for bound args), indirect (load + extract + call)

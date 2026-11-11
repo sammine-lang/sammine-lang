@@ -116,6 +116,31 @@ void ScopeGeneratorVisitor::preorder_walk(ExternAST *ast) {
 void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
   enter_definition(*ast, ast->Prototype->type_params);
 }
+void ScopeGeneratorVisitor::visit(CaseExprAST *ast) {
+  ast->scrutinee->accept_vis(this);
+  for (auto &arm : ast->arms)
+    resolver.resolve_variant(arm.pattern.variant_name, arm.pattern.location,
+                             ctx());
+}
+// An instance is code of its module like a function. Its methods' names
+// aren't registered: they are reached through the typeclass.
+void ScopeGeneratorVisitor::visit(TypeClassInstanceAST *ast) {
+  push_ast_context();
+  enter_definition(*ast, {});
+  for (auto &type : ast->concrete_type_exprs)
+    resolve_type(type.get());
+  pop_ast_context();
+  for (auto &method : ast->methods) {
+    ScopeGuard scope(*this);
+    enter_definition(*ast, {});
+    for (auto &param : method->Prototype->parameterVectors) {
+      register_name(param->name, param->get_location());
+      resolve_type(param->type_expr.get());
+    }
+    resolve_type(method->Prototype->return_type_expr.get());
+    method->Block->accept_vis(this);
+  }
+}
 void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {
   push_ast_context();
   enter_definition(*ast, ast->type_params);

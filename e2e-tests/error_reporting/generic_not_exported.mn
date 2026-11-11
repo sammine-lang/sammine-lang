@@ -1,0 +1,19 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_not_exported.mn:16:30
+// CHECK-NEXT:   14|let main() -> i32 {
+// CHECK-NEXT:   15|  let d = alloc<i32>(1);
+// CHECK-NEXT:   16|  let d2 = vec::grow_buf<i32>(d, 0i64, 1i64);
+// CHECK-NEXT:     |                              ────────────┬
+// CHECK-NEXT:     |                                          ╰─ 'vec::grow_buf' is private to module 'vec'
+
+// A generic function its module doesn't export can't be called from outside
+// the module. vec::push still calls vec's grow_buf, inside vec.
+
+import vec;
+
+let main() -> i32 {
+  let d = alloc<i32>(1);
+  let d2 = vec::grow_buf<i32>(d, 0i64, 1i64);
+  free(d2);
+  return 0;
+}

@@ -64,9 +64,7 @@ public:
 
   // Case expressions: arm bodies contain pattern bindings not known at
   // scope-gen time
-  virtual void visit(CaseExprAST *ast) override {
-    ast->scrutinee->accept_vis(this);
-  }
+  virtual void visit(CaseExprAST *ast) override;
 
   // For-range: register loop var in a new scope around the body
   virtual void visit(ForExprAST *ast) override {
@@ -80,7 +78,7 @@ public:
 
   // Type class decls/instances: skip scope checking for their methods
   virtual void visit(TypeClassDeclAST *ast) override {}
-  virtual void visit(TypeClassInstanceAST *ast) override {}
+  virtual void visit(TypeClassInstanceAST *ast) override;
 
   virtual void visit(ExternAST *ast) override;
 

@@ -1,0 +1,14 @@
+// RUN: %sammine --file %dir/Inputs/shapes.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 9.000000
+
+// An exported instance on a type its module defines, used from another
+// module. Its method calls a helper the module doesn't export, which works
+// because the method is compiled in that module, as an exported function is.
+
+import shapes;
+import std;
+
+let main() -> i32 {
+  std::printf("%f\n", Area<shapes::Square>(shapes::Square { side: 3.0 }));
+  return 0;
+}

@@ -44,6 +44,7 @@
 - Enum variants: always added to `variant_to_enum`; registered in scope only if not already there
 - Functions registered in **parent** scope (visible at call-site, not inside own body)
 - Case arm bodies NOT walked — payload bindings created by type checker
+- Instance methods: signatures and bodies are resolved in the instance's module; their names aren't registered (reached through the typeclass). Case patterns: a variant named through its enum is resolved (`resolve_variant`)
 
 ### Name resolution (`NameResolver`, semantics/NameResolver.h)
 - The one place names are decided. `use_program` first names every definition (`qualify(name, defining_module)`: `M::name`; an executable's bare; a module's own C binding keeps its C name), then each reference is resolved below

@@ -1,0 +1,15 @@
+// RUN: %sammine --file %dir/Inputs/private_parts.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 300 600
+
+// An exported generic function, compiled here, can use its module's private
+// function and private instance.
+
+import private_parts;
+import std;
+
+let main() -> i32 {
+  let m = private_parts::from_dollars<i32>(3i64, 0);
+  let t = private_parts::twice<private_parts::Money>(m);
+  std::printf("%ld %ld\n", m.cents, t.cents);
+  return 0;
+}

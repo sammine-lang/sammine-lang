@@ -375,6 +375,9 @@ public:
   ~FuncDefAST() = default;
   std::unique_ptr<PrototypeAST> Prototype;
   std::unique_ptr<BlockAST> Block;
+  /// A copy of a generic function for concrete types, compiled in each module
+  /// that uses it.
+  bool is_instantiation = false;
 
   FuncDefAST(std::unique_ptr<PrototypeAST> Prototype_,
              std::unique_ptr<BlockAST> Block_)
@@ -995,6 +998,9 @@ public:
 class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;
+  /// An instance imported from another module: its methods are only declared
+  /// here, and their bodies are compiled in that module.
+  bool is_declaration = false;
   std::vector<std::unique_ptr<TypeExprAST>> concrete_type_exprs;
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(

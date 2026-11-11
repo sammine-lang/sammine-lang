@@ -21,7 +21,10 @@ void NameResolver::use_program(ProgramAST &program) {
   module_aliases = program.module_aliases;
   for (auto &def : program.DefinitionVec) {
     auto &module = def->defining_module;
-    auto name = [&](sammine_util::QualifiedName &n) { n = qualify(n, module); };
+    auto name = [&](sammine_util::QualifiedName &n) {
+      n = qualify(n, module);
+      owners[n.strip_type_args().mangled()] = {module, def->is_exported};
+    };
     if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get()))
       name(fd->Prototype->functionName);
     else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
@@ -90,6 +93,8 @@ void NameResolver::resolve_type_name(sammine_util::QualifiedName &name,
     if (!resolve_head(name, where) && !is_visible(name.get_module()))
       reportee.add_error(location, fmt::format("Module '{}' is not imported",
                                                name.get_module()));
+    else
+      check_visible(name, location, where);
     return;
   }
   if (llvm::is_contained(where.type_params, name.mangled()) ||
@@ -97,6 +102,32 @@ void NameResolver::resolve_type_name(sammine_util::QualifiedName &name,
     return;
   if (auto own = own_definition(name, where))
     name = *own;
+  check_visible(name, location, where);
+}
+
+void NameResolver::resolve_variant(sammine_util::QualifiedName &name,
+                                   sammine_util::Location location,
+                                   const ASTContext &where) {
+  if (!name.is_qualified())
+    return;
+  resolve_head(name, where);
+  check_visible(name, location, where);
+}
+
+void NameResolver::check_visible(const sammine_util::QualifiedName &name,
+                                 sammine_util::Location location,
+                                 const ASTContext &where) {
+  auto plain = name.strip_type_args();
+  for (auto &candidate : {plain.mangled(), plain.get_qualifier()}) {
+    auto it = owners.find(candidate);
+    if (it == owners.end())
+      continue;
+    auto &[module, exported] = it->second;
+    if (!exported && !module.empty() && module != where.module)
+      reportee.add_error(location, fmt::format("'{}' is private to module '{}'",
+                                               candidate, module));
+    return;
+  }
 }
 
 void NameResolver::resolve_type(TypeExprAST *type, const ASTContext &where) {
@@ -130,6 +161,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
   if (name.is_qualified()) {
     auto written = name;
     bool head_known = resolve_head(name, where);
+    check_visible(name, location, where);
     // A typeclass method or a generic enum's variant: the type checker
     // resolves it.
     if (has_type_args)
@@ -156,6 +188,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
     return;
   if (auto own = own_definition(name, where)) {
     name = *own;
+    check_visible(name, location, where);
     return;
   }
 
@@ -180,6 +213,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
     }
     if (enums.size() == 1) {
       name = enums.front().with_appended({bare, ""});
+      check_visible(name, location, where);
       return;
     }
   }

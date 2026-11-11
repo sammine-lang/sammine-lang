@@ -1,0 +1,35 @@
+// RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+// In a library, every function and instance method gets a global symbol,
+// private ones too: the library's generic functions are compiled in the
+// modules that use them, and may call them there. Privacy only limits who can
+// name them. A generic instantiation stays internal: each module compiles its
+// own. This file has no main, so it is a library.
+
+typeclass Twice<T> {
+  Twice(x: T) -> T;
+}
+
+export struct Num { v: i32, };
+
+let helper(x: i32) -> i32 { x * 2 }
+
+export let double(x: i32) -> i32 { helper(x) }
+
+let pick<T>(x: T) -> T { x }
+
+export let first(x: i32) -> i32 { pick<i32>(x) }
+
+export instance Twice<Num> {
+  let Twice(n: Num) -> Num { Num { v: helper(n.v) } }
+}
+
+instance Twice<i64> {
+  let Twice(x: i64) -> i64 { x + x }
+}
+
+// CHECK: define internal i32 @"library_symbols::pick<i32>"(
+// CHECK: define i32 @"library_symbols::helper"(
+// CHECK: define i32 @"library_symbols::double"(
+// CHECK: define i32 @"library_symbols::first"(
+// CHECK: define %"sammine.struct.library_symbols::Num" @"Twice<library_symbols::Num>::Twice"(
+// CHECK: define i64 @"Twice<i64>::Twice"(

@@ -1,0 +1,11 @@
+// RUN: %sammine --file %dir/Inputs/private_types.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: 'private_types::Shape' is private to module 'private_types'
+
+// A private enum's variants are private too.
+
+import private_types;
+
+let main() -> i32 {
+  let s = private_types::Shape::Dot;
+  return 0;
+}

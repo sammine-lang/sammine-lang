@@ -207,8 +207,16 @@ public:
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);
-  /// True if `key` is an instance, whether built in or written in source.
-  bool has_instance(const MonomorphizedKey &key) const;
+  /// True if `key` is an instance the code being checked can use: built in,
+  /// written in source, or imported (if private, only by its module's code).
+  bool has_instance(const MonomorphizedKey &key);
+  /// Instances imported but not exported → their module.
+  std::unordered_map<MonomorphizedKey, std::string, MonomorphizedKeyHash>
+      private_instances;
+  /// The error for the missing instance `key`: that it is private, if it is,
+  /// or else `otherwise`.
+  std::string missing_instance(const MonomorphizedKey &key,
+                               std::string otherwise) const;
 
   // Monomorphize and type-check the generic function a call resolved to.
   void instantiate_generic_callee(CallExprAST *ast);

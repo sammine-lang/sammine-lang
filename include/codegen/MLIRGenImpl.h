@@ -190,7 +190,12 @@ public:
 
   // --- Functions/externs/closures/calls (MLIRGenFunction.cpp) ---
   void forwardDeclareFunc(AST::PrototypeAST *proto);
-  void emitFunction(AST::FuncDefAST *ast);
+  /// `global`: other modules can link to it. In a library that is every
+  /// function and instance method, private ones too, since the library's
+  /// generic code compiled in another module may call them; privacy only
+  /// limits who can name them. In an executable only main is, and a generic
+  /// instantiation never is: each module compiles its own.
+  void emitFunction(AST::FuncDefAST *ast, bool global);
   void emitExtern(AST::ExternAST *ast);
   mlir::Value buildClosure(mlir::Value codePtr, mlir::Value envPtr,
                            mlir::Location loc);

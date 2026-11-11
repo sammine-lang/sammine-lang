@@ -675,10 +675,32 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   }
 
   type_class_instances.insert(tc_key);
+  if (!ast->is_exported && ast->is_declaration)
+    private_instances[tc_key] = ast->defining_module;
 }
 
-bool BiTypeCheckerVisitor::has_instance(const MonomorphizedKey &key) const {
-  return is_builtin_instance(key) || type_class_instances.contains(key);
+// An instance is chosen by type, not by a name NameResolver could check, so
+// its privacy is checked here: a private one is only for its module's code,
+// such as that module's generic functions compiled here.
+bool BiTypeCheckerVisitor::has_instance(const MonomorphizedKey &key) {
+  if (is_builtin_instance(key))
+    return true;
+  if (!type_class_instances.contains(key))
+    return false;
+  auto it = private_instances.find(key);
+  auto *fn = ctx().enclosing_function;
+  return it == private_instances.end() ||
+         (fn && fn->defining_module == it->second);
+}
+
+std::string
+BiTypeCheckerVisitor::missing_instance(const MonomorphizedKey &key,
+                                       std::string otherwise) const {
+  auto it = private_instances.find(key);
+  if (it == private_instances.end())
+    return otherwise;
+  return fmt::format("{}<{}> is private to module '{}'", key.name,
+                     key.type_args_string(), it->second);
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
@@ -687,9 +709,16 @@ void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
-  // Registration already done in first pass — just type-check method bodies
-  for (auto &method : ast->methods)
-    method->accept_vis(this);
+  // Registration already done in first pass — just type-check method bodies.
+  // An imported instance's methods have none here, only their signatures.
+  for (auto &method : ast->methods) {
+    if (ast->is_declaration) {
+      ScopeGuard scope(*this);
+      method->Prototype->accept_vis(this);
+    } else {
+      method->accept_vis(this);
+    }
+  }
 }
 
 void BiTypeCheckerVisitor::visit(KernelDefAST *ast) {

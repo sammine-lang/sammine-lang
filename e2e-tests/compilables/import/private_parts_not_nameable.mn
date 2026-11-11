@@ -1,0 +1,12 @@
+// RUN: %sammine --file %dir/Inputs/private_parts.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: 'private_parts::cents_of' is private to module 'private_parts'
+
+// A module's private function can't be named from outside it, though its
+// generic functions compiled here call it.
+
+import private_parts;
+
+let main() -> i32 {
+  let c = private_parts::cents_of(1i64);
+  return 0;
+}

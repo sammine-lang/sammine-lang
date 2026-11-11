@@ -1,0 +1,12 @@
+// RUN: %sammine --file %dir/Inputs/private_types.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: 'private_types::Hidden' is private to module 'private_types'
+
+// A library's private type can't be named outside the library, though its
+// values can reach other modules.
+
+import private_types;
+
+let main() -> i32 {
+  let h = private_types::Hidden { v: 1i64 };
+  return 0;
+}

@@ -2,10 +2,10 @@ typeclass Describe<T> {
   describe() -> i64;
 }
 
-instance Describe<i32> {
+export instance Describe<i32> {
   let describe() -> i64 { 32 }
 }
 
-instance Describe<i64> {
+export instance Describe<i64> {
   let describe() -> i64 { 64 }
 }

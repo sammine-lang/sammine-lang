@@ -1,0 +1,13 @@
+// RUN: %sammine --file %dir/Inputs/private_parts.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: Combine<private_parts::Money> is private to module 'private_parts'
+
+// A module's private instance can't be used from outside it, though its
+// generic functions compiled here use it.
+
+import private_parts;
+
+let main() -> i32 {
+  let m = private_parts::Money { cents: 1i64 };
+  let n = Combine<private_parts::Money>(m, m);
+  return 0;
+}

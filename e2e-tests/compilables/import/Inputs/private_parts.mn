@@ -1,0 +1,21 @@
+// A library whose exported generic functions use its private parts. They are
+// compiled in the module that uses them, which can't name those parts itself.
+
+typeclass Combine<T> {
+  Combine(a: T, b: T) -> T;
+}
+
+export struct Money { cents: i64, };
+
+// Private: not exported.
+let cents_of(dollars: i64) -> i64 { dollars * 100i64 }
+
+instance Combine<Money> {
+  let Combine(a: Money, b: Money) -> Money { Money { cents: a.cents + b.cents } }
+}
+
+export let from_dollars<T>(dollars: i64, tag: T) -> Money {
+  Money { cents: cents_of(dollars) }
+}
+
+export let twice<T>(x: T) -> T { Combine<T>(x, x) }
