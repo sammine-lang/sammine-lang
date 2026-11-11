@@ -391,10 +391,12 @@ mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
 
   using Handler = mlir::Value (MLIRGenImpl::*)(
       AST::BinaryExprAST *, mlir::Value, mlir::Value, mlir::Location);
+  // A user's instance, which the type checker chose, comes first: its type
+  // may have built-in operators too, like a pointer's ==.
   static constexpr Handler handlers[] = {
-      &MLIRGenImpl::emitBinaryIntArith,    &MLIRGenImpl::emitBinaryFloatArith,
-      &MLIRGenImpl::emitBinaryComparison,  &MLIRGenImpl::emitBinaryEnumBitwise,
-      &MLIRGenImpl::emitBinaryTypeclassOp,
+      &MLIRGenImpl::emitBinaryTypeclassOp, &MLIRGenImpl::emitBinaryIntArith,
+      &MLIRGenImpl::emitBinaryFloatArith,  &MLIRGenImpl::emitBinaryComparison,
+      &MLIRGenImpl::emitBinaryEnumBitwise,
   };
 
   for (auto handler : handlers) {

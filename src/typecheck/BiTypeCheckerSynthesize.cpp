@@ -828,8 +828,10 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                                         ast->Op->lexeme)));
       return ast->set_type(Type::Poisoned());
     }
-    props_.binary(ast->id()).resolved_op_method =
-        tc_key.to_typeclass_name(tc_key.name);
+    // A built-in instance is an instruction; any other is called.
+    if (!is_builtin_instance(tc_key))
+      props_.binary(ast->id()).resolved_op_method =
+          tc_key.to_typeclass_name(tc_key.name);
     return ast->set_type(ast->Op->is_comparison() ? Type::Bool() : lhs_type);
   }
 

@@ -1,0 +1,21 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 0 0
+
+// A user's instance on a pointer type, Less<ptr<Box>>, is what < calls, though
+// pointers have a built-in == that compares addresses. The boxes hold equal
+// values, so neither is less; by address one of them would be.
+
+import std;
+
+struct Box { v: i32, };
+
+instance Less<ptr<Box>> {
+  let Less(a: ptr<Box>, b: ptr<Box>) -> bool { (*a).v < (*b).v }
+}
+
+let main() -> i32 {
+  let a = Box { v: 1 };
+  let b = Box { v: 1 };
+  std::printf("%d %d\n", &a < &b, &b < &a);
+  return 0;
+}
