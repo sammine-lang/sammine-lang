@@ -1,5 +1,15 @@
 export struct Two { a: i64, b: i64, };
 export struct Three { a: i64, b: i64, c: i64, };
+export struct FourI32 { a: i32, b: i32, c: i32, d: i32, };
+export struct ThreeF32 { x: f32, y: f32, z: f32, };
+export struct I32F32 { a: i32, x: f32, };
+export struct Chars { a: char, b: char, c: char, };
+export struct F64I64 { d: f64, n: i64, };
 
 export reuse make_two(a: i64) -> Two;
 export reuse make_three(a: i64, b: i64) -> Three;
+export reuse make_four_i32() -> FourI32;
+export reuse make_three_f32() -> ThreeF32;
+export reuse make_i32_f32() -> I32F32;
+export reuse make_chars() -> Chars;
+export reuse make_f64_i64() -> F64I64;

@@ -17,6 +17,7 @@ add_custom_target(SammineOpsIncGen DEPENDS
 add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGen.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/CABI.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenExpr.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenBinaryOps.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenKernel.cpp

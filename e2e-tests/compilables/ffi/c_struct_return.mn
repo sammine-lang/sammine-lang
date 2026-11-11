@@ -1,9 +1,15 @@
 // RUN: %cc -fPIC -c %dir/Inputs/c_struct_return_runtime.c -o %T/c_struct_return_runtime.o && %sammine --file %dir/Inputs/c_struct_return.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
 // CHECK:      two 5 6
 // CHECK-NEXT: three 10 20 30
+// CHECK-NEXT: four_i32 1 2 3 4
+// CHECK-NEXT: three_f32 0.5 1.5 2.5
+// CHECK-NEXT: i32_f32 7 3.5
+// CHECK-NEXT: chars abc
+// CHECK-NEXT: f64_i64 9.25 42
 
-// C returns a struct over 16 bytes through a hidden first pointer argument,
-// and one of 16 bytes or less in registers.
+// C returns a struct over 16 bytes through a hidden first pointer argument.
+// A smaller one comes back in registers, packed into 8-byte chunks that are
+// floating point only if every field in them is.
 
 import c_struct_return as c;
 import std;
@@ -13,5 +19,15 @@ let main() -> i32 {
   std::printf("two %ld %ld\n", t.a, t.b);
   let th = c::make_three(10i64, 20i64);
   std::printf("three %ld %ld %ld\n", th.a, th.b, th.c);
+  let f = c::make_four_i32();
+  std::printf("four_i32 %d %d %d %d\n", f.a, f.b, f.c, f.d);
+  let tf = c::make_three_f32();
+  std::printf("three_f32 %.1f %.1f %.1f\n", tf.x, tf.y, tf.z);
+  let m = c::make_i32_f32();
+  std::printf("i32_f32 %d %.1f\n", m.a, m.x);
+  let ch = c::make_chars();
+  std::printf("chars %c%c%c\n", ch.a, ch.b, ch.c);
+  let di = c::make_f64_i64();
+  std::printf("f64_i64 %.2f %ld\n", di.d, di.n);
   return 0;
 }

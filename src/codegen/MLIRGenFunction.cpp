@@ -1,10 +1,10 @@
 #include "codegen/MLIRGenImpl.h"
+#include "codegen/CABI.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/BuiltinTypes.h"
-#include "mlir/Interfaces/DataLayoutInterfaces.h"
 
 #include "llvm/ADT/SmallVector.h"
 
@@ -218,20 +218,27 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   auto location = loc(ast);
   builder.setInsertionPointToEnd(theModule.getBody());
 
-  // C returns a struct over 16 bytes through a pointer the caller passes as
-  // a hidden first argument, marked sret. LLVM leaves this to the frontend.
+  // C returns a struct in registers, as the type cabi::registerType gives,
+  // or through a pointer the caller passes as a hidden first argument,
+  // marked sret. LLVM leaves this to the frontend.
   auto retType = std::get<FunctionType>(ast->Prototype->get_type().type_data)
                      .get_return_type();
-  if (ast->is_c_function && returnsThroughMemory(retType)) {
-    llvm::SmallVector<mlir::Type, 4> paramTypes{llvmPtrTy()};
+  if (ast->is_c_function && (retType.type_kind == TypeKind::Struct ||
+                             retType.type_kind == TypeKind::Tuple)) {
+    auto structTy = convertType(retType);
+    auto regTy = cabi::registerType(structTy, mlir::DataLayout(theModule));
+    llvm::SmallVector<mlir::Type, 4> paramTypes;
+    if (!regTy)
+      paramTypes.push_back(llvmPtrTy());
     for (auto &param : ast->Prototype->parameterVectors)
       paramTypes.push_back(convertType(param->get_type()));
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(
-        llvmVoidTy(), paramTypes, ast->Prototype->is_var_arg);
+        regTy ? regTy : llvmVoidTy(), paramTypes, ast->Prototype->is_var_arg);
     auto funcOp =
         mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
-    funcOp.setArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName(),
-                      mlir::TypeAttr::get(convertType(retType)));
+    if (!regTy)
+      funcOp.setArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName(),
+                        mlir::TypeAttr::get(structTy));
     return;
   }
 
@@ -255,14 +262,6 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
   }
-}
-
-bool MLIRGenImpl::returnsThroughMemory(const Type &cReturnType) {
-  if (cReturnType.type_kind != TypeKind::Struct &&
-      cReturnType.type_kind != TypeKind::Tuple)
-    return false;
-  auto size = mlir::DataLayout(theModule).getTypeSize(convertType(cReturnType));
-  return size.getFixedValue() > 16;
 }
 
 // ===--- Call emission ---===
@@ -440,7 +439,6 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
               0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
         resultBuf = emitAllocaOne(sretTy.getValue(), location);
         operands.insert(operands.begin(), resultBuf);
-        resultTypes.clear();
       }
 
     // C default argument promotion: float → double for variadic args
@@ -453,16 +451,22 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
               builder, location, builder.getF64Type(), operands[i]);
       }
     }
-    auto llvmCallOp = mlir::LLVM::CallOp::create(builder, location, resultTypes,
-                                                 callee, operands);
-    if (fnTy.isVarArg())
-      llvmCallOp.setVarCalleeType(fnTy);
+    // The declaration's types, which differ from sammine's for a struct.
+    auto llvmCallOp =
+        mlir::LLVM::CallOp::create(builder, location, llvmFunc, operands);
+    if (!resultBuf && llvmCallOp.getNumResults() == 0)
+      return nullptr;
+    auto semTy = convertType(ast->get_type());
     if (resultBuf)
-      return mlir::LLVM::LoadOp::create(
-          builder, location, convertType(ast->get_type()), resultBuf);
-    if (llvmCallOp.getNumResults() > 0)
-      return llvmCallOp.getResult();
-    return nullptr;
+      return mlir::LLVM::LoadOp::create(builder, location, semTy, resultBuf);
+    // A struct returned in registers comes back as its register type; it
+    // reaches the struct type through memory.
+    auto result = llvmCallOp.getResult();
+    if (result.getType() == semTy)
+      return result;
+    auto slot = emitAllocaOne(result.getType(), location);
+    mlir::LLVM::StoreOp::create(builder, location, result, slot);
+    return mlir::LLVM::LoadOp::create(builder, location, semTy, slot);
   }
 
   auto callOp = mlir::func::CallOp::create(
