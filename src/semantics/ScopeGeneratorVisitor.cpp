@@ -220,6 +220,11 @@ void ScopeGeneratorVisitor::preorder_walk(CallExprAST *ast) {
     }
   }
 }
+void ScopeGeneratorVisitor::preorder_walk(VariableExprAST *ast) {
+  if (ctx().in_imported_def)
+    for (auto &type_arg : ast->explicit_type_args)
+      qualify_type_expr(type_arg.get());
+}
 void ScopeGeneratorVisitor::preorder_walk(TypedVarAST *ast) {
   if (ctx().in_imported_def && ast->type_expr) {
     qualify_type_expr(ast->type_expr.get());
@@ -304,6 +309,10 @@ void ScopeGeneratorVisitor::postorder_walk(VariableExprAST *ast) {
   // A qualified name: a module's function (std::printf) or an enum's variant
   // (Color::Red, dummy_enum::dummy::A).
   if (ast->variableName.is_qualified()) {
+    // A generic enum's variant (Option<i32>::None) is resolved by the type
+    // checker, which instantiates the enum.
+    if (!ast->explicit_type_args.empty())
+      return;
     auto &name = ast->variableName;
     if (name.is_unresolved()) {
       // The prefix may be an enum in scope rather than a module alias.

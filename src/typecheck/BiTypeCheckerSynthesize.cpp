@@ -337,30 +337,28 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   return ast->get_type();
 }
 
-std::optional<ResolvedCall>
-BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
-  // INFO: All enum variant calls arrive here in qualified form (Enum::Variant).
-  // The scope generator rewrites unqualified variant names (e.g. Some(42)) to
-  // qualified form (e.g. Option::Some(42)) via variant_to_enum. The type
-  // checker does NOT resolve unqualified enum variant names — that is the scope
-  // generator's responsibility.
-  if (!ast->functionName.is_qualified())
+// The enum `variant` (Color::Red, Option<i32>::None) belongs to, or nullopt
+// if it names no enum's variant. A generic enum is instantiated with
+// `type_args`.
+std::optional<Type> BiTypeCheckerVisitor::enum_of_variant(
+    const sammine_util::QualifiedName &variant,
+    const std::vector<std::unique_ptr<TypeExprAST>> &type_args) {
+  if (!variant.is_qualified())
     return std::nullopt;
 
-  auto enum_type_opt = get_typename_type(ast->functionName.get_qualifier());
+  auto enum_type_opt = get_typename_type(variant.get_qualifier());
 
   // If not found and we have explicit type args, try generic enum
   // instantiation
-  if (!enum_type_opt && !ast->explicit_type_args.empty()) {
-    auto base_name = ast->functionName.strip_type_args().get_qualifier();
+  if (!enum_type_opt && !type_args.empty()) {
+    auto base_name = variant.strip_type_args().get_qualifier();
     auto *generic_def = monomorphizer.generic_enums.find(base_name);
-    if (generic_def &&
-        ast->explicit_type_args.size() == generic_def->type_params.size()) {
-      auto resolved = resolve_explicit_type_args(ast->explicit_type_args,
-                                                 generic_def->type_params);
+    if (generic_def && type_args.size() == generic_def->type_params.size()) {
+      auto resolved =
+          resolve_explicit_type_args(type_args, generic_def->type_params);
       if (resolved) {
-        auto &[bindings, type_args] = *resolved;
-        MonomorphizedKey key{generic_def->enum_name.mangled(), type_args};
+        auto &[bindings, args] = *resolved;
+        MonomorphizedKey key{generic_def->enum_name.mangled(), args};
         monomorphizer.instantiate_enum(generic_def, key, bindings)
             ->accept_vis(this);
         enum_type_opt = get_typename_type(
@@ -372,12 +370,26 @@ BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
   // Enum variant without explicit type args — use fully-qualified mangled
   // name (e.g., Some(42) rewritten to Option::Some by scope generator)
   if (!enum_type_opt) {
-    auto vc_it = variant_constructors.find(ast->functionName.mangled());
+    auto vc_it = variant_constructors.find(variant.mangled());
     if (vc_it != variant_constructors.end())
       enum_type_opt = vc_it->second.first;
   }
 
   if (!enum_type_opt || enum_type_opt->type_kind != TypeKind::Enum)
+    return std::nullopt;
+  return enum_type_opt;
+}
+
+std::optional<ResolvedCall>
+BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
+  // INFO: All enum variant calls arrive here in qualified form (Enum::Variant).
+  // The scope generator rewrites unqualified variant names (e.g. Some(42)) to
+  // qualified form (e.g. Option::Some(42)) via variant_to_enum. The type
+  // checker does NOT resolve unqualified enum variant names — that is the scope
+  // generator's responsibility.
+  auto enum_type_opt =
+      enum_of_variant(ast->functionName, ast->explicit_type_args);
+  if (!enum_type_opt)
     return std::nullopt;
 
   auto &et = std::get<EnumType>(enum_type_opt->type_data);
@@ -888,25 +900,32 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
       return ast->set_type(Type::Poisoned());
     }
     ast->set_type(*ty);
-  } else {
-    // Try zero-payload enum variant (e.g., None, Red)
-    auto it = variant_constructors.find(ast->variableName.mangled());
-    if (it != variant_constructors.end()) {
-      auto &[enum_type, variant_idx] = it->second;
-      auto &et = std::get<EnumType>(enum_type.type_data);
-      auto &vi = et.get_variant(variant_idx);
-      if (vi.payload_types.empty()) {
-        props_.variable(ast->id()).is_enum_unit_variant = true;
-        props_.variable(ast->id()).enum_variant_index = variant_idx;
-        return ast->set_type(enum_type);
-      }
-      // A variant with a payload needs its arguments, e.g. Circle(1).
+  } else if (auto enum_type =
+                 enum_of_variant(ast->variableName, ast->explicit_type_args)) {
+    // An enum variant, e.g. Color::Red or Option<i32>::None. The scope
+    // generator has qualified an unqualified one like Red.
+    auto &et = std::get<EnumType>(enum_type->type_data);
+    auto variant_idx = et.get_variant_index(ast->variableName.get_name());
+    if (!variant_idx) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Type '{}' has no variant '{}'",
+                                  ast->variableName.get_qualifier(),
+                                  ast->variableName.get_name()));
+      return ast->set_type(Type::Poisoned());
+    }
+    auto &vi = et.get_variant(*variant_idx);
+    // A variant with a payload needs its arguments, e.g. Circle(1).
+    if (!vi.payload_types.empty()) {
       this->add_error(
           ast->get_location(),
           fmt::format("Enum variant '{}' expects {} arguments, got 0",
                       ast->variableName.mangled(), vi.payload_types.size()));
       return ast->set_type(Type::Poisoned());
     }
+    props_.variable(ast->id()).is_enum_unit_variant = true;
+    props_.variable(ast->id()).enum_variant_index = *variant_idx;
+    ast->set_type(*enum_type);
+  } else {
     this->add_error(
         ast->get_location(),
         fmt::format("Variable '{}' not found", ast->variableName.mangled()));

@@ -193,6 +193,9 @@ public:
   void instantiate_generic_callee(CallExprAST *ast);
 
   // Call resolvers: nullopt means the call is not of this kind.
+  std::optional<Type>
+  enum_of_variant(const sammine_util::QualifiedName &variant,
+                  const std::vector<std::unique_ptr<TypeExprAST>> &type_args);
   std::optional<ResolvedCall> resolve_enum_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);

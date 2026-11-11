@@ -637,6 +637,9 @@ public:
   //! The name the value is referred to by, e.g. `x`, `printf`, `std::printf`
   //! or `Color::Red`.
   sammine_util::QualifiedName variableName;
+  //! The type arguments of a generic enum's variant, e.g. the `i32` of
+  //! `Option<i32>::None`.
+  std::vector<std::unique_ptr<TypeExprAST>> explicit_type_args;
   VariableExprAST(std::shared_ptr<Token> var)
       : ExprAST(NodeKind::VariableExprAST) {
     join_location(var);

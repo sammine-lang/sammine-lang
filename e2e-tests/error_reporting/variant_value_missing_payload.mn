@@ -1,26 +1,30 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |variant_value_missing_payload.mn:23:10
-// CHECK-NEXT:   21|
-// CHECK-NEXT:   22|let main() -> i32 {
-// CHECK-NEXT:   23|  let a = Shape::Circle;
+// CHECK:          |variant_value_missing_payload.mn:26:10
+// CHECK-NEXT:   24|
+// CHECK-NEXT:   25|let main() -> i32 {
+// CHECK-NEXT:   26|  let a = Shape::Circle;
 // CHECK-NEXT:     |          ────────────┬
 // CHECK-NEXT:     |                      ╰─ Enum variant 'Shape::Circle' expects 1 arguments, got 0
-// CHECK-NEXT:   24|  let b = Circle;
+// CHECK-NEXT:   27|  let b = Circle;
 // CHECK-NEXT:     |          ─────┬
 // CHECK-NEXT:     |               ╰─ Enum variant 'Shape::Circle' expects 1 arguments, got 0
-// CHECK-NEXT:   25|  0
-// CHECK-NEXT:   26|}
+// CHECK-NEXT:   28|  let c = Option<i32>::Some;
+// CHECK-NEXT:     |          ────────────────┬
+// CHECK-NEXT:     |                          ╰─ Enum variant 'Option<i32>::Some' expects 1 arguments, got 0
+// CHECK-NEXT:   29|  0
+// CHECK-NEXT:   30|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
 
 // A variant with a payload can't be used without its arguments, whether it
-// is written qualified or not.
+// is written qualified, unqualified or with type arguments.
 
 type Shape = Circle(i32) | Dot;
 
 let main() -> i32 {
   let a = Shape::Circle;
   let b = Circle;
+  let c = Option<i32>::Some;
   0
 }

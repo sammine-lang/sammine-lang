@@ -1,0 +1,23 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      none in generic
+// CHECK-NEXT: f64 none
+
+// A generic enum's unit variant written with type arguments is a value,
+// including with a type parameter inside a generic function.
+
+import std;
+
+let none<T>() -> Option<T> { Option<T>::None }
+
+let main() -> i32 {
+  case none<i32>() {
+    Some(v) => std::printf("some\n"),
+    None => std::printf("none in generic\n"),
+  };
+  let n = Option<f64>::None;
+  case n {
+    Some(v) => std::printf("some\n"),
+    None => std::printf("f64 none\n"),
+  };
+  0
+}

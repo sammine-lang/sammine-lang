@@ -1083,15 +1083,12 @@ auto Parser::ParseIdentifierExpr() -> p<ExprAST> {
   }
   if (result == NONCOMMITTED) {
     // A qualified name without parentheses names a value, e.g. a function
-    // `std::printf` or a variant `Color::Red`. With type arguments
-    // (`Option<i32>::None`) it stays a call, which instantiates the generic.
-    if (qn.is_qualified() && !explicit_type_args.empty()) {
-      auto call = std::make_unique<CallExprAST>(qn, qn_loc);
-      call->explicit_type_args = std::move(explicit_type_args);
-      return {std::move(call), SUCCESS};
+    // `std::printf` or a variant `Color::Red` or `Option<i32>::None`.
+    if (qn.is_qualified()) {
+      auto var = std::make_unique<VariableExprAST>(qn, qn_loc);
+      var->explicit_type_args = std::move(explicit_type_args);
+      return {std::move(var), SUCCESS};
     }
-    if (qn.is_qualified())
-      return {std::make_unique<VariableExprAST>(qn, qn_loc), SUCCESS};
     return {std::make_unique<VariableExprAST>(id), SUCCESS};
   }
   return {nullptr, FAILED};

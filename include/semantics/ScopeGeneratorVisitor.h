@@ -90,6 +90,7 @@ public:
   virtual void preorder_walk(FuncDefAST *ast) override;
   virtual void preorder_walk(PrototypeAST *ast) override;
   virtual void preorder_walk(CallExprAST *ast) override;
+  virtual void preorder_walk(VariableExprAST *ast) override;
   virtual void preorder_walk(TypedVarAST *ast) override;
   virtual void preorder_walk(AllocExprAST *ast) override;
 
