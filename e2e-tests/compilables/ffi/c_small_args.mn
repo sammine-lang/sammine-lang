@@ -1,0 +1,23 @@
+// RUN: %cc -fPIC -c %dir/Inputs/c_small_args_runtime.c -o %T/c_small_args_runtime.o && %sammine --file %dir/Inputs/c_small_args.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      char -61
+// CHECK-NEXT: bool 1
+// CHECK-NEXT: negated 61
+// CHECK-NEXT: promoted -61 1
+
+// C expects a char or bool argument already extended to 32 bits, signed for
+// char and unsigned for bool, and promotes either to int through `...`.
+
+import std;
+import c_small_args as c;
+
+let main() -> i32 {
+  // 0xC3, the first byte of "é": negative as a signed char.
+  let s = "é";
+  let x = s[0];
+  let big = 7;
+  std::printf("char %d\n", c::char_to_int(x));
+  std::printf("bool %d\n", c::bool_to_int(big > 3));
+  std::printf("negated %d\n", c::char_to_int(c::negate_char(x)));
+  c::print_promoted(0, x, big > 3);
+  0
+}

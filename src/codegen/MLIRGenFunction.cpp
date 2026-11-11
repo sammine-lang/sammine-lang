@@ -216,6 +216,37 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast) {
   currentSretBuffer = nullptr;
 }
 
+namespace {
+
+// C expects a char or bool argument or result already extended to 32 bits
+// by whoever produces it: signed for char, unsigned for bool. LLVM extends
+// it when the declaration says so.
+std::optional<llvm::StringRef> cExtension(const Type &type) {
+  if (type.type_kind == TypeKind::Char)
+    return mlir::LLVM::LLVMDialect::getSExtAttrName();
+  if (type.type_kind == TypeKind::Bool)
+    return mlir::LLVM::LLVMDialect::getZExtAttrName();
+  return std::nullopt;
+}
+
+// Marks the char and bool parameters and result of a C function. Its
+// declared parameters start at `firstParam`, after a hidden sret pointer.
+template <typename FuncOp>
+void markCExtensions(FuncOp funcOp, AST::PrototypeAST *proto,
+                     unsigned firstParam) {
+  auto *ctx = funcOp.getContext();
+  auto &params = proto->parameterVectors;
+  for (unsigned i = 0; i < params.size(); i++)
+    if (auto ext = cExtension(params[i]->get_type()))
+      funcOp.setArgAttr(firstParam + i, *ext, mlir::UnitAttr::get(ctx));
+  auto retType =
+      std::get<FunctionType>(proto->get_type().type_data).get_return_type();
+  if (auto ext = cExtension(retType))
+    funcOp.setResultAttr(0, *ext, mlir::UnitAttr::get(ctx));
+}
+
+} // namespace
+
 void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
   std::string funcName = ast->Prototype->functionName.mangled();
 
@@ -298,6 +329,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     for (auto &[index, byvalType] : byvalTypes)
       funcOp.setArgAttr(index, mlir::LLVM::LLVMDialect::getByValAttrName(),
                         mlir::TypeAttr::get(byvalType));
+    markCExtensions(funcOp, ast->Prototype.get(), sretType ? 1 : 0);
     return;
   }
 
@@ -313,13 +345,18 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
       llvmRetType = convertType(retType);
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(llvmRetType, paramTypes,
                                                   /*isVarArg=*/true);
-    mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
+    auto funcOp =
+        mlir::LLVM::LLVMFuncOp::create(builder, location, funcName, fnTy);
+    if (ast->is_c_function)
+      markCExtensions(funcOp, ast->Prototype.get(), 0);
   } else {
     auto funcType = buildFuncType(ast->Prototype.get());
     auto funcOp = mlir::func::FuncOp::create(
         location, llvm::StringRef(funcName), funcType);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     theModule.push_back(funcOp);
+    if (ast->is_c_function)
+      markCExtensions(funcOp, ast->Prototype.get(), 0);
   }
 }
 
@@ -492,13 +529,21 @@ mlir::Value MLIRGenImpl::emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
                       .getResult();
   }
 
-  // C default argument promotion: float → double for variadic args
+  // C's default argument promotions for variadic args: float to double,
+  // and char (signed) and bool (unsigned) to int.
   if (fnTy.isVarArg()) {
     unsigned fixedCount = fnTy.getNumParams();
     for (unsigned i = fixedCount; i < operands.size(); i++) {
-      if (operands[i].getType().isF32())
+      auto type = operands[i].getType();
+      if (type.isF32())
         operands[i] = mlir::LLVM::FPExtOp::create(
             builder, location, builder.getF64Type(), operands[i]);
+      else if (type.isInteger(8))
+        operands[i] = mlir::LLVM::SExtOp::create(
+            builder, location, builder.getI32Type(), operands[i]);
+      else if (type.isInteger(1))
+        operands[i] = mlir::LLVM::ZExtOp::create(
+            builder, location, builder.getI32Type(), operands[i]);
     }
   }
   // The declaration's types, which differ from sammine's for a struct.

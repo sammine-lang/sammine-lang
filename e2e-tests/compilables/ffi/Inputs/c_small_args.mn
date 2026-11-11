@@ -1,0 +1,4 @@
+export reuse char_to_int(c: char) -> i32;
+export reuse bool_to_int(b: bool) -> i32;
+export reuse negate_char(c: char) -> char;
+export reuse print_promoted(n: i32, ...) -> unit;
