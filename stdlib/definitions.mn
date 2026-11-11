@@ -46,6 +46,33 @@ typeclass Mod<T> {
   Mod(a: T, b: T) -> T;
 }
 
+// The comparisons: < goes through Less, == through Equal, and so on. The
+// compiler provides the instances for numbers and char, and Equal and
+// NotEqual also for bool, pointers and arrays of those.
+typeclass Less<T> {
+  Less(a: T, b: T) -> bool;
+}
+
+typeclass Greater<T> {
+  Greater(a: T, b: T) -> bool;
+}
+
+typeclass LessEqual<T> {
+  LessEqual(a: T, b: T) -> bool;
+}
+
+typeclass GreaterEqual<T> {
+  GreaterEqual(a: T, b: T) -> bool;
+}
+
+typeclass Equal<T> {
+  Equal(a: T, b: T) -> bool;
+}
+
+typeclass NotEqual<T> {
+  NotEqual(a: T, b: T) -> bool;
+}
+
 // `x as To` converts through this. The compiler provides the instances
 // between the number types, and between char and the integer types.
 typeclass Convert<From, To> {

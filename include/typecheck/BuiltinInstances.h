@@ -20,8 +20,17 @@ struct OperatorClass {
 };
 
 inline constexpr OperatorClass kOperatorClasses[] = {
-    {TokADD, "Add"}, {TokSUB, "Sub"}, {TokMUL, "Mul"},
-    {TokDIV, "Div"}, {TokMOD, "Mod"},
+    {TokADD, "Add"},
+    {TokSUB, "Sub"},
+    {TokMUL, "Mul"},
+    {TokDIV, "Div"},
+    {TokMOD, "Mod"},
+    {TokLESS, "Less"},
+    {TokGREATER, "Greater"},
+    {TokLessEqual, "LessEqual"},
+    {TokGreaterEqual, "GreaterEqual"},
+    {TokEQUAL, "Equal"},
+    {TokNOTEqual, "NotEqual"},
 };
 
 /// The typeclass `op` goes through, or nullopt if it has none.
@@ -65,6 +74,24 @@ inline bool is_builtin_conversion(const Type &from, const Type &to) {
   return is_number(from) && is_number(to);
 }
 
+/// True if `==` and `!=` are built in for `t`: numbers (untyped literals
+/// too), char, bool, pointers, and arrays of those but arrays.
+inline bool is_builtin_equality(const Type &t) {
+  switch (t.type_kind) {
+  case TypeKind::Char:
+  case TypeKind::Bool:
+  case TypeKind::Pointer:
+    return true;
+  case TypeKind::Array: {
+    auto element = std::get<ArrayType>(t.type_data).get_element();
+    return element.type_kind != TypeKind::Array &&
+           !element.is_polymorphic_numeric() && is_builtin_equality(element);
+  }
+  default:
+    return t.is_numeric();
+  }
+}
+
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
   if (key.name == kConvertClass)
@@ -74,6 +101,19 @@ inline bool is_builtin_instance(const MonomorphizedKey &key) {
   if (!op || key.type_args.size() != 1)
     return false;
   auto &t = key.type_args[0];
+  switch (*op) {
+  case TokEQUAL:
+  case TokNOTEqual:
+    return is_builtin_equality(t);
+  case TokLESS:
+  case TokGREATER:
+  case TokLessEqual:
+  case TokGreaterEqual:
+    // Numbers, untyped literals too (1 < 2), and char.
+    return t.is_numeric() || t.type_kind == TypeKind::Char;
+  default:
+    break;
+  }
   if (t.is_polymorphic_numeric())
     return false;
   if (*op == TokMOD)

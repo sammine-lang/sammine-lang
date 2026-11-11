@@ -206,49 +206,23 @@ mlir::Value MLIRGenImpl::emitBinaryFloatArith(AST::BinaryExprAST *ast,
   return emitFloatArithOp(builder, location, lhs, rhs, ast->Op->tok_type);
 }
 
-mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
-                                              mlir::Value lhs, mlir::Value rhs,
-                                              mlir::Location location) {
-  if (!isBoolType(ast->get_type()))
+mlir::Value MLIRGenImpl::emitComparison(TokenType op, mlir::Value lhs,
+                                        mlir::Value rhs, const Type &type,
+                                        mlir::Location location) {
+  auto *cmp = lookupCmpPredicate(op);
+  if (!cmp)
     return nullptr;
-
-  auto lhsType = ast->LHS->get_type();
-
-  // Integer and bool comparisons share the same CmpIOp + AND/OR logic
-  if (isIntegerType(lhsType) || isBoolType(lhsType)) {
-    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-    if (cmp) {
-      auto pred =
-          isUnsignedIntegerType(lhsType) ? cmp->unsigned_int : cmp->signed_int;
-      return mlir::arith::CmpIOp::create(builder, location, pred, lhs, rhs)
-          .getResult();
-    }
-    switch (ast->Op->tok_type) {
-    case TokAND:
-      return mlir::arith::AndIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    case TokOR:
-      return mlir::arith::OrIOp::create(builder, location, lhs, rhs)
-          .getResult();
-    default:
-      imm_error(fmt::format("unsupported operator '{}'", ast->Op->lexeme),
-                ast->get_location());
-    }
-  }
-
-  if (isFloatType(lhsType)) {
-    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-    if (!cmp)
-      imm_error(fmt::format("unsupported float operator '{}'", ast->Op->lexeme),
-                ast->get_location());
+  if (isIntegerType(type) || isBoolType(type))
+    return mlir::arith::CmpIOp::create(
+               builder, location,
+               isUnsignedIntegerType(type) ? cmp->unsigned_int
+                                           : cmp->signed_int,
+               lhs, rhs)
+        .getResult();
+  if (isFloatType(type))
     return mlir::arith::CmpFOp::create(builder, location, cmp->flt, lhs, rhs)
         .getResult();
-  }
-
-  if (lhsType.type_kind == TypeKind::Pointer) {
-    auto *cmp = lookupCmpPredicate(ast->Op->tok_type);
-    if (!cmp)
-      imm_error("only == and != supported for pointers", ast->get_location());
+  if (type.type_kind == TypeKind::Pointer) {
     auto i64Ty = builder.getI64Type();
     auto lhsInt = mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, lhs);
     auto rhsInt = mlir::LLVM::PtrToIntOp::create(builder, location, i64Ty, rhs);
@@ -256,11 +230,31 @@ mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
                                        lhsInt, rhsInt)
         .getResult();
   }
-
-  if (lhsType.type_kind == TypeKind::Array)
-    return emitArrayComparison(lhs, rhs, lhsType, ast->Op->tok_type, location);
-
+  if (type.type_kind == TypeKind::Array)
+    return emitArrayComparison(lhs, rhs, type, op, location);
   return nullptr;
+}
+
+mlir::Value MLIRGenImpl::emitBinaryComparison(AST::BinaryExprAST *ast,
+                                              mlir::Value lhs, mlir::Value rhs,
+                                              mlir::Location location) {
+  if (!isBoolType(ast->get_type()))
+    return nullptr;
+
+  // A comparison with a built-in instance; another goes through the
+  // typeclass (emitBinaryTypeclassOp).
+  if (ast->Op->is_comparison())
+    return emitComparison(ast->Op->tok_type, lhs, rhs, ast->LHS->get_type(),
+                          location);
+
+  switch (ast->Op->tok_type) {
+  case TokAND:
+    return mlir::arith::AndIOp::create(builder, location, lhs, rhs).getResult();
+  case TokOR:
+    return mlir::arith::OrIOp::create(builder, location, lhs, rhs).getResult();
+  default:
+    return nullptr;
+  }
 }
 
 mlir::Value MLIRGenImpl::emitBinaryEnumBitwise(AST::BinaryExprAST *ast,

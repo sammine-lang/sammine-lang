@@ -257,6 +257,8 @@ if a < b { std::printf("less\n"); }
 else { std::printf("not less\n"); };
 ```
 
+Each goes through its own typeclass, as `+` goes through `Add` (see [Builtin Typeclasses](#builtin-typeclasses)): `<` through `Less`, `>` through `Greater`, `<=` through `LessEqual`, `>=` through `GreaterEqual`, `==` through `Equal` and `!=` through `NotEqual`. Numbers and `char` can be compared every way, and `bool`, pointers and arrays of those with `==` and `!=`. Any other type, a struct, tuple or enum, needs an instance: comparing values without one is an error ("No instance of Equal<P>").
+
 ### Logical
 
 `&&` (and), `||` (or). Short-circuit evaluation:
@@ -684,6 +686,20 @@ std::printf("%d %d\n", v3.x, v3.y);     // 30 40
 
 The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
 
+**`Less<T>`**, **`Greater<T>`**, **`LessEqual<T>`**, **`GreaterEqual<T>`**, **`Equal<T>`**, **`NotEqual<T>`** -- comparison, used by `<`, `>`, `<=`, `>=`, `==` and `!=`. Each method takes two `T`s and returns `bool`. They are built in for the number types and `char`, and `Equal` and `NotEqual` also for `bool`, pointers and arrays of those. Each operator only needs its own instance:
+
+```sammine
+struct Version { major: i32, minor: i32, };
+
+instance Less<Version> {
+  let Less(a: Version, b: Version) -> bool {
+    a.major < b.major || (a.major == b.major && a.minor < b.minor)
+  }
+}
+
+let older = Version { major: 1, minor: 4 } < Version { major: 2, minor: 1 };  // true
+```
+
 **`Convert<From, To>`** -- conversion, used by `as` (see [Conversions with `as`](#conversions-with-as)). It is built in between the number types, and between `char` and the integer types, so `Convert<char, i32>('a')` is `'a' as i32`.
 
 **`Indexer<Collection, Element>`** -- custom indexing:
@@ -1010,7 +1026,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 
 ### Standard Library Modules
 
-- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`.
+- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`.
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('ptr<char>, i64) | Eof`: the buffer, which the caller must free, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` also hands back the file handle, as `(f, result)`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)

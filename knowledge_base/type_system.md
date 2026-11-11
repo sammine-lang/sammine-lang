@@ -30,7 +30,7 @@
 
 ### Operators
 - **Arithmetic** (`+`/`-`/`*`/`/`/`%`): dispatch via typeclass instances (`Add<i32>::add` etc.); sets `resolved_op_method` on `BinaryProps`
-- **Comparison** (`==`/`!=`/`<`/`>`/`<=`/`>=`): return `Bool`. Arrays/Pointers: only `==`/`!=` allowed
+- **Comparison** (`==`/`!=`/`<`/`>`/`<=`/`>=`): dispatch like arithmetic, through `Equal`/`NotEqual`/`Less`/`Greater`/`LessEqual`/`GreaterEqual` (`kOperatorClasses`), result `Bool`. Built in (`is_builtin_instance`): ordering for numbers (untyped literals too) and char; equality also for bool, pointers, arrays of those (`is_builtin_equality`). Structs, tuples and enums need a user instance (no built-in enum equality: a payload only means something per variant). Codegen: `emitComparison` for built-ins (operators and calls by name); otherwise the instance is called
 - **Logical** (`&&`/`||`): return LHS type (NOT Bool), no typeclass dispatch
 - **Bitwise** (`&`/`|`/`^`/`<<`/`>>`): valid on integers and integer-backed enums, return operand type
 - **Assignment** (`=`): returns `Unit`; `check_assign_target` follows the LHS through array elements and fields (`write_root`) and requires it to land behind a pointer (`*p`, `p[i]`)

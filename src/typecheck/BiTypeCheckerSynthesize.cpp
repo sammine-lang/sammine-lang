@@ -787,19 +787,6 @@ bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
 Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
                                                       const Type &lhs_type,
                                                       const Type &rhs_type) {
-  if (ast->Op->is_comparison()) {
-    auto kind = lhs_type.type_kind;
-    if (kind == TypeKind::Array || kind == TypeKind::Pointer) {
-      if (ast->Op->tok_type != TokEQUAL && ast->Op->tok_type != TokNOTEqual) {
-        this->add_error(ast->Op->get_location(),
-                        fmt::format("Only == and != are supported for {} types",
-                                    lhs_type.to_string()));
-        return ast->set_type(Type::Poisoned());
-      }
-    }
-    return ast->set_type(Type::Bool());
-  }
-
   if (ast->Op->is_assign())
     return ast->set_type(Type::Unit());
 
@@ -828,7 +815,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     return ast->set_type(lhs_type);
   }
 
-  // Arithmetic operators dispatch through typeclasses
+  // Arithmetic and comparison operators dispatch through typeclasses: + through
+  // Add, < through Less. A comparison gives a bool.
   if (auto class_name = class_of_operator(ast->Op->tok_type)) {
     MonomorphizedKey tc_key{std::string(*class_name), {lhs_type}};
     if (!has_instance(tc_key)) {
@@ -842,7 +830,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     }
     props_.binary(ast->id()).resolved_op_method =
         tc_key.to_typeclass_name(tc_key.name);
-    return ast->set_type(lhs_type);
+    return ast->set_type(ast->Op->is_comparison() ? Type::Bool() : lhs_type);
   }
 
   return ast->set_type(lhs_type);

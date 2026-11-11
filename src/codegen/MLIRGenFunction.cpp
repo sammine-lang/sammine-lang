@@ -651,6 +651,9 @@ mlir::Value MLIRGenImpl::emitBuiltinInstanceCall(AST::CallExprAST *ast,
                               location);
   if (auto op = operator_of_class(key.name)) {
     auto &type = key.type_args[0];
+    if (auto cmp =
+            emitComparison(*op, operands[0], operands[1], type, location))
+      return cmp;
     if (isFloatType(type))
       return emitFloatArithOp(builder, location, operands[0], operands[1], *op);
     return emitIntArithOp(builder, location, operands[0], operands[1], *op,

@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Less<ptr<i32>>
+
+// Pointers have built-in == and !=, but no order.
+
+let main() -> i32 {
+  let x = 1;
+  let p = &x;
+  let before = p < p;
+  return 0;
+}

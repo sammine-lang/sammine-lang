@@ -1,9 +1,8 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: No instance of Equal<P>
-// XFAIL: *
 
 // == goes through the Equal typeclass, as + goes through Add, and P has no
-// instance. Today codegen crashes on it instead.
+// instance.
 
 struct P { x: i32, };
 

@@ -329,6 +329,10 @@ public:
 
   void emitBoundsCheck(mlir::Value idx, size_t arrSize,
                        mlir::Location location);
+  /// The built-in comparison `op` (==, <, ...) of two values of `type`, or
+  /// nullptr if `type` has none.
+  mlir::Value emitComparison(TokenType op, mlir::Value lhs, mlir::Value rhs,
+                             const Type &type, mlir::Location location);
   mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
                                   const Type &arrType, TokenType tok,
                                   mlir::Location location);
