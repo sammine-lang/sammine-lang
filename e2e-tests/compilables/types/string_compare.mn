@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      1 0 0
+// CHECK-NEXT: 1 1 0
+// CHECK-NEXT: 1 1
+// CHECK-NEXT: 1
+
+// Strings are compared through views, &a < &b, byte by byte as C's strcmp
+// does. A comparison only reads them: each is still deleted after.
+
+import str;
+import std;
+
+let main() -> i32 {
+  let a = str::new("apple");
+  let b = str::new("banana");
+  let a2 = str::new("apple");
+  std::printf("%d %d %d\n", &a < &b, &b < &a, &a < &a2);
+  std::printf("%d %d %d\n", &a <= &a2, &b > &a, &a >= &b);
+  // Uppercase sorts before lowercase, as in ASCII.
+  let upper = str::new("Zebra");
+  std::printf("%d %d\n", &upper < &a, str::compare(&a, &a2) == 0);
+  std::printf("%d\n", str::compare(&a, &b) < 0);
+  str::delete(a);
+  str::delete(b);
+  str::delete(a2);
+  str::delete(upper);
+  return 0;
+}

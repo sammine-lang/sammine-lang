@@ -23,3 +23,30 @@ export let new(src: ptr<char>) -> String {
 export let delete(s: String) -> unit {
   free(s.data)
 }
+
+reuse strcmp(a: ptr<char>, b: ptr<char>) -> i32;
+
+// Negative, zero or positive as `a` sorts before, with, or after `b`, byte
+// by byte as C's strcmp does.
+export let compare(a: ptr<String>, b: ptr<String>) -> i32 {
+  strcmp((*a).data, (*b).data)
+}
+
+// Strings are ordered through views, &a < &b: a comparison only reads them.
+export instance Less<ptr<String>> {
+  let Less(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) < 0 }
+}
+
+export instance Greater<ptr<String>> {
+  let Greater(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) > 0 }
+}
+
+export instance LessEqual<ptr<String>> {
+  let LessEqual(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) <= 0 }
+}
+
+export instance GreaterEqual<ptr<String>> {
+  let GreaterEqual(a: ptr<String>, b: ptr<String>) -> bool {
+    compare(a, b) >= 0
+  }
+}
