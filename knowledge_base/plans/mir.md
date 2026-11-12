@@ -47,7 +47,7 @@ lex → parse → imports → semantics → typecheck → monomorphize
 ## The dialect
 
 The existing `sammine` dialect grows to hold MIR. Today it only has the GPU
-transfer ops (`to_device`, `to_host`) in `SammineOps.td`; MIR ops and types are
+transfer ops (`to_device`, `to_host`) in `include/dialect/SammineOps.td`; MIR ops and types are
 added beside them.
 
 ### Types

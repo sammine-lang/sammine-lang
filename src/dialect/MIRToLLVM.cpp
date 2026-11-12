@@ -1,5 +1,5 @@
-#include "codegen/MIRToLLVM.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/MIRToLLVM.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"

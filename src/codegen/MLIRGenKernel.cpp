@@ -14,7 +14,7 @@
 
 #include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"

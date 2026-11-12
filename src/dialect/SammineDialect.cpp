@@ -1,4 +1,4 @@
-#include "codegen/SammineDialect.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"

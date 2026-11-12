@@ -1,7 +1,7 @@
 #ifndef SAMMINE_TYPES_TD
 #define SAMMINE_TYPES_TD
 
-include "codegen/SammineDialect.td"
+include "dialect/SammineDialect.td"
 include "mlir/IR/AttrTypeBase.td"
 include "mlir/IR/EnumAttr.td"
 

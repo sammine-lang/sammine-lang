@@ -1,6 +1,6 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/SammineDialect.h"
 #include "util/Utilities.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"

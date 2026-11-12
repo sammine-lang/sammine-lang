@@ -7,7 +7,7 @@
 #include "codegen/LLVMRes.h"
 #include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/SammineDialect.h"
 #include "compiler/Options.h"
 #include "fmt/color.h"
 #include "fmt/core.h"

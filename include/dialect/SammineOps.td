@@ -1,5 +1,5 @@
-include "codegen/SammineDialect.td"
-include "codegen/SammineTypes.td"
+include "dialect/SammineDialect.td"
+include "dialect/SammineTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 class Sammine_Op<string mnemonic, list<Trait> traits = []>

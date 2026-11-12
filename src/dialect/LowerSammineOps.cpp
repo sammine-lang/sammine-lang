@@ -1,5 +1,5 @@
-#include "codegen/LowerSammineOps.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/LowerSammineOps.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/GPU/IR/GPUDialect.h"

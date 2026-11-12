@@ -2,8 +2,8 @@
 //! \brief mlir-opt for the sammine dialect: parses MIR, runs the passes it's
 //! asked for, prints the result. Tests MIR on small hand-written inputs.
 
-#include "codegen/MIRToLLVM.h"
-#include "codegen/SammineDialect.h"
+#include "dialect/MIRToLLVM.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"

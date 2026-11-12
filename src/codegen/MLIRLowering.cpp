@@ -1,6 +1,6 @@
 #include "codegen/LinalgReduceToGpu.h"
-#include "codegen/LowerSammineOps.h"
-#include "codegen/MIRToLLVM.h"
+#include "dialect/LowerSammineOps.h"
+#include "dialect/MIRToLLVM.h"
 #include "codegen/MLIRLowering.h"
 #include "compiler/Compiler.h"
 #include "util/Utilities.h"
