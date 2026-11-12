@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_in_case_arm.mn:8:17
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+
+// A dropped None inside an arm body decides nothing, as anywhere else.
+let main() -> i32 {
+  let r = case Option<i64>::Some(1i64) {
+    Some(v) => { None; v },
+    None => 0i64,
+  };
+  0
+}

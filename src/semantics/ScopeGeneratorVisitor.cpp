@@ -118,9 +118,15 @@ void ScopeGeneratorVisitor::preorder_walk(FuncDefAST *ast) {
 }
 void ScopeGeneratorVisitor::visit(CaseExprAST *ast) {
   ast->scrutinee->accept_vis(this);
-  for (auto &arm : ast->arms)
+  for (auto &arm : ast->arms) {
     resolver.resolve_variant(arm.pattern.variant_name, arm.pattern.location,
                              ctx());
+    enter_new_scope();
+    for (auto &binding : arm.pattern.bindings)
+      register_name(binding, arm.pattern.location);
+    arm.body->accept_vis(this);
+    exit_new_scope();
+  }
 }
 // An instance is code of its module like a function. Its methods' names
 // aren't registered: they are reached through the typeclass.

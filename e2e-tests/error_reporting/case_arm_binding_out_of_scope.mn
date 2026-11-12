@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: case_arm_binding_out_of_scope.mn:8:10
+// CHECK: The variable named v for the variable expression is not found before
+
+// An arm's binding ends with its arm.
+let main() -> i32 {
+  let r = case Option<i64>::Some(1i64) { Some(v) => v, None => 0i64, };
+  let w = v;
+  0
+}

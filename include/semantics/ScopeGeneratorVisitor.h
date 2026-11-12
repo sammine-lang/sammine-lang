@@ -62,8 +62,8 @@ public:
     ASTVisitor::visit(ast);
   }
 
-  // Case expressions: arm bodies contain pattern bindings not known at
-  // scope-gen time
+  // Case expressions: an arm's bindings are names in a new scope around its
+  // body, as a for loop's variable is
   virtual void visit(CaseExprAST *ast) override;
 
   // For-range: register loop var in a new scope around the body

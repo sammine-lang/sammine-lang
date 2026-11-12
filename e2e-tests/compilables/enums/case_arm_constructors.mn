@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: -1 2 7 4 13
+
+import std;
+
+// Unqualified constructors inside case arms, typed by where the case's
+// value goes.
+let take(o: Option<i64>) -> i64 { case o { Some(v) => v, None => -1i64, } }
+let keep(o: Option<i64>) -> Option<i64> {
+  case o { Some(v) => Some(v + 1i64), None => None, }
+}
+let flip(o: Option<i64>) -> Option<i64> {
+  case o { Some(v) => None, None => Some(7i64), }
+}
+
+let main() -> i32 {
+  let lit: Option<i64> = case 3 { 1 => None, _ => Some(4i64), };
+  let nested = case keep(Some(5i64)) {
+    Some(a) => case flip(None) { Some(b) => a + b, None => a, },
+    None => 0i64,
+  };
+  std::printf("%ld %ld %ld %ld %ld\n", take(keep(None)), take(keep(Some(1i64))),
+              take(flip(None)), take(lit), nested);
+  0
+}

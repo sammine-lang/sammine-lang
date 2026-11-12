@@ -1,0 +1,13 @@
+// RUN: %sammine --file %dir/Inputs/case_arm_helper.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK: 42 0
+
+// Names in a library's case arms are resolved in the library, as names
+// anywhere else in it are.
+import case_arm_helper;
+import std;
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", case_arm_helper::bump(Option<i64>::Some(41i64)),
+              case_arm_helper::bump(Option<i64>::None));
+  0
+}

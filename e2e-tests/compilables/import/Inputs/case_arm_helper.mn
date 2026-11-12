@@ -1,0 +1,5 @@
+// A library whose case arms call its own unexported helper.
+let helper(x: i64) -> i64 { x + 1i64 }
+export let bump(o: Option<i64>) -> i64 {
+  case o { Some(v) => helper(v), None => 0i64, }
+}
