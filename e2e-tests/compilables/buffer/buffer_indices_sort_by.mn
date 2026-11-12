@@ -1,0 +1,26 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 0 1 2 3
+// CHECK: 3 0 2 1
+
+import std;
+import buffer;
+
+// Sorting a permutation of indices by the values they point at.
+let value_after(values: ptr<i64>, a: i64, b: i64) -> bool {
+  values[a] > values[b]
+}
+
+let main() -> i32 {
+  let order = buffer::indices(4i64);
+  std::printf("%ld %ld %ld %ld\n", order[0], order[1], order[2], order[3]);
+  let values = alloc<i64>(4i64);
+  values[0] = 20i64;
+  values[1] = 40i64;
+  values[2] = 30i64;
+  values[3] = 10i64;
+  let order = buffer::sort_by(order, 4i64, value_after(values));
+  std::printf("%ld %ld %ld %ld\n", order[0], order[1], order[2], order[3]);
+  free(values);
+  free(order);
+  0
+}

@@ -1,0 +1,23 @@
+// Folding over the integers from..to, end excluded.
+
+// step(...step(step(acc, from), from + 1)..., to - 1). The accumulator can
+// own memory, handed from one step to the next.
+export let fold<T>(from: i64, to: i64, acc: T, step: (T, i64) -> T) -> T {
+  if from >= to { acc } else { fold(from + 1i64, to, step(acc, from), step) }
+}
+
+let add_term(term: (i64) -> i64, acc: i64, i: i64) -> i64 { acc + term(i) }
+
+// term(from) + ... + term(to - 1).
+export let sum(from: i64, to: i64, term: (i64) -> i64) -> i64 {
+  fold(from, to, 0i64, add_term(term))
+}
+
+let count_if(pred: (i64) -> bool, acc: i64, i: i64) -> i64 {
+  if pred(i) { acc + 1i64 } else { acc }
+}
+
+// How many of from, ..., to - 1 satisfy pred.
+export let count(from: i64, to: i64, pred: (i64) -> bool) -> i64 {
+  fold(from, to, 0i64, count_if(pred))
+}

@@ -1,0 +1,41 @@
+// Operations on a buffer of n elements, xs[0] to xs[n - 1]. Each takes the
+// buffer and hands it back.
+
+import range;
+
+let set_index(xs: 'ptr<i64>, i: i64) -> 'ptr<i64> {
+  xs[i] = i;
+  xs
+}
+
+// A new buffer holding 0, 1, ..., n - 1.
+export let indices(n: i64) -> 'ptr<i64> {
+  range::fold(0i64, n, alloc<i64>(n), set_index)
+}
+
+// Moves xs[j] down past every element `after` puts it before: one step of
+// insertion sort.
+let insert<T>(after: (T, T) -> bool, xs: 'ptr<T>, j: i64) -> 'ptr<T> {
+  if j > 0i64 && after(xs[j - 1i64], xs[j]) {
+    let moved = xs[j];
+    xs[j] = xs[j - 1i64];
+    xs[j - 1i64] = moved;
+    insert(after, xs, j - 1i64)
+  } else { xs }
+}
+
+// Sorts xs in place so that no element comes `after` the one following it.
+export let sort_by<T>(xs: 'ptr<T>, n: i64, after: (T, T) -> bool) -> 'ptr<T> {
+  range::fold(1i64, n, xs, insert(after))
+}
+
+let give_at<T>(f: (T) -> unit, xs: 'ptr<T>, i: i64) -> 'ptr<T> {
+  f(xs[i]);
+  xs
+}
+
+// f(xs[0]), ..., f(xs[n - 1]), in order. Each element is moved into f, so
+// f can consume what it owns, as str::delete does.
+export let each<T>(xs: 'ptr<T>, n: i64, f: (T) -> unit) -> 'ptr<T> {
+  range::fold(0i64, n, xs, give_at(f))
+}

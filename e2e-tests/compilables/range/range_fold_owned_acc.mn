@@ -1,0 +1,18 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 0 2 4 6 8
+
+import std;
+import range;
+
+// The accumulator owns a buffer, handed from one step to the next.
+let set_double(xs: 'ptr<i64>, i: i64) -> 'ptr<i64> {
+  xs[i] = 2i64 * i;
+  xs
+}
+
+let main() -> i32 {
+  let xs = range::fold(0i64, 5i64, alloc<i64>(5i64), set_double);
+  std::printf("%ld %ld %ld %ld %ld\n", xs[0], xs[1], xs[2], xs[3], xs[4]);
+  free(xs);
+  0
+}

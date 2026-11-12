@@ -1,0 +1,23 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: alpha
+// CHECK-NEXT: beta
+// CHECK-NEXT: gamma
+
+import std;
+import str;
+import buffer;
+
+// Each String is moved into the function, which must consume it.
+let print_and_delete(s: str::String) -> unit {
+  std::printf("%s\n", s.data);
+  str::delete(s);
+}
+
+let main() -> i32 {
+  let names = alloc<str::String>(3i64);
+  names[0] = str::new("alpha");
+  names[1] = str::new("beta");
+  names[2] = str::new("gamma");
+  free(buffer::each(names, 3i64, print_and_delete));
+  0
+}

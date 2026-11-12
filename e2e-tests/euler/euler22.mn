@@ -9,21 +9,9 @@
 import io;
 import str;
 import std;
-
-// ===--- Folding over a range ---===
-
-// step(...step(step(acc, from), from + 1)..., to - 1). The accumulator can
-// own memory, handed from one step to the next.
-let fold<T>(from: i64, to: i64, acc: T, step: (T, i64) -> T) -> T {
-  if from >= to { acc } else { fold(from + 1i64, to, step(acc, from), step) }
-}
-
-let add_term(term: (i64) -> i64, acc: i64, i: i64) -> i64 { acc + term(i) }
-
-// term(from) + ... + term(to - 1).
-let sum(from: i64, to: i64, term: (i64) -> i64) -> i64 {
-  fold(from, to, 0i64, add_term(term))
-}
+import vec;
+import range;
+import buffer;
 
 // ===--- Reading the names ---===
 
@@ -34,60 +22,24 @@ let blank_separator(buf: 'ptr<char>, i: i64) -> 'ptr<char> {
   buf
 }
 
-let split(buf: 'ptr<char>, n: i64) -> 'ptr<char> {
-  fold(0i64, n, buf, blank_separator)
+// Whether a name starts at position i: a letter after a NUL or at the start.
+let starts_at(buf: ptr<char>, i: i64) -> bool {
+  buf[i] != '\0' && (i == 0i64 || buf[i - 1i64] == '\0')
 }
 
-// 1 if a name starts at position i: a letter after a NUL or at the start.
-let starts_at(buf: ptr<char>, i: i64) -> i64 {
-  if buf[i] != '\0' && (i == 0i64 || buf[i - 1i64] == '\0') { 1i64 }
-  else { 0i64 }
+// names, plus the name at position i if one starts there.
+let push_name(buf: ptr<char>, names: vec::Vec<str::String>,
+              i: i64) -> vec::Vec<str::String> {
+  if starts_at(buf, i) { vec::push(names, str::new(&buf[i])) }
+  else { names }
 }
 
-// A String for each name in buf from position i on, stored from index k on.
-let collect(buf: ptr<char>, n: i64, i: i64, k: i64,
-            names: 'ptr<str::String>) -> 'ptr<str::String> {
-  if i >= n { names }
-  else if starts_at(buf, i) == 1i64 {
-    names[k] = str::new(&buf[i]);
-    collect(buf, n, i + 1i64, k + 1i64, names)
-  } else { collect(buf, n, i + 1i64, k, names) }
-}
-
-// ===--- Sorting ---===
+// ===--- Scoring ---===
 
 // Whether the name at a sorts after the one at b.
 let name_after(names: ptr<str::String>, a: i64, b: i64) -> bool {
   &names[a] > &names[b]
 }
-
-// Moves the index at position j down past every index `after` puts it before:
-// one step of insertion sort.
-let insert(after: (i64, i64) -> bool, order: 'ptr<i64>, j: i64) -> 'ptr<i64> {
-  if j > 0i64 && after(order[j - 1i64], order[j]) {
-    let moved = order[j];
-    order[j] = order[j - 1i64];
-    order[j - 1i64] = moved;
-    insert(after, order, j - 1i64)
-  } else { order }
-}
-
-let sort_by(order: 'ptr<i64>, count: i64,
-            after: (i64, i64) -> bool) -> 'ptr<i64> {
-  fold(1i64, count, order, insert(after))
-}
-
-let set_index(order: 'ptr<i64>, k: i64) -> 'ptr<i64> {
-  order[k] = k;
-  order
-}
-
-// order[k] = k for each k.
-let fill(order: 'ptr<i64>, count: i64) -> 'ptr<i64> {
-  fold(0i64, count, order, set_index)
-}
-
-// ===--- Scoring ---===
 
 // A = 1, B = 2, ...
 let letter_of(name: ptr<str::String>, c: i64) -> i64 {
@@ -97,25 +49,22 @@ let letter_of(name: ptr<str::String>, c: i64) -> i64 {
 // The name in sorted position k, scored.
 let score_at(names: ptr<str::String>, order: ptr<i64>, k: i64) -> i64 {
   let name = &names[order[k]];
-  (k + 1i64) * sum(0i64, (*name).length, letter_of(name))
-}
-
-let delete_at(names: 'ptr<str::String>, k: i64) -> 'ptr<str::String> {
-  str::delete(names[k]);
-  names
+  (k + 1i64) * range::sum(0i64, (*name).length, letter_of(name))
 }
 
 let main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
   case io::read_file(argv[1]) {
     Line(file, n) => {
-      let buf = file |> split(n);
-      let count = sum(0i64, n, starts_at(buf));
-      let names = collect(buf, n, 0i64, 0i64, alloc<str::String>(count));
-      let order = alloc<i64>(count) |> fill(count)
-                  |> sort_by(count, name_after(names));
-      std::printf("%ld\n", sum(0i64, count, score_at(names, order)));
+      let buf = range::fold(0i64, n, file, blank_separator);
+      let names = range::fold(0i64, n, vec::new<str::String>(16i64),
+                              push_name(buf));
+      let count = names.length;
+      let order = buffer::indices(count)
+                  |> buffer::sort_by(count, name_after(names.data));
+      std::printf("%ld\n",
+                  range::sum(0i64, count, score_at(names.data, order)));
       free(order);
-      free(fold(0i64, count, names, delete_at));
+      free(buffer::each(names.data, count, str::delete));
       free(buf);
       0
     },

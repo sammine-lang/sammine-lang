@@ -87,9 +87,11 @@ file(MAKE_DIRECTORY ${STDLIB_DIR})
 # definitions is the prelude, which every other module imports, so it is
 # compiled first.
 set(STDLIB_PRELUDE definitions)
-set(STDLIB_COMPILED std str io)
+# A module comes after the modules it imports, listed in STDLIB_IMPORTS_<mod>.
+set(STDLIB_COMPILED std str io range buffer)
 set(STDLIB_COPIED vec.mn)
 set(STDLIB_C_RUNTIME_io io_runtime.c)
+set(STDLIB_IMPORTS_buffer range)
 
 # Helper: compile a C runtime file to a PIC object in STDLIB_DIR.
 function(stdlib_compile_c_runtime src out_var)
@@ -140,6 +142,10 @@ foreach(mod ${STDLIB_COMPILED})
     stdlib_compile_c_runtime(${STDLIB_C_RUNTIME_${mod}} _obj)
     list(APPEND _extra_deps ${_obj})
   endif()
+  foreach(dep ${STDLIB_IMPORTS_${mod}})
+    list(APPEND _extra_deps ${STDLIB_DIR}/${dep}.so ${STDLIB_DIR}/${dep}.a
+         ${STDLIB_DIR}/${dep}.mn)
+  endforeach()
   stdlib_add_module(${mod} "${_extra_deps}")
 endforeach()
 

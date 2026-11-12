@@ -1,0 +1,19 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4950 285 3 120
+
+import std;
+import range;
+
+let square(i: i64) -> i64 { i * i }
+let id(i: i64) -> i64 { i }
+let multiple_of(k: i64, i: i64) -> bool { i % k == 0i64 }
+let times(acc: i64, i: i64) -> i64 { acc * i }
+
+let main() -> i32 {
+  std::printf("%ld %ld %ld %ld\n",
+              range::sum(0i64, 100i64, id),
+              range::sum(0i64, 10i64, square),
+              range::count(1i64, 10i64, multiple_of(3i64)),
+              range::fold(1i64, 6i64, 1i64, times));
+  0
+}
