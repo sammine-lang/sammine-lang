@@ -136,6 +136,13 @@ private:
   mlir::FailureOr<mlir::Value> lowerVariable(AST::VariableExprAST *var);
   mlir::FailureOr<mlir::Value> lowerBinary(AST::BinaryExprAST *bin);
   mlir::FailureOr<mlir::Value> lowerLogical(AST::BinaryExprAST *bin);
+  mlir::FailureOr<mlir::Value> lowerOperator(mlir::Location location,
+                                             TokenType op, mlir::Value lhs,
+                                             mlir::Value rhs, const Type &type);
+  static std::optional<bool> integerKind(const Type &type);
+  mlir::FailureOr<mlir::Value> lowerEquality(mlir::Location location,
+                                             mlir::Value lhs, mlir::Value rhs,
+                                             const Type &type);
   /// An arm of an if or a case: the block it starts in, what its pattern
   /// binds (if anything), and its body.
   struct Arm {
@@ -152,6 +159,14 @@ private:
   mlir::FailureOr<mlir::Value> lowerCase(AST::CaseExprAST *caseExpr);
   mlir::FailureOr<mlir::Value> lowerFor(AST::ForExprAST *forExpr);
   mlir::FailureOr<mlir::Value> lowerScalarCase(AST::CaseExprAST *caseExpr);
+  void branchOn(mlir::Location location, mlir::Value flag,
+                llvm::ArrayRef<llvm::APInt> values,
+                llvm::ArrayRef<mlir::Block *> dests, mlir::Block *otherwise,
+                mlir::ValueRange otherwiseArgs);
+  void branchOn(mlir::Location location, mlir::Value flag,
+                llvm::ArrayRef<int32_t> tags,
+                llvm::ArrayRef<mlir::Block *> dests, mlir::Block *otherwise,
+                mlir::ValueRange otherwiseArgs);
   mlir::FailureOr<mlir::Value>
   lowerVariant(mlir::Location location, const Type &type, size_t index,
                llvm::ArrayRef<AST::ExprAST *> payload);

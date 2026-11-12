@@ -144,6 +144,17 @@ def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
   let assemblyFormat = "$ptr `[` $index `]` attr-dict `:` type($ptr) `,` type($index)";
 }
 
+def AddressOp : Sammine_Op<"address", [Pure]> {
+  let summary = "the address a pointer holds, as an integer";
+  let description = [{
+    What comparing two pointers compares, as the AST codegen does: their
+    addresses, as signed integers.
+  }];
+  let arguments = (ins Sammine_PtrType:$ptr);
+  let results = (outs I64:$result);
+  let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
+}
+
 def LendOp : Sammine_Op<"lend", [Pure,
     TypesMatchWith<"the result is a view of what the place holds",
                    "place", "result", ViewOfPlace>]> {

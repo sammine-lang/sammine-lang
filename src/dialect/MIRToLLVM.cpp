@@ -517,6 +517,17 @@ struct ElementLowering : public mlir::OpConversionPattern<smn::ElementOp> {
   }
 };
 
+struct AddressLowering : public mlir::OpConversionPattern<smn::AddressOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::AddressOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<mlir::LLVM::PtrToIntOp>(
+        op, rewriter.getI64Type(), adaptor.getPtr());
+    return mlir::success();
+  }
+};
+
 struct UnreachableLowering
     : public mlir::OpConversionPattern<smn::UnreachableOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -711,7 +722,8 @@ struct MIRToLLVMPass
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering, ExtractLowering, VariantLowering, TagLowering,
                  PayloadLowering, ElementLowering, UnreachableLowering,
-                 LocalLowering, CallIndirectLowering>(converter, &context);
+                 LocalLowering, CallIndirectLowering, AddressLowering>(
+        converter, &context);
     unsigned partials = 0;
     patterns.add<ClosureLowering>(converter, &context, partials);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
@@ -733,7 +745,7 @@ struct MIRToLLVMPass
                         smn::StringOp, smn::AggregateOp, smn::ExtractOp,
                         smn::VariantOp, smn::TagOp, smn::PayloadOp,
                         smn::ElementOp, smn::UnreachableOp, smn::ClosureOp,
-                        smn::CallIndirectOp>();
+                        smn::CallIndirectOp, smn::AddressOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

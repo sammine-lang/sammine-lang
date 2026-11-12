@@ -728,9 +728,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
     otherwise = dests.pop_back_val();
     tags.pop_back();
   }
-  llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
-  mlir::cf::SwitchOp::create(builder_, location, tag, otherwise,
-                             mlir::ValueRange{}, tags, dests, noOperands);
+  branchOn(location, tag, tags, dests, otherwise, mlir::ValueRange{});
   return lowerArms(location, *resultType, arms);
 }
 
@@ -872,13 +870,41 @@ MIRLowering::lowerScalarCase(CaseExprAST *caseExpr) {
     values.pop_back();
   }
   auto location = loc(caseExpr);
+  branchOn(location, *value, values, dests, otherwise, mlir::ValueRange{});
+  return lowerArms(location, *resultType, arms);
+}
+
+// Branches on `flag`: to the block of the value it equals, else to
+// `otherwise`, passed `otherwiseArgs`. With no values that is a plain
+// branch: MLIR's translation to LLVM IR can't take a switch with no cases
+// whose default takes arguments (upstream/mlir-switch-no-cases-phi).
+void MIRLowering::branchOn(mlir::Location location, mlir::Value flag,
+                           llvm::ArrayRef<llvm::APInt> values,
+                           llvm::ArrayRef<mlir::Block *> dests,
+                           mlir::Block *otherwise,
+                           mlir::ValueRange otherwiseArgs) {
+  if (values.empty()) {
+    mlir::cf::BranchOp::create(builder_, location, otherwise, otherwiseArgs);
+    return;
+  }
   auto caseValues = mlir::DenseIntElementsAttr::get(
-      mlir::VectorType::get({static_cast<int64_t>(values.size())}, flagType),
+      mlir::VectorType::get({static_cast<int64_t>(values.size())},
+                            flag.getType()),
       values);
   llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
-  mlir::cf::SwitchOp::create(builder_, location, *value, mlir::ValueRange{},
+  mlir::cf::SwitchOp::create(builder_, location, flag, otherwiseArgs,
                              noOperands, caseValues, otherwise, dests);
-  return lowerArms(location, *resultType, arms);
+}
+
+void MIRLowering::branchOn(mlir::Location location, mlir::Value flag,
+                           llvm::ArrayRef<int32_t> tags,
+                           llvm::ArrayRef<mlir::Block *> dests,
+                           mlir::Block *otherwise,
+                           mlir::ValueRange otherwiseArgs) {
+  llvm::SmallVector<llvm::APInt> values;
+  for (auto tag : tags)
+    values.emplace_back(32, static_cast<uint64_t>(tag), /*isSigned=*/true);
+  branchOn(location, flag, values, dests, otherwise, otherwiseArgs);
 }
 
 // `Option<i64>::Some(x)`, or a variant with no payload, `None`: its payload
@@ -1068,22 +1094,7 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
   auto op = operator_of_class(key.name);
   if (!op || args.size() != 2)
     return mlir::failure();
-  auto &type = key.type_args[0];
-  if (!type.is_integer() && !type.is_float() &&
-      type.type_kind != TypeKind::Bool)
-    return mlir::failure();
-  mlir::Value value;
-  if (isComparisonOp(*op))
-    value = emitScalarComparison(builder_, location, args[0], args[1], *op,
-                                 type.is_float(), type.is_unsigned());
-  else if (type.is_float())
-    value = emitFloatArithOp(builder_, location, args[0], args[1], *op);
-  else
-    value = emitIntArithOp(builder_, location, args[0], args[1], *op,
-                           type.is_unsigned());
-  if (!value)
-    return mlir::failure();
-  return value;
+  return lowerOperator(location, *op, args[0], args[1], key.type_args[0]);
 }
 
 // `[a, b, c]`: its elements' values, in order.
@@ -1439,9 +1450,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   return it->second;
 }
 
-// Integer or float arithmetic, or a comparison of integers, bools or floats,
-// through a built-in instance, or a call to the method of an instance the
-// program declares.
+// An operator through the instance the type checker chose: one the program
+// declares is a call to its method, one the compiler provides lowerOperator.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   if (auto *bp = props_.binary(bin->id()); bp && bp->resolved_op_method) {
     auto lhs = lowerExpr(bin->LHS.get());
@@ -1453,37 +1463,181 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
     return callMethod(loc(bin), *bp->resolved_op_method, {*lhs, *rhs},
                       bin->get_type());
   }
-  auto op = bin->Op->tok_type;
-  bool comparison = bin->Op->is_comparison();
-  // A comparison's operands decide how it compares; its own type is bool.
-  auto type = comparison ? bin->LHS->get_type() : bin->get_type();
-  // As the AST codegen has it, a char is an integer, and an integer-backed
-  // enum is its backing integer to == and !=.
-  bool intEnum = type.type_kind == TypeKind::Enum &&
-                 std::get<EnumType>(type.type_data).is_integer_backed() &&
-                 (op == TokEQUAL || op == TokNOTEqual);
-  bool integer = type.is_integer() || type.type_kind == TypeKind::Char ||
-                 (comparison && type.type_kind == TypeKind::Bool) || intEnum;
-  if (!integer && !type.is_float())
-    return mlir::failure();
   auto lhs = lowerExpr(bin->LHS.get());
   if (mlir::failed(lhs) || !*lhs)
     return mlir::failure();
   auto rhs = lowerExpr(bin->RHS.get());
   if (mlir::failed(rhs) || !*rhs)
     return mlir::failure();
+  // The operands' type decides what the operator does; a comparison's own
+  // type is bool.
+  return lowerOperator(loc(bin), bin->Op->tok_type, *lhs, *rhs,
+                       bin->LHS->get_type());
+}
+
+// `lhs op rhs`, operands of `type`, through the instance the compiler
+// provides, as the AST codegen does it. On integers, chars, bools, and an
+// integer-backed enum's backing integer, and on floats, the operator itself;
+// pointers compare their addresses, as signed integers; arrays and enums
+// with payloads take == and != (lowerEquality).
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerOperator(mlir::Location location, TokenType op,
+                           mlir::Value lhs, mlir::Value rhs, const Type &type) {
+  bool comparison = isComparisonOp(op);
   mlir::Value result;
-  if (comparison)
-    result = emitScalarComparison(builder_, loc(bin), *lhs, *rhs, op,
-                                  type.is_float(), type.is_unsigned());
-  else if (type.is_float())
-    result = emitFloatArithOp(builder_, loc(bin), *lhs, *rhs, op);
-  else
-    result = emitIntArithOp(builder_, loc(bin), *lhs, *rhs, op,
-                            type.is_unsigned());
+  if (type.type_kind == TypeKind::Pointer) {
+    if (!comparison)
+      return mlir::failure();
+    auto address = [&](mlir::Value ptr) -> mlir::Value {
+      return smn::AddressOp::create(builder_, location,
+                                    builder_.getI64Type(), ptr);
+    };
+    result = emitScalarComparison(builder_, location, address(lhs),
+                                  address(rhs), op, /*is_float=*/false,
+                                  /*is_unsigned=*/false);
+  } else if (auto integer = integerKind(type)) {
+    result = comparison ? emitScalarComparison(builder_, location, lhs, rhs, op,
+                                               /*is_float=*/false, *integer)
+                        : emitIntArithOp(builder_, location, lhs, rhs, op,
+                                         *integer);
+  } else if (type.is_float()) {
+    result = comparison ? emitScalarComparison(builder_, location, lhs, rhs, op,
+                                               /*is_float=*/true,
+                                               /*is_unsigned=*/false)
+                        : emitFloatArithOp(builder_, location, lhs, rhs, op);
+  } else if (op == TokEQUAL || op == TokNOTEqual) {
+    auto equal = lowerEquality(location, lhs, rhs, type);
+    if (mlir::failed(equal) || op == TokEQUAL)
+      return equal;
+    auto one = mlir::arith::ConstantIntOp::create(builder_, location,
+                                                  builder_.getI1Type(), 1);
+    return mlir::arith::XOrIOp::create(builder_, location, *equal, one)
+        .getResult();
+  }
   if (!result)
     return mlir::failure();
   return result;
+}
+
+// Whether `type` is an integer to operators, and if so whether unsigned: an
+// integer, a char (signed) or a bool, or an integer-backed enum, by its
+// backing integer.
+std::optional<bool> MIRLowering::integerKind(const Type &type) {
+  if (type.is_integer())
+    return type.is_unsigned();
+  if (type.type_kind == TypeKind::Char || type.type_kind == TypeKind::Bool)
+    return false;
+  if (type.type_kind == TypeKind::Enum) {
+    auto &et = std::get<EnumType>(type.type_data);
+    if (et.is_integer_backed())
+      return et.get_backing_type() == TypeKind::U32_t ||
+             et.get_backing_type() == TypeKind::U64_t;
+  }
+  return std::nullopt;
+}
+
+// `lhs == rhs` of `type`, as an i1. Arrays compare element by element,
+// stopping at the first that differs; enums with payloads compare their
+// tags, then the payload of the variant they share.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
+                           mlir::Value rhs, const Type &type) {
+  auto i1 = builder_.getI1Type();
+  auto constant = [&](mlir::Type t, int64_t v) -> mlir::Value {
+    return mlir::arith::ConstantIntOp::create(builder_, location, t, v);
+  };
+  auto *region = builder_.getInsertionBlock()->getParent();
+
+  if (type.type_kind == TypeKind::Array) {
+    auto &array = std::get<ArrayType>(type.type_data);
+    auto mirArray = mlir::dyn_cast<smn::ArrayType>(lhs.getType());
+    if (!mirArray)
+      return mlir::failure();
+    auto i64 = builder_.getI64Type();
+    auto *header = &region->emplaceBlock();
+    header->addArgument(i64, location);
+    auto *body = &region->emplaceBlock();
+    auto *after = &region->emplaceBlock();
+    after->addArgument(i1, location);
+    mlir::cf::BranchOp::create(builder_, location, header,
+                               mlir::ValueRange{constant(i64, 0)});
+    builder_.setInsertionPointToStart(header);
+    auto index = header->getArgument(0);
+    auto more = mlir::arith::CmpIOp::create(
+        builder_, location, mlir::arith::CmpIPredicate::slt, index,
+        constant(i64, static_cast<int64_t>(array.get_size())));
+    mlir::cf::CondBranchOp::create(builder_, location, more, body,
+                                   mlir::ValueRange{}, after,
+                                   mlir::ValueRange{constant(i1, 1)});
+    builder_.setInsertionPointToStart(body);
+    auto element = mirArray.getElement();
+    auto a = smn::ElementOp::create(builder_, location, element, lhs, index);
+    auto b = smn::ElementOp::create(builder_, location, element, rhs, index);
+    auto same = lowerOperator(location, TokEQUAL, a, b, array.get_element());
+    if (mlir::failed(same))
+      return mlir::failure();
+    auto next = mlir::arith::AddIOp::create(builder_, location, index,
+                                            constant(i64, 1));
+    mlir::cf::CondBranchOp::create(builder_, location, *same, header,
+                                   mlir::ValueRange{next}, after,
+                                   mlir::ValueRange{constant(i1, 0)});
+    after->moveBefore(region, region->end());
+    builder_.setInsertionPointToStart(after);
+    return after->getArgument(0);
+  }
+
+  if (type.type_kind != TypeKind::Enum)
+    return mlir::failure();
+  auto et = std::get<EnumType>(type.type_data);
+  auto enumType = mlir::dyn_cast<smn::EnumType>(lhs.getType());
+  if (!enumType)
+    return mlir::failure();
+  auto i32 = builder_.getI32Type();
+  auto lhsTag = smn::TagOp::create(builder_, location, i32, lhs);
+  auto rhsTag = smn::TagOp::create(builder_, location, i32, rhs);
+  auto sameTag = mlir::arith::CmpIOp::create(
+      builder_, location, mlir::arith::CmpIPredicate::eq, lhsTag, rhsTag);
+  auto *check = &region->emplaceBlock();
+  auto *after = &region->emplaceBlock();
+  after->addArgument(i1, location);
+  mlir::cf::CondBranchOp::create(builder_, location, sameTag, check,
+                                 mlir::ValueRange{}, after,
+                                 mlir::ValueRange{constant(i1, 0)});
+  // The same variant: with no payload, equal; else equal if its fields are.
+  builder_.setInsertionPointToStart(check);
+  auto equalTrue = constant(i1, 1);
+  llvm::SmallVector<int32_t> tags;
+  llvm::SmallVector<mlir::Block *> dests;
+  for (auto [v, variant] : llvm::enumerate(et.get_variants()))
+    if (!variant.payload_types.empty()) {
+      tags.push_back(static_cast<int32_t>(v));
+      dests.push_back(&region->emplaceBlock());
+    }
+  branchOn(location, lhsTag, tags, dests, after, mlir::ValueRange{equalTrue});
+  for (auto [tag, dest] : llvm::zip(tags, dests)) {
+    builder_.setInsertionPointToStart(dest);
+    auto variant = static_cast<uint64_t>(tag);
+    auto &fields = et.get_variant(variant).payload_types;
+    auto mirFields = enumType.getPayload(variant);
+    mlir::Value all = constant(i1, 1);
+    int64_t offset = 0;
+    for (auto [i, field] : llvm::enumerate(fields)) {
+      auto at = static_cast<uint64_t>(layout::advancePayloadOffset(offset, field));
+      auto a = smn::PayloadOp::create(builder_, location, mirFields[i], lhs,
+                                      variant, i, at);
+      auto b = smn::PayloadOp::create(builder_, location, mirFields[i], rhs,
+                                      variant, i, at);
+      auto same = lowerOperator(location, TokEQUAL, a, b, field);
+      if (mlir::failed(same))
+        return mlir::failure();
+      all = mlir::arith::AndIOp::create(builder_, location, all, *same);
+    }
+    mlir::cf::BranchOp::create(builder_, location, after,
+                               mlir::ValueRange{all});
+  }
+  after->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(after);
+  return after->getArgument(0);
 }
 
 } // namespace sammine_lang

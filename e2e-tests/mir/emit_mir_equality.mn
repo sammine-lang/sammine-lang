@@ -1,0 +1,29 @@
+// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// Pointers compare their addresses (sammine.address). Arrays compare element
+// by element in a loop, stopping at the first that differs. Enums with
+// payloads compare tags, then branch on the tag to compare that variant's
+// payload; one with no payloads has no switch, just a branch.
+// CHECK-LABEL: func.func private @same_ptr(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.address %arg0
+// CHECK: arith.cmpi eq
+// CHECK-LABEL: func.func private @same_arr(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.element %arg0[%{{[0-9]+}}] : <3, i32>, i64 -> i32
+// CHECK-LABEL: func.func private @same_pick(
+// CHECK-SAME: sammine.mir
+// CHECK: cf.switch
+// CHECK: sammine.payload %arg0[1, 0] at 0
+// CHECK-LABEL: func.func private @same_color(
+// CHECK-SAME: sammine.mir
+// CHECK-NOT: cf.switch
+// CHECK: return
+type Pick = A(i64) | B(i64);
+type Color = Red | Green;
+
+let same_ptr(p: ptr<i32>, q: ptr<i32>) -> bool { p == q }
+let same_arr(a: [3]i32, b: [3]i32) -> bool { a == b }
+let same_pick(a: Pick, b: Pick) -> bool { a == b }
+let same_color(a: Color, b: Color) -> bool { a == b }
+
+let main() -> i32 { 0 }
