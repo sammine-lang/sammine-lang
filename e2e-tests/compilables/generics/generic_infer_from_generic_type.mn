@@ -1,0 +1,33 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 42 11 2.500000
+// CHECK: 4 9
+// CHECK: 5
+
+import std;
+import vec;
+
+// A type parameter is inferred through a generic struct or enum argument:
+// Box<T> given a Box<i64> binds T to i64.
+struct Box<T> { val: T, };
+struct Pair<A, B> { a: A, b: B, };
+type Maybe<T> = Just(T) | Nothing;
+
+let get<T>(b: Box<T>) -> T { b.val }
+let inner<T>(b: Box<Box<T>>) -> T { b.val.val }
+let second<A, B>(p: Pair<A, B>) -> B { p.b }
+let or_else<T>(m: Maybe<T>, d: T) -> T {
+  case m { Just(x) => x, Nothing => d, }
+}
+
+let main() -> i32 {
+  let bb = Box<Box<i64>> { val: Box<i64> { val: 11i64 } };
+  std::printf("%ld %ld %f\n", get(Box<i64> { val: 42i64 }), inner(bb),
+              second(Pair<i64, f64> { a: 1i64, b: 2.5 }));
+  std::printf("%ld %ld\n", or_else(Maybe<i64>::Just(4i64), 9i64),
+              or_else(Maybe<i64>::Nothing, 9i64));
+  // From another module.
+  let v = vec::push(vec::new<i64>(2i64), 5i64);
+  std::printf("%ld\n", v.data[0]);
+  vec::delete(v);
+  0
+}

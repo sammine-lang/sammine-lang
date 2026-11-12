@@ -404,6 +404,8 @@ public:
   sammine_util::QualifiedName struct_name;
   std::vector<std::unique_ptr<TypedVarAST>> struct_members;
   std::vector<std::string> type_params;
+  /// Set on an instance the monomorphizer cloned from a generic struct.
+  InstanceOf instance_of;
 
   explicit StructDefAST(sammine_util::QualifiedName name,
                         sammine_util::Location name_loc,
@@ -430,6 +432,8 @@ public:
   sammine_util::QualifiedName enum_name;
   std::vector<EnumVariantDef> variants;
   std::vector<std::string> type_params;
+  /// Set on an instance the monomorphizer cloned from a generic enum.
+  InstanceOf instance_of;
   bool is_integer_backed = false;
   std::optional<std::string> backing_type_name;
 

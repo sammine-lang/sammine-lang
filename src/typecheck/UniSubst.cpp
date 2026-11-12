@@ -16,6 +16,19 @@ bool contains_type_param(const Type &type, const std::string &param_name) {
 
 static Type substitute_parts(const Type &type, const TypeBindings &bindings);
 
+// What an instance is an instance of, with `bindings` substituted into its
+// type arguments: Box applied to (T) becomes Box applied to (i64).
+static InstanceOf substitute_instance_of(const MonomorphizedKey *instance_of,
+                                         const TypeBindings &bindings) {
+  if (!instance_of)
+    return nullptr;
+  std::vector<Type> args;
+  for (auto &arg : instance_of->type_args)
+    args.push_back(substitute(arg, bindings));
+  return std::make_shared<const MonomorphizedKey>(
+      MonomorphizedKey{instance_of->name, std::move(args)});
+}
+
 // A type built from substituted parts keeps its own linearity: 'ptr<T> stays
 // owning. A type parameter becomes what it is bound to, linearity and all.
 Type substitute(const Type &type, const TypeBindings &bindings) {
@@ -69,7 +82,9 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
     }
     if (!changed)
       return type;
-    return Type::Struct(st.get_name(), st.get_field_names(), std::move(ftypes));
+    return Type::Struct(
+        st.get_name(), st.get_field_names(), std::move(ftypes),
+        substitute_instance_of(st.get_instance_of(), bindings));
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
@@ -89,7 +104,8 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
     if (!changed)
       return type;
     return Type::Enum(et.get_name(), std::move(new_variants),
-                      et.is_integer_backed(), et.get_backing_type());
+                      et.is_integer_backed(), et.get_backing_type(),
+                      substitute_instance_of(et.get_instance_of(), bindings));
   }
   // Scalar and pseudo-types: nothing to substitute
   case TypeKind::I32_t:
@@ -112,6 +128,21 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
   default:
     return type;
   }
+}
+
+// Two instances of one generic type unify through their type arguments, as
+// Box<T> with Box<i64> binds T to i64. nullopt when they aren't instances of
+// one generic type.
+static std::optional<bool> unify_instances(const MonomorphizedKey *pattern,
+                                           const MonomorphizedKey *concrete,
+                                           TypeBindings &bindings) {
+  if (!pattern || !concrete || pattern->name != concrete->name ||
+      pattern->type_args.size() != concrete->type_args.size())
+    return std::nullopt;
+  for (size_t i = 0; i < pattern->type_args.size(); i++)
+    if (!unify(pattern->type_args[i], concrete->type_args[i], bindings))
+      return false;
+  return true;
 }
 
 bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
@@ -169,6 +200,9 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
   case TypeKind::Struct: {
     auto &ps = std::get<StructType>(pattern.type_data);
     auto &cs = std::get<StructType>(concrete.type_data);
+    if (auto unified = unify_instances(ps.get_instance_of(),
+                                       cs.get_instance_of(), bindings))
+      return *unified;
     if (ps.get_name().mangled() != cs.get_name().mangled())
       return false;
     auto &pft = ps.get_field_types();
@@ -183,6 +217,9 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
   case TypeKind::Enum: {
     auto &pe = std::get<EnumType>(pattern.type_data);
     auto &ce = std::get<EnumType>(concrete.type_data);
+    if (auto unified = unify_instances(pe.get_instance_of(),
+                                       ce.get_instance_of(), bindings))
+      return *unified;
     if (pe.get_name().mangled() != ce.get_name().mangled())
       return false;
     auto &pvs = pe.get_variants();

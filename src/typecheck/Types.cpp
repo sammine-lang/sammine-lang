@@ -39,12 +39,14 @@ bool ArrayType::operator==(const ArrayType &t) const {
 Type ArrayType::get_element() const { return *element; }
 size_t ArrayType::get_size() const { return size; }
 
-StructType::StructType(sammine_util::QualifiedName name_)
-    : name(std::move(name_)), body(std::make_shared<Body>()) {}
+StructType::StructType(sammine_util::QualifiedName name_,
+                       InstanceOf instance_of_)
+    : name(std::move(name_)), body(std::make_shared<Body>()),
+      instance_of(std::move(instance_of_)) {}
 StructType::StructType(sammine_util::QualifiedName name_,
                        std::vector<std::string> field_names_,
-                       std::vector<Type> field_types_)
-    : StructType(std::move(name_)) {
+                       std::vector<Type> field_types_, InstanceOf instance_of_)
+    : StructType(std::move(name_), std::move(instance_of_)) {
   define(std::move(field_names_), std::move(field_types_));
 }
 void StructType::define(std::vector<std::string> field_names_,
@@ -71,12 +73,13 @@ Type StructType::get_field_type(size_t idx) const {
   return body->field_types[idx];
 }
 
-EnumType::EnumType(sammine_util::QualifiedName name_)
-    : name(std::move(name_)), body(std::make_shared<Body>()) {}
+EnumType::EnumType(sammine_util::QualifiedName name_, InstanceOf instance_of_)
+    : name(std::move(name_)), body(std::make_shared<Body>()),
+      instance_of(std::move(instance_of_)) {}
 EnumType::EnumType(sammine_util::QualifiedName name_,
                    std::vector<VariantInfo> variants_, bool integer_backed,
-                   TypeKind backing_type)
-    : EnumType(std::move(name_)) {
+                   TypeKind backing_type, InstanceOf instance_of_)
+    : EnumType(std::move(name_), std::move(instance_of_)) {
   define(std::move(variants_), integer_backed, backing_type);
 }
 void EnumType::define(std::vector<VariantInfo> variants_, bool integer_backed,

@@ -47,6 +47,11 @@ enum class TypeKind {
 };
 
 struct Type;
+struct MonomorphizedKey;
+/// The generic type a struct or enum instantiates and the type arguments it
+/// is given: Box<i64> is Box applied to (i64), and Box<T> in a generic
+/// signature is Box applied to (T). Null for a type that is no instance.
+using InstanceOf = std::shared_ptr<const MonomorphizedKey>;
 class FunctionType;
 
 using TypePtr = std::shared_ptr<Type>;
@@ -100,10 +105,12 @@ class StructType {
   };
   sammine_util::QualifiedName name;
   std::shared_ptr<Body> body;
+  InstanceOf instance_of;
 
 public:
   bool operator==(const StructType &t) const;
   const sammine_util::QualifiedName &get_name() const { return name; }
+  const MonomorphizedKey *get_instance_of() const { return instance_of.get(); }
   const std::vector<std::string> &get_field_names() const {
     return body->field_names;
   }
@@ -118,10 +125,11 @@ public:
   void define(std::vector<std::string> field_names,
               std::vector<Type> field_types) const;
   /// A declared type, with its fields not filled in yet.
-  explicit StructType(sammine_util::QualifiedName name);
+  explicit StructType(sammine_util::QualifiedName name,
+                      InstanceOf instance_of = nullptr);
   StructType(sammine_util::QualifiedName name,
              std::vector<std::string> field_names,
-             std::vector<Type> field_types);
+             std::vector<Type> field_types, InstanceOf instance_of = nullptr);
 };
 /// Sum type with named variants. Supports unit variants, payload variants,
 /// and integer-backed enums (explicit discriminant values, optional backing
@@ -145,10 +153,12 @@ private:
     bool defined = false;
   };
   std::shared_ptr<Body> body;
+  InstanceOf instance_of;
 
 public:
   bool operator==(const EnumType &t) const;
   const sammine_util::QualifiedName &get_name() const { return name; }
+  const MonomorphizedKey *get_instance_of() const { return instance_of.get(); }
   const std::vector<VariantInfo> &get_variants() const {
     return body->variants;
   }
@@ -165,10 +175,12 @@ public:
   void define(std::vector<VariantInfo> variants, bool integer_backed,
               TypeKind backing_type) const;
   /// A declared type, with its variants not filled in yet.
-  explicit EnumType(sammine_util::QualifiedName name);
+  explicit EnumType(sammine_util::QualifiedName name,
+                    InstanceOf instance_of = nullptr);
   EnumType(sammine_util::QualifiedName name, std::vector<VariantInfo> variants,
            bool integer_backed = false,
-           TypeKind backing_type = TypeKind::I32_t);
+           TypeKind backing_type = TypeKind::I32_t,
+           InstanceOf instance_of = nullptr);
 };
 /// Anonymous product type: (T, U, V). Supports destructuring via let (a, b) =
 /// t.
@@ -238,25 +250,32 @@ struct Type {
   }
   static Type Struct(sammine_util::QualifiedName name,
                      std::vector<std::string> field_names,
-                     std::vector<Type> field_types) {
+                     std::vector<Type> field_types,
+                     InstanceOf instance_of = nullptr) {
     return Type{TypeKind::Struct,
                 StructType(std::move(name), std::move(field_names),
-                           std::move(field_types))};
+                           std::move(field_types), std::move(instance_of))};
   }
   static Type Enum(sammine_util::QualifiedName name,
                    std::vector<EnumType::VariantInfo> variants,
                    bool integer_backed = false,
-                   TypeKind backing_type = TypeKind::I32_t) {
-    return Type{TypeKind::Enum, EnumType(std::move(name), std::move(variants),
-                                         integer_backed, backing_type)};
+                   TypeKind backing_type = TypeKind::I32_t,
+                   InstanceOf instance_of = nullptr) {
+    return Type{TypeKind::Enum,
+                EnumType(std::move(name), std::move(variants), integer_backed,
+                         backing_type, std::move(instance_of))};
   }
   /// A struct whose fields are filled in later with StructType::define.
-  static Type DeclaredStruct(sammine_util::QualifiedName name) {
-    return Type{TypeKind::Struct, StructType(std::move(name))};
+  static Type DeclaredStruct(sammine_util::QualifiedName name,
+                             InstanceOf instance_of = nullptr) {
+    return Type{TypeKind::Struct,
+                StructType(std::move(name), std::move(instance_of))};
   }
   /// An enum whose variants are filled in later with EnumType::define.
-  static Type DeclaredEnum(sammine_util::QualifiedName name) {
-    return Type{TypeKind::Enum, EnumType(std::move(name))};
+  static Type DeclaredEnum(sammine_util::QualifiedName name,
+                           InstanceOf instance_of = nullptr) {
+    return Type{TypeKind::Enum,
+                EnumType(std::move(name), std::move(instance_of))};
   }
   static Type Tuple(std::vector<Type> element_types) {
     return Type{TypeKind::Tuple, TupleType(std::move(element_types))};

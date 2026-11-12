@@ -253,7 +253,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
 Type BiTypeCheckerVisitor::declare_struct(StructDefAST *ast) {
   if (ast->get_type().type_kind == TypeKind::Struct)
     return ast->get_type();
-  auto type = Type::DeclaredStruct(ast->struct_name);
+  auto type = Type::DeclaredStruct(ast->struct_name, ast->instance_of);
   ast->set_type(type);
   typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), type);
   return type;
@@ -262,7 +262,7 @@ Type BiTypeCheckerVisitor::declare_struct(StructDefAST *ast) {
 Type BiTypeCheckerVisitor::declare_enum(EnumDefAST *ast) {
   if (ast->get_type().type_kind == TypeKind::Enum)
     return ast->get_type();
-  auto type = Type::DeclaredEnum(ast->enum_name);
+  auto type = Type::DeclaredEnum(ast->enum_name, ast->instance_of);
   ast->set_type(type);
   typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), type);
   return type;

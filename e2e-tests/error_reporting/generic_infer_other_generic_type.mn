@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_infer_other_generic_type.mn:11:33
+// CHECK: Type mismatch in argument 1 of 'open<T>': expected Box<T>, got Crate<i64>
+
+struct Box<T> { val: T, };
+struct Crate<T> { val: T, };
+let open<T>(b: Box<T>) -> T { b.val }
+
+// Crate<i64> has the fields of a Box<i64>, but is another type.
+let main() -> i32 {
+  let y = open(Crate<i64> { val: 1i64 });
+  0
+}

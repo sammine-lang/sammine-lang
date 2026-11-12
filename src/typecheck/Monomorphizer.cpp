@@ -31,6 +31,7 @@ EnumDefAST *Monomorphizer::instantiate_enum(EnumDefAST *generic,
                                             const TypeBindings &bindings) {
   auto new_name = key.to_generic_name(generic->enum_name);
   auto cloned = clone_enum(generic, new_name, bindings);
+  cloned->instance_of = std::make_shared<const MonomorphizedKey>(key);
   auto *ptr = cloned.get();
   monomorphized_enum_defs.push_back(std::move(cloned));
   return ptr;
@@ -41,6 +42,7 @@ StructDefAST *Monomorphizer::instantiate_struct(StructDefAST *generic,
                                                 const TypeBindings &bindings) {
   auto new_name = key.to_generic_name(generic->struct_name);
   auto cloned = clone_struct(generic, new_name, bindings);
+  cloned->instance_of = std::make_shared<const MonomorphizedKey>(key);
   auto *ptr = cloned.get();
   monomorphized_struct_defs.push_back(std::move(cloned));
   return ptr;

@@ -466,7 +466,8 @@ public:
           }
           auto placeholder =
               Type::Struct(sammine_util::QualifiedName::from_parts({mangled}),
-                           std::move(fnames), std::move(ftypes));
+                           std::move(fnames), std::move(ftypes),
+                           std::make_shared<const MonomorphizedKey>(key));
           typename_to_type.registerNameT(mangled, placeholder);
           return placeholder;
         }
@@ -483,7 +484,8 @@ public:
           }
           auto placeholder = Type::Enum(
               sammine_util::QualifiedName::from_parts({mangled}),
-              std::move(variant_infos));
+              std::move(variant_infos), false, TypeKind::I32_t,
+              std::make_shared<const MonomorphizedKey>(key));
           typename_to_type.registerNameT(mangled, placeholder);
           return placeholder;
         }
