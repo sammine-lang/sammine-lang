@@ -1,6 +1,7 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/TypeLayout.h"
+#include "typecheck/BuiltinInstances.h"
 #include "dialect/SammineDialect.h"
 #include "util/Utilities.h"
 
@@ -13,13 +14,12 @@
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
-//! floats, bool, char), pointers, structs and tuples of them, returning one or
-//! `()`; struct and tuple literals, fields, `let (a, b) = t`; enums with
-//! payloads, their variants and `case` on them; their
-//! literals, strings among them, parameters, `let`, arithmetic, calls to
-//! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
-//! `free`, `*p` and `p[i]` read and written, negation, comparisons, `if`, `&&` and `||`,
-//! statements and return.
+//! floats, bool, char), pointers, structs, tuples and enums with payloads;
+//! literals, strings among them, parameters, `let`, `let (a, b) = t`;
+//! arithmetic, negation, comparisons, casts, operators through instances;
+//! calls to sammine and C functions, lending an owned pointer to a ptr<T>;
+//! struct, tuple and enum values, fields, `case`; `alloc`, `free`, `*p` and
+//! `p[i]` read and written; `if`, `&&` and `||`, statements and return.
 
 namespace sammine_lang {
 
@@ -268,6 +268,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   }
   if (auto *ifExpr = llvm::dyn_cast<IfExprAST>(expr))
     return lowerIf(ifExpr);
+  if (auto *cast = llvm::dyn_cast<CastExprAST>(expr))
+    return lowerCast(cast);
   if (auto *caseExpr = llvm::dyn_cast<CaseExprAST>(expr))
     return lowerCase(caseExpr);
   if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
@@ -317,7 +319,18 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
     return lowerVariant(loc(call), call->get_type(), cp->enum_variant_index,
                         payload);
   }
-  if (cp->builtin_instance || cp->is_partial)
+  if (cp->builtin_instance) {
+    llvm::SmallVector<mlir::Value, 2> args;
+    for (auto &arg : call->arguments) {
+      auto value = lowerExpr(arg.get());
+      if (mlir::failed(value) || !*value)
+        return mlir::failure();
+      args.push_back(*value);
+    }
+    return lowerBuiltinInstance(loc(call), *cp->builtin_instance, args,
+                                call->get_type());
+  }
+  if (cp->is_partial)
     return mlir::failure();
   auto name =
       props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
@@ -666,6 +679,73 @@ MIRLowering::lowerFieldAccess(FieldAccessExprAST *access) {
       .getResult();
 }
 
+// A call to `method`, a method of an instance the program declares, chosen
+// by the type checker: an operator, or `as` through Convert. Its arguments
+// are the operands, by value.
+mlir::FailureOr<mlir::Value>
+MIRLowering::callMethod(mlir::Location location,
+                        const sammine_util::QualifiedName &method,
+                        mlir::ValueRange args, const Type &result) {
+  auto type = mirType(result);
+  auto name = props_.symbol(method);
+  if (!type || !module_.lookupSymbol<mlir::func::FuncOp>(name))
+    return mlir::failure();
+  return smn::CallOp::create(builder_, location, mlir::TypeRange{*type}, name,
+                             args)
+      .getResult(0);
+}
+
+// An instance the compiler provides has no function to call: Convert<A, B>
+// is a number conversion, an operator's class the operator on scalars.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerBuiltinInstance(mlir::Location location,
+                                  const MonomorphizedKey &key,
+                                  mlir::ValueRange args, const Type &result) {
+  if (key.name == kConvertClass) {
+    auto to = mirType(key.type_args[1]);
+    if (!to || args.size() != 1)
+      return mlir::failure();
+    return emitNumberConversion(builder_, location, args[0], *to,
+                                key.type_args[0].is_unsigned(),
+                                key.type_args[1].is_unsigned());
+  }
+  auto op = operator_of_class(key.name);
+  if (!op || args.size() != 2)
+    return mlir::failure();
+  auto &type = key.type_args[0];
+  if (!type.is_integer() && !type.is_float() &&
+      type.type_kind != TypeKind::Bool)
+    return mlir::failure();
+  mlir::Value value;
+  if (isComparisonOp(*op))
+    value = emitScalarComparison(builder_, location, args[0], args[1], *op,
+                                 type.is_float(), type.is_unsigned());
+  else if (type.is_float())
+    value = emitFloatArithOp(builder_, location, args[0], args[1], *op);
+  else
+    value = emitIntArithOp(builder_, location, args[0], args[1], *op,
+                           type.is_unsigned());
+  if (!value)
+    return mlir::failure();
+  return value;
+}
+
+// `x as T`, through the Convert<A, T> instance the type checker chose.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
+  auto *cp = props_.cast(cast->id());
+  if (!cp || !cp->instance)
+    return mlir::failure();
+  auto value = lowerExpr(cast->operand.get());
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  auto &key = *cp->instance;
+  if (is_builtin_instance(key))
+    return lowerBuiltinInstance(loc(cast), key, *value, cast->get_type());
+  return callMethod(loc(cast),
+                    key.to_typeclass_name(std::string(kConvertClass)), *value,
+                    cast->get_type());
+}
+
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
   auto type = mirType(alloc->get_type());
@@ -798,12 +878,19 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
 }
 
 // Integer or float arithmetic, or a comparison of integers, bools or floats,
-// through a built-in instance; an instance the program declares is a call,
-// which MIR doesn't lower yet.
+// through a built-in instance, or a call to the method of an instance the
+// program declares.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
-  auto *bp = props_.binary(bin->id());
-  if (bp && bp->resolved_op_method)
-    return mlir::failure();
+  if (auto *bp = props_.binary(bin->id()); bp && bp->resolved_op_method) {
+    auto lhs = lowerExpr(bin->LHS.get());
+    if (mlir::failed(lhs) || !*lhs)
+      return mlir::failure();
+    auto rhs = lowerExpr(bin->RHS.get());
+    if (mlir::failed(rhs) || !*rhs)
+      return mlir::failure();
+    return callMethod(loc(bin), *bp->resolved_op_method, {*lhs, *rhs},
+                      bin->get_type());
+  }
   auto op = bin->Op->tok_type;
   bool arithmetic = op == TokADD || op == TokSUB || op == TokMUL ||
                     op == TokDIV || op == TokMOD;

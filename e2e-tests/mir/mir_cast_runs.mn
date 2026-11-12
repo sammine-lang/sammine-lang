@@ -1,0 +1,35 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// The same answers through MIR for conversions, a Convert and an operator
+// instance the program declares, and a built-in instance called by name.
+// CHECK: 4000000000 -3 2.75 255
+// CHECK-NEXT: 12.34
+// CHECK-NEXT: 4 6
+// CHECK-NEXT: 7
+import std;
+
+struct Money { cents: i64 };
+struct Vec2 { x: i32, y: i32 };
+
+instance Convert<Money, f64> {
+  let Convert(m: Money) -> f64 { m.cents as f64 / 100.0 }
+}
+instance Add<Vec2> {
+  let Add(a: Vec2, b: Vec2) -> Vec2 { Vec2 { x: a.x + b.x, y: a.y + b.y } }
+}
+
+let widen(a: u32) -> u64 { a as u64 }
+let trunc(f: f64) -> i32 { f as i32 }
+let to_float(a: i32) -> f64 { a as f64 / 4.0 }
+let low_byte(a: i32) -> u32 { (a as u32) % 256u32 }
+let dollars(m: Money) -> f64 { m as f64 }
+let sum(a: Vec2, b: Vec2) -> Vec2 { a + b }
+let named(a: i32, b: i32) -> i32 { Add<i32>::Add(a, b) }
+
+let main() -> i32 {
+  std::printf("%llu %d %.2f %u\n", widen(4000000000u32), trunc(-3.9), to_float(11), low_byte(-1));
+  std::printf("%.2f\n", dollars(Money { cents: 1234i64 }));
+  let v = sum(Vec2 { x: 1, y: 2 }, Vec2 { x: 3, y: 4 });
+  std::printf("%d %d\n", v.x, v.y);
+  std::printf("%d\n", named(3, 4));
+  0
+}

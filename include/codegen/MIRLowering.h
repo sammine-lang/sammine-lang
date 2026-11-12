@@ -82,6 +82,13 @@ private:
   lowerTupleLiteral(AST::TupleLiteralExprAST *tuple);
   mlir::FailureOr<mlir::Value>
   lowerFieldAccess(AST::FieldAccessExprAST *access);
+  mlir::FailureOr<mlir::Value>
+  callMethod(mlir::Location location, const sammine_util::QualifiedName &method,
+             mlir::ValueRange args, const Type &result);
+  mlir::FailureOr<mlir::Value>
+  lowerBuiltinInstance(mlir::Location location, const MonomorphizedKey &key,
+                       mlir::ValueRange args, const Type &result);
+  mlir::FailureOr<mlir::Value> lowerCast(AST::CastExprAST *cast);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

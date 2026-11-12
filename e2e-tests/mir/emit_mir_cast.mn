@@ -1,0 +1,37 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// `as` between numbers is a conversion, signed or unsigned as each side is;
+// through a Convert instance the program declares, and an operator through
+// its own instance, it is a call to the instance's method. A built-in
+// instance called by name is the operator itself.
+// CHECK-LABEL: func.func private @widen(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.extui %arg0 : i32 to i64
+// CHECK-LABEL: func.func private @to_float(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.sitofp %arg0 : i32 to f64
+// CHECK-LABEL: func.func private @dollars(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.call @"Convert<Money, f64>::Convert"(%arg0) : (!sammine.struct<"Money", (i64)>) -> f64
+// CHECK-LABEL: func.func private @sum(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.call @"Add<Vec2>::Add"(%arg0, %arg1)
+// CHECK-LABEL: func.func private @named(
+// CHECK-SAME: sammine.mir
+// CHECK: arith.addi
+struct Money { cents: i64 };
+struct Vec2 { x: i32, y: i32 };
+
+instance Convert<Money, f64> {
+  let Convert(m: Money) -> f64 { m.cents as f64 / 100.0 }
+}
+instance Add<Vec2> {
+  let Add(a: Vec2, b: Vec2) -> Vec2 { Vec2 { x: a.x + b.x, y: a.y + b.y } }
+}
+
+let widen(a: u32) -> u64 { a as u64 }
+let to_float(a: i32) -> f64 { a as f64 }
+let dollars(m: Money) -> f64 { m as f64 }
+let sum(a: Vec2, b: Vec2) -> Vec2 { a + b }
+let named(a: i32, b: i32) -> i32 { Add<i32>::Add(a, b) }
+
+let main() -> i32 { 0 }
