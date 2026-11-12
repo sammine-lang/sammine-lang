@@ -1,5 +1,6 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/RangeIteration.h"
 #include "codegen/TypeLayout.h"
 #include "typecheck/BuiltinInstances.h"
 #include "dialect/SammineDialect.h"
@@ -19,7 +20,8 @@
 //! arithmetic, negation, comparisons, casts, operators through instances;
 //! calls to sammine and C functions, lending an owned pointer to a ptr<T>;
 //! struct, tuple and enum values, fields, `case`; `alloc`, `free`, `*p` and
-//! `p[i]` read and written; `if`, `&&` and `||`, statements and return.
+//! `p[i]` read and written; `if`, `for`, `&&` and `||`, statements and
+//! return.
 
 namespace sammine_lang {
 
@@ -277,6 +279,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerCast(cast);
   if (auto *caseExpr = llvm::dyn_cast<CaseExprAST>(expr))
     return lowerCase(caseExpr);
+  if (auto *forExpr = llvm::dyn_cast<ForExprAST>(expr))
+    return lowerFor(forExpr);
   if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     if (!neg->get_type().is_integer() && !neg->get_type().is_float())
       return mlir::failure();
@@ -553,6 +557,75 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   mlir::cf::SwitchOp::create(builder_, location, tag, otherwise,
                              mlir::ValueRange{}, tags, dests, noOperands);
   return lowerArms(location, *resultType, arms);
+}
+
+// `for i in a..b { body }`, as the AST codegen does it: Range { a, b } goes
+// round a loop, each turn calling Iterator<Range<T>, T>::next on it. Some
+// gives the next range and i, for the body, then the loop goes round with
+// that range; None leaves the loop.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
+  auto *forProps = props_.for_loop(forExpr->id());
+  if (!forProps || !forProps->range_type)
+    return mlir::failure();
+  auto elementType = forExpr->start->get_type();
+  auto iteration = rangeIteration(*forProps->range_type, elementType);
+  auto rangeType = mirType(*forProps->range_type);
+  auto optionType = mirType(iteration.option);
+  auto stepType = mirType(iteration.step);
+  auto element = mirType(elementType);
+  if (!rangeType || !optionType || !stepType || !element ||
+      !module_.lookupSymbol<mlir::FunctionOpInterface>(iteration.next))
+    return mlir::failure();
+  auto location = loc(forExpr);
+
+  auto start = lowerExpr(forExpr->start.get());
+  if (mlir::failed(start) || !*start)
+    return mlir::failure();
+  auto end = lowerExpr(forExpr->end.get());
+  if (mlir::failed(end) || !*end)
+    return mlir::failure();
+  auto range = smn::AggregateOp::create(builder_, location, *rangeType,
+                                        mlir::ValueRange{*start, *end});
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *header = &region->emplaceBlock();
+  header->addArgument(*rangeType, location);
+  mlir::cf::BranchOp::create(builder_, location, header,
+                             mlir::ValueRange{range});
+
+  builder_.setInsertionPointToStart(header);
+  auto option = smn::CallOp::create(builder_, location,
+                                    mlir::TypeRange{*optionType},
+                                    iteration.next, header->getArgument(0))
+                    .getResult(0);
+  auto tag = smn::TagOp::create(builder_, location, builder_.getI32Type(),
+                                option);
+  auto some = mlir::arith::ConstantIntOp::create(builder_, location,
+                                                 builder_.getI32Type(), 0);
+  auto isSome = mlir::arith::CmpIOp::create(
+      builder_, location, mlir::arith::CmpIPredicate::eq, tag, some);
+  auto *body = &region->emplaceBlock();
+  auto *exit = &region->emplaceBlock();
+  mlir::cf::CondBranchOp::create(builder_, location, isSome, body, exit);
+
+  builder_.setInsertionPointToStart(body);
+  auto step = smn::PayloadOp::create(builder_, location, *stepType, option,
+                                     /*variant=*/0, /*field=*/0, /*offset=*/0);
+  auto next = smn::ExtractOp::create(builder_, location, *rangeType, step, 0);
+  auto outer = names_;
+  names_[forExpr->loop_var] =
+      smn::ExtractOp::create(builder_, location, *element, step, 1);
+  auto value = lowerStatements(forExpr->body.get());
+  names_ = std::move(outer);
+  if (mlir::failed(value))
+    return mlir::failure();
+  if (!terminated())
+    mlir::cf::BranchOp::create(builder_, location, header,
+                               mlir::ValueRange{next});
+
+  exit->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(exit);
+  return mlir::Value();
 }
 
 // `case n { 0 => a, 1 => b, _ => c }` on an integer, char or bool, or on an
