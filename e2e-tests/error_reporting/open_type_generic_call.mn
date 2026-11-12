@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_generic_call.mn:9:15
+// CHECK: Type parameter 'T' could not be inferred for 'wrap'
+
+let wrap<T>(x: T) -> Option<T> { Some(x) }
+
+// None says nothing of T, so wrap(None) doesn't either.
+let main() -> i32 {
+  let g = wrap(None);
+  0
+}

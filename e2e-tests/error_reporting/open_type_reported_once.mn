@@ -1,0 +1,19 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK-NOT: Could not infer
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK-NOT: Could not infer
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK-NOT: Could not infer
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK-NOT: Could not infer
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK-NOT: Could not infer
+
+// Four Nones leave T open, so four errors, each at its None: none at the
+// Some, the tuple or the if that are open only because of one.
+let main() -> i32 {
+  let a = Some(None);
+  let b = (None, 1);
+  let c = if true { None } else { None };
+  0
+}

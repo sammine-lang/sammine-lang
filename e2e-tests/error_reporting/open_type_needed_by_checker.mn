@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_needed_by_checker.mn:9:2
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+
+// An operator's instance and a case's patterns are chosen by the type, so
+// it can't be left for a context to decide.
+let comparison() -> bool {
+  None == None
+}
+let scrutinee() -> i32 {
+  case None { Some(v) => 0, None => 1, }
+}
+
+let main() -> i32 { 0 }

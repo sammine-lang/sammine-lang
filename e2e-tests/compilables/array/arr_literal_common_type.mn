@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4 -1 1 2.500000
+
+import std;
+
+let take(o: Option<i64>) -> i64 { case o { Some(v) => v, None => -1i64, } }
+
+// An array's elements have one type, found as an if's branches' is: a
+// literal takes its neighbour's type, a None its neighbour's Option.
+let main() -> i32 {
+  let b = [1, 2i64, 3];
+  let a = [None, Some(1i64)];
+  let c = [Some(2.5), None];
+  std::printf("%ld %ld %ld %f\n", b[0] + b[2], take(a[0]), take(a[1]),
+              case c[0] { Some(x) => x, None => 0.0, });
+  0
+}

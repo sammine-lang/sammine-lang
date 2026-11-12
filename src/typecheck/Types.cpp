@@ -171,6 +171,7 @@ size_t std::hash<Type>::operator()(const Type &t) const {
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::Hole:
   case TypeKind::Generic:
     break;
   case TypeKind::String:
@@ -234,16 +235,10 @@ std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
 
 std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
                                                         const Type &b) const {
-  auto list_ancestors_of_a = visit_ancestor(a);
-  auto list_ancestors_of_b = visit_ancestor(b);
-  auto set_ancestors_of_b =
-      std::set(list_ancestors_of_b.begin(), list_ancestors_of_b.end());
-
-  for (auto &ancestor : list_ancestors_of_a) {
-    if (set_ancestors_of_b.contains(ancestor)) {
-      return ancestor;
-    }
-  }
+  if (structurally_compatible(a, b))
+    return a;
+  if (structurally_compatible(b, a))
+    return b;
   return std::nullopt;
 }
 
@@ -289,6 +284,37 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
   return std::nullopt;
 }
 
+std::string open_type_message(const Type &type,
+                              const std::optional<std::string> &variant) {
+  auto *instance_of =
+      type.type_kind == TypeKind::Enum
+          ? std::get<EnumType>(type.type_data).get_instance_of()
+          : nullptr;
+  if (variant && instance_of)
+    return fmt::format("Could not infer the type arguments of {}; write them "
+                       "out, as in {}<...>::{}",
+                       type.to_string(), instance_of->name, *variant);
+  return fmt::format("Could not infer the type arguments of {}",
+                     type.to_string());
+}
+
+bool Type::is_open() const {
+  if (type_kind == TypeKind::Hole)
+    return true;
+  // An argument need not appear in a field or payload, as in Tag<T> = A | B.
+  const MonomorphizedKey *instance_of = nullptr;
+  if (type_kind == TypeKind::Struct)
+    instance_of = std::get<StructType>(type_data).get_instance_of();
+  else if (type_kind == TypeKind::Enum)
+    instance_of = std::get<EnumType>(type_data).get_instance_of();
+  if (instance_of && std::ranges::any_of(instance_of->type_args,
+                                         &Type::is_open))
+    return true;
+  bool open = false;
+  forEachInnerType([&](const Type &inner) { open = open || inner.is_open(); });
+  return open;
+}
+
 void TypeMapOrdering::populate() {
   // Polymorphic integer narrowing: Integer is parent of all concrete ints
   type_map[Type::I32_t()] = Type::Integer();
@@ -322,6 +348,30 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
   if (to.type_kind == TypeKind::NonExistent &&
       from.type_kind != TypeKind::NonExistent)
     return true;
+
+  // An open instance flows into an instance of the same generic whose type
+  // arguments its own fit, a hole fitting any: None, an Option<_>, is an
+  // Option<i64>. Not the other way, which would open a decided type.
+  if (from.is_open() && !to.is_open() && to.type_kind == from.type_kind &&
+      (to.type_kind == TypeKind::Struct || to.type_kind == TypeKind::Enum)) {
+    auto instance_of = [](const Type &t) {
+      return t.type_kind == TypeKind::Struct
+                 ? std::get<StructType>(t.type_data).get_instance_of()
+                 : std::get<EnumType>(t.type_data).get_instance_of();
+    };
+    auto *to_key = instance_of(to);
+    auto *from_key = instance_of(from);
+    if (!to_key || !from_key || to_key->name != from_key->name ||
+        to_key->type_args.size() != from_key->type_args.size())
+      return false;
+    for (size_t i = 0; i < to_key->type_args.size(); i++) {
+      auto &from_arg = from_key->type_args[i];
+      if (from_arg.type_kind != TypeKind::Hole &&
+          !structurally_compatible(to_key->type_args[i], from_arg))
+        return false;
+    }
+    return true;
+  }
 
   // Polymorphic numeric: use the lattice.
   // "from" is polymorphic (Integer or Flt) — check if "from" appears in

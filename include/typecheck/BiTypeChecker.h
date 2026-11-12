@@ -230,6 +230,15 @@ public:
   /// a type parameter, as Vec<T> in a generic signature.
   Type generic_type_instance(const sammine_util::QualifiedName &base,
                              std::vector<Type> type_args);
+  /// The type two values have together, as an if's branches, a case's arms
+  /// or an array's elements do: TypeMapOrdering::lowest_common_type, or else
+  /// the join of two instances of one generic open in different arguments:
+  /// Left(1i64), an Either<i64, _>, and Right(2.5), an Either<_, f64>, are
+  /// both an Either<i64, f64>. nullopt if they conflict.
+  std::optional<Type> common_type(const Type &a, const Type &b);
+  /// Reports `expr`, whose type has an open type argument that nothing
+  /// decides, as `let x = None;` leaves Option<_>.
+  void report_open_type(const ExprAST *expr);
 
   /// Binds the type parameters `params` by unifying each of `args` with its
   /// parameter in `patterns`, on top of `bindings`. A parameter whose type
@@ -493,7 +502,8 @@ inline Type default_polymorphic_type(const Type &t) {
 /// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
 /// ArrayLiteral, and TupleLiteral to reach all leaf literals.
 inline void resolve_literal_type(ExprAST *expr, const Type &target) {
-  if (!expr)
+  // An open target decides nothing.
+  if (!expr || target.is_open())
     return;
 
   // Compound types: recurse into elements
@@ -529,13 +539,25 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
     return;
   }
 
-  // Scalar polymorphic literals
-  if (!expr->get_type().is_polymorphic_numeric())
+  // Scalar polymorphic literals, and values with an open type argument
+  if (!expr->get_type().is_polymorphic())
     return;
 
   expr->set_type(target);
 
-  if (auto *unary = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
+  if (auto *call = llvm::dyn_cast<CallExprAST>(expr)) {
+    // A constructor's payload is decided with it: Some(None) as an
+    // Option<Option<i64>>.
+    if (target.type_kind == TypeKind::Enum) {
+      auto &et = std::get<EnumType>(target.type_data);
+      if (auto idx = et.get_variant_index(call->functionName.get_name())) {
+        auto &payload = et.get_variant(*idx).payload_types;
+        for (size_t i = 0; i < call->arguments.size() && i < payload.size();
+             i++)
+          resolve_literal_type(call->arguments[i].get(), payload[i]);
+      }
+    }
+  } else if (auto *unary = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     resolve_literal_type(unary->operand.get(), target);
   } else if (auto *binary = llvm::dyn_cast<BinaryExprAST>(expr)) {
     resolve_literal_type(binary->LHS.get(), target);
@@ -554,7 +576,7 @@ inline void resolve_literal_type(ExprAST *expr, const Type &target) {
   } else if (auto *case_expr = llvm::dyn_cast<CaseExprAST>(expr)) {
     for (auto &arm : case_expr->arms) {
       if (arm.body->Statements.empty() ||
-          !arm.body->get_type().is_polymorphic_numeric())
+          !arm.body->get_type().is_polymorphic())
         continue;
       resolve_literal_type(arm.body->Statements.back().get(), target);
       arm.body->set_type(target);

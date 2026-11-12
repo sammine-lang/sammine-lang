@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: destructure_annotation_conflict.mn:7:7
+// CHECK: Type annotation 'i64' incompatible with tuple element type 'float literal'
+
+// An annotation decides only what the element leaves open.
+let main() -> i32 {
+  let (a: i64, b) = (2.5, 1);
+  0
+}

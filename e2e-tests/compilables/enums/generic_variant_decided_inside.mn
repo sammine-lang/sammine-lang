@@ -1,0 +1,24 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: -1 -1 -1 9 -1
+
+import std;
+
+let take(o: Option<i64>) -> i64 { case o { Some(v) => v, None => -1i64, } }
+
+// None decided by its context in a generic instance, a loop body and a
+// destructuring isn't reported by the check for undecided ones.
+let none_of<T>(x: T) -> Option<T> { if false { Some(x) } else { None } }
+let first<T>(x: T) -> Option<T> {
+  let (o: Option<T>, n) = (None, 0);
+  o
+}
+
+let main() -> i32 {
+  for i in 0..2 {
+    let x: Option<i64> = None;
+  };
+  let (a: Option<i64>, b: (i64, Option<i64>)) = (None, (9, None));
+  std::printf("%ld %ld %ld %ld %ld\n", take(none_of(5i64)),
+              take(first(6i64)), take(a), b.0, take(b.1));
+  0
+}

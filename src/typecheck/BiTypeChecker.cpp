@@ -536,7 +536,7 @@ Type BiTypeCheckerVisitor::generic_type_instance(
   TypeBindings bindings;
   bool has_unresolved_type_param = false;
   for (size_t i = 0; i < type_args.size(); i++) {
-    if (type_args[i].containsTypeParam())
+    if (type_args[i].containsTypeParam() || type_args[i].is_open())
       has_unresolved_type_param = true;
     bindings[type_params[i]] = type_args[i];
   }
@@ -544,9 +544,9 @@ Type BiTypeCheckerVisitor::generic_type_instance(
   auto mangled = key.to_generic_name(base).mangled();
 
   // An argument that is still a type parameter, as Vec<T> inside a generic
-  // signature, can't be instantiated yet: a placeholder with the type
-  // parameter in its fields stands in, and substitute() replaces it once
-  // concrete bindings are known.
+  // signature, or still open, as in None's Option<_>, can't be instantiated
+  // yet: a placeholder with it in its fields stands in, until substitute()
+  // or the context decides it.
   if (has_unresolved_type_param) {
     if (auto existing = get_typename_type(mangled))
       return *existing;
@@ -598,6 +598,63 @@ Type BiTypeCheckerVisitor::generic_type_instance(
         ->accept_vis(this);
   auto result = get_typename_type(mangled);
   return result.has_value() ? *result : Type::Poisoned();
+}
+
+std::optional<Type> BiTypeCheckerVisitor::common_type(const Type &a,
+                                                      const Type &b) {
+  if (auto lowest = type_map_ordering.lowest_common_type(a, b))
+    return lowest;
+
+  // Otherwise two instances of one generic, each open where the other
+  // isn't, join: each hole takes the other's argument.
+  if (!a.is_open() && !b.is_open())
+    return std::nullopt;
+  if (a.type_kind != b.type_kind ||
+      (a.type_kind != TypeKind::Struct && a.type_kind != TypeKind::Enum))
+    return std::nullopt;
+  auto instance_of = [](const Type &t) {
+    return t.type_kind == TypeKind::Struct
+               ? std::get<StructType>(t.type_data).get_instance_of()
+               : std::get<EnumType>(t.type_data).get_instance_of();
+  };
+  auto *a_key = instance_of(a);
+  auto *b_key = instance_of(b);
+  if (!a_key || !b_key || a_key->name != b_key->name ||
+      a_key->type_args.size() != b_key->type_args.size())
+    return std::nullopt;
+
+  std::vector<Type> args;
+  for (size_t i = 0; i < a_key->type_args.size(); i++) {
+    auto &a_arg = a_key->type_args[i];
+    auto &b_arg = b_key->type_args[i];
+    if (a_arg.type_kind == TypeKind::Hole)
+      args.push_back(b_arg);
+    else if (b_arg.type_kind == TypeKind::Hole)
+      args.push_back(a_arg);
+    else if (auto common = common_type(a_arg, b_arg))
+      args.push_back(*common);
+    else
+      return std::nullopt;
+  }
+  auto *enum_def = monomorphizer.generic_enums.find(a_key->name);
+  auto *struct_def = monomorphizer.generic_structs.find(a_key->name);
+  if (!enum_def && !struct_def)
+    return std::nullopt;
+  return generic_type_instance(enum_def ? enum_def->enum_name
+                                        : struct_def->struct_name,
+                               std::move(args));
+}
+
+void BiTypeCheckerVisitor::report_open_type(const ExprAST *expr) {
+  std::optional<std::string> variant;
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr);
+      var && props_.variable(var->id()).is_enum_unit_variant)
+    variant = var->variableName.get_name();
+  else if (auto *call = llvm::dyn_cast<CallExprAST>(expr);
+           call && props_.call(call->id()).is_enum_constructor)
+    variant = call->functionName.get_name();
+  add_error(expr->get_location(),
+            open_type_message(expr->get_type(), variant));
 }
 
 void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {

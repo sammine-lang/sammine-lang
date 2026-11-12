@@ -547,15 +547,18 @@ let main() -> i32 {
 
 `Option<T>` is provided by the standard library and available in all programs without an import (see [Imports](#16-imports)).
 
-Written without its type arguments, a constructor takes them from its payload, as a generic function call does. A variant whose payload doesn't say, such as `None`, is written with them:
+Written without its type arguments, a constructor takes them from its payload, as a generic function call does. What the payload leaves open, as `None` leaves `T`, comes from where the value goes: a `let` annotation, a return type, a parameter, a field, or the other branch of an `if` or `case`. If nothing says, it's an error, and the type arguments are written out:
 
 ```sammine
-let a = Some(3i64);              // Option<i64>
-let b = Some(7);                 // Option<i32>: the literal's default type
-let c = Option<f64>::None;       // written out
-let d: Option<f64> = None;       // error: nothing in None says what T is
+let a = Some(3i64);                  // Option<i64>
+let b = Some(7);                     // Option<i32>: the literal's default type
+let c: Option<f64> = None;           // Option<f64>, from the annotation
+let find(x: i64) -> Option<i64> {
+  if x > 0i64 { Some(x) } else { None }   // None is an Option<i64>
+}
+let d = None;                        // error: nothing says what T is
+let e = Option<f64>::None;           // written out
 ```
-
 ---
 
 ## 8. Generics

@@ -123,6 +123,7 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::Hole:
   case TypeKind::Generic:
     return type;
   default:
@@ -146,6 +147,10 @@ static std::optional<bool> unify_instances(const MonomorphizedKey *pattern,
 }
 
 bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
+  // An open type argument says nothing, so it fits any pattern and binds
+  // nothing: or_else(None, 5i64) learns T from 5i64.
+  if (concrete.type_kind == TypeKind::Hole)
+    return true;
   if (pattern.type_kind == TypeKind::TypeParam) {
     auto name = std::get<std::string>(pattern.type_data);
     // Occurs check

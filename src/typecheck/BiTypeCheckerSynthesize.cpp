@@ -153,6 +153,9 @@ Type BiTypeCheckerVisitor::synthesize_tuple_destructure(VarDefAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
+  // An annotation is the type its element takes, as a let's is for its
+  // initializer: (5000000000, None) as an (i64, Option<i64>).
+  std::vector<Type> elem_types;
   for (size_t i = 0; i < tt.size(); i++) {
     auto elem_type = tt.get_element(i);
     // If the var has a type annotation, check compatibility
@@ -171,7 +174,9 @@ Type BiTypeCheckerVisitor::synthesize_tuple_destructure(VarDefAST *ast) {
     }
     ast->destructure_vars[i]->set_type(elem_type);
     register_variable(ast->destructure_vars[i]->name, elem_type);
+    elem_types.push_back(elem_type);
   }
+  resolve_literal_type(ast->Expression.get(), Type::Tuple(std::move(elem_types)));
 
   return ast->set_type(Type::Unit());
 }
@@ -445,23 +450,11 @@ Type BiTypeCheckerVisitor::infer_enum_instance(
     return Type::Poisoned();
   }
 
-  for (auto &tp : def->type_params) {
-    if (bindings.contains(tp))
-      continue;
-    // Without its payload, the payload can't have said.
-    if (payload.size() != patterns.size())
-      add_error(site->get_location(),
-                fmt::format("Enum variant '{}' expects {} arguments, got {}",
-                            written, patterns.size(), payload.size()));
-    else
-      add_error(site->get_location(),
-                fmt::format("Type parameter '{}' of '{}' could not be "
-                            "inferred for '{}'; give it explicitly, as in "
-                            "{}<...>::{}",
-                            tp, def->enum_name.mangled(), written,
-                            def->enum_name.mangled(), variant_name));
-    return Type::Poisoned();
-  }
+  // What the payload doesn't say stays open for the context to decide:
+  // None is an Option<_>.
+  for (auto &tp : def->type_params)
+    if (!bindings.contains(tp))
+      bindings[tp] = Type::Hole();
 
   return generic_type_instance(
       def->enum_name,
@@ -664,9 +657,10 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
     }
 
     // Check all type params resolved. A partial application infers them
-    // from the arguments it binds alone.
+    // from the arguments it binds alone. An open argument, as None, binds
+    // nothing it leaves open: wrap(None) says nothing of T.
     for (auto &tp : type_params) {
-      if (!bindings.contains(tp)) {
+      if (!bindings.contains(tp) || bindings.at(tp).is_open()) {
         this->add_error(
             ast->get_location(),
             is_partial
@@ -822,17 +816,24 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
     return ast->set_type(ast->LHS->get_type());
   }
   // One polymorphic, one concrete: resolve polymorphic to concrete
-  if (ast->LHS->get_type().is_polymorphic_numeric() &&
-      !ast->RHS->get_type().is_polymorphic_numeric()) {
+  if (ast->LHS->get_type().is_polymorphic() &&
+      !ast->RHS->get_type().is_polymorphic()) {
     if (type_map_ordering.structurally_compatible(ast->RHS->get_type(),
                                                   ast->LHS->get_type()))
       resolve_literal_type(ast->LHS.get(), ast->RHS->get_type());
-  } else if (ast->RHS->get_type().is_polymorphic_numeric() &&
-             !ast->LHS->get_type().is_polymorphic_numeric()) {
+  } else if (ast->RHS->get_type().is_polymorphic() &&
+             !ast->LHS->get_type().is_polymorphic()) {
     if (type_map_ordering.structurally_compatible(ast->LHS->get_type(),
                                                   ast->RHS->get_type()))
       resolve_literal_type(ast->RHS.get(), ast->LHS->get_type());
   }
+  // The operator's instance is chosen by the operand types, so an open one
+  // can't wait for a context: None == None.
+  for (auto *operand : {ast->LHS.get(), ast->RHS.get()})
+    if (operand->get_type().is_open()) {
+      report_open_type(operand);
+      return ast->set_type(Type::Poisoned());
+    }
 
   if (!this->type_map_ordering.compatible_to_from(ast->LHS->get_type(),
                                                   ast->RHS->get_type())) {
@@ -1109,17 +1110,13 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
   // Both branches must have compatible types (structural only — ignore
   // qualifiers)
   if (then_type != else_type) {
-    if (type_map_ordering.structurally_compatible(else_type, then_type)) {
-      resolve_literal_type(ast->thenBlockAST->Statements.back().get(),
-                           else_type);
-      ast->thenBlockAST->set_type(else_type);
-      return ast->set_type(else_type);
-    } else if (type_map_ordering.structurally_compatible(then_type,
-                                                         else_type)) {
-      resolve_literal_type(ast->elseBlockAST->Statements.back().get(),
-                           then_type);
-      ast->elseBlockAST->set_type(then_type);
-      return ast->set_type(then_type);
+    if (auto common = common_type(then_type, else_type)) {
+      for (auto *block : {ast->thenBlockAST.get(), ast->elseBlockAST.get()}) {
+        resolve_literal_type(block->Statements.back().get(), *common);
+        if (!common->is_open())
+          block->set_type(*common);
+      }
+      return ast->set_type(*common);
     }
     this->add_error(
         ast->elseBlockAST->get_location(),
@@ -1294,19 +1291,26 @@ Type BiTypeCheckerVisitor::synthesize(ArrayLiteralExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
-  auto first_type = ast->elements[0]->accept_synthesis(this);
+  // The elements have one type, as an if's branches do: [1, 2i64] is an
+  // array of i64, [None, Some(1i64)] of Option<i64>.
+  auto elem_type = ast->elements[0]->accept_synthesis(this);
   for (size_t i = 1; i < ast->elements.size(); i++) {
-    auto elem_type = ast->elements[i]->accept_synthesis(this);
-    if (elem_type != first_type) {
+    auto type = ast->elements[i]->accept_synthesis(this);
+    if (type == elem_type)
+      continue;
+    auto common = common_type(elem_type, type);
+    if (!common) {
       this->add_error(ast->elements[i]->get_location(),
                       fmt::format("Array element {}: expected {}, got {}", i,
-                                  first_type.to_string(),
-                                  elem_type.to_string()));
+                                  elem_type.to_string(), type.to_string()));
       return ast->set_type(Type::Poisoned());
     }
+    elem_type = *common;
   }
+  for (auto &elem : ast->elements)
+    resolve_literal_type(elem.get(), elem_type);
 
-  return ast->set_type(Type::Array(first_type, ast->elements.size()));
+  return ast->set_type(Type::Array(elem_type, ast->elements.size()));
 }
 
 Type BiTypeCheckerVisitor::synthesize(RangeExprAST *ast) {
@@ -1966,6 +1970,11 @@ Type BiTypeCheckerVisitor::synthesize(CaseExprAST *ast) {
   auto scrutinee_type = ast->scrutinee->accept_synthesis(this);
   if (scrutinee_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
+  // Its variants are matched by its type, which nothing else decides.
+  if (scrutinee_type.is_open()) {
+    report_open_type(ast->scrutinee.get());
+    return ast->set_type(Type::Poisoned());
+  }
 
   // Detect mode: literal vs enum
   bool has_literal = false, has_variant = false;
@@ -2233,11 +2242,8 @@ Type BiTypeCheckerVisitor::check_arm_bodies(CaseExprAST *ast,
     if (result_type.is_never()) {
       result_type = arm_type;
     } else if (!arm_type.is_never() && arm_type != result_type) {
-      if (type_map_ordering.structurally_compatible(result_type, arm_type)) {
-        // arm_type is compatible with result_type, keep result_type
-      } else if (type_map_ordering.structurally_compatible(arm_type,
-                                                           result_type)) {
-        result_type = arm_type;
+      if (auto common = common_type(result_type, arm_type)) {
+        result_type = *common;
       } else {
         report_type_mismatch(
             arm.body->get_location(),
@@ -2255,7 +2261,7 @@ Type BiTypeCheckerVisitor::check_arm_bodies(CaseExprAST *ast,
 
   // Arms holding polymorphic literals take the unified result type.
   for (auto &arm : ast->arms) {
-    if (arm.body->get_type().is_polymorphic_numeric() &&
+    if (arm.body->get_type().is_polymorphic() &&
         !arm.body->Statements.empty()) {
       resolve_literal_type(arm.body->Statements.back().get(), result_type);
       arm.body->set_type(result_type);

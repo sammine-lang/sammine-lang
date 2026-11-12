@@ -42,6 +42,7 @@ enum class TypeKind {
   Integer,     // polymorphic integer literal — flows into i32/i64/u32/u64 via
                // context
   Flt,         // polymorphic float literal — flows into f64/f32 via context
+  Hole,        // a type argument the context decides, as T in None: Option<_>
   TypeParam,   // generic type parameter (e.g. T in identity<T>)
   Generic      // uninstantiated generic function/struct template
 };
@@ -232,6 +233,7 @@ struct Type {
   static Type Never() { return Type{TypeKind::Never, std::monostate()}; }
   static Type Integer() { return Type{TypeKind::Integer, std::monostate()}; }
   static Type Flt() { return Type{TypeKind::Flt, std::monostate()}; }
+  static Type Hole() { return Type{TypeKind::Hole, std::monostate()}; }
   static Type Generic() { return Type{TypeKind::Generic, std::monostate()}; }
   static Type String(const std::string &str) {
     return Type{TypeKind::String, str};
@@ -369,6 +371,8 @@ struct Type {
       return "numeric literal";
     case TypeKind::Flt:
       return "float literal";
+    case TypeKind::Hole:
+      return "_";
     case TypeKind::TypeParam:
       return std::get<std::string>(type_data);
     case TypeKind::Generic:
@@ -409,6 +413,14 @@ struct Type {
   bool is_polymorphic_numeric() const {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
+
+  /// Whether a type argument is still open, as in None's Option<_>, here or
+  /// in any type inside: the context has yet to decide it.
+  bool is_open() const;
+
+  /// True for a type its context specializes: a numeric literal's, or one
+  /// with an open type argument.
+  bool is_polymorphic() const { return is_polymorphic_numeric() || is_open(); }
 
   bool is_integer() const {
     return type_kind == TypeKind::I32_t || type_kind == TypeKind::I64_t ||
@@ -632,6 +644,12 @@ using TypeBindings = std::unordered_map<std::string, Type>;
 std::optional<std::string> incompatibility_hint(const Type &expected,
                                                 const Type &actual);
 
+/// The error for a value of `type`, which has an open type argument nothing
+/// decided, as `let x = None;` leaves Option<_>. `variant` names the variant
+/// written without its type arguments, if the value is one.
+std::string open_type_message(const Type &type,
+                              const std::optional<std::string> &variant);
+
 inline constexpr std::array<std::string_view, 10> kBuiltinTypeNames = {
     "i32", "i64", "f32", "f64", "bool", "char", "u32", "u64", "string", "unit"};
 
@@ -653,6 +671,10 @@ struct TypeMapOrdering {
   void populate();
 
   std::vector<Type> visit_ancestor(const Type &t) const;
+  /// The type a and b both have, as an if's branches do: the one the other
+  /// flows into, as i64 for a numeric literal and an i64, or Option<i64>
+  /// for None and an Option<i64>. Qualifiers are ignored. nullopt if
+  /// neither flows into the other.
   std::optional<Type> lowest_common_type(const Type &a, const Type &b) const;
 
   /// Full check: structure + qualifiers (use for assignments, args, returns)

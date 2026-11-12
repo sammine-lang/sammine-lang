@@ -1,0 +1,56 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      5 -1 -1 -1
+// CHECK-NEXT: 6 -1 -1
+// CHECK-NEXT: 2.500000 1
+// CHECK-NEXT: 4 1 0
+// CHECK-NEXT: -1 4
+
+import std;
+
+// A variant whose payload leaves a type argument open, as None leaves T,
+// takes it from where its value goes: a let's annotation, a return type, a
+// parameter, a field, the other branch of an if.
+type Either<L, R> = Left(L) | Right(R);
+struct Holder { o: Option<i64>, };
+
+let take(o: Option<i64>) -> i64 { case o { Some(v) => v, None => -1i64, } }
+let find(x: i64) -> Option<i64> { if x > 0i64 { Some(x) } else { None } }
+let early(x: i64) -> Option<i64> {
+  if x < 0i64 { return None; };
+  Some(x)
+}
+let or_else<T>(m: Option<T>, d: T) -> T {
+  case m { Some(x) => x, None => d, }
+}
+// Each branch decides the type argument the other leaves open.
+let pick(c: bool) -> Either<i64, f64> {
+  if c { Left(1i64) } else { Right(2.5) }
+}
+let is_left(e: Either<i64, f64>) -> i32 {
+  case e { Left(l) => 1, Right(r) => 0, }
+}
+
+let main() -> i32 {
+  // Return types, and a parameter.
+  std::printf("%ld %ld %ld %ld\n", take(find(5i64)), take(find(0i64)),
+              take(early(-1i64)), take(None));
+  // A generic call learns T from its other argument; a field; nested.
+  let h = Holder { o: None };
+  let b: Option<Option<i64>> = Some(None);
+  let inner = case b { Some(i) => take(i), None => 0i64, };
+  std::printf("%ld %ld %ld\n", or_else(None, 6i64), take(h.o), inner);
+  // Branches open in different arguments join.
+  case pick(false) { Left(l) => std::printf("%ld", l),
+                     Right(r) => std::printf("%f", r), };
+  std::printf(" %d\n", is_left(pick(true)));
+  // An if takes the annotation; a comparison takes the other operand.
+  let k: Option<i64> = if false { None } else { Some(4i64) };
+  let n: Option<i64> = if true { None } else { None };
+  std::printf("%ld %d %d\n", take(k), take(n) == -1i64,
+              Option<i64>::Some(3i64) == None);
+  // Arrays and tuples of them.
+  let a: [2]Option<i64> = [None, None];
+  let t: (Option<f64>, i64) = (None, 4i64);
+  std::printf("%ld %ld\n", take(a[1]), t.1);
+  0
+}

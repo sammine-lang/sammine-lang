@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_nested_mismatch.mn:6:28
+// CHECK: Type mismatch: expression has type Option<Option<_>>, but variable declared as Option<i64>
+
+let main() -> i32 {
+  let g: Option<i64> = Some(None);
+  0
+}

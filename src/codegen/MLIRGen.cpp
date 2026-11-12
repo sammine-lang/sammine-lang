@@ -337,6 +337,12 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
         "this is a compiler bug: the type parameter was not substituted "
         "during monomorphization",
         type.to_string()));
+  case TypeKind::Hole:
+    imm_error(fmt::format(
+        "open type argument in '{}' reached codegen — "
+        "this is a compiler bug: the type checker should have given it a "
+        "type from its context or reported that it couldn't",
+        type.to_string()));
   case TypeKind::Never:
     imm_error("'never' type reached codegen — "
               "this is a compiler bug: a diverging expression's "

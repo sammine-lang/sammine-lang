@@ -228,7 +228,7 @@ Type::TypeParam("T")       // generic parameter
 - `compatible_to_from(to, from)` -- full check including structure and linearity. Used for assignments, function arguments, and return values.
 - `structurally_compatible(to, from)` -- checks structural type equivalence (polymorphic numerics, tuples, enums). Does not check qualifiers.
 - `qualifier_compatible(to, from)` -- checks linearity qualifiers (e.g., linear pointer types must match exactly).
-- `lowest_common_type(a, b)` -- finds the lowest common ancestor in the type lattice, used for unifying branch types.
+- `lowest_common_type(a, b)` -- the type two branches both have: the one the other flows into, as `i64` for a numeric literal and an `i64`. The checker's `common_type` uses it for the branches of `if` and `case` and the elements of an array literal.
 
 ---
 

@@ -1,0 +1,34 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_no_context.mn:15:2
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+// CHECK: Could not infer the type arguments of Either<i64, _>; write them out, as in Either<...>::Left
+
+import std;
+
+type Either<L, R> = Left(L) | Right(R);
+
+// Each value leaves a type argument open, and nothing it goes to decides it.
+let statement() -> i32 {
+  None;
+  0
+}
+let variadic() -> i32 {
+  std::printf("%d", None)
+}
+let loop_body() -> i32 {
+  for i in 0..2 { None };
+  0
+}
+let destructured() -> i32 {
+  let (a, b) = (None, 1);
+  0
+}
+let half_known() -> i32 {
+  let e = Left(1i64);
+  0
+}
+
+let main() -> i32 { 0 }

@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_join_conflict.mn:10:32
+// CHECK: If branches have incompatible types: then has Either<i64, _>, else has Either<f64, _>
+
+type Either<L, R> = Left(L) | Right(R);
+
+// Both branches decide L, differently.
+let main() -> i32 {
+  let e: Either<i64, f64> =
+    if true { Left(1i64) } else { Left(2.5) };
+  0
+}

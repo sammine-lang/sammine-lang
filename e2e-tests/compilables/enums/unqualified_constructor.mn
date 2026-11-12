@@ -10,7 +10,7 @@ type Color = Red | Green | Blue;
 let main() -> i32 {
   let c: Color = Red;
   let x: Option<i32> = Some(99);
-  let y: Option<i32> = Option<i32>::None;
+  let y: Option<i32> = None;
 
   case c {
     Red => std::printf("red\n"),

@@ -2,6 +2,7 @@
 #include "ast/Ast.h"
 #include "fmt/format.h"
 #include "typecheck/Types.h"
+#include <algorithm>
 
 //! \file LinearTypeChecker.cpp
 //! \brief Implements linear type checking — enforces that heap-allocated
@@ -247,6 +248,7 @@ static bool has_misplaced_pointer(const Type &type, bool ptr_allowed_here) {
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::Hole:
   case TypeKind::TypeParam:
   case TypeKind::Generic:
     return false;
@@ -349,9 +351,40 @@ static bool is_place_or_statement(const ExprAST *expr) {
                    IndexExprAST, VarDefAST, ReturnStmtAST>(expr);
 }
 
+// The variant `expr` is, if it is one written without type arguments its
+// payload doesn't decide, as None or Left(1i64): each open type argument
+// starts at one such variant, and is reported there.
+static std::optional<std::string>
+variant_leaving_type_open(const ExprAST *expr, const ASTProperties *props) {
+  auto type = expr->get_type();
+  if (type.type_kind != TypeKind::Enum || !props)
+    return std::nullopt;
+  auto *instance_of = std::get<EnumType>(type.type_data).get_instance_of();
+  if (!instance_of || std::ranges::none_of(instance_of->type_args,
+                                           [](const Type &arg) {
+                                             return arg.type_kind ==
+                                                    TypeKind::Hole;
+                                           }))
+    return std::nullopt;
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr);
+      var && props->variable(var->id()) &&
+      props->variable(var->id())->is_enum_unit_variant)
+    return var->variableName.get_name();
+  if (auto *call = llvm::dyn_cast<CallExprAST>(expr);
+      call && props->call(call->id()) &&
+      props->call(call->id())->is_enum_constructor)
+    return call->functionName.get_name();
+  return std::nullopt;
+}
+
 // Every expression is visited with what its parent does with it. A linear
 // temporary has no name to track, so it is only legal where ownership is taken.
+// A type argument still open here is one its context never decided.
 void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
+  if (auto variant = variant_leaving_type_open(expr, props_))
+    this->add_error(expr->get_location(),
+                    open_type_message(expr->get_type(), variant));
+
   if (use.kind != Use::Kind::Own && !is_place_or_statement(expr) &&
       expr->get_type().containsLinearTypes()) {
     this->add_error(
@@ -687,6 +720,7 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::Hole:
   case TypeKind::TypeParam:
   case TypeKind::Generic:
     return std::nullopt;
@@ -1236,6 +1270,7 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   case TypeKind::Poisoned:
   case TypeKind::Integer:
   case TypeKind::Flt:
+  case TypeKind::Hole:
   case TypeKind::TypeParam:
   case TypeKind::Generic:
     break;

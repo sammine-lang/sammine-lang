@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: open_type_in_generic_instance.mn:7:2
+// CHECK: Could not infer the type arguments of Option<_>; write them out, as in Option<...>::None
+
+// A generic body is checked as each instance of it, ignore<i64> here.
+let ignore<T>(x: T) -> i32 {
+  None;
+  0
+}
+
+let main() -> i32 { ignore(1i64) }
