@@ -35,6 +35,17 @@ public:
   /// can't lower yet.
   bool lowerFunction(AST::FuncDefAST *ast, mlir::func::FuncOp decl);
 
+  /// A kernel's scalar code where the builder is: the body of a map's lambda
+  /// or a reduce's identity, `bindings` naming the lambda's parameters. It
+  /// must lower to plain arith ops in the one block a linalg region has:
+  /// failure, with nothing left behind, if it doesn't.
+  mlir::FailureOr<mlir::Value>
+  lowerKernelScalar(AST::BlockAST *body,
+                    const llvm::StringMap<mlir::Value> &bindings);
+  mlir::FailureOr<mlir::Value>
+  lowerKernelScalar(AST::ExprAST *expr,
+                    const llvm::StringMap<mlir::Value> &bindings);
+
 private:
   mlir::OpBuilder &builder_;
   const AST::ASTProperties &props_;
@@ -80,6 +91,9 @@ private:
   /// `ast`'s signature in MIR types, if MIR has a type for each part.
   std::optional<mlir::FunctionType> mirSignature(AST::FuncDefAST *ast) const;
 
+  mlir::FailureOr<mlir::Value>
+  lowerArithOnly(const llvm::StringMap<mlir::Value> &bindings,
+                 llvm::function_ref<mlir::FailureOr<mlir::Value>()> lower);
   /// Whether the block being built has ended, as after a return.
   bool terminated() const;
   mlir::FailureOr<mlir::Value> lowerStatements(AST::BlockAST *block);

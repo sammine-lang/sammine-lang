@@ -141,21 +141,15 @@ mlir::Value MLIRGenImpl::emitKernelMapExpr(AST::KernelMapExprAST *mapExpr,
         mlir::OpBuilder::InsertionGuard builderGuard(builder);
         builder.setInsertionPointToStart(b.getInsertionBlock());
 
-        decltype(symbolTable)::Guard lambdaScope(symbolTable);
-        symbolTable.registerNameT(lambdaParamName, args[0]);
-
-        bool savedKernelCtx = in_kernel_lambda_body;
-        in_kernel_lambda_body = true;
-
-        mlir::Value bodyResult = nullptr;
-        for (auto &expr : mapExpr->lambda_body->Statements) {
-          bodyResult = emitExpr(expr.get());
-        }
-
-        in_kernel_lambda_body = savedKernelCtx;
-
-        assert(bodyResult && "Lambda body must produce a value");
-        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{bodyResult});
+        llvm::StringMap<mlir::Value> bindings;
+        bindings[lambdaParamName] = args[0];
+        auto bodyResult = mirLowering->lowerKernelScalar(
+            mapExpr->lambda_body.get(), bindings);
+        if (mlir::failed(bodyResult))
+          imm_error("A kernel's lambda can only compute on its element with "
+                    "arithmetic",
+                    mapExpr->lambda_body->get_location());
+        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{*bodyResult});
       });
 
   return mapOp->getResult(0);
@@ -182,8 +176,12 @@ MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
   auto elemSamType = arrType.get_element();
   auto elemMLIRType = convertTypeForKernel(elemSamType);
 
-  auto identityVal = emitExpr(reduceExpr->identity.get());
-  assert(identityVal && "Identity expression must produce a value");
+  auto identity =
+      mirLowering->lowerKernelScalar(reduceExpr->identity.get(), {});
+  if (mlir::failed(identity))
+    imm_error("A reduce's identity can only be arithmetic",
+              reduceExpr->identity->get_location());
+  auto identityVal = *identity;
 
   auto emptyScalar = mlir::tensor::EmptyOp::create(
       builder, location, llvm::ArrayRef<int64_t>{}, elemMLIRType);

@@ -87,6 +87,7 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 - Initializer: PoisonOp + InsertValueOp per element
 
 ## Kernel Codegen (2-Module Architecture)
+- A kernel's scalar code, a map lambda's body and a reduce's identity, goes through MIR: `MIRLowering::lowerKernelScalar` lowers it where the kernel codegen's builder is, the lambda's parameter bound, and it must be plain `arith` ops in the one block a linalg region has (`lowerArithOnly`), else a located error. MLIRGenImpl always has a MIRLowering for this
 
 ### Invariants
 - Kernel module: only arith/math/tensor/linalg/func ops — NO llvm dialect

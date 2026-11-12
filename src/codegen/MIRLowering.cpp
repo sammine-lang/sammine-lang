@@ -268,6 +268,62 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   return true;
 }
 
+// A kernel's scalar code, as `lower` lowers it where the builder is, with
+// `bindings` naming the lambda's parameters. It must be only arith ops, in
+// the block it starts in: what a linalg region holds. Anything else it
+// lowered is erased again.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerArithOnly(
+    const llvm::StringMap<mlir::Value> &bindings,
+    llvm::function_ref<mlir::FailureOr<mlir::Value>()> lower) {
+  auto *block = builder_.getInsertionBlock();
+  auto *region = block->getParent();
+  auto blockCount = region->getBlocks().size();
+  llvm::SmallPtrSet<mlir::Operation *, 8> before;
+  for (auto &op : *block)
+    before.insert(&op);
+  names_ = bindings;
+  addressed_.clear();
+
+  auto value = lower();
+  llvm::SmallVector<mlir::Operation *> lowered;
+  for (auto &op : *block)
+    if (!before.contains(&op))
+      lowered.push_back(&op);
+  bool arith = mlir::succeeded(value) && *value &&
+               region->getBlocks().size() == blockCount &&
+               llvm::all_of(lowered, [](mlir::Operation *op) {
+                 return mlir::isa<mlir::arith::ArithDialect>(op->getDialect());
+               });
+  if (arith)
+    return value;
+  while (region->getBlocks().size() > blockCount)
+    region->getBlocks().back().erase();
+  for (auto *op : llvm::reverse(lowered))
+    op->erase();
+  return mlir::failure();
+}
+
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerKernelScalar(BlockAST *body,
+                               const llvm::StringMap<mlir::Value> &bindings) {
+  return lowerArithOnly(bindings, [&]() -> mlir::FailureOr<mlir::Value> {
+    mlir::Value last;
+    for (auto &stmt : body->Statements) {
+      auto value = lowerExpr(stmt.get());
+      if (mlir::failed(value))
+        return mlir::failure();
+      last = *value;
+    }
+    return last;
+  });
+}
+
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerKernelScalar(ExprAST *expr,
+                               const llvm::StringMap<mlir::Value> &bindings) {
+  return lowerArithOnly(bindings, [&] { return lowerExpr(expr); });
+}
+
 bool MIRLowering::terminated() const {
   auto *block = builder_.getInsertionBlock();
   return !block->empty() &&

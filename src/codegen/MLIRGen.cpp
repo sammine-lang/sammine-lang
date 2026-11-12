@@ -198,7 +198,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
 
   // With --mir, MIR takes every function body it can before any is emitted
   // here, so a call emitted below sees its callee's final signature.
-  if (mirLowering)
+  if (use_mir_)
     lowerThroughMIR(program);
 
   for (auto &def : program->DefinitionVec)

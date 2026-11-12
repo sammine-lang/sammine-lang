@@ -44,10 +44,9 @@ public:
               const AST::ASTProperties &props, GPUMode gpu_mode, bool use_mir)
       : builder(&context), moduleName(moduleName_),
         locator(fileName_, sourceText), reporter(fileName_, sourceText, 3),
-        gpu_mode_(gpu_mode), props_(props) {
-    if (use_mir)
-      mirLowering =
-          std::make_unique<MIRLowering>(builder, props_, locator);
+        gpu_mode_(gpu_mode), use_mir_(use_mir), props_(props) {
+    // Kernels' scalar code goes through MIR too, with or without use_mir.
+    mirLowering = std::make_unique<MIRLowering>(builder, props_, locator);
   }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
@@ -72,6 +71,8 @@ public:
   size_t mirFunctionCount = 0;
 
   GPUMode gpu_mode_;
+  /// Whether function bodies are lowered through MIR (lowerThroughMIR).
+  bool use_mir_;
 
   /// Emit an ariadne-style error before aborting. If a Location is provided,
   /// the error points to the offending source span; otherwise shows "In
