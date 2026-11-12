@@ -1,7 +1,6 @@
-// RUN: %sammine --file %full %O --emit llvm 2>&1 | %check %full
-// UNSUPPORTED: mir
-// The unoptimized IR the AST codegen emits: under --mir this main goes
-// through MIR, which keeps no stack slot for its let.
+// RUN: %sammine --no-mir --file %full %O --emit llvm 2>&1 | %check %full
+// The unoptimized IR the AST codegen emits, with a stack slot for the let:
+// through MIR, which names a let's value, this main would have none.
 // CHECK:      ; ModuleID = 'LLVMDialectModule'
 // CHECK-NEXT: source_filename = "LLVMDialectModule"
 // CHECK-NEXT: target datalayout = "{{.*}}"

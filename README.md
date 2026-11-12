@@ -59,6 +59,8 @@ to erase the build folder (similar to make clean).
   --lib           Emit library output. Values: static (.a) or shared (.so)
   --emit          Print an intermediate form to stdout, then stop.
                   Values: ast, mlir, llvm (before optimization), llvm-opt (after), llvm-diff
+  --no-mir        Compile every function through the AST codegen, not MIR
+                  where it can (the default, --mir)
   --diagnostics   Developer diagnostics. Values: stages;lexer;parser or 'dev'
   --time          Print compilation timing. Values: simple, sparse, coarse
 ```

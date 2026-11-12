@@ -75,8 +75,10 @@ Options::Options(int argc, char *argv[]) {
                  "llvm-diff")
       ->check(CLI::IsMember({"ast", "mlir", "llvm", "llvm-opt", "llvm-diff"}));
 
-  app.add_flag("--mir", mir,
-               "Lower function bodies through MIR where it handles them");
+  app.add_flag("--mir,!--no-mir", mir,
+               "Lower function bodies through MIR where it handles them, the "
+               "rest through the AST codegen (the default). --no-mir: the AST "
+               "codegen only");
 
   app.add_option("--diagnostics", diagnostics,
                  "Diagnostics for sammine-lang developers. "

@@ -1,6 +1,8 @@
 # Plan: a mid-level IR (MIR) as an MLIR dialect
 
-Status: design, for review. No code yet.
+Status: in progress. MIR is the default: each function body goes through it
+where it can, through the AST codegen otherwise (`--no-mir`: the AST codegen
+only). Slices 1-8 are done, most of 9.
 
 ## Why
 
@@ -223,8 +225,9 @@ suite passes after every commit.
 - The conversion builds signatures and layouts with the same code the AST
   codegen uses (`buildFuncType`, `convertType`, name mangling, `CABI`), so
   both sides agree, until the old path is gone.
-- `--mir` turns the MIR path on. Lit runs the whole suite both ways. A debug
-  counter prints how many functions went through MIR, so progress shows.
+- MIR is on by default; `--no-mir` turns it off. Lit runs the whole suite
+  both ways (`e2e-tests`, and `e2e-tests-ast`, `--param ast=1`). `--emit
+  mlir` prints how many functions went through MIR, so progress shows.
 
 ### Slices
 
@@ -273,7 +276,12 @@ come next, then the constructs, each picked by what blocks the most code:
    generic-copy linkage.
 
 Once the fallback is rare and reliable, `--mir` becomes the default; the AST
-path still covers what MIR doesn't.
+path still covers what MIR doesn't. Done once MIR took 3446 of the 3580
+functions outside the MIR tests, every test passing both ways: the standard
+library is compiled through it too. What still falls back: closures and
+function values, `&x` and `x[i]` through `Indexer` (which need locals as
+places), functions returning arrays (sret), writing `a[i]`, `==` on arrays
+and enums with payloads.
 
 ### The ownership check, the same way
 
@@ -325,7 +333,7 @@ indexing, automatic drops.
 2. Each sammine type kind gets a full MLIR type, so MIR is parsable.
 3. Consuming an outer value inside a loop is reported as a use after move on
    the next iteration, so consuming and then leaving the loop is accepted.
-4. MIR is printed with `--mir --emit mlir` (its functions are marked
+4. MIR is printed with `--emit mlir` (its functions are marked
    `sammine.mir`, under a `// MIR: N of M functions` line). `sammine-opt`
    parses and prints MIR and runs passes on it, for small hand-written tests;
    it came with the first MIR type.
