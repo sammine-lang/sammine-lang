@@ -1,0 +1,35 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// An integer-backed enum is its backing integer, a variant its discriminant.
+// A case on one, or on literals, is a cf.switch on the value. A char is an
+// integer, compared signed; bitwise operators are arith ops.
+// CHECK-LABEL: func.func private @big(
+// CHECK-SAME: -> i64
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.constant 4294967296 : i64
+// CHECK-LABEL: func.func private @weight(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: cf.switch %arg0 : i32, [
+// CHECK-NEXT: default: ^bb3,
+// CHECK-NEXT: 1: ^bb1,
+// CHECK-NEXT: 2: ^bb2
+// CHECK-LABEL: func.func private @name_len(
+// CHECK-SAME: sammine.mir
+// CHECK: cf.switch %arg0 : i8, [
+// CHECK-LABEL: func.func private @is_lower(
+// CHECK-SAME: sammine.mir
+// CHECK: arith.cmpi sge, %arg0, %{{.*}} : i8
+// CHECK-LABEL: func.func private @mask(
+// CHECK-SAME: sammine.mir
+// CHECK: arith.andi
+type Flags = Read(1) | Write(2) | Exec(4);
+type Big: i64 = Large(4294967296) | Small(0);
+
+let big() -> Big { Big::Large }
+let weight(f: Flags) -> i32 {
+  case f { Flags::Read => 10, Flags::Write => 20, _ => 30 }
+}
+let name_len(c: char) -> i32 { case c { 'a' => 1, 'b' => 2, _ => 0 } }
+let is_lower(c: char) -> bool { c >= 'a' && c <= 'z' }
+let mask(a: i32) -> i32 { a & 255 }
+
+let main() -> i32 { 0 }

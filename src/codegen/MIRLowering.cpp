@@ -79,9 +79,14 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
     auto name = et.get_name().mangled();
-    // An integer-backed enum isn't lowered yet, nor an enum that reaches
-    // itself through a pointer.
-    if (et.is_integer_backed() || !enclosing.insert(name).second)
+    // An integer-backed enum is its backing integer, as in the AST codegen.
+    if (et.is_integer_backed()) {
+      auto backing = et.get_backing_type();
+      return builder_.getIntegerType(
+          backing == TypeKind::I64_t || backing == TypeKind::U64_t ? 64 : 32);
+    }
+    // An enum that reaches itself through a pointer has no MIR type yet.
+    if (!enclosing.insert(name).second)
       return std::nullopt;
     llvm::SmallVector<mlir::Type> variants;
     int64_t payloadSize = 0;
@@ -485,8 +490,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
 // variant.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   auto scrutineeType = caseExpr->scrutinee->get_type();
-  if (scrutineeType.type_kind != TypeKind::Enum || caseExpr->arms.empty())
+  if (caseExpr->arms.empty())
     return mlir::failure();
+  if (scrutineeType.type_kind != TypeKind::Enum ||
+      std::get<EnumType>(scrutineeType.type_data).is_integer_backed())
+    return lowerScalarCase(caseExpr);
   auto et = std::get<EnumType>(scrutineeType.type_data);
   auto resultType = branchResultType(caseExpr->get_type());
   if (mlir::failed(resultType))
@@ -547,6 +555,83 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   return lowerArms(location, *resultType, arms);
 }
 
+// `case n { 0 => a, 1 => b, _ => c }` on an integer, char or bool, or on an
+// integer-backed enum's variants: a cf.switch on the value, to each arm's
+// block. With no wildcard, any other value goes to the last arm: the arms
+// cover them all. An arm for a value an earlier arm took is never reached.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerScalarCase(CaseExprAST *caseExpr) {
+  auto scrutineeType = caseExpr->scrutinee->get_type();
+  std::optional<EnumType> intEnum;
+  if (scrutineeType.type_kind == TypeKind::Enum)
+    intEnum = std::get<EnumType>(scrutineeType.type_data);
+  auto resultType = branchResultType(caseExpr->get_type());
+  if (mlir::failed(resultType))
+    return mlir::failure();
+  auto value = lowerExpr(caseExpr->scrutinee.get());
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  auto flagType = mlir::dyn_cast<mlir::IntegerType>(value->getType());
+  if (!flagType)
+    return mlir::failure();
+
+  // The value each arm matches, as the AST codegen reads its pattern.
+  using LK = CasePattern::LiteralKind;
+  auto armValue = [&](const CasePattern &pattern) -> std::optional<int64_t> {
+    if (intEnum)
+      return intEnum->get_variant(pattern.variant_index).discriminant_value;
+    switch (pattern.literal_kind) {
+    case LK::Bool:
+      return pattern.literal_value == "true" ? 1 : 0;
+    case LK::Char:
+      return static_cast<uint8_t>(pattern.literal_value[0]);
+    case LK::Integer:
+      return sammine_util::literal_int_bits(pattern.literal_value);
+    default:
+      return std::nullopt;
+    }
+  };
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  llvm::SmallVector<Arm> arms;
+  llvm::SmallVector<llvm::APInt> values;
+  llvm::SmallVector<mlir::Block *> dests;
+  mlir::Block *otherwise = nullptr;
+  for (auto &arm : caseExpr->arms) {
+    auto *block = &region->emplaceBlock();
+    arms.push_back(Arm{block, arm.body.get(), nullptr});
+    if (arm.pattern.is_wildcard) {
+      otherwise = block;
+      break;
+    }
+    if (!intEnum && !arm.pattern.is_literal)
+      return mlir::failure();
+    auto matched = armValue(arm.pattern);
+    if (!matched)
+      return mlir::failure();
+    llvm::APInt bits(flagType.getWidth(), static_cast<uint64_t>(*matched),
+                     /*isSigned=*/true, /*implicitTrunc=*/true);
+    if (llvm::is_contained(values, bits))
+      continue;
+    values.push_back(bits);
+    dests.push_back(block);
+  }
+  if (!otherwise) {
+    if (dests.empty())
+      return mlir::failure();
+    otherwise = dests.pop_back_val();
+    values.pop_back();
+  }
+  auto location = loc(caseExpr);
+  auto caseValues = mlir::DenseIntElementsAttr::get(
+      mlir::VectorType::get({static_cast<int64_t>(values.size())}, flagType),
+      values);
+  llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
+  mlir::cf::SwitchOp::create(builder_, location, *value, mlir::ValueRange{},
+                             noOperands, caseValues, otherwise, dests);
+  return lowerArms(location, *resultType, arms);
+}
+
 // `Option<i64>::Some(x)`, or a variant with no payload, `None`: its payload
 // fields at the offsets layout:: gives them, as the AST codegen puts them.
 mlir::FailureOr<mlir::Value>
@@ -555,6 +640,16 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
   auto mir = mirType(type);
   if (!mir)
     return mlir::failure();
+  // A variant of an integer-backed enum is its discriminant.
+  if (auto backing = mlir::dyn_cast<mlir::IntegerType>(*mir)) {
+    auto discriminant =
+        std::get<EnumType>(type.type_data).get_variant(index).discriminant_value;
+    if (!discriminant || !payload.empty())
+      return mlir::failure();
+    return mlir::arith::ConstantIntOp::create(builder_, location, backing,
+                                              *discriminant)
+        .getResult();
+  }
   auto enumType = mlir::cast<smn::EnumType>(*mir);
   auto &payloadTypes =
       std::get<EnumType>(type.type_data).get_variant(index).payload_types;
@@ -892,13 +987,17 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
                       bin->get_type());
   }
   auto op = bin->Op->tok_type;
-  bool arithmetic = op == TokADD || op == TokSUB || op == TokMUL ||
-                    op == TokDIV || op == TokMOD;
+  bool comparison = bin->Op->is_comparison();
   // A comparison's operands decide how it compares; its own type is bool.
-  auto type = bin->Op->is_comparison() ? bin->LHS->get_type() : bin->get_type();
-  bool scalar = type.is_integer() || type.is_float() ||
-                (bin->Op->is_comparison() && type.type_kind == TypeKind::Bool);
-  if (!(arithmetic || bin->Op->is_comparison()) || !scalar)
+  auto type = comparison ? bin->LHS->get_type() : bin->get_type();
+  // As the AST codegen has it, a char is an integer, and an integer-backed
+  // enum is its backing integer to == and !=.
+  bool intEnum = type.type_kind == TypeKind::Enum &&
+                 std::get<EnumType>(type.type_data).is_integer_backed() &&
+                 (op == TokEQUAL || op == TokNOTEqual);
+  bool integer = type.is_integer() || type.type_kind == TypeKind::Char ||
+                 (comparison && type.type_kind == TypeKind::Bool) || intEnum;
+  if (!integer && !type.is_float())
     return mlir::failure();
   auto lhs = lowerExpr(bin->LHS.get());
   if (mlir::failed(lhs) || !*lhs)
@@ -906,13 +1005,18 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   auto rhs = lowerExpr(bin->RHS.get());
   if (mlir::failed(rhs) || !*rhs)
     return mlir::failure();
-  if (bin->Op->is_comparison())
-    return emitScalarComparison(builder_, loc(bin), *lhs, *rhs, op,
-                                type.is_float(), type.is_unsigned());
-  if (type.is_float())
-    return emitFloatArithOp(builder_, loc(bin), *lhs, *rhs, op);
-  return emitIntArithOp(builder_, loc(bin), *lhs, *rhs, op,
-                        type.is_unsigned());
+  mlir::Value result;
+  if (comparison)
+    result = emitScalarComparison(builder_, loc(bin), *lhs, *rhs, op,
+                                  type.is_float(), type.is_unsigned());
+  else if (type.is_float())
+    result = emitFloatArithOp(builder_, loc(bin), *lhs, *rhs, op);
+  else
+    result = emitIntArithOp(builder_, loc(bin), *lhs, *rhs, op,
+                            type.is_unsigned());
+  if (!result)
+    return mlir::failure();
+  return result;
 }
 
 } // namespace sammine_lang

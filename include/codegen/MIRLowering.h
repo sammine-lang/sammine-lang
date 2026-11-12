@@ -119,6 +119,7 @@ private:
                                          llvm::ArrayRef<Arm> arms);
   mlir::FailureOr<mlir::Value> lowerIf(AST::IfExprAST *ifExpr);
   mlir::FailureOr<mlir::Value> lowerCase(AST::CaseExprAST *caseExpr);
+  mlir::FailureOr<mlir::Value> lowerScalarCase(AST::CaseExprAST *caseExpr);
   mlir::FailureOr<mlir::Value>
   lowerVariant(mlir::Location location, const Type &type, size_t index,
                llvm::ArrayRef<AST::ExprAST *> payload);
