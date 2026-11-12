@@ -12,7 +12,6 @@
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/Interfaces/FunctionInterfaces.h"
-#include "llvm/ADT/StringSet.h"
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
@@ -71,144 +70,12 @@ private:
 
 } // namespace
 
-std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
-  llvm::StringSet<> enclosing;
-  return mirType(type, enclosing);
-}
-
-std::optional<mlir::Type>
-MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
-  switch (type.type_kind) {
-  case TypeKind::I32_t:
-  case TypeKind::U32_t:
-  case TypeKind::Integer: // an untyped literal defaults to i32, as in codegen
-    return builder_.getI32Type();
-  case TypeKind::I64_t:
-  case TypeKind::U64_t:
-    return builder_.getI64Type();
-  case TypeKind::F32_t:
-    return builder_.getF32Type();
-  case TypeKind::F64_t:
-  case TypeKind::Flt: // an untyped float literal defaults to f64
-    return builder_.getF64Type();
-  case TypeKind::Bool:
-    return builder_.getI1Type();
-  case TypeKind::Char:
-    return builder_.getI8Type();
-  case TypeKind::Pointer: {
-    // 'ptr<T> owns what it points at; ptr<T> is a view of it.
-    auto pointee =
-        mirType(std::get<PointerType>(type.type_data).get_pointee(), enclosing);
-    if (!pointee)
-      return std::nullopt;
-    return smn::PtrType::get(builder_.getContext(), *pointee,
-                             type.linearity == Linearity::Linear
-                                 ? smn::Ownership::Owned
-                                 : smn::Ownership::View);
-  }
-  case TypeKind::Struct: {
-    auto &st = std::get<StructType>(type.type_data);
-    auto name = st.get_name().mangled();
-    // A struct that reaches itself, through a pointer, has no MIR type yet.
-    if (!enclosing.insert(name).second)
-      return std::nullopt;
-    llvm::SmallVector<mlir::Type> fields;
-    for (auto &field : st.get_field_types()) {
-      auto fieldType = mirType(field, enclosing);
-      if (!fieldType)
-        return std::nullopt;
-      fields.push_back(*fieldType);
-    }
-    enclosing.erase(name);
-    return smn::StructType::get(builder_.getContext(), name, fields);
-  }
-  case TypeKind::Enum: {
-    auto &et = std::get<EnumType>(type.type_data);
-    auto name = et.get_name().mangled();
-    // An integer-backed enum is its backing integer.
-    if (et.is_integer_backed()) {
-      auto backing = et.get_backing_type();
-      return builder_.getIntegerType(
-          backing == TypeKind::I64_t || backing == TypeKind::U64_t ? 64 : 32);
-    }
-    // An enum that reaches itself through a pointer has no MIR type yet.
-    if (!enclosing.insert(name).second)
-      return std::nullopt;
-    llvm::SmallVector<mlir::Type> variants;
-    int64_t payloadSize = 0;
-    for (auto &variant : et.get_variants()) {
-      llvm::SmallVector<mlir::Type> fields;
-      for (auto &field : variant.payload_types) {
-        auto fieldType = mirType(field, enclosing);
-        if (!fieldType)
-          return std::nullopt;
-        fields.push_back(*fieldType);
-      }
-      variants.push_back(smn::TupleType::get(builder_.getContext(), fields));
-      payloadSize = std::max(payloadSize,
-                             layout::variantPayloadSize(variant.payload_types));
-    }
-    enclosing.erase(name);
-    return smn::EnumType::get(builder_.getContext(), name, payloadSize,
-                              variants);
-  }
-  case TypeKind::Function: {
-    // A function value; a C function's `...` has no MIR type.
-    auto &fn = std::get<FunctionType>(type.type_data);
-    auto signature = mirFunctionType(fn);
-    if (fn.is_var_arg() || !signature)
-      return std::nullopt;
-    return smn::FnType::get(builder_.getContext(), *signature);
-  }
-  case TypeKind::Array: {
-    auto &array = std::get<ArrayType>(type.type_data);
-    auto element = mirType(array.get_element(), enclosing);
-    if (!element)
-      return std::nullopt;
-    return smn::ArrayType::get(builder_.getContext(),
-                               static_cast<int64_t>(array.get_size()),
-                               *element);
-  }
-  case TypeKind::Tuple: {
-    llvm::SmallVector<mlir::Type> elements;
-    for (auto &element : std::get<TupleType>(type.type_data).get_element_types()) {
-      auto elementType = mirType(element, enclosing);
-      if (!elementType)
-        return std::nullopt;
-      elements.push_back(*elementType);
-    }
-    return smn::TupleType::get(builder_.getContext(), elements);
-  }
-  default:
-    return std::nullopt;
-  }
-}
-
-std::optional<mlir::FunctionType>
-MIRLowering::mirFunctionType(const FunctionType &fn) const {
-  llvm::SmallVector<mlir::Type, 4> inputs;
-  for (auto &param : fn.get_params_types()) {
-    auto type = mirType(param);
-    if (!type)
-      return std::nullopt;
-    inputs.push_back(*type);
-  }
-  // A function returning () returns nothing.
-  if (fn.get_return_type().type_kind == TypeKind::Unit)
-    return builder_.getFunctionType(inputs, {});
-  auto result = mirType(fn.get_return_type());
-  if (!result)
-    return std::nullopt;
-  return builder_.getFunctionType(inputs, {*result});
-}
-
-
 std::optional<mlir::FunctionType>
 MIRLowering::mirSignature(FuncDefAST *ast) const {
   auto type = ast->Prototype->get_type();
   if (type.type_kind != TypeKind::Function)
     return std::nullopt;
-  return mirFunctionType(std::get<FunctionType>(type.type_data));
+  return types_.mirFunctionType(std::get<FunctionType>(type.type_data));
 }
 
 // The function is built on its own, outside the module, and only put in
@@ -351,7 +218,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
 // names each element of t.
 mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
   // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.
-  if (!def->is_tuple_destructure && !mirType(def->get_type()))
+  if (!def->is_tuple_destructure && !types_.mirType(def->get_type()))
     return mlir::failure();
   auto value = lowerExpr(def->Expression.get());
   if (mlir::failed(value) || !*value)
@@ -512,7 +379,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   if (!callee)
     return lowerIndirectCall(call);
   auto type =
-      mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
+      types_.mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
   if (cp->is_partial)
@@ -563,7 +430,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIndirectCall(CallExprAST *call) {
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
                                      mlir::FunctionType type) {
-  auto result = mirType(call->get_type());
+  auto result = types_.mirType(call->get_type());
   if (!result || !mlir::isa<smn::FnType>(*result) ||
       call->arguments.size() > type.getNumInputs())
     return mlir::failure();
@@ -628,7 +495,7 @@ mlir::FailureOr<std::optional<mlir::Type>>
 MIRLowering::branchResultType(const Type &type) const {
   if (type.type_kind == TypeKind::Unit || type.type_kind == TypeKind::Never)
     return std::optional<mlir::Type>();
-  auto mir = mirType(type);
+  auto mir = types_.mirType(type);
   if (!mir)
     return mlir::failure();
   return mir;
@@ -771,10 +638,10 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
     return mlir::failure();
   auto elementType = forExpr->start->get_type();
   auto iteration = rangeIteration(*forProps->range_type, elementType);
-  auto rangeType = mirType(*forProps->range_type);
-  auto optionType = mirType(iteration.option);
-  auto stepType = mirType(iteration.step);
-  auto element = mirType(elementType);
+  auto rangeType = types_.mirType(*forProps->range_type);
+  auto optionType = types_.mirType(iteration.option);
+  auto stepType = types_.mirType(iteration.step);
+  auto element = types_.mirType(elementType);
   if (!rangeType || !optionType || !stepType || !element ||
       !module_.lookupSymbol<mlir::FunctionOpInterface>(iteration.next))
     return mlir::failure();
@@ -941,7 +808,7 @@ void MIRLowering::branchOn(mlir::Location location, mlir::Value flag,
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerVariant(mlir::Location location, const Type &type,
                           size_t index, llvm::ArrayRef<ExprAST *> payload) {
-  auto mir = mirType(type);
+  auto mir = types_.mirType(type);
   if (!mir)
     return mlir::failure();
   // A variant of an integer-backed enum is its discriminant.
@@ -1031,7 +898,7 @@ MIRLowering::lowerAggregate(mlir::Location location, mlir::Type type,
 // at its field's place.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerStructLiteral(StructLiteralExprAST *lit) {
-  auto type = mirType(lit->get_type());
+  auto type = types_.mirType(lit->get_type());
   if (!type)
     return mlir::failure();
   auto st = std::get<StructType>(lit->get_type().type_data);
@@ -1048,7 +915,7 @@ MIRLowering::lowerStructLiteral(StructLiteralExprAST *lit) {
 
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerTupleLiteral(TupleLiteralExprAST *tuple) {
-  auto type = mirType(tuple->get_type());
+  auto type = types_.mirType(tuple->get_type());
   if (!type)
     return mlir::failure();
   llvm::SmallVector<std::pair<size_t, ExprAST *>> exprs;
@@ -1061,7 +928,7 @@ MIRLowering::lowerTupleLiteral(TupleLiteralExprAST *tuple) {
 // A function named as a value, `apply(f, x)`: f binding nothing.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerFunctionValue(VariableExprAST *var) {
-  auto type = mirType(var->get_type());
+  auto type = types_.mirType(var->get_type());
   auto name = props_.symbol(var->variableName);
   if (!type || !mlir::isa<smn::FnType>(*type) ||
       !module_.lookupSymbol<mlir::FunctionOpInterface>(name))
@@ -1078,7 +945,7 @@ MIRLowering::lowerFieldAccess(FieldAccessExprAST *access) {
   if (hasPlace(access))
     return lowerPlaceRead(access);
   auto index = fieldIndex(access);
-  auto type = mirType(access->get_type());
+  auto type = types_.mirType(access->get_type());
   if (!index || !type)
     return mlir::failure();
   auto object = lowerExpr(access->object_expr.get());
@@ -1095,7 +962,7 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::callMethod(mlir::Location location,
                         const sammine_util::QualifiedName &method,
                         mlir::ValueRange args, const Type &result) {
-  auto type = mirType(result);
+  auto type = types_.mirType(result);
   auto name = props_.symbol(method);
   if (!type || !module_.lookupSymbol<mlir::func::FuncOp>(name))
     return mlir::failure();
@@ -1111,7 +978,7 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                   const MonomorphizedKey &key,
                                   mlir::ValueRange args, const Type &result) {
   if (key.name == kConvertClass) {
-    auto to = mirType(key.type_args[1]);
+    auto to = types_.mirType(key.type_args[1]);
     if (!to || args.size() != 1)
       return mlir::failure();
     return emitNumberConversion(builder_, location, args[0], *to,
@@ -1127,7 +994,7 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
 // `[a, b, c]`: its elements' values, in order.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
-  auto type = mirType(array->get_type());
+  auto type = types_.mirType(array->get_type());
   if (!type)
     return mlir::failure();
   auto arrayType = mlir::cast<smn::ArrayType>(*type);
@@ -1145,7 +1012,7 @@ MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
 // read whole.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerRangeArray(RangeExprAST *range) {
-  auto type = mirType(range->get_type());
+  auto type = types_.mirType(range->get_type());
   if (!type)
     return mlir::failure();
   auto array = mlir::cast<smn::ArrayType>(*type);
@@ -1193,7 +1060,7 @@ MIRLowering::lowerRangeArray(RangeExprAST *range) {
 // `dim(a)`: the sizes of a nested array's dimensions, a tuple of i32
 // constants, from its type alone.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
-  auto type = mirType(dim->get_type());
+  auto type = types_.mirType(dim->get_type());
   if (!type)
     return mlir::failure();
   llvm::SmallVector<mlir::Value> sizes;
@@ -1293,7 +1160,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
-  auto type = mirType(alloc->get_type());
+  auto type = types_.mirType(alloc->get_type());
   auto count = lowerExpr(alloc->operand.get());
   if (!type || mlir::failed(count) || !*count)
     return mlir::failure();
@@ -1310,7 +1177,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
 
 // The place `*p` is, for `p` a pointer MIR has a type for.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
-  if (!mirType(deref->operand->get_type()))
+  if (!types_.mirType(deref->operand->get_type()))
     return mlir::failure();
   auto ptr = lowerExpr(deref->operand.get());
   if (mlir::failed(ptr) || !*ptr)
@@ -1368,7 +1235,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
     if (mlir::failed(base))
       return mlir::failure();
     auto index = fieldIndex(field);
-    auto type = mirType(field->get_type());
+    auto type = types_.mirType(field->get_type());
     if (!index || !type)
       return mlir::failure();
     return smn::FieldOp::create(
@@ -1499,7 +1366,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAssign(BinaryExprAST *assign) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
-  auto type = mirType(num->get_type());
+  auto type = types_.mirType(num->get_type());
   if (!type)
     return mlir::failure();
   if (auto floatType = mlir::dyn_cast<mlir::FloatType>(*type))
@@ -1512,7 +1379,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
-  auto type = mirType(str->get_type());
+  auto type = types_.mirType(str->get_type());
   if (!type)
     return mlir::failure();
   return smn::StringOp::create(builder_, loc(str), *type, str->string_content)
