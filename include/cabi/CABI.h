@@ -6,8 +6,8 @@
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 
 //! \file CABI.h
-//! \brief How the C calling convention (x86-64 System V) moves structs, and
-//! how a call to C is made.
+//! \brief How the C calling convention (x86-64 System V) moves structs, how
+//! a call to C is made, and how C lays out a string.
 //!
 //! LLVM leaves this to the frontend. A struct over 16 bytes goes through
 //! memory. A smaller one is split into 8-byte chunks, each classified as
@@ -43,6 +43,12 @@ Registers registersFor(mlir::Type type);
 //! (unsigned) to an int. The call carries the declaration's argument
 //! attributes (sret, byval, signext, zeroext), which LLVM reads from the
 //! call.
+//! A constant global named `name`, at the top of `module`, holding `text` as
+//! C reads a string: its bytes, then a NUL.
+mlir::LLVM::GlobalOp createString(mlir::OpBuilder &builder,
+                                  mlir::ModuleOp module, mlir::Location loc,
+                                  llvm::StringRef name, llvm::StringRef text);
+
 mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
                             mlir::LLVM::LLVMFuncOp callee,
                             llvm::SmallVector<mlir::Value, 4> args);

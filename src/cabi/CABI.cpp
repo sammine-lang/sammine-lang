@@ -113,6 +113,19 @@ mlir::Value promoteVariadic(mlir::OpBuilder &builder, mlir::Location loc,
 
 } // namespace
 
+mlir::LLVM::GlobalOp createString(mlir::OpBuilder &builder,
+                                  mlir::ModuleOp module, mlir::Location loc,
+                                  llvm::StringRef name, llvm::StringRef text) {
+  std::string bytes = text.str();
+  bytes.push_back('\0');
+  mlir::OpBuilder::InsertionGuard guard(builder);
+  builder.setInsertionPointToStart(module.getBody());
+  auto type = mlir::LLVM::LLVMArrayType::get(builder.getI8Type(), bytes.size());
+  return mlir::LLVM::GlobalOp::create(builder, loc, type, /*isConstant=*/true,
+                                      mlir::LLVM::Linkage::Internal, name,
+                                      builder.getStringAttr(bytes));
+}
+
 mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
                             mlir::LLVM::LLVMFuncOp callee,
                             llvm::SmallVector<mlir::Value, 4> args) {

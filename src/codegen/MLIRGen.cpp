@@ -1,4 +1,5 @@
 #include "codegen/MLIRGen.h"
+#include "cabi/CABI.h"
 #include "codegen/MLIRGenImpl.h"
 #include "compiler/Compiler.h"
 
@@ -976,25 +977,9 @@ mlir::Value MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
 mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
                                                  llvm::StringRef value,
                                                  mlir::Location location) {
-  // Check if we already have this global
-  auto globalOp = theModule.lookupSymbol<mlir::LLVM::GlobalOp>(name);
-  if (!globalOp) {
-    // Add null terminator for C interop
-    std::string nullTerminated = value.str();
-    nullTerminated.push_back('\0');
+  if (!theModule.lookupSymbol<mlir::LLVM::GlobalOp>(name))
+    cabi::createString(builder, theModule, location, name, value);
 
-    mlir::OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(theModule.getBody());
-
-    auto strType = mlir::LLVM::LLVMArrayType::get(
-        mlir::IntegerType::get(builder.getContext(), 8), nullTerminated.size());
-    globalOp = mlir::LLVM::GlobalOp::create(
-        builder, location, strType, /*isConstant=*/true,
-        mlir::LLVM::Linkage::Internal, name,
-        builder.getStringAttr(nullTerminated));
-  }
-
-  // Get address of the global
   auto ptrTy = llvmPtrTy();
   return mlir::LLVM::AddressOfOp::create(builder, location, ptrTy, name);
 }
