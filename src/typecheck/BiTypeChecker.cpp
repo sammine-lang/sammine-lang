@@ -612,13 +612,8 @@ std::optional<Type> BiTypeCheckerVisitor::common_type(const Type &a,
   if (a.type_kind != b.type_kind ||
       (a.type_kind != TypeKind::Struct && a.type_kind != TypeKind::Enum))
     return std::nullopt;
-  auto instance_of = [](const Type &t) {
-    return t.type_kind == TypeKind::Struct
-               ? std::get<StructType>(t.type_data).get_instance_of()
-               : std::get<EnumType>(t.type_data).get_instance_of();
-  };
-  auto *a_key = instance_of(a);
-  auto *b_key = instance_of(b);
+  auto *a_key = a.instance_of();
+  auto *b_key = b.instance_of();
   if (!a_key || !b_key || a_key->name != b_key->name ||
       a_key->type_args.size() != b_key->type_args.size())
     return std::nullopt;

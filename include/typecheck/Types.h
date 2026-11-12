@@ -414,6 +414,16 @@ struct Type {
     return type_kind == TypeKind::Integer || type_kind == TypeKind::Flt;
   }
 
+  /// What a struct or enum instantiates, as Option applied to (i64): null
+  /// for any other type, or one that instantiates no generic.
+  const MonomorphizedKey *instance_of() const {
+    if (type_kind == TypeKind::Struct)
+      return std::get<StructType>(type_data).get_instance_of();
+    if (type_kind == TypeKind::Enum)
+      return std::get<EnumType>(type_data).get_instance_of();
+    return nullptr;
+  }
+
   /// Whether a type argument is still open, as in None's Option<_>, here or
   /// in any type inside: the context has yet to decide it.
   bool is_open() const;

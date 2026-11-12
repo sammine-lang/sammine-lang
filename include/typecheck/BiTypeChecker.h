@@ -498,9 +498,10 @@ inline Type default_polymorphic_type(const Type &t) {
   return t;
 }
 
-/// Recursively resolve polymorphic literal types in an expression tree
-/// to a concrete target type. Walks through UnaryNeg, BinaryExpr, IfExpr,
-/// ArrayLiteral, and TupleLiteral to reach all leaf literals.
+/// Recursively resolve polymorphic types in an expression tree to a concrete
+/// target type: numeric literals, and values with an open type argument, as
+/// None. Walks through UnaryNeg, BinaryExpr, IfExpr, CaseExpr, ArrayLiteral,
+/// TupleLiteral, StructLiteral and enum constructor calls to reach them.
 inline void resolve_literal_type(ExprAST *expr, const Type &target) {
   // An open target decides nothing.
   if (!expr || target.is_open())

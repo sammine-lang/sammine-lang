@@ -286,10 +286,7 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
 
 std::string open_type_message(const Type &type,
                               const std::optional<std::string> &variant) {
-  auto *instance_of =
-      type.type_kind == TypeKind::Enum
-          ? std::get<EnumType>(type.type_data).get_instance_of()
-          : nullptr;
+  auto *instance_of = type.instance_of();
   if (variant && instance_of)
     return fmt::format("Could not infer the type arguments of {}; write them "
                        "out, as in {}<...>::{}",
@@ -302,13 +299,8 @@ bool Type::is_open() const {
   if (type_kind == TypeKind::Hole)
     return true;
   // An argument need not appear in a field or payload, as in Tag<T> = A | B.
-  const MonomorphizedKey *instance_of = nullptr;
-  if (type_kind == TypeKind::Struct)
-    instance_of = std::get<StructType>(type_data).get_instance_of();
-  else if (type_kind == TypeKind::Enum)
-    instance_of = std::get<EnumType>(type_data).get_instance_of();
-  if (instance_of && std::ranges::any_of(instance_of->type_args,
-                                         &Type::is_open))
+  if (auto *key = instance_of();
+      key && std::ranges::any_of(key->type_args, &Type::is_open))
     return true;
   bool open = false;
   forEachInnerType([&](const Type &inner) { open = open || inner.is_open(); });
@@ -354,13 +346,8 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
   // Option<i64>. Not the other way, which would open a decided type.
   if (from.is_open() && !to.is_open() && to.type_kind == from.type_kind &&
       (to.type_kind == TypeKind::Struct || to.type_kind == TypeKind::Enum)) {
-    auto instance_of = [](const Type &t) {
-      return t.type_kind == TypeKind::Struct
-                 ? std::get<StructType>(t.type_data).get_instance_of()
-                 : std::get<EnumType>(t.type_data).get_instance_of();
-    };
-    auto *to_key = instance_of(to);
-    auto *from_key = instance_of(from);
+    auto *to_key = to.instance_of();
+    auto *from_key = from.instance_of();
     if (!to_key || !from_key || to_key->name != from_key->name ||
         to_key->type_args.size() != from_key->type_args.size())
       return false;

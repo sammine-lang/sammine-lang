@@ -359,7 +359,7 @@ variant_leaving_type_open(const ExprAST *expr, const ASTProperties *props) {
   auto type = expr->get_type();
   if (type.type_kind != TypeKind::Enum || !props)
     return std::nullopt;
-  auto *instance_of = std::get<EnumType>(type.type_data).get_instance_of();
+  auto *instance_of = type.instance_of();
   if (!instance_of || std::ranges::none_of(instance_of->type_args,
                                            [](const Type &arg) {
                                              return arg.type_kind ==
