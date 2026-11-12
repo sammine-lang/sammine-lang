@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 0 1 2 found
+// CHECK-NEXT: 0 1 2 3 4 none
+// CHECK-NEXT: empty
+
+import std;
+import range;
+
+// Says which i it is asked about, so the output shows where any stopped.
+let is_two(i: i64) -> bool {
+  std::printf("%ld ", i);
+  i == 2i64
+}
+let is_nine(i: i64) -> bool {
+  std::printf("%ld ", i);
+  i == 9i64
+}
+
+// any tries from, from + 1, ... and stops at the first that holds.
+let main() -> i32 {
+  if range::any(0i64, 5i64, is_two) { std::printf("found\n") }
+  else { std::printf("none\n") };
+  if range::any(0i64, 5i64, is_nine) { std::printf("found\n") }
+  else { std::printf("none\n") };
+  if range::any(3i64, 3i64, is_two) { std::printf("found\n") }
+  else { std::printf("empty\n") };
+  0
+}

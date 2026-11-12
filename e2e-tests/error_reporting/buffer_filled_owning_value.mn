@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Cannot bind
+// CHECK-SAME: into a partial application of 'buffer::set_to'
+
+import buffer;
+
+// filled puts the same value in every element, so it can't take one that
+// owns memory: each element would own it.
+let main() -> i32 {
+  let xs = buffer::filled(2i64, alloc<i64>(1i64));
+  0
+}

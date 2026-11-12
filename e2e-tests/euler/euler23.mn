@@ -1,0 +1,35 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4179871
+
+// Project Euler Problem 23: Non-abundant sums
+// A number is abundant when its proper divisors sum to more than it. Every
+// integer above 28123 is the sum of two abundant numbers. Find the sum of
+// the positive integers that aren't.
+
+import std;
+import range;
+import buffer;
+
+let is_abundant(sums: ptr<i64>, i: i64) -> bool { sums[i] > i }
+
+// Whether a and n - a are both abundant.
+let abundant_pair(sums: ptr<i64>, n: i64, a: i64) -> bool {
+  is_abundant(sums, a) && is_abundant(sums, n - a)
+}
+
+// n, unless two abundant numbers sum to it.
+let unless_abundant_sum(sums: ptr<i64>, n: i64) -> i64 {
+  if range::any(1, n / 2 + 1, abundant_pair(sums, n)) { 0 } else { n }
+}
+
+let main() -> i32 {
+  let n = 28124i64;
+  // sums[m] is the sum of m's proper divisors: each k divides 2k, 3k, ...
+  let sums = buffer::filled(n, 0i64);
+  for k in 1..n {
+    for j in 2..(n - 1) / k + 1 { sums[j * k] = sums[j * k] + k; };
+  };
+  std::printf("%ld\n", range::sum(1, n, unless_abundant_sum(sums)));
+  free(sums);
+  0
+}

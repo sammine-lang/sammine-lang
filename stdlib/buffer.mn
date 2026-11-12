@@ -13,6 +13,16 @@ export let indices(n: i64) -> 'ptr<i64> {
   range::fold(0i64, n, alloc<i64>(n), set_index)
 }
 
+let set_to<T>(value: T, xs: 'ptr<T>, i: i64) -> 'ptr<T> {
+  xs[i] = value;
+  xs
+}
+
+// A new buffer of n elements, each value.
+export let filled<T>(n: i64, value: T) -> 'ptr<T> {
+  range::fold(0i64, n, alloc<T>(n), set_to(value))
+}
+
 // Moves xs[j] down past every element `after` puts it before: one step of
 // insertion sort.
 let insert<T>(after: (T, T) -> bool, xs: 'ptr<T>, j: i64) -> 'ptr<T> {

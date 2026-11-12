@@ -21,3 +21,9 @@ let count_if(pred: (i64) -> bool, acc: i64, i: i64) -> i64 {
 export let count(from: i64, to: i64, pred: (i64) -> bool) -> i64 {
   fold(from, to, 0i64, count_if(pred))
 }
+
+// Whether pred holds for any of from, ..., to - 1, tried in order up to the
+// first that it holds for.
+export let any(from: i64, to: i64, pred: (i64) -> bool) -> bool {
+  from < to && (pred(from) || any(from + 1i64, to, pred))
+}
