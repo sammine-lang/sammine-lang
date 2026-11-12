@@ -1,0 +1,15 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: ok
+
+// A field of what an owned pointer points at is freed through (*p).a.
+
+import std;
+struct S { a: 'ptr<i32> };
+let main() -> i32 {
+  let p = alloc<S>(1);
+  *p = S { a: alloc<i32>(1) };
+  free((*p).a);
+  free(p);
+  std::printf("ok\n");
+  0
+}

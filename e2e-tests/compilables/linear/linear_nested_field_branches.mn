@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: done
+
+// Both branches free o.i.a, so it is consumed after the if.
+
+import std;
+
+struct In { a: 'ptr<i32> };
+struct Out { i: In };
+
+let main() -> i32 {
+  let o = Out { i: In { a: alloc<i32>(1) } };
+  let c = 1 > 0;
+  if c { free(o.i.a); } else { free(o.i.a); };
+  std::printf("done\n");
+  0
+}

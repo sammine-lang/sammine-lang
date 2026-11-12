@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Linear variable 'o.i.a' is consumed in some branches but not others
+
+struct In { a: 'ptr<i32> };
+struct Out { i: In };
+
+let main() -> i32 {
+  let o = Out { i: In { a: alloc<i32>(1) } };
+  let c = 1 > 0;
+  if c { free(o.i.a); } else { };
+  0
+}

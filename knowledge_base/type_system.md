@@ -113,10 +113,16 @@
 - Outer linear vars cannot be consumed inside loops
 
 ### Known Limitations
-- Array elements: single `"*"` tracking, not per-element
-- Nested struct fields: only single-level `FieldAccessExprAST`
-- Enum payloads: not yet tracked
-- Whole-struct move after partial child consume: not yet rejected
+- Array elements: one `"[*]"` child for every element, not per-element; `free(a[i])` does not consume it
+
+### Places and Parts
+- A place is a variable, a field of a place (`e.f`) or what a place points at (`*e`); `find_tracked` resolves any of them to its `VarInfo`, at any depth. `free`, stores, moves and reads all go through it
+- Registration builds the whole tree for a type: fields, tuple elements, payloads, array elements (`"[*]"`) and pointees (`"*"`). Recursive types are rejected, so it is finite
+- An entry is an **owner** (an owned `'ptr`, which must itself be consumed) or an **aggregate** (done once all its parts are). `collect_live_owners` is the one walk behind scope exit, `free` (the pointee must hold nothing) and stores (the target must hold nothing)
+- A pointee starts **unset**: consumed with no reason, reported as "no owned value is known to be stored there". A store, or `let x = place`, takes the stored place's states; any other value is live with unset pointees (so a parameter's pointee is unset)
+- Moving a whole value (`move_whole`) is rejected if a part was already consumed (pointees excepted), and marks every part consumed; `free` does the same after checking the pointee
+- A `*e` reached through a consumed pointer is reported once, at the pointer (`pointer_consumed`)
+- Branch reconciliation recurses into parts while the whole stays live; a whole consumed on any branch takes its parts with it
 
 ## Incompatibility Hints
 - `incompatibility_hint(expected, actual)` returns note explaining why types don't match

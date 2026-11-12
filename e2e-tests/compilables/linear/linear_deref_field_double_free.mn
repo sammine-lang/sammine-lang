@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ '*p.a' was freed here
+// CHECK: ╰─ Cannot use linear variable '*p.a' — it was already freed previously
+
+struct S { a: 'ptr<i32> };
+let main() -> i32 {
+  let p = alloc<S>(1);
+  *p = S { a: alloc<i32>(1) };
+  free((*p).a);
+  free((*p).a);
+  free(p);
+  0
+}

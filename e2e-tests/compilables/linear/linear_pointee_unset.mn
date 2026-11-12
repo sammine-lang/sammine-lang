@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:     ╰─ Cannot use linear variable '*p' — no owned value is known to be stored there
+// CHECK-NOT: was  here
+
+// alloc leaves *p unset, so there is no inner pointer to free yet.
+
+let main() -> i32 {
+  let p = alloc<'ptr<i32>>(1);
+  free(*p);
+  free(p);
+  0
+}

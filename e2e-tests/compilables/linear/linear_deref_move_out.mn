@@ -1,0 +1,17 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ '*pp' was moved here
+// CHECK: ╰─ Cannot use linear variable '*pp' — it was already moved previously
+
+// let q = *pp moves the inner pointer out, so pp no longer owns it.
+
+import std;
+let main() -> i32 {
+  let pp = alloc<'ptr<i32>>(1);
+  *pp = alloc<i32>(1);
+  let q = *pp;
+  free(q);
+  free(*pp);
+  free(pp);
+  std::printf("ok\n");
+  0
+}

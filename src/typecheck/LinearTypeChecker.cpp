@@ -17,46 +17,47 @@ void LinearTypeChecker::push_scope() { scope_stack.emplace_back(); }
 void LinearTypeChecker::pop_scope_and_check(sammine_util::Location loc) {
   if (scope_stack.empty())
     return;
-  auto &top = scope_stack.back();
-  for (auto &[name, info] : top) {
-    if (info.state == VarState::Unconsumed) {
-      // Check children first (struct/array/tuple with linear fields)
-      if (!info.children.empty()) {
-        check_children_consumed(info);
-      } else {
-        this->add_error(
-            info.def_location,
-            fmt::format(
-                "Linear variable '{}' must be consumed before scope exit"
-                " (use free() to deallocate)",
-                name));
-      }
-    }
-  }
+  for (auto &[name, info] : scope_stack.back())
+    report_leaks(info);
   scope_stack.pop_back();
+}
+
+void LinearTypeChecker::collect_live_owners(const VarInfo &info,
+                                            std::vector<const VarInfo *> &out) {
+  if (info.state == VarState::Consumed)
+    return;
+  if (info.is_owner || info.children.empty()) {
+    out.push_back(&info);
+    return;
+  }
+  for (auto &[key, child] : info.children)
+    collect_live_owners(child, out);
+}
+
+void LinearTypeChecker::report_leaks(const VarInfo &info) {
+  std::vector<const VarInfo *> live;
+  collect_live_owners(info, live);
+  for (auto *owner : live)
+    this->add_error(owner->def_location,
+                    fmt::format("Linear variable '{}' must be consumed before "
+                                "scope exit (use free() to deallocate)",
+                                owner->name));
 }
 
 // ── Variable tracking ───────────────────────────────────────────────
 
-void LinearTypeChecker::register_linear(const std::string &name,
-                                        sammine_util::Location loc) {
-  if (scope_stack.empty())
-    return;
-  scope_stack.back()[name] =
-      VarInfo{VarState::Unconsumed, loc, {}, name, {}, {}};
+VarInfo LinearTypeChecker::make_entry(std::string name, const Type &type,
+                                      sammine_util::Location loc) {
+  VarInfo entry{VarState::Unconsumed, loc, {}, std::move(name), {}, {}, false};
+  entry.is_owner = type.type_kind == TypeKind::Pointer &&
+                   type.linearity == Linearity::Linear;
+  return entry;
 }
 
 void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc,
                                 const std::string &reason) {
   if (info->state == VarState::Consumed) {
-    this->add_error(
-        loc,
-        fmt::format(
-            "Cannot use linear variable '{}' — it was already {} previously",
-            info->name, info->consume_reason));
-    this->add_error(
-        info->consume_location,
-        fmt::format("'{}' was {} here", info->name, info->consume_reason));
+    report_consumed(*info, loc, "use linear variable");
     return;
   }
   info->state = VarState::Consumed;
@@ -64,17 +65,111 @@ void LinearTypeChecker::consume(VarInfo *info, sammine_util::Location loc,
   info->consume_reason = reason;
 }
 
+// A consumed entry with no reason never held a value: what alloc or a
+// parameter's owned pointer points at until something is stored there.
+void LinearTypeChecker::report_consumed(const VarInfo &info,
+                                        sammine_util::Location use_loc,
+                                        const std::string &what) {
+  if (info.consume_reason.empty()) {
+    this->add_error(use_loc,
+                    fmt::format("Cannot {} '{}' — no owned value is known to "
+                                "be stored there",
+                                what, info.name));
+    return;
+  }
+  this->add_error(use_loc,
+                  fmt::format("Cannot {} '{}' — it was already {} previously",
+                              what, info.name, info.consume_reason));
+  this->add_error(info.consume_location, fmt::format("'{}' was {} here",
+                                                     info.name,
+                                                     info.consume_reason));
+}
+
+void LinearTypeChecker::move_whole(VarInfo *info, sammine_util::Location loc,
+                                   const std::string &reason) {
+  if (info->state == VarState::Consumed) {
+    consume(info, loc, reason); // reports the second use
+    return;
+  }
+  if (auto *part = first_consumed_part(*info)) {
+    this->add_error(loc, fmt::format("Cannot move '{}' — its part '{}' was "
+                                     "already {}",
+                                     info->name, part->name,
+                                     part->consume_reason));
+    this->add_error(part->consume_location,
+                    fmt::format("'{}' was {} here", part->name,
+                                part->consume_reason));
+  }
+  consume(info, loc, reason);
+  mark_parts_consumed(*info, loc, reason);
+}
+
+const VarInfo *
+LinearTypeChecker::first_consumed_part(const VarInfo &info) const {
+  for (auto &[key, child] : info.children) {
+    if (key == kPointeeKey)
+      continue;
+    if (child.state == VarState::Consumed)
+      return &child;
+    if (auto *part = first_consumed_part(child))
+      return part;
+  }
+  return nullptr;
+}
+
+void LinearTypeChecker::mark_unset(VarInfo &info) {
+  info.state = VarState::Consumed;
+  info.consume_reason.clear();
+  for (auto &[key, child] : info.children)
+    mark_unset(child);
+}
+
+void LinearTypeChecker::fill(VarInfo &target, const VarInfo *source,
+                             sammine_util::Location loc) {
+  target.state = source ? source->state : VarState::Unconsumed;
+  target.consume_location = source ? source->consume_location : loc;
+  target.consume_reason = source ? source->consume_reason : "";
+  target.def_location = loc;
+  for (auto &[key, child] : target.children) {
+    const VarInfo *source_child = nullptr;
+    if (source)
+      if (auto it = source->children.find(key); it != source->children.end())
+        source_child = &it->second;
+    if (!source_child && key == kPointeeKey)
+      mark_unset(child);
+    else
+      fill(child, source_child, loc);
+  }
+}
+
+// A place already consumed has no state to hand on: moving it again is
+// reported, and what receives it starts fresh rather than consumed.
+std::optional<VarInfo> LinearTypeChecker::tracked_state(ExprAST *expr) {
+  if (auto *info = find_tracked(expr); info && info->state == VarState::Unconsumed)
+    return *info;
+  return std::nullopt;
+}
+
+void LinearTypeChecker::mark_parts_consumed(VarInfo &info,
+                                            sammine_util::Location loc,
+                                            const std::string &reason) {
+  for (auto &[key, child] : info.children) {
+    // A part consumed before keeps where that happened.
+    if (child.state == VarState::Unconsumed || child.consume_reason.empty()) {
+      child.state = VarState::Consumed;
+      child.consume_location = loc;
+      child.consume_reason = reason;
+    }
+    mark_parts_consumed(child, loc, reason);
+  }
+}
+
 bool LinearTypeChecker::check_use_after_consume(VarInfo *info,
                                                 sammine_util::Location use_loc,
                                                 const std::string &verb) {
   if (!info || info->state != VarState::Consumed)
     return false;
-  this->add_error(use_loc,
-                  fmt::format("Cannot {} '{}' — it was already {} previously",
-                              verb, info->name, info->consume_reason));
-  this->add_error(
-      info->consume_location,
-      fmt::format("'{}' was {} here", info->name, info->consume_reason));
+  report_consumed(*info, use_loc, verb);
   return true;
 }
 
@@ -111,15 +206,13 @@ void LinearTypeChecker::restore(const LinearVarMap &snap) {
 // ── Branch consistency ──────────────────────────────────────────────
 
 LinearTypeChecker::BranchAgreement
-LinearTypeChecker::check_agreement(const std::vector<LinearVarMap> &branches,
-                                   const StateExtractor &get_state) {
+LinearTypeChecker::check_agreement(const BranchCopies &branches) {
   bool first_consumed = false;
   bool seen_first = false;
-  for (auto &branch : branches) {
-    auto state = get_state(branch);
-    if (!state)
+  for (auto *copy : branches) {
+    if (!copy)
       continue;
-    bool consumed = (*state == VarState::Consumed);
+    bool consumed = copy->state == VarState::Consumed;
     if (!seen_first) {
       first_consumed = consumed;
       seen_first = true;
@@ -131,57 +224,61 @@ LinearTypeChecker::check_agreement(const std::vector<LinearVarMap> &branches,
                                         : BranchAgreement::AllUnconsumed;
 }
 
+// After the branches, a value consumed on any of them is gone, and so is
+// every part of it. It keeps where one branch consumed it, for later reports.
 void LinearTypeChecker::apply_consistency(BranchAgreement result, VarInfo *info,
+                                          const BranchCopies &branches,
                                           const std::string &display_name,
                                           sammine_util::Location loc) {
-  if (result == BranchAgreement::Mismatch) {
+  if (result == BranchAgreement::Mismatch)
     this->add_error(
         loc, fmt::format("Linear variable '{}' is consumed in some branches "
                          "but not others",
                          display_name));
-    if (info)
-      info->state = VarState::Consumed;
-  } else if (result == BranchAgreement::AllConsumed && info) {
-    info->state = VarState::Consumed;
-  }
+  if (result == BranchAgreement::AllUnconsumed || !info)
+    return;
+  auto consumed_on = std::ranges::find_if(branches, [](const VarInfo *copy) {
+    return copy && copy->state == VarState::Consumed;
+  });
+  info->state = VarState::Consumed;
+  info->consume_location = (*consumed_on)->consume_location;
+  info->consume_reason = (*consumed_on)->consume_reason;
+  mark_parts_consumed(*info, info->consume_location, info->consume_reason);
 }
 
 void LinearTypeChecker::check_branch_consistency(
     const LinearVarMap &before, const std::vector<LinearVarMap> &branches,
     sammine_util::Location loc) {
   for (auto &[name, before_info] : before) {
-    if (before_info.state != VarState::Unconsumed)
-      continue;
-
-    auto *info = find_linear(name);
-
-    // Check the var itself
-    auto result = check_agreement(
-        branches, [&](const LinearVarMap &b) -> std::optional<VarState> {
-          auto it = b.find(name);
-          return it != b.end() ? std::optional(it->second.state) : std::nullopt;
-        });
-    apply_consistency(result, info, name, loc);
-
-    // Check children (e.g. v.data inside a struct wrapper)
-    for (auto &[child_name, child_before] : before_info.children) {
-      if (child_before.state != VarState::Unconsumed)
-        continue;
-
-      auto child_result = check_agreement(
-          branches, [&](const LinearVarMap &b) -> std::optional<VarState> {
-            auto it = b.find(name);
-            if (it == b.end())
-              return std::nullopt;
-            auto cit = it->second.children.find(child_name);
-            return cit != it->second.children.end()
-                       ? std::optional(cit->second.state)
-                       : std::nullopt;
-          });
-      apply_consistency(child_result,
-                        info ? find_child(name, child_name) : nullptr,
-                        child_before.name, loc);
+    BranchCopies copies;
+    for (auto &branch : branches) {
+      auto it = branch.find(name);
+      copies.push_back(it != branch.end() ? &it->second : nullptr);
     }
+    reconcile(find_linear(name), before_info, copies, loc);
+  }
+}
+
+void LinearTypeChecker::reconcile(VarInfo *current, const VarInfo &before,
+                                  const BranchCopies &branches,
+                                  sammine_util::Location loc) {
+  if (before.state != VarState::Unconsumed)
+    return;
+  auto result = check_agreement(branches);
+  apply_consistency(result, current, branches, before.name, loc);
+  // A whole value consumed on some branch took its parts with it.
+  if (result != BranchAgreement::AllUnconsumed)
+    return;
+  for (auto &[key, child_before] : before.children) {
+    BranchCopies child_copies;
+    for (auto *copy : branches) {
+      const VarInfo *child = nullptr;
+      if (copy)
+        if (auto it = copy->children.find(key); it != copy->children.end())
+          child = &it->second;
+      child_copies.push_back(child);
+    }
+    reconcile(child_of(current, key), child_before, child_copies, loc);
   }
 }
 
@@ -449,10 +546,13 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     move_elements(llvm::cast<TupleLiteralExprAST>(expr)->elements, loc,
                   "moved into tuple");
     break;
-  case NK::DerefExprAST:
-    check_through_pointer(llvm::cast<DerefExprAST>(expr)->operand.get(), use,
-                          loc, "dereference");
+  case NK::DerefExprAST: {
+    auto *deref = llvm::cast<DerefExprAST>(expr);
+    check_through_pointer(deref->operand.get(), use, loc, "dereference");
+    if (auto *pointee = find_tracked(deref); pointee && !pointer_consumed(deref))
+      apply_use(pointee, use);
     break;
+  }
   case NK::IndexExprAST: {
     auto *index = llvm::cast<IndexExprAST>(expr);
     auto *base = index->array_expr.get();
@@ -520,7 +620,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
 void LinearTypeChecker::apply_use(VarInfo *info, Use use) {
   switch (use.kind) {
   case Use::Kind::Own:
-    consume(info, use.loc, use.action);
+    move_whole(info, use.loc, use.action);
     break;
   case Use::Kind::Read:
   case Use::Kind::TakeAddress:
@@ -557,10 +657,9 @@ void LinearTypeChecker::check_variable(VariableExprAST *ast, Use use) {
     apply_use(info, use);
 }
 
+// A field of a tracked variable or of a tracked field, as o.i.a.
 VarInfo *LinearTypeChecker::find_field(FieldAccessExprAST *ast) {
-  auto *obj = llvm::dyn_cast<VariableExprAST>(ast->object_expr.get());
-  return obj ? find_child(obj->variableName.mangled(), ast->field_name)
-             : nullptr;
+  return child_of(find_tracked(ast->object_expr.get()), ast->field_name);
 }
 
 void LinearTypeChecker::check_field_access(FieldAccessExprAST *ast, Use use) {
@@ -638,9 +737,12 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
                llvm::dyn_cast<ArrayLiteralExprAST>(ast->Expression.get()))
     propagate_from_elements(al->elements);
 
+  auto source = tracked_state(ast->Expression.get());
   check_expr(ast->Expression.get(), Use::owns(loc, "moved"));
 
   register_if_linear(ast->TypedVar->name, ast->get_type(), loc);
+  if (auto *info = find_linear(ast->TypedVar->name); info && source)
+    fill(*info, &*source, loc);
 }
 
 // ── Non-linear pointer path detection ───────────────────────────────
@@ -746,63 +848,43 @@ static bool involves_deref(ExprAST *expr) {
 
 // ── check_binary ────────────────────────────────────────────────────
 
+// Storing into a place: a linear value may only replace one that holds no
+// memory any more, and the place then holds what was stored.
+void LinearTypeChecker::check_store(BinaryExprAST *ast) {
+  auto loc = ast->get_location();
+  // Lateral escape: storing a non-linear pointer through a pointer
+  // dereference allows it to outlive the current scope.
+  if (involves_deref(ast->LHS.get())) {
+    if (auto path = find_nonlinear_pointer_path(ast->RHS->get_type())) {
+      this->add_error(loc, fmt::format("Cannot store {} through pointer "
+                                       "dereference — may dangle after scope "
+                                       "exit",
+                                       *path));
+      return;
+    }
+  }
+
+  auto source = tracked_state(ast->RHS.get());
+  check_expr(ast->LHS.get(), Use::writes(loc));
+  check_expr(ast->RHS.get(), Use::owns(loc, "moved"));
+
+  auto *target = find_tracked(ast->LHS.get());
+  if (!target || !ast->RHS->get_type().containsLinearTypes())
+    return;
+  std::vector<const VarInfo *> live;
+  collect_live_owners(*target, live);
+  if (!live.empty()) {
+    this->add_error(loc, fmt::format("Reassigning linear variable '{}' "
+                                     "without consuming its previous value",
+                                     target->name));
+    return;
+  }
+  fill(*target, source ? &*source : nullptr, loc);
+}
+
 void LinearTypeChecker::check_binary(BinaryExprAST *ast) {
   if (ast->Op->is_assign()) {
-    // Lateral escape: storing a non-linear pointer through a pointer
-    // dereference allows it to outlive the current scope.
-    if (involves_deref(ast->LHS.get())) {
-      auto path = find_nonlinear_pointer_path(ast->RHS->get_type());
-      if (path) {
-        this->add_error(
-            ast->get_location(),
-            fmt::format("Cannot store {} through pointer dereference"
-                        " — may dangle after scope exit",
-                        *path));
-        return;
-      }
-    }
-
-    check_expr(ast->LHS.get(), Use::writes(ast->get_location()));
-
-    check_expr(ast->RHS.get(), Use::owns(ast->get_location(), "moved"));
-
-    // LHS deref: *pp = x updates the "*" child's location
-    if (auto *deref = llvm::dyn_cast<DerefExprAST>(ast->LHS.get())) {
-      if (auto *lhs_var =
-              llvm::dyn_cast<VariableExprAST>(deref->operand.get())) {
-        auto *child = find_child(lhs_var->variableName.mangled(), "*");
-        if (child) {
-          if (child->state == VarState::Unconsumed &&
-              ast->RHS->get_type().linearity == Linearity::Linear) {
-            this->add_error(
-                ast->get_location(),
-                fmt::format("Reassigning linear variable '{}' without "
-                            "consuming its previous value",
-                            child->name));
-            return;
-          }
-          child->state = VarState::Unconsumed;
-          child->def_location = ast->get_location();
-        }
-      }
-    }
-
-    // LHS: check for overwrite without consuming, or re-register
-    if (auto *lhs_var = llvm::dyn_cast<VariableExprAST>(ast->LHS.get())) {
-      auto *lhs_info = find_linear(lhs_var->variableName.mangled());
-      if (lhs_info && ast->RHS->get_type().linearity == Linearity::Linear) {
-        if (lhs_info->state == VarState::Unconsumed) {
-          this->add_error(
-              ast->get_location(),
-              fmt::format("Reassigning linear variable '{}' without "
-                          "consuming its previous value",
-                          lhs_var->variableName.mangled()));
-          return;
-        }
-        lhs_info->state = VarState::Unconsumed;
-        lhs_info->def_location = ast->get_location();
-      }
-    }
+    check_store(ast);
   } else if (ast->Op->is_logical()) {
     // The right side runs only on one path, like an if without an else.
     auto read = Use::reads(ast->get_location(), "use");
@@ -870,11 +952,20 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
   }
 }
 
+// Reading a consumed pointer is reported at the pointer, which is the
+// mistake; what it pointed at went with it.
+bool LinearTypeChecker::pointer_consumed(DerefExprAST *deref) {
+  auto *pointer = find_tracked(deref->operand.get());
+  return pointer && pointer->state == VarState::Consumed;
+}
+
 VarInfo *LinearTypeChecker::find_tracked(ExprAST *expr) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
     return find_linear(var->variableName.mangled());
   if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr))
     return find_field(fa);
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr))
+    return child_of(find_tracked(deref->operand.get()), kPointeeKey);
   return nullptr;
 }
 
@@ -903,24 +994,30 @@ void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
 
 // ── check_free ──────────────────────────────────────────────────────
 
+// Freeing an owner frees only its own memory: whatever it points at must
+// already hold nothing, or it leaks.
 void LinearTypeChecker::check_free(FreeExprAST *ast) {
   auto *operand = ast->operand.get();
-  VarInfo *target = nullptr;
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(operand)) {
-    target = find_linear(var->variableName.mangled());
-  } else if (auto *deref = llvm::dyn_cast<DerefExprAST>(operand)) {
-    if (auto *base = llvm::dyn_cast<VariableExprAST>(deref->operand.get()))
-      target = find_child(base->variableName.mangled(), "*");
-  } else if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(operand)) {
-    target = find_field(fa);
-  }
-
-  if (target) {
-    check_children_consumed(*target);
-    consume(target, ast->get_location(), "freed");
+  auto loc = ast->get_location();
+  auto *target = find_tracked(operand);
+  if (!target) {
+    check_expr(operand, Use::owns(loc, "freed"));
     return;
   }
-  check_expr(operand, Use::owns(ast->get_location(), "freed"));
+  // Reaching the place reads whatever it is reached through.
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(operand)) {
+    check_expr(deref->operand.get(), Use::reads(loc, "dereference"));
+    if (pointer_consumed(deref))
+      return;
+  }
+  if (target->state == VarState::Consumed) {
+    consume(target, loc, "freed"); // reports the second use
+    return;
+  }
+  for (auto &[key, part] : target->children)
+    report_leaks(part);
+  consume(target, loc, "freed");
+  mark_parts_consumed(*target, loc, "freed");
 }
 
 // ── Closure capture tracking ─────────────────────────────────────────
@@ -1187,71 +1284,57 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
 
 // ── Inner-linear tracking helpers ────────────────────────────────────
 
+// The parts of an entry for a value of type `t`: each field, tuple element,
+// payload and array element holding linear memory, and what an owned pointer
+// points at, which starts unset. Recursive types are rejected, so this ends.
 void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
                                               sammine_util::Location loc) {
+  auto add_part = [&](const std::string &key, std::string name,
+                      const Type &part_type) -> VarInfo & {
+    auto &child = parent.children[key] =
+        make_entry(std::move(name), part_type, loc);
+    register_inner_linear(child, part_type, loc);
+    return child;
+  };
   switch (t.type_kind) {
   case TypeKind::Struct: {
     auto &st = std::get<StructType>(t.type_data);
     auto &names = st.get_field_names();
     auto &types = st.get_field_types();
-    for (size_t i = 0; i < names.size(); i++) {
-      if (types[i].containsLinearTypes()) {
-        auto &child = parent.children[names[i]] =
-            VarInfo{VarState::Unconsumed,         loc, {},
-                    parent.name + "." + names[i], {},  {}};
-        if (types[i].linearity != Linearity::Linear)
-          register_inner_linear(child, types[i], loc);
-      }
-    }
+    for (size_t i = 0; i < names.size(); i++)
+      if (types[i].containsLinearTypes())
+        add_part(names[i], parent.name + "." + names[i], types[i]);
     break;
   }
   case TypeKind::Tuple: {
     auto &tt = std::get<TupleType>(t.type_data);
-    for (size_t i = 0; i < tt.size(); i++) {
+    for (size_t i = 0; i < tt.size(); i++)
       if (tt.get_element(i).containsLinearTypes()) {
         auto key = std::to_string(i);
-        auto &child = parent.children[key] = VarInfo{
-            VarState::Unconsumed, loc, {}, parent.name + "." + key, {}, {}};
-        if (tt.get_element(i).linearity != Linearity::Linear)
-          register_inner_linear(child, tt.get_element(i), loc);
+        add_part(key, parent.name + "." + key, tt.get_element(i));
       }
-    }
     break;
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(t.type_data);
-    for (auto &variant : et.get_variants()) {
-      for (size_t i = 0; i < variant.payload_types.size(); i++) {
+    for (auto &variant : et.get_variants())
+      for (size_t i = 0; i < variant.payload_types.size(); i++)
         if (variant.payload_types[i].containsLinearTypes()) {
           auto key = variant.name + "." + std::to_string(i);
-          auto &child = parent.children[key] = VarInfo{
-              VarState::Unconsumed, loc, {}, parent.name + "." + key, {}, {}};
-          if (variant.payload_types[i].linearity != Linearity::Linear)
-            register_inner_linear(child, variant.payload_types[i], loc);
+          add_part(key, parent.name + "." + key, variant.payload_types[i]);
         }
-      }
-    }
     break;
   }
   case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
-    if (at.get_element().containsLinearTypes()) {
-      auto &child = parent.children["*"] =
-          VarInfo{VarState::Unconsumed, loc, {}, parent.name + "[*]", {}, {}};
-      if (at.get_element().linearity != Linearity::Linear)
-        register_inner_linear(child, at.get_element(), loc);
-    }
+    if (at.get_element().containsLinearTypes())
+      add_part(kElementKey, parent.name + "[*]", at.get_element());
     break;
   }
   case TypeKind::Pointer: {
-    auto &pt = std::get<PointerType>(t.type_data);
-    auto pointee = pt.get_pointee();
-    if (pointee.containsLinearTypes()) {
-      auto &child = parent.children["*"] =
-          VarInfo{VarState::Consumed, loc, {}, "*" + parent.name, {}, {}};
-      if (pointee.linearity != Linearity::Linear)
-        register_inner_linear(child, pointee, loc);
-    }
+    auto pointee = std::get<PointerType>(t.type_data).get_pointee();
+    if (pointee.containsLinearTypes())
+      mark_unset(add_part(kPointeeKey, "*" + parent.name, pointee));
     break;
   }
   case TypeKind::I32_t:
@@ -1277,43 +1360,20 @@ void LinearTypeChecker::register_inner_linear(VarInfo &parent, const Type &t,
   }
 }
 
-void LinearTypeChecker::check_children_consumed(const VarInfo &info) {
-  for (auto &[name, child] : info.children) {
-    if (child.state == VarState::Unconsumed) {
-      // Check if child has its own children (nested wrapper)
-      if (!child.children.empty()) {
-        check_children_consumed(child);
-      } else {
-        this->add_error(
-            child.def_location,
-            fmt::format(
-                "Linear variable '{}' must be consumed before scope exit"
-                " (use free() to deallocate)",
-                child.name));
-      }
-    }
-  }
-}
-
-VarInfo *LinearTypeChecker::find_child(const std::string &var_name,
-                                       const std::string &field_name) {
-  auto *parent = find_linear(var_name);
-  if (!parent)
+VarInfo *LinearTypeChecker::child_of(VarInfo *owner, const std::string &key) {
+  if (!owner)
     return nullptr;
-  auto it = parent->children.find(field_name);
-  if (it != parent->children.end())
-    return &it->second;
-  return nullptr;
+  auto it = owner->children.find(key);
+  return it != owner->children.end() ? &it->second : nullptr;
 }
 
 void LinearTypeChecker::register_if_linear(const std::string &name,
                                            const Type &type,
                                            sammine_util::Location loc) {
-  if (!type.containsLinearTypes())
+  if (!type.containsLinearTypes() || scope_stack.empty())
     return;
-  register_linear(name, loc);
-  auto *info = find_linear(name);
-  register_inner_linear(*info, type, loc);
+  auto &info = scope_stack.back()[name] = make_entry(name, type, loc);
+  register_inner_linear(info, type, loc);
 }
 
 } // namespace sammine_lang::AST

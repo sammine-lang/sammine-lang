@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ '*pp' was freed here
+// CHECK: ╰─ Cannot dereference '*pp' — it was already freed previously
+
+import std;
+let main() -> i32 {
+  let pp = alloc<'ptr<i32>>(1);
+  *pp = alloc<i32>(1);
+  free(*pp);
+  let x = **pp;
+  free(pp);
+  std::printf("ok %d\n", x);
+  0
+}

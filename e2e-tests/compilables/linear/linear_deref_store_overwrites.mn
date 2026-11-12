@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Reassigning linear variable '*p' without consuming its previous value
+
+// The second store would leak the first value's a.
+
+struct S { a: 'ptr<i32> };
+let main() -> i32 {
+  let p = alloc<S>(1);
+  *p = S { a: alloc<i32>(1) };
+  *p = S { a: alloc<i32>(1) };
+  free((*p).a);
+  free(p);
+  0
+}

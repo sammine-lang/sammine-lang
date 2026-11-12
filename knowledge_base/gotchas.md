@@ -49,7 +49,7 @@
 ## Bug Patterns (from Vec<T> implementation)
 - **Generic struct returns**: `resolve_type_expr` on `GenericTypeExprAST` with unresolved TypeParams must build placeholder StructType, not return Poisoned — `substitute()` alone can't trigger struct instantiation
 - **Monomorphizer must preserve `is_linear`**: all type expression clones must carry linearity flag
-- **Linear checker branch consistency must check children**: wrapper types (structs with linear fields) have consumption tracked in `VarInfo::children`, not just the parent
+- **Linear checker branch consistency must check children**: wrapper types (structs with linear fields) have consumption tracked in `VarInfo::children` at every depth, not just the parent — `reconcile` recurses
 - **Linear checker must skip generic templates**: template AST node IDs have no ASTProperties entries; only monomorphized copies have proper CallProps
 - **FieldAccessExprAST in struct/array/tuple literals**: must handle `v.data` as consumption of child, not just `VariableExprAST`
 
@@ -61,7 +61,7 @@
 - Pipe `|>` desugared at parse time (precedence 1), no special typecheck/codegen
 
 ## Codegen Gotchas
-- `func.return` inside `scf.if` is invalid MLIR — early returns in if-branches not supported
+- `if` lowers to `cf` blocks, not `scf.if`, so a `return` inside a branch is a plain `func.return` in its block
 - A C binding's symbol is its C name in every module (`std::printf` is `@printf`): `emitExtern` records it in `c_symbols`, and calls and function values look it up there
 - Kernel wrappers get `noinline` to preserve LICM (LLVM can hoist calls when ptr args are loop-invariant)
 - `GreenInterner` is NOT movable (pmr limitation) — always `make_unique`

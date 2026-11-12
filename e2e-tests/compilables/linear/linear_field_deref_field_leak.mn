@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Linear variable '*o.p.a' must be consumed before scope exit
+
+struct S { a: 'ptr<i32> };
+struct O { p: 'ptr<S> };
+let main() -> i32 {
+  let o = O { p: alloc<S>(1) };
+  *o.p = S { a: alloc<i32>(1) };
+  free(o.p);
+  0
+}

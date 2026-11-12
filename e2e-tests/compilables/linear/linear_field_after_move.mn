@@ -1,0 +1,20 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:      ╰─ 'p.a' was passed to function here
+// CHECK:      ╰─ Cannot use linear variable 'p.a' — it was already passed to function previously
+
+// Moving p moves p.a with it, so main no longer owns p.a.
+
+struct P { a: 'ptr<i32>, b: 'ptr<i32> };
+
+let eat(p: P) -> i32 {
+  free(p.a);
+  free(p.b);
+  0
+}
+
+let main() -> i32 {
+  let p = P { a: alloc<i32>(1), b: alloc<i32>(1) };
+  eat(p);
+  free(p.a);
+  0
+}

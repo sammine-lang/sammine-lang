@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:     ╰─ Cannot dereference 'pp' — it was already freed previously
+// CHECK-NOT: Cannot use linear variable '*pp'
+
+// One mistake, reported once: pp was freed, and *pp went with it.
+
+let main() -> i32 {
+  let pp = alloc<'ptr<i32>>(1);
+  *pp = alloc<i32>(1);
+  free(*pp);
+  free(pp);
+  free(*pp);
+  0
+}

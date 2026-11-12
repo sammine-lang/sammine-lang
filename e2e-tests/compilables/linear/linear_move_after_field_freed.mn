@@ -1,0 +1,20 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:      ╰─ 'p.a' was freed here
+// CHECK:      ╰─ Cannot move 'p' — its part 'p.a' was already freed
+
+// Moving p would hand eat a p.a that main already freed.
+
+struct P { a: 'ptr<i32>, b: 'ptr<i32> };
+
+let eat(p: P) -> i32 {
+  free(p.a);
+  free(p.b);
+  0
+}
+
+let main() -> i32 {
+  let p = P { a: alloc<i32>(1), b: alloc<i32>(1) };
+  free(p.a);
+  eat(p);
+  0
+}

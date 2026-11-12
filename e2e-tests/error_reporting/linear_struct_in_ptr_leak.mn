@@ -1,12 +1,12 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |linear_struct_in_ptr_leak.mn:22:2
-// CHECK-NEXT:   20|let main() -> i32 {
-// CHECK-NEXT:   21|  let inner: 'ptr<i32> = alloc<i32>(1);
+// CHECK:          |linear_struct_in_ptr_leak.mn:24:2
 // CHECK-NEXT:   22|  let p: 'ptr<Box> = alloc<Box>(1);
-// CHECK-NEXT:     |  ──────────────────────────────┬
-// CHECK-NEXT:     |                                ╰─ Linear variable '*p.data' must be consumed before scope exit (use free() to deallocate)
 // CHECK-NEXT:   23|  *inner = 42;
 // CHECK-NEXT:   24|  *p = Box { data: inner };
+// CHECK-NEXT:     |  ─────────────────────┬
+// CHECK-NEXT:     |                       ╰─ Linear variable '*p.data' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:   25|  free(p);
+// CHECK-NEXT:   26|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------

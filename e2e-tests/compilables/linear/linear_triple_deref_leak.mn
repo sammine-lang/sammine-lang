@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Linear variable '**ppp' must be consumed before scope exit
+
+// Freeing *ppp while **ppp still holds memory leaks it.
+
+let main() -> i32 {
+  let ppp = alloc<'ptr<'ptr<i32>>>(1);
+  *ppp = alloc<'ptr<i32>>(1);
+  **ppp = alloc<i32>(1);
+  free(*ppp);
+  free(ppp);
+  0
+}
