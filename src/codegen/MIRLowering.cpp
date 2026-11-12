@@ -1,13 +1,15 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/SammineDialect.h"
 #include "util/Utilities.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/IR/OwningOpRef.h"
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
-//! floats, bool, char), their literals, parameters, `let`, arithmetic and
-//! return.
+//! floats, bool, char) and pointers to them, their literals, parameters,
+//! `let`, arithmetic and return.
 
 namespace sammine_lang {
 
@@ -31,32 +33,54 @@ std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
     return builder_.getI1Type();
   case TypeKind::Char:
     return builder_.getI8Type();
+  case TypeKind::Pointer: {
+    // 'ptr<T> owns what it points at; ptr<T> is a view of it.
+    auto pointee = mirType(std::get<PointerType>(type.type_data).get_pointee());
+    if (!pointee)
+      return std::nullopt;
+    return smn::PtrType::get(builder_.getContext(), *pointee,
+                             type.linearity == Linearity::Linear
+                                 ? smn::Ownership::Owned
+                                 : smn::Ownership::View);
+  }
   default:
     return std::nullopt;
   }
 }
 
-// The signature `func` already has came from the AST codegen; MIR only takes
-// functions whose every parameter and result it has a type for, so the two
-// agree.
-bool MIRLowering::supportsSignature(FuncDefAST *ast) const {
+std::optional<mlir::FunctionType>
+MIRLowering::mirSignature(FuncDefAST *ast) const {
   auto *proto = ast->Prototype.get();
-  if (proto->is_var_arg ||
-      proto->get_type().type_kind != TypeKind::Function)
-    return false;
-  for (auto &param : proto->parameterVectors)
-    if (!mirType(param->get_type()))
-      return false;
+  if (proto->is_var_arg || proto->get_type().type_kind != TypeKind::Function)
+    return std::nullopt;
+  llvm::SmallVector<mlir::Type, 4> inputs;
+  for (auto &param : proto->parameterVectors) {
+    auto type = mirType(param->get_type());
+    if (!type)
+      return std::nullopt;
+    inputs.push_back(*type);
+  }
   auto fn = std::get<FunctionType>(proto->get_type().type_data);
-  return mirType(fn.get_return_type()).has_value();
+  auto result = mirType(fn.get_return_type());
+  if (!result)
+    return std::nullopt;
+  return builder_.getFunctionType(inputs, {*result});
 }
 
-bool MIRLowering::lowerBody(FuncDefAST *ast, mlir::func::FuncOp func) {
-  if (!supportsSignature(ast))
+// The function is built on its own, outside the module, and only put in
+// place of `decl` once it is whole: a body MIR can't lower is dropped with
+// it, and `decl` was never touched.
+bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
+  auto signature = mirSignature(ast);
+  if (!signature)
     return false;
 
+  mlir::OwningOpRef<mlir::func::FuncOp> func =
+      mlir::func::FuncOp::create(loc(ast), decl.getSymName(), *signature);
+  func->setSymVisibilityAttr(decl.getSymVisibilityAttr());
+
   mlir::OpBuilder::InsertionGuard guard(builder_);
-  auto &entry = *func.addEntryBlock();
+  auto &entry = *func->addEntryBlock();
   builder_.setInsertionPointToStart(&entry);
 
   names_.clear();
@@ -64,12 +88,13 @@ bool MIRLowering::lowerBody(FuncDefAST *ast, mlir::func::FuncOp func) {
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
     names_[param->name] = arg;
 
-  if (mlir::failed(lowerBlock(ast->Block.get()))) {
-    // Leave no trace: the AST codegen gives `func` its body instead.
-    func.getBody().getBlocks().clear();
+  if (mlir::failed(lowerBlock(ast->Block.get())))
     return false;
-  }
-  func->setAttr(kMirAttr, builder_.getUnitAttr());
+
+  (*func)->setAttr(kMirAttr, builder_.getUnitAttr());
+  decl->getBlock()->getOperations().insert(mlir::Block::iterator(decl),
+                                           func.release());
+  decl.erase();
   return true;
 }
 

@@ -7,8 +7,10 @@
 - Files: `MLIRGen.cpp` (main + kernel), `MLIRGenFunction.cpp` (functions/closures/calls), `MLIRGenExpr.cpp` (expressions), `MLIRGenBinaryOps.cpp/.h` (int/float arithmetic free functions), `MLIRLowering.cpp` (passes)
 
 ## MIR (in progress, see `plans/mir.md`)
-- `--mir`: `emitFunction` first asks `MIRLowering::lowerBody` to build the body; if the body uses anything MIR doesn't handle yet, it leaves the function bodiless and the AST codegen emits it as before. A MIR function is marked `sammine.mir`
-- Handled so far: functions whose parameters and result are scalars (integers, floats, `bool`, `char`), their literals, parameters, `let`, built-in arithmetic, `return`. Same signature as `buildFuncType` gives, so no casts are needed yet. Float constants come from `emitFloatConstant` in `MLIRGenBinaryOps`, shared with the AST codegen
+- `--mir`: before any body is emitted, `lowerThroughMIR` offers each function body (`functionBodies`, the same list `emitDefinition` emits) to `MIRLowering::lowerFunction`. It builds the function apart from the module and, only if the whole body lowers, puts it in place of the AST codegen's declaration, marked `sammine.mir`; otherwise the declaration stays and `emitFunction` gives it a body as before
+- Handled so far: functions over scalars (integers, floats, `bool`, `char`) and pointers to them, their literals, parameters, `let`, built-in arithmetic, `return`. Float constants come from `emitFloatConstant` in `MLIRGenBinaryOps`, shared with the AST codegen
+- A MIR function has MIR types in its signature (`!sammine.ptr<i32, owned>` for `'ptr<i32>`). The AST codegen calls every sammine function through `emitSammineCall`, which bridges each argument and result whose type differs from the callee's with `unrealized_conversion_cast`
+- `sammine-mir-to-llvm` (`MIRToLLVM.cpp`), first in the lowering to LLVM, turns `!sammine.ptr` into `!llvm.ptr` in signatures, calls, returns and branches; reconciling then removes the casts. Ops that take or give no MIR type are left alone
 - `--mir --emit mlir` starts the dump with `// MIR: N of M functions`. `e2e-tests-mir` runs the whole suite with `--mir` (lit `--param mir=1`, feature `mir`)
 - `SourceLocator` maps AST byte offsets to MLIR locations for both paths
 - Dialect: `SammineDialect.td` (the dialect), `SammineTypes.td` (MIR types: `!sammine.ptr<T, owned|view>` so far, its ownership an `Ownership` enum, so the assembly format is declarative), `SammineOps.td` (ops). Built as its own `SammineDialect` library, linked by the backend and by `sammine-opt`

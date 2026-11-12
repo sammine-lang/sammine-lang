@@ -27,10 +27,11 @@ public:
               const SourceLocator &locator)
       : builder_(builder), props_(props), locator_(locator) {}
 
-  /// Builds `ast`'s body into `func`, which has its signature and no body. On
-  /// success `func` is marked `kMirAttr`. Returns false, leaving `func`
-  /// without a body, if `ast` uses something MIR can't lower yet.
-  bool lowerBody(AST::FuncDefAST *ast, mlir::func::FuncOp func);
+  /// Lowers `ast` to a new function with its MIR signature and body, marked
+  /// `kMirAttr`, which replaces `decl`, the AST codegen's declaration of it.
+  /// Returns false, leaving `decl` untouched, if `ast` uses something MIR
+  /// can't lower yet.
+  bool lowerFunction(AST::FuncDefAST *ast, mlir::func::FuncOp decl);
 
 private:
   mlir::OpBuilder &builder_;
@@ -45,7 +46,8 @@ private:
   }
   /// The MIR type of a sammine type MIR handles so far, or nullopt.
   std::optional<mlir::Type> mirType(const Type &type) const;
-  bool supportsSignature(AST::FuncDefAST *ast) const;
+  /// `ast`'s signature in MIR types, if MIR has a type for each part.
+  std::optional<mlir::FunctionType> mirSignature(AST::FuncDefAST *ast) const;
 
   mlir::LogicalResult lowerBlock(AST::BlockAST *block);
   mlir::LogicalResult lowerVarDef(AST::VarDefAST *def);

@@ -189,6 +189,11 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
     }
   }
 
+  // With --mir, MIR takes every function body it can before any is emitted
+  // here, so a call emitted below sees its callee's final signature.
+  if (mirLowering)
+    lowerThroughMIR(program);
+
   for (auto &def : program->DefinitionVec)
     emitDefinition(def.get());
 
@@ -375,12 +380,46 @@ mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
 
 // ===--- Definition emission ---===
 
+// The function bodies a definition is compiled to: a function's own, or an
+// instance's methods. A generic function or instance has none: its copies
+// for concrete types are definitions of their own. Lowering through MIR and
+// emitting here both go by this, so they agree on what to compile.
+static llvm::SmallVector<AST::FuncDefAST *, 1>
+functionBodies(AST::DefinitionAST *def) {
+  llvm::SmallVector<AST::FuncDefAST *, 1> bodies;
+  if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def)) {
+    if (!fd->Prototype->is_generic())
+      bodies.push_back(fd);
+  } else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def);
+             tci && !tci->is_generic()) {
+    for (auto &method : tci->methods)
+      if (!method->Prototype->is_generic())
+        bodies.push_back(method.get());
+  }
+  return bodies;
+}
+
+// Who can link to a definition's functions. A library's are global; an
+// executable's and generic copies are internal, so two modules can both copy
+// vec::push<i32>. An imported instance's methods are copies of its module's,
+// there to inline.
+MLIRGenImpl::Linkage MLIRGenImpl::functionLinkage(AST::DefinitionAST *def) {
+  if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def))
+    return tci->is_declaration ? Linkage::AvailableExternally
+           : moduleName.empty() || tci->is_instantiation
+               ? Linkage::Internal
+               : Linkage::Global;
+  auto *fd = llvm::cast<AST::FuncDefAST>(def);
+  return !moduleName.empty() && !fd->is_instantiation ? Linkage::Global
+                                                       : Linkage::Internal;
+}
+
 void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
-  if (auto *funcDef = llvm::dyn_cast<AST::FuncDefAST>(def))
-    emitFunction(funcDef, !moduleName.empty() && !funcDef->is_instantiation
-                              ? Linkage::Global
-                              : Linkage::Internal);
-  else if (auto *externDef = llvm::dyn_cast<AST::ExternAST>(def))
+  if (llvm::isa<AST::FuncDefAST, AST::TypeClassInstanceAST>(def)) {
+    auto linkage = functionLinkage(def);
+    for (auto *fd : functionBodies(def))
+      emitFunction(fd, linkage);
+  } else if (auto *externDef = llvm::dyn_cast<AST::ExternAST>(def))
     emitExtern(externDef);
   else if (llvm::isa<AST::StructDefAST>(def))
     ; // Struct types registered in generate() pre-pass
@@ -390,24 +429,22 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     ; // Type aliases resolved at type-check time
   else if (llvm::isa<AST::TypeClassDeclAST>(def))
     ; // Skip typeclass declarations (no codegen needed)
-  else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {
-    // Emit each instance method as a regular function. An imported instance's
-    // are copies of its module's, there to inline. A generic instance is
-    // emitted through its copies, each private to the module that made it.
-    if (tci->is_generic())
-      return;
-    auto linkage = tci->is_declaration ? Linkage::AvailableExternally
-                   : moduleName.empty() || tci->is_instantiation
-                       ? Linkage::Internal
-                       : Linkage::Global;
-    for (auto &method : tci->methods)
-      emitFunction(method.get(), linkage);
-  } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
+  else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
     emitKernelDef(kd);
   } else {
     imm_error(fmt::format("unknown definition type '{}'", def->getTreeName()),
               def->get_location());
   }
+}
+
+void MLIRGenImpl::lowerThroughMIR(AST::ProgramAST *program) {
+  for (auto &def : program->DefinitionVec)
+    for (auto *fd : functionBodies(def.get())) {
+      auto decl = theModule.lookupSymbol<mlir::func::FuncOp>(
+          mangleName(fd->Prototype->functionName));
+      if (decl && decl.isDeclaration() && mirLowering->lowerFunction(fd, decl))
+        ++mirFunctionCount;
+    }
 }
 
 mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {

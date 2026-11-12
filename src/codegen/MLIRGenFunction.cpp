@@ -149,10 +149,6 @@ void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
 // ===--- Function emission ---===
 
 void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, Linkage linkage) {
-  // Skip generic function templates — only monomorphized copies
-  if (ast->Prototype->is_generic())
-    return;
-
   auto location = loc(ast);
   decltype(symbolTable)::Guard scope(symbolTable);
 
@@ -183,11 +179,11 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, Linkage linkage) {
                             ? mlir::LLVM::Linkage::Internal
                             : mlir::LLVM::Linkage::AvailableExternally));
 
+  // Its body came through MIR (lowerThroughMIR); only its linkage is set
+  // here.
   ++functionCount;
-  if (mirLowering && mirLowering->lowerBody(ast, funcOp)) {
-    ++mirFunctionCount;
+  if (funcOp->hasAttr(MIRLowering::kMirAttr))
     return;
-  }
 
   // Create entry block with arguments
   auto &entryBlock = *funcOp.addEntryBlock();

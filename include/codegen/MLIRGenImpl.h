@@ -49,6 +49,8 @@ public:
   }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
+  /// Gives each function MIR can lower its MIR signature and body.
+  void lowerThroughMIR(AST::ProgramAST *program);
 
   // --- Member variables ---
 
@@ -216,6 +218,8 @@ public:
     /// for the optimizer to inline; never emitted, as the module defines it.
     AvailableExternally,
   };
+  /// The linkage of the functions a function or instance definition makes.
+  Linkage functionLinkage(AST::DefinitionAST *def);
   void emitFunction(AST::FuncDefAST *ast, Linkage linkage);
   void emitExtern(AST::ExternAST *ast);
   mlir::Value buildClosure(mlir::Value codePtr, mlir::Value envPtr,

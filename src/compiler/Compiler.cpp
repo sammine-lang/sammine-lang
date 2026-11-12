@@ -348,6 +348,8 @@ void Compiler::codegen_mlir() {
   mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
   mlirCtx.getOrLoadDialect<mlir::cf::ControlFlowDialect>();
+  // MIR's types and ops, and the GPU transfer ops.
+  mlirCtx.getOrLoadDialect<smn::SammineDialect>();
 
   // Kernel dialects — only needed when kernel defs exist.
   if (has_kernel_defs) {
@@ -356,7 +358,6 @@ void Compiler::codegen_mlir() {
     mlirCtx.getOrLoadDialect<mlir::bufferization::BufferizationDialect>();
     mlirCtx.getOrLoadDialect<mlir::affine::AffineDialect>();
     mlirCtx.getOrLoadDialect<mlir::memref::MemRefDialect>();
-    mlirCtx.getOrLoadDialect<smn::SammineDialect>();
   }
 
   // GPU dialect — needed when --gpu=cuda or --gpu=amd.
