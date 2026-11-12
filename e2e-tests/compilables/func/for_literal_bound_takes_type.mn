@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      3000000000 6000000000
+// CHECK-NEXT: 3000000000 6000000000
+// CHECK-NEXT: 5999999998 5999999999
+// CHECK-NEXT: 0 1 2
+
+import std;
+
+// A literal bound takes the other bound's type, as an if's literal branch
+// does: k is an i64 in 1..n, so k * 3000000000 doesn't overflow.
+let main() -> i32 {
+  let n = 3i64;
+  for k in 1..n { std::printf("%ld ", k * 3000000000); };
+  std::printf("\n");
+  let m = 1i64;
+  for k in m..3 { std::printf("%ld ", k * 3000000000); };
+  std::printf("\n");
+  let big = 6000000000u64;
+  for k in 5999999998..big { std::printf("%lu ", k); };
+  std::printf("\n");
+  // Two literals are i32s.
+  for k in 0..3 { std::printf("%d ", k); };
+  std::printf("\n");
+  0
+}

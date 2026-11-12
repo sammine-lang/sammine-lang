@@ -1673,13 +1673,10 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
       !is_integer_bound(*this, ast->end.get(), end_type, "for-range end"))
     return ast->set_type(Type::Poisoned());
 
-  // Resolve polymorphic Integer → concrete via default_polymorphic_type,
-  // then check both sides match.
-  auto resolved = default_polymorphic_type(start_type);
-  if (resolved.type_kind == TypeKind::Integer)
-    resolved = default_polymorphic_type(end_type);
-  if (resolved.type_kind == TypeKind::Integer)
-    resolved = Type::I32_t();
+  // The bounds have one type, as an if's branches do: a literal bound takes
+  // the other's, as in 1..n with n an i64, and two literals default to i32.
+  auto common = type_map_ordering.lowest_common_type(start_type, end_type);
+  auto resolved = default_polymorphic_type(common ? *common : start_type);
 
   if (!type_map_ordering.compatible_to_from(resolved, start_type) ||
       !type_map_ordering.compatible_to_from(resolved, end_type)) {
