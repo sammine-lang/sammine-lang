@@ -5,6 +5,18 @@
 
 namespace sammine_lang {
 
+mlir::Value emitFloatConstant(mlir::OpBuilder &builder, mlir::Location location,
+                              double value, mlir::FloatType type) {
+  llvm::APFloat apVal(value);
+  if (type.isF32()) {
+    bool losesInfo = false;
+    apVal.convert(llvm::APFloat::IEEEsingle(),
+                  llvm::APFloat::rmNearestTiesToEven, &losesInfo);
+  }
+  return mlir::arith::ConstantFloatOp::create(builder, location, type, apVal)
+      .getResult();
+}
+
 mlir::Value emitIntArithOp(mlir::OpBuilder &builder, mlir::Location location,
                            mlir::Value lhs, mlir::Value rhs, TokenType op,
                            bool is_unsigned) {

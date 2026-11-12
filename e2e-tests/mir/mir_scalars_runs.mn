@@ -1,0 +1,14 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// CHECK: 7.500000 1.250000 z 1
+import std;
+
+let area(w: f64, h: f64) -> f64 { let a = w * h; a / 2.0 }
+let half(x: f32) -> f32 { x * 0.5f32 }
+let yes() -> bool { true }
+let letter() -> char { 'z' }
+
+let main() -> i32 {
+  let y = if yes() { 1 } else { 0 };
+  std::printf("%f %f %c %d\n", area(3.0, 5.0), half(2.5f32) as f64, letter(), y);
+  0
+}

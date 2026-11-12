@@ -52,6 +52,8 @@ private:
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
   mlir::FailureOr<mlir::Value> lowerNumber(AST::NumberExprAST *num);
+  mlir::FailureOr<mlir::Value> lowerBool(AST::BoolExprAST *b);
+  mlir::FailureOr<mlir::Value> lowerChar(AST::CharExprAST *c);
   mlir::FailureOr<mlir::Value> lowerVariable(AST::VariableExprAST *var);
   mlir::FailureOr<mlir::Value> lowerBinary(AST::BinaryExprAST *bin);
 };

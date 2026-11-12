@@ -5,8 +5,9 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
 //! \file MIRLowering.cpp
-//! \brief The constructs MIR handles so far: functions over integers, integer
-//! literals, parameters, `let`, arithmetic and return.
+//! \brief The constructs MIR handles so far: functions over scalars (integers,
+//! floats, bool, char), their literals, parameters, `let`, arithmetic and
+//! return.
 
 namespace sammine_lang {
 
@@ -21,6 +22,15 @@ std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
   case TypeKind::I64_t:
   case TypeKind::U64_t:
     return builder_.getI64Type();
+  case TypeKind::F32_t:
+    return builder_.getF32Type();
+  case TypeKind::F64_t:
+  case TypeKind::Flt: // an untyped float literal defaults to f64
+    return builder_.getF64Type();
+  case TypeKind::Bool:
+    return builder_.getI1Type();
+  case TypeKind::Char:
+    return builder_.getI8Type();
   default:
     return std::nullopt;
   }
@@ -104,6 +114,10 @@ mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
 mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (auto *num = llvm::dyn_cast<NumberExprAST>(expr))
     return lowerNumber(num);
+  if (auto *b = llvm::dyn_cast<BoolExprAST>(expr))
+    return lowerBool(b);
+  if (auto *c = llvm::dyn_cast<CharExprAST>(expr))
+    return lowerChar(c);
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
     return lowerVariable(var);
   if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr))
@@ -115,9 +129,25 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
   auto type = mirType(num->get_type());
   if (!type)
     return mlir::failure();
+  if (auto floatType = mlir::dyn_cast<mlir::FloatType>(*type))
+    return emitFloatConstant(builder_, loc(num), std::stod(num->number),
+                             floatType);
   return mlir::arith::ConstantIntOp::create(
              builder_, loc(num), *type,
              sammine_util::literal_int_bits(num->number))
+      .getResult();
+}
+
+mlir::FailureOr<mlir::Value> MIRLowering::lowerBool(BoolExprAST *b) {
+  return mlir::arith::ConstantIntOp::create(builder_, loc(b),
+                                            builder_.getI1Type(), b->b ? 1 : 0)
+      .getResult();
+}
+
+mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
+  return mlir::arith::ConstantIntOp::create(builder_, loc(c),
+                                            builder_.getI8Type(),
+                                            static_cast<uint8_t>(c->value))
       .getResult();
 }
 
@@ -128,8 +158,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   return it->second;
 }
 
-// Integer arithmetic through a built-in instance; an instance the program
-// declares is a call, which MIR doesn't lower yet.
+// Integer or float arithmetic through a built-in instance; an instance the
+// program declares is a call, which MIR doesn't lower yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   auto *bp = props_.binary(bin->id());
   if (bp && bp->resolved_op_method)
@@ -138,7 +168,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   bool arithmetic = op == TokADD || op == TokSUB || op == TokMUL ||
                     op == TokDIV || op == TokMOD;
   auto type = bin->get_type();
-  if (!arithmetic || !mirType(type))
+  if (!arithmetic || !(type.is_integer() || type.is_float()))
     return mlir::failure();
   auto lhs = lowerExpr(bin->LHS.get());
   if (mlir::failed(lhs))
@@ -146,6 +176,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   auto rhs = lowerExpr(bin->RHS.get());
   if (mlir::failed(rhs))
     return mlir::failure();
+  if (type.is_float())
+    return emitFloatArithOp(builder_, loc(bin), *lhs, *rhs, op);
   return emitIntArithOp(builder_, loc(bin), *lhs, *rhs, op,
                         type.is_unsigned());
 }

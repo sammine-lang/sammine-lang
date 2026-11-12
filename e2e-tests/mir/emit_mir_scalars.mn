@@ -1,0 +1,26 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// bool, char, f32 and f64 go through MIR as i1, i8, f32 and f64, with their
+// literals and float arithmetic.
+// CHECK-LABEL: func.func private @area(
+// CHECK-SAME: f64
+// CHECK-SAME: sammine.mir
+// CHECK: arith.mulf
+// CHECK-LABEL: func.func private @half(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.constant 5.000000e-01 : f32
+// CHECK-NEXT: arith.mulf
+// CHECK-LABEL: func.func private @yes(
+// CHECK-SAME: -> i1
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.constant true
+// CHECK-LABEL: func.func private @letter(
+// CHECK-SAME: -> i8
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: arith.constant 122 : i8
+
+let area(w: f64, h: f64) -> f64 { let a = w * h; a }
+let half(x: f32) -> f32 { x * 0.5f32 }
+let yes() -> bool { true }
+let letter() -> char { 'z' }
+
+let main() -> i32 { 0 }

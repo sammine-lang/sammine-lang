@@ -12,6 +12,11 @@ mlir::Value emitIntArithOp(mlir::OpBuilder &builder, mlir::Location location,
                            mlir::Value lhs, mlir::Value rhs, TokenType op,
                            bool is_unsigned);
 
+/// A float constant of `type` (f32 or f64). An f32 is rounded to the nearest
+/// single-precision value.
+mlir::Value emitFloatConstant(mlir::OpBuilder &builder, mlir::Location location,
+                              double value, mlir::FloatType type);
+
 /// Emit a float arithmetic op. Returns nullptr if the token is not a
 /// recognized float operator.
 mlir::Value emitFloatArithOp(mlir::OpBuilder &builder, mlir::Location location,

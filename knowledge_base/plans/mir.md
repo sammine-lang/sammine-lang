@@ -227,19 +227,26 @@ suite passes after every commit.
 
 ### Slices
 
-1. The dialect, `--mir`, the fallback, and the first slice:
-   functions with `i32`/`i64` parameters, arithmetic and `return`.
-   `let f(a: i32) -> i32 { a + 1 }` compiles through MIR.
-2. `let` and locals.
-3. `if`/`else`.
-4. Calls between functions.
-5. `bool`, comparisons, `&&`/`||`.
-6. `while`.
-7. Then one construct per commit: structs, tuples, field access; pointers,
-   `alloc`/`free`, `*p`, lending; unsafe pointer indexing; enums and `case`;
-   `for`; operators and casts through typeclasses; `Indexer`; closures and
-   partial application; arrays and bounds checks; strings; C calls and
-   variadics; instance and generic-copy linkage.
+Done: (1) `--mir`, the fallback, and functions over `i32`/`i64` with
+arithmetic and `return`; (2) `let` of those; (3) the other scalars, `bool`,
+`char`, `f32`, `f64`, with their literals and float arithmetic.
+
+Measured after (2), what kept user functions out of MIR was mostly their
+types (pointers, views, floats, structs, `Vec`, `Option`, function values in
+signatures and `let`s), well ahead of calls (139) and `if` (55). So types
+come next, then the constructs, each picked by what blocks the most code:
+
+4. `!sammine.ptr` (owned and view) in signatures and `let`s, with the
+   `unrealized_conversion_cast` boundary at calls into and out of MIR;
+   `alloc`, `free`, `*p`, lending.
+5. Calls between functions, then C calls and variadics (`std::printf`).
+6. Structs, tuples, field access.
+7. `if`/`else`, comparisons, `&&`/`||`.
+8. Enums and `case`, `Option`.
+9. Then the rest, one construct per commit: `while`, `for`; operators and
+   casts through typeclasses; `Indexer`; closures and partial application;
+   arrays and bounds checks; strings; unsafe pointer indexing; instance and
+   generic-copy linkage.
 
 Once the fallback is rare and reliable, `--mir` becomes the default; the AST
 path still covers what MIR doesn't.

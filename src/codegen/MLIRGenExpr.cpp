@@ -65,15 +65,8 @@ mlir::Value MLIRGenImpl::emitIntConstant(int64_t value, const Type &type,
 
 mlir::Value MLIRGenImpl::emitFloatConstant(double value, const Type &type,
                                            mlir::Location loc) {
-  auto mlirType = mlir::cast<mlir::FloatType>(convertType(type));
-  llvm::APFloat apVal(value);
-  if (type.type_kind == TypeKind::F32_t) {
-    bool losesInfo = false;
-    apVal.convert(llvm::APFloat::IEEEsingle(),
-                  llvm::APFloat::rmNearestTiesToEven, &losesInfo);
-  }
-  return mlir::arith::ConstantFloatOp::create(builder, loc, mlirType, apVal)
-      .getResult();
+  return sammine_lang::emitFloatConstant(
+      builder, loc, value, mlir::cast<mlir::FloatType>(convertType(type)));
 }
 
 mlir::Value MLIRGenImpl::emitNumberExpr(AST::NumberExprAST *ast) {
