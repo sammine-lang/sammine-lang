@@ -1,0 +1,22 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Elements written and read through a pointer in MIR functions, read back
+// from main.
+// CHECK: 0 10 20 30 2.5
+import std;
+
+let unsafe fill(xs: 'ptr<i64>, i: i64, n: i64) -> 'ptr<i64> {
+  if i >= n { xs } else { xs[i] = i * 10i64; fill(xs, i + 1i64, n) }
+}
+let unsafe at(xs: ptr<i64>, i: i64) -> i64 { xs[i] }
+let unsafe second(xs: ptr<f64>) -> f64 { xs[1] }
+
+let unsafe main() -> i32 {
+  let xs = fill(alloc<i64>(4), 0i64, 4i64);
+  let fs = alloc<f64>(2);
+  fs[0] = 1.0;
+  fs[1] = 2.5;
+  std::printf("%lld %lld %lld %lld %.1f\n", at(xs, 0i64), at(xs, 1i64), at(xs, 2i64), at(xs, 3i64), second(fs));
+  free(xs);
+  free(fs);
+  0
+}

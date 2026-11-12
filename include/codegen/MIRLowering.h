@@ -85,7 +85,11 @@ private:
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);
-  mlir::FailureOr<mlir::Value> lowerDerefRead(AST::DerefExprAST *deref);
+  mlir::FailureOr<mlir::Value> lowerPtrElemPlace(AST::IndexExprAST *index);
+  mlir::FailureOr<mlir::Value> lowerPlace(AST::ExprAST *target);
+  mlir::FailureOr<mlir::Value> lowerPlaceRead(AST::ExprAST *expr);
+  /// A copy or a move of what `place` holds, as its type says.
+  mlir::Value read(mlir::Location location, mlir::Value place);
   mlir::FailureOr<mlir::Value> lowerAssign(AST::BinaryExprAST *assign);
   mlir::FailureOr<mlir::Value> lowerNumber(AST::NumberExprAST *num);
   mlir::FailureOr<mlir::Value> lowerString(AST::StringExprAST *str);

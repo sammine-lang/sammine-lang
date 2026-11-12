@@ -18,7 +18,7 @@
 //! payloads, their variants and `case` on them; their
 //! literals, strings among them, parameters, `let`, arithmetic, calls to
 //! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
-//! `free`, `*p` read and written, negation, comparisons, `if`, `&&` and `||`,
+//! `free`, `*p` and `p[i]` read and written, negation, comparisons, `if`, `&&` and `||`,
 //! statements and return.
 
 namespace sammine_lang {
@@ -284,8 +284,13 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerAlloc(alloc);
   if (auto *free = llvm::dyn_cast<FreeExprAST>(expr))
     return lowerFree(free);
-  if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr))
-    return lowerDerefRead(deref);
+  if (llvm::isa<DerefExprAST>(expr))
+    return lowerPlaceRead(expr);
+  if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
+    if (index->array_expr->get_type().type_kind != TypeKind::Pointer)
+      return mlir::failure();
+    return lowerPlaceRead(expr);
+  }
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
   if (auto *lit = llvm::dyn_cast<StructLiteralExprAST>(expr))
@@ -692,29 +697,57 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
       .getResult();
 }
 
-// Reading `*p` copies a value that owns nothing, and moves one that does out
-// of the place.
-mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefRead(DerefExprAST *deref) {
-  auto place = lowerDerefPlace(deref);
+// Reading `*p` or `p[i]`, for p a pointer.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerPlaceRead(ExprAST *expr) {
+  auto place = lowerPlace(expr);
   if (mlir::failed(place))
     return mlir::failure();
-  auto valueType = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
-  if (smn::ownsMemory(valueType))
-    return smn::MoveOp::create(builder_, loc(deref), valueType, *place)
-        .getResult();
-  return smn::CopyOp::create(builder_, loc(deref), valueType, *place)
+  return read(loc(expr), *place);
+}
+
+// The place `target` names, if MIR has one: `*p`, or `p[i]` of a pointer.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(target))
+    return lowerDerefPlace(deref);
+  if (auto *index = llvm::dyn_cast<IndexExprAST>(target))
+    return lowerPtrElemPlace(index);
+  return mlir::failure();
+}
+
+// `p[i]`, for p a pointer, in an unsafe function: the type checker allows it
+// nowhere else.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerPtrElemPlace(IndexExprAST *index) {
+  if (index->array_expr->get_type().type_kind != TypeKind::Pointer)
+    return mlir::failure();
+  auto ptr = lowerExpr(index->array_expr.get());
+  if (mlir::failed(ptr) || !*ptr)
+    return mlir::failure();
+  auto offset = lowerExpr(index->index_expr.get());
+  if (mlir::failed(offset) || !*offset)
+    return mlir::failure();
+  auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
+  return smn::PtrElemOp::create(
+             builder_, loc(index),
+             smn::PlaceType::get(builder_.getContext(), pointee), *ptr, *offset)
       .getResult();
 }
 
-// `*p = v`. Writing anywhere else, a field or an element, isn't lowered yet.
+// Reading a place copies a value that owns nothing, and moves one that does
+// out of it.
+mlir::Value MIRLowering::read(mlir::Location location, mlir::Value place) {
+  auto valueType = mlir::cast<smn::PlaceType>(place.getType()).getValueType();
+  if (smn::ownsMemory(valueType))
+    return smn::MoveOp::create(builder_, location, valueType, place);
+  return smn::CopyOp::create(builder_, location, valueType, place);
+}
+
+// `*p = v` or `p[i] = v`. Writing a field isn't lowered yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerAssign(BinaryExprAST *assign) {
-  auto *target = llvm::dyn_cast<DerefExprAST>(assign->LHS.get());
-  if (!target)
-    return mlir::failure();
   auto value = lowerExpr(assign->RHS.get());
   if (mlir::failed(value) || !*value)
     return mlir::failure();
-  auto place = lowerDerefPlace(target);
+  auto place = lowerPlace(assign->LHS.get());
   if (mlir::failed(place))
     return mlir::failure();
   smn::StoreOp::create(builder_, loc(assign), *value, *place);

@@ -61,6 +61,19 @@ def DerefOp : Sammine_Op<"deref", [Pure,
   let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
 }
 
+def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
+    TypesMatchWith<"the place holds what the pointer points at",
+                   "ptr", "place", PlaceOfPointee>]> {
+  let summary = "the place `index` elements past where a pointer points, `p[i]`";
+  let description = [{
+    Only in an unsafe function: nothing checks the index, and the ownership
+    check doesn't follow what is stored there.
+  }];
+  let arguments = (ins Sammine_PtrType:$ptr, AnySignlessInteger:$index);
+  let results = (outs Sammine_PlaceType:$place);
+  let assemblyFormat = "$ptr `[` $index `]` attr-dict `:` type($ptr) `,` type($index)";
+}
+
 def LendOp : Sammine_Op<"lend", [Pure,
     TypesMatchWith<"the result is a view of what the place holds",
                    "place", "result", ViewOfPlace>]> {

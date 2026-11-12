@@ -150,6 +150,24 @@ struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
   }
 };
 
+// An element past a pointer: a GEP over its pointee's type.
+struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::PtrElemOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto element = getTypeConverter()->convertType(
+        mlir::cast<smn::PtrType>(op.getPtr().getType()).getPointee());
+    if (!element)
+      return mlir::failure();
+    rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
+        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), element,
+        adaptor.getPtr(), llvm::ArrayRef<mlir::LLVM::GEPArg>{adaptor.getIndex()},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+    return mlir::success();
+  }
+};
+
 // Copying and moving both read the place; what differs is only what the
 // ownership check makes of them.
 template <typename ReadOp>
@@ -403,7 +421,7 @@ struct MIRToLLVMPass
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
     patterns.add<FuncLowering, AllocLowering, FreeLowering,
                  SameAddressLowering<smn::DerefOp>,
-                 SameAddressLowering<smn::LendOp>,
+                 SameAddressLowering<smn::LendOp>, PtrElemLowering,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering, AggregateLowering,
                  ExtractLowering, VariantLowering, TagLowering,
@@ -419,6 +437,7 @@ struct MIRToLLVMPass
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
+                        smn::PtrElemOp,
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
                         smn::StringOp, smn::AggregateOp, smn::ExtractOp,
                         smn::VariantOp, smn::TagOp, smn::PayloadOp>();

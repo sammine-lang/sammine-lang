@@ -39,3 +39,13 @@ func.func @lend(%p: !sammine.ptr<i32, owned>) -> i32 {
   %v = sammine.call @look(%view) : (!sammine.ptr<i32, view>) -> i32
   return %v : i32
 }
+
+// An element past a pointer is a GEP over its pointee's type.
+// CHECK-LABEL: func.func @elem(%arg0: !llvm.ptr, %arg1: i64) -> i32
+// CHECK-NEXT: %0 = llvm.getelementptr inbounds %arg0[%arg1] : (!llvm.ptr, i64) -> !llvm.ptr, i32
+// CHECK-NEXT: %1 = llvm.load %0 : !llvm.ptr -> i32
+func.func @elem(%p: !sammine.ptr<i32, view>, %i: i64) -> i32 {
+  %place = sammine.ptr_elem %p[%i] : !sammine.ptr<i32, view>, i64
+  %v = sammine.copy %place : !sammine.place<i32>
+  return %v : i32
+}
