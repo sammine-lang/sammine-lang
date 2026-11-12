@@ -22,11 +22,11 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **linear_check** -- `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`) enforces that heap-allocated (`'ptr<T>`) pointers are consumed exactly once before scope exit via `free()`, `let` move, or `return`. It tracks variable state (Unconsumed/Consumed) per scope and verifies branch consistency (all if/case arms must consume or all must not consume each linear variable). It also forbids consuming outer linear variables inside loops.
 
-**dump_ast** -- If `--ast-ir` is passed, the AST is pretty-printed via `ASTPrinter::print()`. If any prior stage set the error flag, the compiler aborts here with exit code 1.
+**dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
 **codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenExpr.cpp`, `MLIRGenFunction.cpp`) translates the typed AST into an MLIR module using the Arith, Func, LLVM, SCF, and CF dialects. This stage uses direct recursive dispatch (not the visitor pattern). See Section 6 for details.
 
-**optimize** -- The LLVM IR module (produced by MLIR lowering) is run through LLVM's `O2` optimization pipeline using the new pass manager. The `--llvm-ir` flag can dump pre-optimization, post-optimization, or diff output.
+**optimize** -- The LLVM IR module (produced by MLIR lowering) is run through LLVM's `O2` optimization pipeline using the new pass manager. `--emit llvm`, `--emit llvm-opt` and `--emit llvm-diff` print the IR before optimization, after it, or a diff of the two, then stop. `--emit mlir` prints the MLIR module before it is lowered to LLVM IR.
 
 **emit_object** -- The optimized LLVM IR is lowered to a native `.o` object file using the target machine's code emission passes.
 

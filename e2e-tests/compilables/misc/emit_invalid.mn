@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O --emit invalid 2>&1) | %check %full
+// CHECK:      --emit: invalid not in {ast,mlir,llvm,llvm-opt,llvm-diff}
+// CHECK-NEXT: Run with --help for more information.
+
+// An --emit value it doesn't know is an error.
+
+let main() -> i32 {
+  return 0;
+}

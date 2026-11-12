@@ -57,9 +57,8 @@ to erase the build folder (similar to make clean).
   -O              Output directory for build artifacts (.so, .a, .exe)
   -I              Add directory to import search path (repeatable)
   --lib           Emit library output. Values: static (.a) or shared (.so)
-  --llvm-ir       Emit LLVM IR. Values: pre, post, or diff
-  --mlir-ir       Dump MLIR before lowering to LLVM IR
-  --ast-ir        Dump the internal AST to stdout
+  --emit          Print an intermediate form to stdout, then stop.
+                  Values: ast, mlir, llvm (before optimization), llvm-opt (after), llvm-diff
   --diagnostics   Developer diagnostics. Values: stages;lexer;parser or 'dev'
   --time          Print compilation timing. Values: simple, sparse, coarse
 ```

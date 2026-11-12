@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm-opt 2>&1 | %check %full
 // Verify LLVM's tailcallelim pass transforms self-recursive tail calls.
 // After optimization, count() should not contain a recursive call to itself.
 // This file has no main, so it is a library, and count stays a function of

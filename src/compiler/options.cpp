@@ -17,6 +17,20 @@ namespace sammine_lang {
       return GPUMode::AMD;
     return GPUMode::NONE;
   }
+  // "ast", "mlir", "llvm", "llvm-opt", "llvm-diff"
+  static EmitKind parse_emit_kind(const std::string &s) {
+    if (s == "ast")
+      return EmitKind::Ast;
+    if (s == "mlir")
+      return EmitKind::Mlir;
+    if (s == "llvm")
+      return EmitKind::Llvm;
+    if (s == "llvm-opt")
+      return EmitKind::LlvmOpt;
+    if (s == "llvm-diff")
+      return EmitKind::LlvmDiff;
+    return EmitKind::None;
+  }
   // "simple", "sparse", "coarse"
   static TimingMode parse_timing_mode(const std::string &s) {
     if (s == "simple")
@@ -54,14 +68,12 @@ Options::Options(int argc, char *argv[]) {
   app.add_option("--jit-args", jit_args,
                  "Arguments to pass to the JIT-executed program (repeatable).");
 
-  app.add_option("--llvm-ir", llvm_ir,
-                 "Emit LLVM IR. Required value: pre, post, or diff")
-      ->check(CLI::IsMember({"pre", "post", "diff"}));
-
-  app.add_flag("--mlir-ir", mlir_ir, "Dump MLIR before lowering to LLVM IR");
-
-  app.add_flag("--ast-ir", ast_ir,
-               "sammine compiler spits out the internal AST to stdout");
+  std::string emit_raw;
+  app.add_option("--emit", emit_raw,
+                 "Print an intermediate form to stdout, then stop. Values: "
+                 "ast, mlir, llvm (before optimization), llvm-opt (after), "
+                 "llvm-diff")
+      ->check(CLI::IsMember({"ast", "mlir", "llvm", "llvm-opt", "llvm-diff"}));
 
   app.add_option("--diagnostics", diagnostics,
                  "Diagnostics for sammine-lang developers. "
@@ -102,6 +114,7 @@ Options::Options(int argc, char *argv[]) {
   lib_format = parse_lib_format(lib_format_raw);
   gpu = parse_gpu_mode(gpu_mode_raw);
   time_val = parse_timing_mode(time_val_raw);
+  emit = parse_emit_kind(emit_raw);
 
 
   if (!output_dir_raw.empty())

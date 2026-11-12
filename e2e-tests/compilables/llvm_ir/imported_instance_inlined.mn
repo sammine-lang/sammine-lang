@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm-opt 2>&1 | %check %full
 // An imported instance's methods are copied in as available_externally
 // functions, so the optimizer can inline them: a for loop over a range calls
 // the prelude's Iterator<Range<i64>, i64>::next, compiled in definitions.so,

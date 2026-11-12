@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm 2>&1 | %check %full
 // CHECK:      ; ModuleID = 'LLVMDialectModule'
 // CHECK-NEXT: source_filename = "LLVMDialectModule"
 // CHECK-NEXT: target datalayout = "{{.*}}"

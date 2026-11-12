@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm 2>&1 | %check %full
 // Immutable array literals are emitted as global constants — no stack
 // alloca or element-wise stores.  The variable just aliases the global.
 

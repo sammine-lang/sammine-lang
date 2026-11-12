@@ -1,0 +1,7 @@
+// RUN: %sammine --file %full %O --emit ast | %check %full
+// --emit ast prints the AST after type checking, then stops.
+// CHECK: fn_name: "main"
+
+let main() -> i32 {
+  return 0;
+}

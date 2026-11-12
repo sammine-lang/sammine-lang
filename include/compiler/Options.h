@@ -13,6 +13,15 @@ enum class GPUMode {
   AMD,
   NONE,
 };
+/// What --emit prints to stdout before the compiler stops.
+enum class EmitKind {
+  None,
+  Ast,      // the AST after type checking
+  Mlir,     // MLIR before it is lowered to LLVM IR
+  Llvm,     // LLVM IR before optimization
+  LlvmOpt,  // LLVM IR after optimization
+  LlvmDiff, // a unified diff of the two
+};
 enum class TimingMode {
   SIMPLE, 
   COARSE,
@@ -27,9 +36,7 @@ public:
   bool check;
   bool jit;
   std::vector<std::string> jit_args;
-  std::string llvm_ir;
-  bool mlir_ir = false;
-  bool ast_ir = false;
+  EmitKind emit = EmitKind::None;
   std::string diagnostics = "none";
   TimingMode time_val;
   std::filesystem::path output_dir;

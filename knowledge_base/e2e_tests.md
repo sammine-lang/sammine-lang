@@ -12,7 +12,7 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 ## Test Patterns
 - **Success**: `# RUN: %sammine --file %full %O && %T/%base.exe | %check %full`
 - **Error**: `# RUN: ! %sammine --file %full %O 2>&1 | %check %full`
-- **IR check**: `# RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full`
+- **IR check**: `# RUN: %sammine --file %full %O --emit llvm | %check %full` (`--emit llvm-opt` after optimization, `--emit mlir` for MLIR)
 - **Multi-file**: compile library first to `%T`, then main with `%I`
 
 ## Feature Directories (`e2e-tests/compilables/`)
@@ -29,7 +29,7 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 | `io/` | print, println, eprint, file I/O, linear file handles, stdin |
 | `kernel/` | map, reduce, 2-module codegen, kernel_no_malloc golden test |
 | `linear/` | ~59 tests: alloc/free, consumption, branches, loops, struct/array/enum fields. `break_` prefix = expected-failure |
-| `llvm_ir/` | LLVM IR patterns via `--llvm-ir pre/post` + FileCheck |
+| `llvm_ir/` | LLVM IR patterns via `--emit llvm` / `--emit llvm-opt` + FileCheck |
 | `misc/` | General tests, compiler flags, readme_demo |
 | `ptr/` | Pointers, alloc/free |
 | `type_inference/` | Numeric literal resolution |

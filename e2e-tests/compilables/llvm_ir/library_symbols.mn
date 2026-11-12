@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir pre 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm 2>&1 | %check %full
 // In a library, every function and instance method gets a global symbol,
 // private ones too: the library's generic functions are compiled in the
 // modules that use them, and may call them there. Privacy only limits who can

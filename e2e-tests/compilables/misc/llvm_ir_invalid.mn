@@ -1,9 +1,0 @@
-// RUN: (! %sammine --file %full %O --llvm-ir invalid 2>&1) | %check %full
-// CHECK:      --llvm-ir: invalid not in {pre,post,diff}
-// CHECK-NEXT: Run with --help for more information.
-
-// Invalid --llvm-ir value should produce an error
-
-let main() -> i32 {
-  return 0;
-}

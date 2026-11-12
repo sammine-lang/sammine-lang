@@ -280,12 +280,14 @@ void Compiler::linear_check() {
 }
 
 void Compiler::dump_ast() {
-  if (options_.ast_ir) {
+  if (options_.emit == EmitKind::Ast) {
     LOG({
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-                 "Start dumping ast-ir stage...\n");
+                 "Start dumping ast stage...\n");
     });
     AST::ASTPrinter::print(programAST.get(), props_);
+    if (!has_error())
+      state_ = State::Finished;
   }
   if (has_error()) {
     LOG({
@@ -409,7 +411,7 @@ void Compiler::codegen_mlir() {
     return;
   }
 
-  if (options_.mlir_ir) {
+  if (options_.emit == EmitKind::Mlir) {
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
     if (mlirResult.kernelModule) {
@@ -441,7 +443,7 @@ void Compiler::codegen_mlir() {
   resPtr->Module = std::move(llvmModule);
 }
 
-// Stage 9: Run LLVM O2 optimization pipeline. Supports --llvm-ir pre/post/diff
+// Stage 9: Run LLVM O2 optimization pipeline. Supports --emit llvm/llvm-opt/llvm-diff
 // modes.
 void Compiler::optimize() {
   SAMMINE_ZONE_NAMED("optimize");
@@ -453,16 +455,18 @@ void Compiler::optimize() {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                "Start optimize stage...\n");
   });
-  std::string llvm_ir_mode = options_.llvm_ir;
+  auto emit = options_.emit;
 
-  std::string pre_ir;
-  if (llvm_ir_mode == "pre" || llvm_ir_mode == "diff") {
-    llvm::raw_string_ostream pre_stream(pre_ir);
-    resPtr->Module->print(pre_stream, nullptr);
+  if (emit == EmitKind::Llvm) {
+    resPtr->Module->print(llvm::outs(), nullptr);
+    state_ = State::Finished;
+    return;
   }
 
-  if (llvm_ir_mode == "pre") {
-    llvm::errs() << pre_ir;
+  std::string pre_ir;
+  if (emit == EmitKind::LlvmDiff) {
+    llvm::raw_string_ostream pre_stream(pre_ir);
+    resPtr->Module->print(pre_stream, nullptr);
   }
 
   llvm::LoopAnalysisManager LAM;
@@ -481,9 +485,10 @@ void Compiler::optimize() {
       PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
   MPM.run(*resPtr->Module, MAM);
 
-  if (llvm_ir_mode == "post") {
-    resPtr->Module->print(llvm::errs(), nullptr);
-  } else if (llvm_ir_mode == "diff") {
+  if (emit == EmitKind::LlvmOpt) {
+    resPtr->Module->print(llvm::outs(), nullptr);
+    state_ = State::Finished;
+  } else if (emit == EmitKind::LlvmDiff) {
     std::string post_ir;
     llvm::raw_string_ostream post_stream(post_ir);
     resPtr->Module->print(post_stream, nullptr);
@@ -508,7 +513,8 @@ void Compiler::optimize() {
       post_file << post_ir;
     }
 
-    std::string diff_cmd = fmt::format("diff --color -u {} {} 1>&2",
+    llvm::outs().flush();
+    std::string diff_cmd = fmt::format("diff --color -u {} {}",
                                        pre_path.string(), post_path.string());
     int diff_ret = std::system(diff_cmd.c_str());
     if (diff_ret != 0 && diff_ret != 1) {
@@ -519,6 +525,7 @@ void Compiler::optimize() {
 
     std::filesystem::remove(pre_path);
     std::filesystem::remove(post_path);
+    state_ = State::Finished;
   }
 }
 

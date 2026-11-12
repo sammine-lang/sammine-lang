@@ -1,0 +1,9 @@
+// RUN: %sammine --file %full %O --emit mlir | %check %full
+// --emit mlir prints the module before it is lowered to LLVM IR, then stops.
+// CHECK: func.func @main() -> i32 {
+// CHECK-NEXT: arith.constant 7 : i32
+// CHECK-NEXT: return
+
+let main() -> i32 {
+  return 7;
+}

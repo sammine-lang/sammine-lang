@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm-opt 2>&1 | %check %full
 // Array passed to a function should use extractvalue (register decomposition),
 // not alloca + GEP (struct-like memory access). This file has no main, so it
 // is a library, and sum3 stays a function of its own.

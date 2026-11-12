@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O --llvm-ir post 2>&1 | %check %full
+// RUN: %sammine --file %full %O --emit llvm-opt 2>&1 | %check %full
 // Immutable array with constant elements should be fully constant-folded.
 // main should have no alloca — LLVM folds the array + sum into a single constant.
 // std::printf is C's printf, called by its C name.
