@@ -34,7 +34,9 @@ target_include_directories(SammineDialect SYSTEM PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS}
 )
 target_link_libraries(SammineDialect PRIVATE project_options)
-target_link_libraries(SammineDialect PUBLIC MLIRIR MLIRSupport MLIRFunctionInterfaces)
+target_link_libraries(SammineDialect PUBLIC
+  MLIRIR MLIRSupport MLIRFunctionInterfaces MLIRLLVMDialect
+)
 
 # Passes on the dialect: MIR to the LLVM dialect, and the GPU transfer ops to
 # the gpu dialect.
@@ -44,6 +46,6 @@ add_library(SammineDialectTransforms STATIC
 )
 target_link_libraries(SammineDialectTransforms PRIVATE project_options)
 target_link_libraries(SammineDialectTransforms PUBLIC
-  SammineDialect MLIRArithDialect MLIRFuncDialect MLIRFuncTransforms MLIRLLVMDialect MLIRDataLayoutInterfaces
+  SammineDialect SammineCABI MLIRArithDialect MLIRFuncDialect MLIRFuncTransforms MLIRLLVMDialect MLIRDataLayoutInterfaces
   MLIRGPUDialect MLIRMemRefDialect MLIRTransformUtils MLIRPass
 )

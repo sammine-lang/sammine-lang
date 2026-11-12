@@ -126,6 +126,10 @@ def CallOp : Sammine_Op<"call",
     (`!llvm.ptr` for `!sammine.ptr`): then only the counts must match. A
     callee that went through MIR (marked `sammine.mir`) must take and give
     exactly these types. Lowering to LLVM makes both the same.
+
+    The callee may be a C function, an `llvm.func`: a variadic one takes any
+    number of arguments after those it declares, which lowering promotes as
+    C does.
   }];
   let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$args);
   let results = (outs Variadic<AnyType>:$results);

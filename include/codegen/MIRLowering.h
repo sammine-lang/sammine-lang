@@ -12,6 +12,8 @@
 #include "llvm/ADT/StringMap.h"
 
 #include <optional>
+#include <string>
+#include <unordered_map>
 
 //! \file MIRLowering.h
 //! \brief Lowers a type-checked function's body to MIR (see
@@ -22,9 +24,13 @@ namespace sammine_lang {
 
 class MIRLowering {
 public:
+  /// `cSymbols` maps each C binding's name in source to its symbol, its C
+  /// name (std::printf to printf).
   MIRLowering(mlir::OpBuilder &builder, const AST::ASTProperties &props,
-              const SourceLocator &locator)
-      : builder_(builder), props_(props), locator_(locator) {}
+              const SourceLocator &locator,
+              const std::unordered_map<std::string, std::string> &cSymbols)
+      : builder_(builder), props_(props), locator_(locator),
+        cSymbols_(cSymbols) {}
 
   /// Lowers `ast` to a new function with its MIR signature and body, marked
   /// `smn::kMirAttr`, which replaces `decl`, the AST codegen's declaration of
@@ -36,6 +42,7 @@ private:
   mlir::OpBuilder &builder_;
   const AST::ASTProperties &props_;
   const SourceLocator &locator_;
+  const std::unordered_map<std::string, std::string> &cSymbols_;
   /// The module the function being lowered goes in, where its callees are.
   mlir::ModuleOp module_;
   /// What each name in the current function stands for: its parameters and
@@ -47,7 +54,8 @@ private:
   }
   /// The MIR type of a sammine type MIR handles so far, or nullopt.
   std::optional<mlir::Type> mirType(const Type &type) const;
-  /// A function type in MIR types, if MIR has a type for each part.
+  /// A function type in MIR types, if MIR has a type for each part. A C
+  /// function's `...` has none: this is what it declares.
   std::optional<mlir::FunctionType>
   mirFunctionType(const FunctionType &fn) const;
   /// `ast`'s signature in MIR types, if MIR has a type for each part.
@@ -61,6 +69,9 @@ private:
   mlir::FailureOr<mlir::Value> lowerCall(AST::CallExprAST *call);
   mlir::FailureOr<mlir::Value> lowerArgument(AST::ExprAST *arg,
                                              mlir::Type param);
+  mlir::FailureOr<mlir::Value> lowerVariadicArgument(AST::ExprAST *arg);
+  /// A view of what the owned pointer `owner` points at, for a call.
+  mlir::Value lend(mlir::Value owner, mlir::Location loc);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

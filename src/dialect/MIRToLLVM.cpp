@@ -1,4 +1,5 @@
 #include "dialect/MIRToLLVM.h"
+#include "cabi/CABI.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -141,12 +142,20 @@ struct StoreLowering : public mlir::OpConversionPattern<smn::StoreOp> {
 };
 
 // By now the callee has its final signature in LLVM types, whichever way it
-// was emitted, and MIR's call takes and gives the same ones once converted.
+// was emitted, and MIR's call takes and gives the same ones once converted. A
+// C function declared as an llvm.func is called as C calls it.
 struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
   matchAndRewrite(smn::CallOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
+    if (auto cFunc = mlir::SymbolTable::lookupNearestSymbolFrom<
+            mlir::LLVM::LLVMFuncOp>(op, op.getCalleeAttr())) {
+      auto call = cabi::emitCall(rewriter, op.getLoc(), cFunc,
+                                 llvm::to_vector<4>(adaptor.getArgs()));
+      rewriter.replaceOp(op, call.getResults());
+      return mlir::success();
+    }
     llvm::SmallVector<mlir::Type, 1> results;
     if (mlir::failed(
             getTypeConverter()->convertTypes(op.getResultTypes(), results)))

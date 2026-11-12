@@ -1,5 +1,6 @@
 #include "dialect/SammineDialect.h"
 
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/DialectImplementation.h"
 #include "mlir/IR/OpImplementation.h"
@@ -67,11 +68,17 @@ CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
            << getCallee() << "', which isn't a function";
   auto params = callee.getArgumentTypes();
   auto results = callee.getResultTypes();
-  if (params.size() != getArgs().size() ||
+  // A C function's `...` takes any number more.
+  auto cType =
+      mlir::dyn_cast<mlir::LLVM::LLVMFunctionType>(callee.getFunctionType());
+  bool variadic = cType && cType.isVarArg();
+  if ((variadic ? getArgs().size() < params.size()
+                : getArgs().size() != params.size()) ||
       results.size() != getResults().size())
     return emitOpError("passes ")
            << getArgs().size() << " and takes back " << getResults().size()
-           << ", but '" << getCallee() << "' takes " << params.size()
+           << ", but '" << getCallee() << "' takes "
+           << (variadic ? "at least " : "") << params.size()
            << " and gives back " << results.size();
   // A callee emitted from the AST has LLVM types where MIR has its own.
   if (!callee->hasAttr(kMirAttr))

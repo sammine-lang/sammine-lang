@@ -232,8 +232,9 @@ Done: (1) `--mir`, the fallback, and functions over `i32`/`i64` with
 arithmetic and `return`; (2) `let` of those; (3) the other scalars, `bool`,
 `char`, `f32`, `f64`, with their literals and float arithmetic; (4) pointers,
 `alloc`, `free`, `*p`, and lending an owned pointer to a `ptr<T>`
-(`sammine.lend` of the place it points at); (5) calls between sammine
-functions (`sammine.call`), but not C calls.
+(`sammine.lend` of the place it points at); (5) calls to sammine and C
+functions, variadic ones too (`sammine.call`; the lowering to LLVM calls C
+through `cabi::emitCall`, as the AST codegen does).
 
 A call is `sammine.call`, not `func.call`: when a caller is lowered, its
 callee may not have been offered to MIR yet, so its signature (MIR's types

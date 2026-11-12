@@ -28,3 +28,14 @@ func.func @wrong_type(%p: !sammine.ptr<i32, view>) {
   sammine.call @owned(%p) : (!sammine.ptr<i32, view>) -> ()
   return
 }
+
+// -----
+
+llvm.func @printf(!llvm.ptr, ...) -> i32
+
+// A variadic C function takes at least the arguments it declares.
+func.func @too_few() -> i32 {
+  // expected-error @+1 {{'sammine.call' op passes 0 and takes back 1, but 'printf' takes at least 1 and gives back 1}}
+  %n = sammine.call @printf() : () -> i32
+  return %n : i32
+}

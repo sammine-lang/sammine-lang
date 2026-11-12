@@ -45,7 +45,8 @@ public:
         locator(fileName_, sourceText), reporter(fileName_, sourceText, 3),
         gpu_mode_(gpu_mode), props_(props) {
     if (use_mir)
-      mirLowering = std::make_unique<MIRLowering>(builder, props_, locator);
+      mirLowering =
+          std::make_unique<MIRLowering>(builder, props_, locator, c_symbols);
   }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);

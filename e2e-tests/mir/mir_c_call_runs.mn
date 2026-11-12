@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// C functions called from MIR: printf through its `...`, with a char, a
+// bool and an f32 promoted as C expects, and an owned string lent to it;
+// abs, which C declares with fixed arguments.
+// CHECK: 42 z 1 2.500000
+// CHECK-NEXT: []
+// CHECK-NEXT: 5
+import std;
+
+reuse abs(x: i32) -> i32;
+
+let show(fmt: ptr<char>, a: i32, c: char, b: bool, f: f32) {
+  std::printf(fmt, a, c, b, f);
+}
+let show_text(fmt: ptr<char>, text: 'ptr<char>) -> 'ptr<char> {
+  std::printf(fmt, text);
+  text
+}
+let distance(a: i32, b: i32) -> i32 { abs(a - b) }
+let empty() -> 'ptr<char> { let s = alloc<char>(1); *s = '\0'; s }
+
+let main() -> i32 {
+  show("%d %c %d %f\n", 42, 'z', true, 2.5f32);
+  let s = show_text("[%s]\n", empty());
+  free(s);
+  std::printf("%d\n", distance(2, 7));
+  0
+}

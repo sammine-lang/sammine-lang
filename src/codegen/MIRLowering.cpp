@@ -5,11 +5,12 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/IR/OwningOpRef.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
 //! floats, bool, char) and pointers to them, returning one or `()`; their
-//! literals, parameters, `let`, arithmetic, calls to other sammine
+//! literals, parameters, `let`, arithmetic, calls to sammine and C
 //! functions, lending an owned pointer to a ptr<T>, `alloc`, `free`, `*p`
 //! read and written, statements and return.
 
@@ -52,8 +53,6 @@ std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
 
 std::optional<mlir::FunctionType>
 MIRLowering::mirFunctionType(const FunctionType &fn) const {
-  if (fn.is_var_arg())
-    return std::nullopt;
   llvm::SmallVector<mlir::Type, 4> inputs;
   for (auto &param : fn.get_params_types()) {
     auto type = mirType(param);
@@ -178,28 +177,34 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   return mlir::failure();
 }
 
-// `f(a, b)`, `f` a sammine function, a generic function's copy or an
-// instance's method, whether its body goes through MIR or not.
+// `f(a, b)`, `f` a sammine function, a generic function's copy, an
+// instance's method or a C function, whether its body goes through MIR or not.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   // Not lowered yet: enum constructors, instances the compiler provides, and
   // partial application.
   auto *cp = props_.call(call->id());
   if (cp->is_enum_constructor || cp->builtin_instance || cp->is_partial)
     return mlir::failure();
-  // Nor a call through a function value or to a C function, which are not
-  // func.func symbols.
   auto name =
       (cp->resolved_name ? *cp->resolved_name : call->functionName).mangled();
-  if (!module_.lookupSymbol<mlir::func::FuncOp>(name))
+  // A C function is declared under its C name: std::printf is printf.
+  if (auto it = cSymbols_.find(name); it != cSymbols_.end())
+    name = it->second;
+  // Nor a call through a function value, which names no function.
+  if (!module_.lookupSymbol<mlir::FunctionOpInterface>(name))
     return mlir::failure();
   auto type =
       mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
 
+  // The arguments for the declared parameters, then any passed through a C
+  // function's `...`.
+  auto params = type->getInputs();
   llvm::SmallVector<mlir::Value, 4> args;
-  for (auto [arg, param] : llvm::zip(call->arguments, type->getInputs())) {
-    auto value = lowerArgument(arg.get(), param);
+  for (auto [i, arg] : llvm::enumerate(call->arguments)) {
+    auto value = i < params.size() ? lowerArgument(arg.get(), params[i])
+                                   : lowerVariadicArgument(arg.get());
     if (mlir::failed(value))
       return mlir::failure();
     args.push_back(*value);
@@ -224,10 +229,30 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
       param != smn::PtrType::get(builder_.getContext(), ptr.getPointee(),
                                  smn::Ownership::View))
     return mlir::failure();
-  auto place = smn::DerefOp::create(
-      builder_, loc(arg),
-      smn::PlaceType::get(builder_.getContext(), ptr.getPointee()), *value);
-  return smn::LendOp::create(builder_, loc(arg), param, place).getResult();
+  return lend(*value, loc(arg));
+}
+
+// An argument passed through a C function's `...`. Nothing declares its
+// type, and C only reads what sammine passes it (the type checker keeps
+// addresses out), so an owned pointer is lent, as the linear checker has it.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
+  auto value = lowerExpr(arg);
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  if (smn::ownsMemory(value->getType()))
+    return lend(*value, loc(arg));
+  return *value;
+}
+
+mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc) {
+  auto pointee = mlir::cast<smn::PtrType>(owner.getType()).getPointee();
+  auto *ctx = builder_.getContext();
+  auto place = smn::DerefOp::create(builder_, loc,
+                                    smn::PlaceType::get(ctx, pointee), owner);
+  return smn::LendOp::create(
+             builder_, loc,
+             smn::PtrType::get(ctx, pointee, smn::Ownership::View), place)
+      .getResult();
 }
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
