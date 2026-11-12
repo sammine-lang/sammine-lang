@@ -490,23 +490,16 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   return op.getNumResults() ? op.getResult(0) : mlir::Value();
 }
 
-// Whether MIR can call `callee`, of MIR signature `type`, yet. Not a struct,
-// tuple or array passed to or from C, which C moves in registers or memory
-// as cabi decides, in emitCCall; nor an array passed to a kernel's wrapper,
-// which takes it by pointer, or returned (sret).
+// Whether MIR can call `callee`, of MIR signature `type`, yet: not an
+// array passed to or from C, nor to a kernel's wrapper, which takes it by
+// pointer, nor returned (sret). C's struct passing is cabi::callC's.
 bool MIRLowering::callableFromMIR(mlir::FunctionOpInterface callee,
                                   mlir::FunctionType type) const {
-  auto isAggregate = [](mlir::Type t) {
-    return mlir::isa<smn::StructType, smn::TupleType, smn::ArrayType>(t);
-  };
-  bool passesAggregate = llvm::any_of(type.getInputs(), isAggregate) ||
-                         llvm::any_of(type.getResults(), isAggregate);
   bool passesArray =
       llvm::any_of(type.getInputs(), llvm::IsaPred<smn::ArrayType>);
-  return !(mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
-           passesAggregate) &&
-         !(callee->hasAttr("sammine.kernel_wrapper") && passesArray) &&
-         !returnsArray(type);
+  bool toC = mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) ||
+             callee->hasAttr("sammine.kernel_wrapper");
+  return !(toC && passesArray) && !returnsArray(type);
 }
 
 // `f(a)`, f a binding holding a function value: a call through it.

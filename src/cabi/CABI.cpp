@@ -145,4 +145,51 @@ mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
   return call;
 }
 
+mlir::Value callC(mlir::OpBuilder &builder, mlir::Location loc,
+                  mlir::LLVM::LLVMFuncOp callee,
+                  llvm::SmallVector<mlir::Value, 4> args, mlir::Type result,
+                  llvm::function_ref<mlir::Value(mlir::Type)> slot) {
+  // A struct returned through memory: pass a buffer first, load from it.
+  mlir::Value resultBuf;
+  if (callee.getNumArguments() > 0)
+    if (auto sretTy = callee.getArgAttrOfType<mlir::TypeAttr>(
+            0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
+      resultBuf = slot(sretTy.getValue());
+      args.insert(args.begin(), resultBuf);
+    }
+
+  // A struct argument goes in its register form or, if byval, as a pointer
+  // to a copy. Both reach the declared type through a stack slot.
+  auto fnTy = callee.getFunctionType();
+  for (unsigned i = 0; i < fnTy.getNumParams() && i < args.size(); i++) {
+    if (!mlir::isa<mlir::LLVM::LLVMStructType>(args[i].getType()))
+      continue;
+    auto byvalTy = callee.getArgAttrOfType<mlir::TypeAttr>(
+        i, mlir::LLVM::LLVMDialect::getByValAttrName());
+    auto slotTy = byvalTy ? byvalTy.getValue() : fnTy.getParamType(i);
+    if (args[i].getType() == slotTy && !byvalTy)
+      continue;
+    auto copy = slot(slotTy);
+    mlir::LLVM::StoreOp::create(builder, loc, args[i], copy);
+    args[i] = byvalTy
+                  ? copy
+                  : mlir::LLVM::LoadOp::create(builder, loc, slotTy, copy)
+                        .getResult();
+  }
+
+  auto call = emitCall(builder, loc, callee, args);
+  if (!result)
+    return mlir::Value();
+  if (resultBuf)
+    return mlir::LLVM::LoadOp::create(builder, loc, result, resultBuf);
+  // A struct returned in registers comes back as its register type; it
+  // reaches the struct type through memory.
+  auto value = call.getResult();
+  if (value.getType() == result)
+    return value;
+  auto copy = slot(value.getType());
+  mlir::LLVM::StoreOp::create(builder, loc, value, copy);
+  return mlir::LLVM::LoadOp::create(builder, loc, result, copy);
+}
+
 } // namespace sammine_lang::cabi

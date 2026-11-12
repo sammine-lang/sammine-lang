@@ -108,6 +108,22 @@ void declareCFunction(mlir::ModuleOp module, mlir::OpBuilder &builder,
   mlir::LLVM::LLVMFuncOp::create(builder, module.getLoc(), name, type);
 }
 
+/// A stack slot for one `type`, at the top of the function `op` is in, as the
+/// AST codegen makes them, so LLVM's mem2reg can remove it.
+mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
+                      mlir::Operation *op, mlir::Type type) {
+  mlir::OpBuilder::InsertionGuard guard(rewriter);
+  auto &entry = op->getParentOfType<mlir::FunctionOpInterface>()
+                    .getFunctionBody()
+                    .front();
+  rewriter.setInsertionPointToStart(&entry);
+  auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
+                                                rewriter.getI64Type(), 1);
+  return mlir::LLVM::AllocaOp::create(
+      rewriter, op->getLoc(), mlir::LLVM::LLVMPointerType::get(op->getContext()),
+      type, one);
+}
+
 // alloc<T>(n): malloc(sizeof(T) * n), n widened to i64 as the AST codegen
 // does.
 struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
@@ -291,17 +307,22 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   mlir::LogicalResult
   matchAndRewrite(smn::CallOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    if (auto cFunc = mlir::SymbolTable::lookupNearestSymbolFrom<
-            mlir::LLVM::LLVMFuncOp>(op, op.getCalleeAttr())) {
-      auto call = cabi::emitCall(rewriter, op.getLoc(), cFunc,
-                                 llvm::to_vector<4>(adaptor.getArgs()));
-      rewriter.replaceOp(op, call.getResults());
-      return mlir::success();
-    }
     llvm::SmallVector<mlir::Type, 1> results;
     if (mlir::failed(
             getTypeConverter()->convertTypes(op.getResultTypes(), results)))
       return mlir::failure();
+    if (auto cFunc = mlir::SymbolTable::lookupNearestSymbolFrom<
+            mlir::LLVM::LLVMFuncOp>(op, op.getCalleeAttr())) {
+      auto value = cabi::callC(
+          rewriter, op.getLoc(), cFunc, llvm::to_vector<4>(adaptor.getArgs()),
+          results.empty() ? mlir::Type() : results.front(),
+          [&](mlir::Type type) { return entrySlot(rewriter, op, type); });
+      if (value)
+        rewriter.replaceOp(op, value);
+      else
+        rewriter.eraseOp(op);
+      return mlir::success();
+    }
     rewriter.replaceOpWithNewOp<mlir::func::CallOp>(
         op, op.getCalleeAttr(), results, adaptor.getArgs());
     return mlir::success();
@@ -384,21 +405,6 @@ struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
   }
 };
 
-/// A stack slot for one `type`, at the top of the function `op` is in, as the
-/// AST codegen makes them, so LLVM's mem2reg can remove it.
-mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
-                      mlir::Operation *op, mlir::Type type) {
-  mlir::OpBuilder::InsertionGuard guard(rewriter);
-  auto &entry = op->getParentOfType<mlir::FunctionOpInterface>()
-                    .getFunctionBody()
-                    .front();
-  rewriter.setInsertionPointToStart(&entry);
-  auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
-                                                rewriter.getI64Type(), 1);
-  return mlir::LLVM::AllocaOp::create(
-      rewriter, op->getLoc(), mlir::LLVM::LLVMPointerType::get(op->getContext()),
-      type, one);
-}
 
 // A slot at the top of the function, as the AST codegen makes them.
 struct LocalLowering : public mlir::OpConversionPattern<smn::LocalOp> {
@@ -610,15 +616,28 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
                 mlir::LLVM::GEPNoWrapFlags::inbounds)));
       for (auto arg : entry->getArguments().drop_front())
         args.push_back(arg);
-      mlir::ValueRange returned;
       if (auto cFunc = module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(
-              op.getCallee()))
-        returned = cabi::emitCall(rewriter, loc, cFunc, args).getResults();
-      else
-        returned = mlir::func::CallOp::create(rewriter, loc, op.getCalleeAttr(),
-                                              results, args)
-                       .getResults();
-      mlir::LLVM::ReturnOp::create(rewriter, loc, returned);
+              op.getCallee())) {
+        // A slot for C's struct passing, at the top of the wrapper.
+        auto slot = [&](mlir::Type type) -> mlir::Value {
+          mlir::OpBuilder::InsertionGuard top(rewriter);
+          rewriter.setInsertionPointToStart(entry);
+          auto one = mlir::arith::ConstantIntOp::create(
+              rewriter, loc, rewriter.getI64Type(), 1);
+          return mlir::LLVM::AllocaOp::create(rewriter, loc, ptrTy, type, one);
+        };
+        auto value = cabi::callC(rewriter, loc, cFunc, args,
+                                 results.empty() ? mlir::Type()
+                                                 : results.front(),
+                                 slot);
+        mlir::LLVM::ReturnOp::create(
+            rewriter, loc, value ? mlir::ValueRange{value} : mlir::ValueRange{});
+      } else {
+        auto call = mlir::func::CallOp::create(rewriter, loc,
+                                               op.getCalleeAttr(), results,
+                                               args);
+        mlir::LLVM::ReturnOp::create(rewriter, loc, call.getResults());
+      }
     }
 
     auto closure = closureType(ctx);

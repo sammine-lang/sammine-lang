@@ -211,6 +211,21 @@ mlir::LogicalResult LendOp::verify() {
   return mlir::success();
 }
 
+/// What a sammine call passes `callee` and gets back: its parameters, and
+/// how many results. A C function returning a struct through memory takes
+/// the buffer first (sret) and gives back nothing; the call gives back what
+/// it fills.
+static std::pair<llvm::ArrayRef<mlir::Type>, size_t>
+sammineSignature(mlir::FunctionOpInterface callee) {
+  auto params = callee.getArgumentTypes();
+  size_t results = callee.getResultTypes().size();
+  if (auto cFunc = mlir::dyn_cast<mlir::LLVM::LLVMFuncOp>(*callee);
+      cFunc && cFunc.getNumArguments() > 0 &&
+      cFunc.getArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName()))
+    return {params.drop_front(), 1};
+  return {params, results};
+}
+
 mlir::LogicalResult
 ClosureOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   auto callee = symbolTable.lookupNearestSymbolFrom<mlir::FunctionOpInterface>(
@@ -218,10 +233,10 @@ ClosureOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   if (!callee)
     return emitOpError("binds '")
            << getCallee() << "', which isn't a function";
-  auto params = callee.getArgumentTypes();
+  auto [params, resultCount] = sammineSignature(callee);
   auto signature = getResult().getType().getSignature();
   if (getBound().size() + signature.getNumInputs() != params.size() ||
-      signature.getNumResults() != callee.getResultTypes().size())
+      signature.getNumResults() != resultCount)
     return emitOpError("binds ")
            << getBound().size() << " of '" << getCallee() << "', whose "
            << params.size() << " arguments don't fit " << signature;
@@ -256,7 +271,7 @@ CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   if (!callee)
     return emitOpError("calls '")
            << getCallee() << "', which isn't a function";
-  auto params = callee.getArgumentTypes();
+  auto [params, resultCount] = sammineSignature(callee);
   auto results = callee.getResultTypes();
   // A C function's `...` takes any number more.
   auto cType =
@@ -264,12 +279,12 @@ CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   bool variadic = cType && cType.isVarArg();
   if ((variadic ? getArgs().size() < params.size()
                 : getArgs().size() != params.size()) ||
-      results.size() != getResults().size())
+      resultCount != getResults().size())
     return emitOpError("passes ")
            << getArgs().size() << " and takes back " << getResults().size()
            << ", but '" << getCallee() << "' takes "
            << (variadic ? "at least " : "") << params.size()
-           << " and gives back " << results.size();
+           << " and gives back " << resultCount;
   // A callee emitted from the AST has LLVM types where MIR has its own.
   if (!callee->hasAttr(kMirAttr))
     return mlir::success();

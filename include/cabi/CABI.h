@@ -53,4 +53,15 @@ mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
                             mlir::LLVM::LLVMFuncOp callee,
                             llvm::SmallVector<mlir::Value, 4> args);
 
+//! A call to the C function `callee` with `args` as sammine has them. A
+//! struct argument goes as C passes it, in its register type or as a
+//! pointer to a copy (byval); a struct result comes back in its register
+//! type or through a buffer passed first (sret), and reaches `result`,
+//! sammine's type for it, through memory. Returns the result, or a null
+//! value if `result` is null. `slot` makes a stack slot of a type.
+mlir::Value callC(mlir::OpBuilder &builder, mlir::Location loc,
+                  mlir::LLVM::LLVMFuncOp callee,
+                  llvm::SmallVector<mlir::Value, 4> args, mlir::Type result,
+                  llvm::function_ref<mlir::Value(mlir::Type)> slot);
+
 } // namespace sammine_lang::cabi

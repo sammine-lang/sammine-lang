@@ -550,48 +550,13 @@ mlir::Value MLIRGenImpl::emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
                                    llvm::SmallVector<mlir::Value, 4> operands,
                                    const Type &semRetType,
                                    mlir::Location location) {
-  // A struct returned through memory: pass a buffer first, load from it.
-  mlir::Value resultBuf;
-  if (llvmFunc.getNumArguments() > 0)
-    if (auto sretTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
-            0, mlir::LLVM::LLVMDialect::getStructRetAttrName())) {
-      resultBuf = emitAllocaOne(sretTy.getValue(), location);
-      operands.insert(operands.begin(), resultBuf);
-    }
-
-  // A struct argument goes in its register form or, if byval, as a pointer
-  // to a copy. Both reach the declared type through a stack slot.
-  auto fnTy = llvmFunc.getFunctionType();
-  for (unsigned i = 0; i < fnTy.getNumParams() && i < operands.size(); i++) {
-    if (!mlir::isa<mlir::LLVM::LLVMStructType>(operands[i].getType()))
-      continue;
-    auto byvalTy = llvmFunc.getArgAttrOfType<mlir::TypeAttr>(
-        i, mlir::LLVM::LLVMDialect::getByValAttrName());
-    auto slotTy = byvalTy ? byvalTy.getValue() : fnTy.getParamType(i);
-    if (operands[i].getType() == slotTy && !byvalTy)
-      continue;
-    auto slot = emitAllocaOne(slotTy, location);
-    mlir::LLVM::StoreOp::create(builder, location, operands[i], slot);
-    operands[i] =
-        byvalTy ? slot
-                : mlir::LLVM::LoadOp::create(builder, location, slotTy, slot)
-                      .getResult();
-  }
-
-  auto llvmCallOp = cabi::emitCall(builder, location, llvmFunc, operands);
-  if (!resultBuf && llvmCallOp.getNumResults() == 0)
-    return nullptr;
-  auto semTy = convertType(semRetType);
-  if (resultBuf)
-    return mlir::LLVM::LoadOp::create(builder, location, semTy, resultBuf);
-  // A struct returned in registers comes back as its register type; it
-  // reaches the struct type through memory.
-  auto result = llvmCallOp.getResult();
-  if (result.getType() == semTy)
-    return result;
-  auto slot = emitAllocaOne(result.getType(), location);
-  mlir::LLVM::StoreOp::create(builder, location, result, slot);
-  return mlir::LLVM::LoadOp::create(builder, location, semTy, slot);
+  auto result = semRetType.type_kind == TypeKind::Unit
+                    ? mlir::Type()
+                    : convertType(semRetType);
+  auto value = cabi::callC(
+      builder, location, llvmFunc, operands, result,
+      [&](mlir::Type type) { return emitAllocaOne(type, location); });
+  return value ? value : nullptr;
 }
 
 mlir::Value
