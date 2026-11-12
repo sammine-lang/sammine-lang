@@ -1,0 +1,21 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// CHECK: 70 15
+import std;
+
+let f(a: i64) -> i64 {
+  let b = a * 2i64;
+  let b = b + 1i64;
+  let c: i64 = 10;
+  return b * c;
+}
+
+let g(x: i32, y: i32) -> i32 {
+  let s = x + y;
+  let d = x - y;
+  s * d / 3
+}
+
+let main() -> i32 {
+  std::printf("%lld %d\n", f(3i64), g(7, 2));
+  0
+}

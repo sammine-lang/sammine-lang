@@ -1,0 +1,21 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// A let names the value of its right side, lowered first, so a let that
+// shadows a name reads the one it shadows. No stack slot is made.
+// CHECK-LABEL: func.func private @f(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: %c2_i64 = arith.constant 2 : i64
+// CHECK-NEXT: %0 = arith.muli %arg0, %c2_i64 : i64
+// CHECK-NEXT: %c1_i64 = arith.constant 1 : i64
+// CHECK-NEXT: %1 = arith.addi %0, %c1_i64 : i64
+// CHECK-NEXT: %c10_i64 = arith.constant 10 : i64
+// CHECK-NEXT: %2 = arith.muli %1, %c10_i64 : i64
+// CHECK-NEXT: return %2 : i64
+
+let f(a: i64) -> i64 {
+  let b = a * 2i64;
+  let b = b + 1i64;
+  let c: i64 = 10;
+  return b * c;
+}
+
+let main() -> i32 { (f(3i64) - 70i64) as i32 }

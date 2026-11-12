@@ -7,7 +7,7 @@ import std;
 let inc(a: i32) -> i32 { a + 1 }
 let mix(a: i64, b: i64) -> i64 { return (a * b - 3i64) / 2i64 % 7i64; }
 let udiv(a: u32, b: u32) -> u32 { a / b }
-let local(a: i32) -> i32 { let b = inc(a) - 1; b }
+let local(a: i32) -> i32 { if a > 0 { inc(a) - 1 } else { 0 } }
 
 let main() -> i32 {
   std::printf("%d %lld %u %d\n", inc(41), mix(5i64, 6i64),

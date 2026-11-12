@@ -6,7 +6,7 @@
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over integers, integer
-//! literals, parameters, arithmetic and return.
+//! literals, parameters, `let`, arithmetic and return.
 
 namespace sammine_lang {
 
@@ -49,10 +49,10 @@ bool MIRLowering::lowerBody(FuncDefAST *ast, mlir::func::FuncOp func) {
   auto &entry = *func.addEntryBlock();
   builder_.setInsertionPointToStart(&entry);
 
-  params_.clear();
+  names_.clear();
   for (auto [param, arg] :
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
-    params_[param->name] = arg;
+    names_[param->name] = arg;
 
   if (mlir::failed(lowerBlock(ast->Block.get()))) {
     // Leave no trace: the AST codegen gives `func` its body instead.
@@ -63,14 +63,32 @@ bool MIRLowering::lowerBody(FuncDefAST *ast, mlir::func::FuncOp func) {
   return true;
 }
 
-// For now a body is just its return: `{ a + 1 }` or `{ return a + 1; }`.
+// For now a body is `let`s, then its return:
+// `{ let b = a * 2; b + 1 }` or `{ let b = a * 2; return b + 1; }`.
 mlir::LogicalResult MIRLowering::lowerBlock(BlockAST *block) {
-  if (block->Statements.size() != 1)
+  if (block->Statements.empty())
     return mlir::failure();
-  auto *ret = llvm::dyn_cast<ReturnStmtAST>(block->Statements.front().get());
+  for (auto &stmt : llvm::drop_end(block->Statements)) {
+    auto *def = llvm::dyn_cast<VarDefAST>(stmt.get());
+    if (!def || mlir::failed(lowerVarDef(def)))
+      return mlir::failure();
+  }
+  auto *ret = llvm::dyn_cast<ReturnStmtAST>(block->Statements.back().get());
   if (!ret)
     return mlir::failure();
   return lowerReturn(ret);
+}
+
+// A `let` of a value MIR has a type for names that value: the right side is
+// lowered first, so `let x = x + 1` reads the x it shadows.
+mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
+  if (def->is_tuple_destructure || !mirType(def->get_type()))
+    return mlir::failure();
+  auto value = lowerExpr(def->Expression.get());
+  if (mlir::failed(value))
+    return mlir::failure();
+  names_[def->TypedVar->name] = *value;
+  return mlir::success();
 }
 
 mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
@@ -104,8 +122,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
-  auto it = params_.find(var->variableName.mangled());
-  if (it == params_.end())
+  auto it = names_.find(var->variableName.mangled());
+  if (it == names_.end())
     return mlir::failure();
   return it->second;
 }

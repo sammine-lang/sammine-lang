@@ -36,8 +36,9 @@ private:
   mlir::OpBuilder &builder_;
   const AST::ASTProperties &props_;
   const SourceLocator &locator_;
-  /// The current function's parameters, by name.
-  llvm::StringMap<mlir::Value> params_;
+  /// What each name in the current function stands for: its parameters and
+  /// `let`s so far. A later `let` of a name shadows the earlier one.
+  llvm::StringMap<mlir::Value> names_;
 
   mlir::Location loc(const AST::AstBase *ast) const {
     return locator_.loc(builder_, ast);
@@ -47,6 +48,7 @@ private:
   bool supportsSignature(AST::FuncDefAST *ast) const;
 
   mlir::LogicalResult lowerBlock(AST::BlockAST *block);
+  mlir::LogicalResult lowerVarDef(AST::VarDefAST *def);
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
   mlir::FailureOr<mlir::Value> lowerNumber(AST::NumberExprAST *num);
