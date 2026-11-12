@@ -1,0 +1,22 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 3 10.000000 6 7
+
+import std;
+
+// A generic function given fewer arguments than it takes makes a closure,
+// as a normal function does. Its type arguments come from the arguments it
+// is given, or are written out.
+let apply2<T>(f: (T, T) -> T, a: T, b: T) -> T { f(a, b) }
+let pick<T>(a: T, b: T) -> T { b }
+let add(a: i64, b: i64) -> i64 { a + b }
+let mul(a: f64, b: f64) -> f64 { a * b }
+let call34(g: (i64, i64) -> i64) -> i64 { g(3i64, 4i64) }
+
+let main() -> i32 {
+  let g = apply2(add);
+  let h = apply2(mul, 2.5);
+  let k = pick<i64>();
+  std::printf("%ld %f %ld %ld\n", g(1i64, 2i64), h(4.0), k(5i64, 6i64),
+              call34(apply2(add)));
+  0
+}

@@ -519,7 +519,8 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
   auto params = func.get_params_types();
   auto &type_params = generic_def->Prototype->type_params;
 
-  if (ast->arguments.size() != params.size()) {
+  // Fewer arguments is a partial application, as for a normal function.
+  if (ast->arguments.size() > params.size()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Generic function '{}' expects {} arguments, got {}",
@@ -527,6 +528,7 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
                     ast->arguments.size()));
     return ResolvedCall::failure();
   }
+  bool is_partial = ast->arguments.size() < params.size();
 
   TypeBindings bindings;
 
@@ -572,13 +574,20 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
       }
     }
 
-    // Check all type params resolved
+    // Check all type params resolved. A partial application infers them
+    // from the arguments it binds alone.
     for (auto &tp : type_params) {
       if (!bindings.contains(tp)) {
         this->add_error(
             ast->get_location(),
-            fmt::format("Type parameter '{}' could not be inferred for '{}'",
-                        tp, ast->functionName.mangled()));
+            is_partial
+                ? fmt::format("Type parameter '{}' could not be inferred for "
+                              "'{}' from the arguments it is partially "
+                              "applied to; give it explicitly",
+                              tp, ast->functionName.mangled())
+                : fmt::format("Type parameter '{}' could not be inferred for "
+                              "'{}'",
+                              tp, ast->functionName.mangled()));
         return ResolvedCall::failure();
       }
     }
@@ -596,10 +605,9 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
-  return ResolvedCall{format_generic_call_name(ast->written_name,
-                                               type_params, bindings),
-                      std::move(expected), std::move(result),
-                      std::move(instance_type), false};
+  return applied_call(
+      ast, format_generic_call_name(ast->written_name, type_params, bindings),
+      expected, std::move(result), std::move(instance_type));
 }
 
 std::optional<ResolvedCall>
@@ -663,21 +671,29 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
     return ResolvedCall::failure();
   }
 
-  auto supplied = params.first(ast->arguments.size());
+  return applied_call(ast, callee, params, func.get_return_type(), ty);
+}
+
+// A call of a function taking `params` and returning `result`, given at most
+// as many arguments. Given fewer, it is a partial application: the call
+// makes a closure that takes the parameters left over.
+ResolvedCall BiTypeCheckerVisitor::applied_call(CallExprAST *ast,
+                                                std::string callee,
+                                                std::span<const Type> params,
+                                                Type result,
+                                                std::optional<Type> signature) {
+  auto given = ast->arguments.size();
+  auto supplied = params.first(given);
   std::vector<Type> expected(supplied.begin(), supplied.end());
-
-  // Partial application: fewer args than params
-  if (ast->arguments.size() < params.size()) {
+  if (given < params.size()) {
     props_.call(ast->id()).is_partial = true;
-    auto rest = params.subspan(ast->arguments.size());
+    auto rest = params.subspan(given);
     std::vector<Type> remaining(rest.begin(), rest.end());
-    remaining.push_back(func.get_return_type());
-    return ResolvedCall{callee, std::move(expected),
-                        Type::Function(std::move(remaining)), ty, false};
+    remaining.push_back(std::move(result));
+    result = Type::Function(std::move(remaining));
   }
-
-  return ResolvedCall{callee, std::move(expected), func.get_return_type(), ty,
-                      false};
+  return ResolvedCall{std::move(callee), std::move(expected),
+                      std::move(result), std::move(signature), false};
 }
 
 Type BiTypeCheckerVisitor::synthesize(ReturnStmtAST *ast) {

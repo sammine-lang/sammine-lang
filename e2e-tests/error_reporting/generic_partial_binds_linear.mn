@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_partial_binds_linear.mn:11:15
+// CHECK: Cannot bind 'p' of linear type ''ptr<i64>' into a partial application of 'keep': the closure can be called more than once
+
+let keep<T>(p: 'ptr<T>, i: i64) -> 'ptr<T> { p }
+
+// A closure can be called any number of times, so it cannot own what it
+// binds. This holds for a generic function as for a normal one.
+let main() -> i32 {
+  let p = alloc<i64>(1i64);
+  let f = keep(p);
+  0
+}

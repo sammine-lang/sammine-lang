@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_partial_not_inferred.mn:9:10
+// CHECK: Type parameter 'T' could not be inferred for 'pick' from the arguments it is partially applied to; give it explicitly
+
+let pick<T>(a: T, b: T) -> T { b }
+
+// Given no arguments, nothing says what T is.
+let main() -> i32 {
+  let k = pick();
+  0
+}

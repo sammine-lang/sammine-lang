@@ -2,9 +2,9 @@
 // CHECK: generic_arg_count.mn:19:20
 // CHECK-NEXT:    17|
 // CHECK-NEXT:    18|let main() -> i32 {
-// CHECK-NEXT:    19|  let x: i32 = pair(42);
-// CHECK-NEXT:     |                    ─┬
-// CHECK-NEXT:     |                     ╰─ Generic function 'pair' expects 2 arguments, got 1
+// CHECK-NEXT:    19|  let x: i32 = pair(4, 2, 0);
+// CHECK-NEXT:     |                    ──────┬
+// CHECK-NEXT:     |                          ╰─ Generic function 'pair' expects 2 arguments, got 3
 // CHECK-NEXT:   20|  return 0;
 // CHECK-NEXT:   21|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -16,6 +16,6 @@ let pair<T>(a: T, b: T) -> T {
 }
 
 let main() -> i32 {
-  let x: i32 = pair(42);
+  let x: i32 = pair(4, 2, 0);
   return 0;
 }

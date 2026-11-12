@@ -229,6 +229,9 @@ public:
   std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_normal_call(CallExprAST *ast);
+  ResolvedCall applied_call(CallExprAST *ast, std::string callee,
+                            std::span<const Type> params, Type result,
+                            std::optional<Type> signature);
 
   /// Check one visited call argument against its expected type, resolving
   /// literals on success. Returns false on a mismatch (reported here) or a
