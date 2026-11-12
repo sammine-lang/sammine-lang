@@ -1,0 +1,13 @@
+// RUN: %sammine --file %full --emit mlir | %check %full
+// RUN: %sammine_jit --file %full | %check %full --check-prefix OUT
+// A function that writes `-> unit` and runs off its end returns (): MIR
+// adds the return, as the AST codegen did.
+// CHECK-LABEL: func.func private @shout(
+// CHECK-SAME: sammine.mir
+// CHECK: return
+// OUT: hi 3
+import std;
+
+let shout(n: i32) -> unit { std::printf("hi %d\n", n); }
+
+let main() -> i32 { shout(3); 0 }

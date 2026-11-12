@@ -191,10 +191,20 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
     names_[param->name] = arg;
 
-  // The body ends by returning, its implicit return made explicit by
-  // GeneralSemanticsVisitor, on every path.
-  if (mlir::failed(lowerStatements(ast->Block.get())) || !terminated())
+  // GeneralSemanticsVisitor makes a body's implicit return explicit, but
+  // not in a function that writes `-> unit`: one that runs off its end
+  // returns (), or its last value, as the AST codegen has it.
+  auto value = lowerStatements(ast->Block.get());
+  if (mlir::failed(value))
     return false;
+  if (!terminated()) {
+    if (signature->getNumResults() == 0)
+      mlir::func::ReturnOp::create(builder_, loc(ast));
+    else if (*value && value->getType() == signature->getResult(0))
+      mlir::func::ReturnOp::create(builder_, loc(ast), *value);
+    else
+      return false;
+  }
 
   (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
   decl->getBlock()->getOperations().insert(mlir::Block::iterator(decl),
