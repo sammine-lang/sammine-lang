@@ -16,12 +16,17 @@ namespace sammine_lang {
 
 namespace {
 
+/// LLVM's opaque pointer, what each of MIR's pointers and places becomes.
+mlir::LLVM::LLVMPointerType llvmPtr(mlir::MLIRContext *ctx) {
+  return mlir::LLVM::LLVMPointerType::get(ctx);
+}
+
 /// A function value: the code to call, which takes
 /// the environment first, and the environment.
 mlir::LLVM::LLVMStructType closureType(mlir::MLIRContext *ctx) {
   auto type = mlir::LLVM::LLVMStructType::getIdentified(ctx, "sammine.closure");
   if (!type.isInitialized()) {
-    auto ptr = mlir::LLVM::LLVMPointerType::get(ctx);
+    auto ptr = llvmPtr(ctx);
     (void)type.setBody({ptr, ptr}, /*isPacked=*/false);
   }
   return type;
@@ -37,10 +42,10 @@ public:
   MIRTypeConverter() {
     addConversion([](mlir::Type type) { return type; });
     addConversion([](smn::PtrType type) -> mlir::Type {
-      return mlir::LLVM::LLVMPointerType::get(type.getContext());
+      return llvmPtr(type.getContext());
     });
     addConversion([](smn::PlaceType type) -> mlir::Type {
-      return mlir::LLVM::LLVMPointerType::get(type.getContext());
+      return llvmPtr(type.getContext());
     });
     addConversion([this](smn::StructType type) -> std::optional<mlir::Type> {
       // Identified by name, so the same type as declarations use, whose
@@ -122,7 +127,7 @@ mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
   auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
                                                 rewriter.getI64Type(), 1);
   return mlir::LLVM::AllocaOp::create(
-      rewriter, op->getLoc(), mlir::LLVM::LLVMPointerType::get(op->getContext()),
+      rewriter, op->getLoc(), llvmPtr(op->getContext()),
       type, one);
 }
 
@@ -133,7 +138,7 @@ struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
   matchAndRewrite(smn::AllocOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
-    auto ptrTy = mlir::LLVM::LLVMPointerType::get(op.getContext());
+    auto ptrTy = llvmPtr(op.getContext());
     auto i64Ty = rewriter.getI64Type();
     auto pointee = getTypeConverter()->convertType(
         mlir::cast<smn::PtrType>(op.getType()).getPointee());
@@ -163,7 +168,7 @@ struct FreeLowering : public mlir::OpConversionPattern<smn::FreeOp> {
   mlir::LogicalResult
   matchAndRewrite(smn::FreeOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    auto ptrTy = mlir::LLVM::LLVMPointerType::get(op.getContext());
+    auto ptrTy = llvmPtr(op.getContext());
     declareCFunction(
         op->getParentOfType<mlir::ModuleOp>(), rewriter, "free",
         mlir::LLVM::LLVMFunctionType::get(
@@ -199,7 +204,7 @@ struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
     if (!element)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), element,
+        op, llvmPtr(op.getContext()), element,
         adaptor.getPtr(), llvm::ArrayRef<mlir::LLVM::GEPArg>{adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     return mlir::success();
@@ -217,7 +222,7 @@ struct FieldLowering : public mlir::OpConversionPattern<smn::FieldOp> {
     if (!base)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), base,
+        op, llvmPtr(op.getContext()), base,
         adaptor.getBase(),
         llvm::ArrayRef<mlir::LLVM::GEPArg>{
             0, static_cast<int32_t>(op.getIndex())},
@@ -236,7 +241,7 @@ struct ElemLowering : public mlir::OpConversionPattern<smn::ElemOp> {
     if (!base)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), base,
+        op, llvmPtr(op.getContext()), base,
         adaptor.getBase(),
         llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
@@ -480,7 +485,7 @@ struct LocalLowering : public mlir::OpConversionPattern<smn::LocalOp> {
 mlir::Value payloadField(mlir::ConversionPatternRewriter &rewriter,
                          mlir::Location loc, mlir::Type enumType,
                          mlir::Value slot, int64_t offset) {
-  auto ptrTy = mlir::LLVM::LLVMPointerType::get(rewriter.getContext());
+  auto ptrTy = llvmPtr(rewriter.getContext());
   mlir::Value payload = mlir::LLVM::GEPOp::create(
       rewriter, loc, ptrTy, enumType, slot,
       llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
@@ -509,7 +514,7 @@ struct VariantLowering : public mlir::OpConversionPattern<smn::VariantOp> {
         rewriter, loc, rewriter.getI32Type(),
         static_cast<int64_t>(op.getIndex()));
     auto tagPtr = mlir::LLVM::GEPOp::create(
-        rewriter, loc, mlir::LLVM::LLVMPointerType::get(op.getContext()),
+        rewriter, loc, llvmPtr(op.getContext()),
         enumType, slot, llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     mlir::LLVM::StoreOp::create(rewriter, loc, tag, tagPtr);
@@ -569,7 +574,7 @@ struct ElementLowering : public mlir::OpConversionPattern<smn::ElementOp> {
     mlir::LLVM::StoreOp::create(rewriter, op.getLoc(), adaptor.getArray(),
                                 slot);
     auto at = mlir::LLVM::GEPOp::create(
-        rewriter, op.getLoc(), mlir::LLVM::LLVMPointerType::get(op.getContext()),
+        rewriter, op.getLoc(), llvmPtr(op.getContext()),
         arrayType, slot,
         llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
@@ -617,7 +622,7 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
     auto loc = op.getLoc();
     auto *ctx = op.getContext();
     auto module = op->getParentOfType<mlir::ModuleOp>();
-    auto ptrTy = mlir::LLVM::LLVMPointerType::get(ctx);
+    auto ptrTy = llvmPtr(ctx);
     auto signature = op.getType().getSignature();
     llvm::SmallVector<mlir::Type> rest, results;
     if (mlir::failed(getTypeConverter()->convertTypes(signature.getInputs(),
@@ -719,7 +724,7 @@ struct CallIndirectLowering
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto loc = op.getLoc();
     auto *ctx = op.getContext();
-    auto ptrTy = mlir::LLVM::LLVMPointerType::get(ctx);
+    auto ptrTy = llvmPtr(ctx);
     llvm::SmallVector<mlir::Type> results;
     if (mlir::failed(
             getTypeConverter()->convertTypes(op.getResultTypes(), results)))
@@ -812,14 +817,10 @@ struct MIRToLLVMPass
                  converter.isLegal(&func.getBody());
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
-    target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
-                        smn::PtrElemOp, smn::AddrOp, smn::FieldOp,
-                        smn::ElemOp, smn::LocalOp,
-                        smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
-                        smn::StringOp, smn::AggregateOp, smn::ExtractOp,
-                        smn::VariantOp, smn::TagOp, smn::PayloadOp,
-                        smn::ElementOp, smn::UnreachableOp, smn::ClosureOp,
-                        smn::CallIndirectOp, smn::AddressOp>();
+    // Every MIR op is lowered here. to_device and to_host aren't MIR: the
+    // kernel wrappers' ops, which lower-sammine-ops lowers before this pass.
+    target.addIllegalDialect<smn::SammineDialect>();
+    target.addLegalOp<smn::ToDeviceOp, smn::ToHostOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(
