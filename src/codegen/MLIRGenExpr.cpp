@@ -1,6 +1,7 @@
 #include "ast/Ast.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
+#include "codegen/RangeIteration.h"
 #include "typecheck/BuiltinInstances.h"
 
 using sammine_util::cautious_at;
@@ -499,18 +500,9 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
                                                endVal, llvm::ArrayRef<int64_t>{1});
 
   // --- Resolve the Option<(Range, i64)> enum type ---
-  auto tupleType = Type::Tuple({rangeType, ast->start->get_type()});
-  auto optionType =
-      Type::Enum(sammine_util::QualifiedName::from_parts(
-                     {"Option<(" + rangeType.to_string() + ", " +
-                      ast->start->get_type().to_string() + ")>"}),
-                 {{/*name=*/"Some",
-                   /*payload=*/{tupleType},
-                   /*discriminant=*/std::nullopt},
-                  {/*name=*/"None",
-                   /*payload=*/{},
-                   /*discriminant=*/std::nullopt}});
-  auto optionMlirTy = convertType(optionType);
+  auto iteration = rangeIteration(rangeType, ast->start->get_type());
+  auto tupleType = iteration.step;
+  auto optionMlirTy = convertType(iteration.option);
 
   // --- Header block: takes Range as block argument ---
   auto *headerBlock = new mlir::Block();
@@ -523,8 +515,7 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   auto iterArg = headerBlock->getArgument(0);
 
   // --- Call Iterator<Range<T>, T>::next(iter) ---
-  std::string nextFn = "Iterator<" + rangeType.to_string() + ", " +
-                       ast->start->get_type().to_string() + ">::next";
+  auto &nextFn = iteration.next;
   auto resultVal =
       emitSammineCall(nextFn, {iterArg}, {optionMlirTy}, location).front();
 
