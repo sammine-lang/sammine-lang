@@ -118,6 +118,8 @@ private:
   mlir::FailureOr<mlir::Value>
   lowerArrayLiteral(AST::ArrayLiteralExprAST *array);
   mlir::FailureOr<mlir::Value> lowerArrayIndex(AST::IndexExprAST *index);
+  mlir::FailureOr<mlir::Value> lowerRangeArray(AST::RangeExprAST *range);
+  mlir::FailureOr<mlir::Value> lowerDim(AST::DimExprAST *dim);
   mlir::LogicalResult checkBounds(mlir::Location location, mlir::Value offset,
                                   int64_t size);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);

@@ -410,6 +410,10 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerAddrOf(addr);
   if (auto *array = llvm::dyn_cast<ArrayLiteralExprAST>(expr))
     return lowerArrayLiteral(array);
+  if (auto *range = llvm::dyn_cast<RangeExprAST>(expr))
+    return lowerRangeArray(range);
+  if (auto *dim = llvm::dyn_cast<DimExprAST>(expr))
+    return lowerDim(dim);
   if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
     auto operand = len->operand->get_type();
     if (operand.type_kind != TypeKind::Array)
@@ -1112,6 +1116,73 @@ MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
   for (auto [i, element] : llvm::enumerate(array->elements))
     exprs.push_back({i, element.get()});
   return lowerAggregate(loc(array), *type, elementTypes, exprs);
+}
+
+// `[a...b]`, an array of a, a + 1, ...: filled in a slot by a loop, as the
+// AST codegen does, then read whole.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerRangeArray(RangeExprAST *range) {
+  auto type = mirType(range->get_type());
+  if (!type)
+    return mlir::failure();
+  auto array = mlir::cast<smn::ArrayType>(*type);
+  auto element = mlir::dyn_cast<mlir::IntegerType>(array.getElement());
+  if (!element)
+    return mlir::failure();
+  auto start = lowerExpr(range->start.get());
+  if (mlir::failed(start) || !*start || start->getType() != element)
+    return mlir::failure();
+  auto location = loc(range);
+  auto *ctx = builder_.getContext();
+  auto slot = smn::LocalOp::create(builder_, location,
+                                   smn::PlaceType::get(ctx, array), "");
+  auto constant = [&](int64_t v) -> mlir::Value {
+    return mlir::arith::ConstantIntOp::create(builder_, location, element, v);
+  };
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *header = &region->emplaceBlock();
+  header->addArgument(element, location);
+  auto *body = &region->emplaceBlock();
+  auto *after = &region->emplaceBlock();
+  mlir::cf::BranchOp::create(builder_, location, header,
+                             mlir::ValueRange{constant(0)});
+  builder_.setInsertionPointToStart(header);
+  auto index = header->getArgument(0);
+  auto more = mlir::arith::CmpIOp::create(builder_, location,
+                                          mlir::arith::CmpIPredicate::slt,
+                                          index, constant(array.getSize()));
+  mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
+  builder_.setInsertionPointToStart(body);
+  auto value = mlir::arith::AddIOp::create(builder_, location, *start, index);
+  auto at = smn::ElemOp::create(builder_, location,
+                                smn::PlaceType::get(ctx, element), slot, index);
+  smn::StoreOp::create(builder_, location, value, at);
+  auto next = mlir::arith::AddIOp::create(builder_, location, index,
+                                          constant(1));
+  mlir::cf::BranchOp::create(builder_, location, header,
+                             mlir::ValueRange{next});
+  after->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(after);
+  return read(location, slot);
+}
+
+// `dim(a)`: the sizes of a nested array's dimensions, a tuple of i32
+// constants, from its type alone, as the AST codegen has it.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
+  auto type = mirType(dim->get_type());
+  if (!type)
+    return mlir::failure();
+  llvm::SmallVector<mlir::Value> sizes;
+  for (Type current = dim->operand->get_type();
+       current.type_kind == TypeKind::Array;
+       current = std::get<ArrayType>(current.type_data).get_element())
+    sizes.push_back(mlir::arith::ConstantIntOp::create(
+        builder_, loc(dim), builder_.getI32Type(),
+        static_cast<int64_t>(
+            std::get<ArrayType>(current.type_data).get_size())));
+  return smn::AggregateOp::create(builder_, loc(dim), *type, sizes)
+      .getResult();
 }
 
 // `a[i]` of an array: i is checked first, as the AST codegen checks it, and
