@@ -6,7 +6,7 @@
 // CHECK-NEXT:     |                     ───────────┬
 // CHECK-NEXT:     |                                ╰─ Type mismatch: expression has type 'ptr<i32>, but variable declared as ptr<i32>
 // CHECK-NEXT:     |                     ───────────┬
-// CHECK-NEXT:     |                                ╰─ note: 'ptr<i32>' is a linear (owned) pointer, 'ptr<i32>' is non-linear — these are incompatible
+// CHECK-NEXT:     |                                ╰─ note: 'ptr<i32> is an owning pointer and ptr<i32> a view of one: they are different types
 // CHECK-NEXT:   18|  return 0;
 // CHECK-NEXT:   19|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

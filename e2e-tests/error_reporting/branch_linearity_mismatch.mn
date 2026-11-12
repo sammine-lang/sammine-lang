@@ -1,7 +1,8 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: branch_linearity_mismatch.mn:10:29
+// CHECK: branch_linearity_mismatch.mn:11:29
 // CHECK: If branches have incompatible types: then has 'ptr<i64>, else has ptr<i64>
 // CHECK: Case arms have incompatible types: expected 'ptr<i64>, got ptr<i64>
+// CHECK: note: 'ptr<i64> is an owning pointer and ptr<i64> a view of one: they are different types
 // CHECK: Array element 1: expected 'ptr<i64>, got ptr<i64>
 
 // An owning pointer and a view are different types, so the branches of an

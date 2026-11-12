@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: hint_linearity_view_for_owner.mn:9:22
+// CHECK: Type mismatch: expression has type ptr<i32>, but variable declared as 'ptr<i32>
+// CHECK: note: 'ptr<i32> is an owning pointer and ptr<i32> a view of one: they are different types
+
+// &x only views x, so it can't be held where an owning pointer is declared.
+let main() -> i32 {
+  let x = 1i32;
+  let p : 'ptr<i32> = &x;
+  0
+}

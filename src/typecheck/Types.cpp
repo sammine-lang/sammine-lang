@@ -236,23 +236,17 @@ std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
 
 std::optional<std::string> incompatibility_hint(const Type &expected,
                                                 const Type &actual) {
-  // Linearity mismatch: both pointers but different linearity
+  // Linearity mismatch: both pointers but different linearity. Each is
+  // spelled as written and left unquoted, a quote being how an owning
+  // pointer is written: 'ptr<T>.
   if (expected.type_kind == TypeKind::Pointer &&
       actual.type_kind == TypeKind::Pointer &&
       expected.linearity != actual.linearity) {
-    auto pointee =
-        std::get<PointerType>(expected.type_data).get_pointee().to_string();
-    if (actual.linearity == Linearity::Linear) {
-      return fmt::format(
-          "note: 'ptr<{}>' is a linear (owned) pointer, 'ptr<{}>' is "
-          "non-linear — these are incompatible",
-          pointee, pointee);
-    } else {
-      return fmt::format(
-          "note: 'ptr<{}>' is non-linear, 'ptr<{}>' is a linear (owned) "
-          "pointer — these are incompatible",
-          pointee, pointee);
-    }
+    auto &owning = expected.is_linear_v() ? expected : actual;
+    auto &view = expected.is_linear_v() ? actual : expected;
+    return fmt::format("note: {} is an owning pointer and {} a view of one: "
+                       "they are different types",
+                       owning.to_string(), view.to_string());
   }
 
   // Signed/unsigned mismatch
