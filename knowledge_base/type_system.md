@@ -10,7 +10,7 @@
 
 ## ASTProperties
 - Side table keyed by `NodeId` (auto-incrementing per `AstBase`)
-- `CallProps`: callee_func_type, is_partial, resolved_name, type_bindings, is_typeclass_call, is_enum_constructor, enum_variant_index. `callee_func_type` is the signature the call goes to (a generic's or an instance's with its type arguments put in), set for every call to a function, normal, generic or typeclass; the linear checker reads it to tell a lent argument from a moved one
+- `CallProps`: callee_func_type, is_partial, resolved_name, type_bindings, is_typeclass_call, is_enum_constructor, enum_variant_index. `callee_func_type` is the signature the call goes to (a generic's or an instance's, as `resolve_generic_signature` resolves it: `substitute()` would leave a generic struct named as the generic, `Vec<T>`), set for every call to a function, normal, generic or typeclass; the linear checker reads it to tell a lent argument from a moved one
 - `BinaryProps`: resolved_op_method
 - `VariableProps`: is_enum_unit_variant, enum_variant_index
 - Writers (BiTypeChecker): `props_.call(id).field = val`; Readers (codegen): `props_.call(id)->field`

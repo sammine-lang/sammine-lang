@@ -279,6 +279,15 @@ bool BiTypeCheckerVisitor::check_call_argument(CallExprAST *ast, size_t i,
   return true;
 }
 
+// The function type taking `params` and giving `result`: an instance's
+// signature, as resolve_generic_signature resolves it. substitute() would
+// leave a generic struct among its types named as the generic is (Vec<T>).
+static Type signature_of(const std::vector<Type> &params, const Type &result) {
+  auto types = params;
+  types.push_back(result);
+  return Type::Function(std::move(types));
+}
+
 std::pair<std::vector<Type>, Type>
 BiTypeCheckerVisitor::resolve_generic_signature(PrototypeAST *proto,
                                                 std::span<const Type> params,
@@ -585,13 +594,12 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   props_.call(ast->id()).is_typeclass_call = true;
   if (is_builtin_instance(tc_key))
     props_.call(ast->id()).builtin_instance = tc_key;
-  // The instance's signature, as for any other call: the linear checker reads
-  // it to tell a lent argument from a moved one.
-  auto instance_type = substitute(method_proto->get_type(), tc_bindings);
-  props_.call(ast->id()).callee_func_type = instance_type;
-
   auto [expected, result] = resolve_generic_signature(
       method_proto, params, func_type.get_return_type(), tc_bindings);
+  // The instance's signature, as for any other call: the linear checker reads
+  // it to tell a lent argument from a moved one.
+  auto instance_type = signature_of(expected, result);
+  props_.call(ast->id()).callee_func_type = instance_type;
   return ResolvedCall{resolved_name.mangled(), std::move(expected),
                       std::move(result), std::move(instance_type), false};
 }
@@ -685,13 +693,12 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
   props_.call(ast->id()).resolved_name = key.to_generic_name(ast->functionName);
   props_.call(ast->id()).type_bindings = bindings;
-  // The instance's signature: what the call passes and gets back, as the
-  // linear checker and codegen read it.
-  auto instance_type = substitute(generic_type, bindings);
-  props_.call(ast->id()).callee_func_type = instance_type;
-
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
+  // The instance's signature: what the call passes and gets back, as the
+  // linear checker and codegen read it.
+  auto instance_type = signature_of(expected, result);
+  props_.call(ast->id()).callee_func_type = instance_type;
   return applied_call(
       ast, format_generic_call_name(ast->written_name, type_params, bindings),
       expected, std::move(result), std::move(instance_type));
