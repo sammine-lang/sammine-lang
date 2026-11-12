@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Function values through MIR: a function passed by name, partial
+// applications binding a value and an owned pointer's view, a function value
+// kept in a binding, the stdlib's folds, and a C function as a value.
+// CHECK: 6 15 47 120
+// CHECK-NEXT: 3
+import std;
+import range;
+
+reuse abs(x: i32) -> i32;
+
+let inc(a: i32) -> i32 { a + 1 }
+let add(a: i32, b: i32) -> i32 { a + b }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+let peek_plus(p: ptr<i32>, x: i32) -> i32 { *p + x }
+let times(acc: i64, i: i64) -> i64 { acc * i }
+let factorial(n: i64) -> i64 { range::fold(1i64, n + 1i64, 1i64, times) }
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 40;
+  let g = add(10);
+  std::printf("%d %d %d %lld\n", apply(inc, 5), apply(g, 5), apply(peek_plus(p), 7), factorial(5i64));
+  free(p);
+  let absolute = abs;
+  std::printf("%d\n", absolute(-3));
+  0
+}

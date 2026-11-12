@@ -212,6 +212,44 @@ mlir::LogicalResult LendOp::verify() {
 }
 
 mlir::LogicalResult
+ClosureOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
+  auto callee = symbolTable.lookupNearestSymbolFrom<mlir::FunctionOpInterface>(
+      *this, getCalleeAttr());
+  if (!callee)
+    return emitOpError("binds '")
+           << getCallee() << "', which isn't a function";
+  auto params = callee.getArgumentTypes();
+  auto signature = getResult().getType().getSignature();
+  if (getBound().size() + signature.getNumInputs() != params.size() ||
+      signature.getNumResults() != callee.getResultTypes().size())
+    return emitOpError("binds ")
+           << getBound().size() << " of '" << getCallee() << "', whose "
+           << params.size() << " arguments don't fit " << signature;
+  // A callee emitted from the AST has LLVM types where MIR has its own.
+  if (!callee->hasAttr(kMirAttr))
+    return mlir::success();
+  if (!llvm::equal(params.take_front(getBound().size()),
+                   getBound().getTypes()) ||
+      !llvm::equal(params.drop_front(getBound().size()),
+                   signature.getInputs()) ||
+      !llvm::equal(callee.getResultTypes(), signature.getResults()))
+    return emitOpError("types don't match those of '")
+           << getCallee() << "': " << callee.getFunctionType();
+  return mlir::success();
+}
+
+mlir::LogicalResult CallIndirectOp::verify() {
+  auto signature = getCallee().getType().getSignature();
+  if (!llvm::equal(signature.getInputs(), getArgs().getTypes()) ||
+      !llvm::equal(signature.getResults(), getResults().getTypes()))
+    return emitOpError("passes and takes back ")
+           << mlir::FunctionType::get(getContext(), getArgs().getTypes(),
+                                      getResults().getTypes())
+           << ", but the function value is " << signature;
+  return mlir::success();
+}
+
+mlir::LogicalResult
 CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   auto callee = symbolTable.lookupNearestSymbolFrom<mlir::FunctionOpInterface>(
       *this, getCalleeAttr());

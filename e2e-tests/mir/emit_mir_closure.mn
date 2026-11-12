@@ -1,0 +1,29 @@
+// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// A function value is !sammine.fn. A function named as a value is
+// sammine.closure binding nothing; a partial application binds the
+// arguments it gives, a view of an owned pointer for as long as it points
+// (sammine.addr), as the closure keeps it. A call through a value is
+// sammine.call_indirect.
+// CHECK-LABEL: func.func private @apply(
+// CHECK-SAME: !sammine.fn<(i32) -> i32>
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.call_indirect %arg0(%arg1) : <(i32) -> i32>, (i32) -> i32
+// CHECK-LABEL: func.func private @use_inc(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.closure @inc() : () -> !sammine.fn<(i32) -> i32>
+// CHECK-LABEL: func.func private @add_to(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.closure @add(%arg0) : (i32) -> !sammine.fn<(i32) -> i32>
+// CHECK-LABEL: func.func private @peek_into(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.addr
+// CHECK-NEXT: sammine.closure @peek_plus(
+let inc(a: i32) -> i32 { a + 1 }
+let add(a: i32, b: i32) -> i32 { a + b }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+let use_inc(x: i32) -> i32 { apply(inc, x) }
+let add_to(n: i32, x: i32) -> i32 { apply(add(n), x) }
+let peek_plus(p: ptr<i32>, x: i32) -> i32 { *p + x }
+let peek_into(p: 'ptr<i32>, x: i32) -> 'ptr<i32> { let v = apply(peek_plus(p), x); p }
+
+let main() -> i32 { 0 }

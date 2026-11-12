@@ -15,6 +15,17 @@ namespace sammine_lang {
 
 namespace {
 
+/// A function value as the AST codegen has it: the code to call, which takes
+/// the environment first, and the environment.
+mlir::LLVM::LLVMStructType closureType(mlir::MLIRContext *ctx) {
+  auto type = mlir::LLVM::LLVMStructType::getIdentified(ctx, "sammine.closure");
+  if (!type.isInitialized()) {
+    auto ptr = mlir::LLVM::LLVMPointerType::get(ctx);
+    (void)type.setBody({ptr, ptr}, /*isPacked=*/false);
+  }
+  return type;
+}
+
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
 /// !llvm.ptr; a struct is the identified LLVM struct the AST codegen makes for
 /// it, `sammine.struct.<name>`, and a tuple a literal one. Any other type is
@@ -63,6 +74,9 @@ public:
         return std::nullopt;
       return mlir::LLVM::LLVMArrayType::get(
           element, static_cast<unsigned>(type.getSize()));
+    });
+    addConversion([](smn::FnType type) -> mlir::Type {
+      return closureType(type.getContext());
     });
     addConversion([this](smn::TupleType type) -> std::optional<mlir::Type> {
       llvm::SmallVector<mlir::Type> elements;
@@ -514,6 +528,136 @@ struct UnreachableLowering
   }
 };
 
+// A function value: the code is a wrapper taking the environment first,
+// then the arguments not bound, which calls the callee with the bound ones
+// before them. A function's own value binds nothing and shares one wrapper,
+// __wrap_<f>, with a null environment, as the AST codegen makes it; a
+// partial application's environment holds what it binds, in a stack slot
+// of the function that makes it, read by a wrapper of its own.
+struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
+  ClosureLowering(const mlir::TypeConverter &converter,
+                  mlir::MLIRContext *context, unsigned &partials)
+      : OpConversionPattern(converter, context), partials(partials) {}
+
+  mlir::LogicalResult
+  matchAndRewrite(smn::ClosureOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto *ctx = op.getContext();
+    auto module = op->getParentOfType<mlir::ModuleOp>();
+    auto ptrTy = mlir::LLVM::LLVMPointerType::get(ctx);
+    auto signature = op.getType().getSignature();
+    llvm::SmallVector<mlir::Type> rest, results;
+    if (mlir::failed(getTypeConverter()->convertTypes(signature.getInputs(),
+                                                      rest)) ||
+        mlir::failed(getTypeConverter()->convertTypes(signature.getResults(),
+                                                      results)))
+      return mlir::failure();
+    llvm::SmallVector<mlir::Type> wrapperParams{ptrTy};
+    wrapperParams.append(rest);
+    auto wrapperType = mlir::LLVM::LLVMFunctionType::get(
+        results.empty() ? mlir::LLVM::LLVMVoidType::get(ctx) : results.front(),
+        wrapperParams);
+
+    auto bound = adaptor.getBound();
+    mlir::Value env;
+    mlir::LLVM::LLVMStructType envType;
+    std::string name;
+    if (bound.empty()) {
+      env = mlir::LLVM::ZeroOp::create(rewriter, loc, ptrTy);
+      name = ("__wrap_" + op.getCallee()).str();
+    } else {
+      envType = mlir::LLVM::LLVMStructType::getLiteral(
+          ctx, llvm::to_vector(bound.getTypes()));
+      env = entrySlot(rewriter, op, envType);
+      for (auto [i, value] : llvm::enumerate(bound))
+        mlir::LLVM::StoreOp::create(
+            rewriter, loc, value,
+            mlir::LLVM::GEPOp::create(
+                rewriter, loc, ptrTy, envType, env,
+                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
+                mlir::LLVM::GEPNoWrapFlags::inbounds));
+      do
+        name = "__partial_" + std::to_string(partials++);
+      while (module.lookupSymbol(name));
+    }
+
+    if (!module.lookupSymbol(name)) {
+      mlir::OpBuilder::InsertionGuard guard(rewriter);
+      rewriter.setInsertionPointToEnd(module.getBody());
+      auto wrapper = mlir::LLVM::LLVMFuncOp::create(
+          rewriter, loc, name, wrapperType, mlir::LLVM::Linkage::Internal);
+      auto *entry = wrapper.addEntryBlock(rewriter);
+      rewriter.setInsertionPointToStart(entry);
+      llvm::SmallVector<mlir::Value, 4> args;
+      for (auto [i, value] : llvm::enumerate(bound))
+        args.push_back(mlir::LLVM::LoadOp::create(
+            rewriter, loc, value.getType(),
+            mlir::LLVM::GEPOp::create(
+                rewriter, loc, ptrTy, envType, entry->getArgument(0),
+                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
+                mlir::LLVM::GEPNoWrapFlags::inbounds)));
+      for (auto arg : entry->getArguments().drop_front())
+        args.push_back(arg);
+      mlir::ValueRange returned;
+      if (auto cFunc = module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(
+              op.getCallee()))
+        returned = cabi::emitCall(rewriter, loc, cFunc, args).getResults();
+      else
+        returned = mlir::func::CallOp::create(rewriter, loc, op.getCalleeAttr(),
+                                              results, args)
+                       .getResults();
+      mlir::LLVM::ReturnOp::create(rewriter, loc, returned);
+    }
+
+    auto closure = closureType(ctx);
+    mlir::Value value = mlir::LLVM::PoisonOp::create(rewriter, loc, closure);
+    auto code = mlir::LLVM::AddressOfOp::create(rewriter, loc, ptrTy, name);
+    value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, code,
+                                              llvm::ArrayRef<int64_t>{0});
+    value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, env,
+                                              llvm::ArrayRef<int64_t>{1});
+    rewriter.replaceOp(op, value);
+    return mlir::success();
+  }
+
+private:
+  unsigned &partials;
+};
+
+// A call through a function value: its code, passed its environment first.
+struct CallIndirectLowering
+    : public mlir::OpConversionPattern<smn::CallIndirectOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::CallIndirectOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto *ctx = op.getContext();
+    auto ptrTy = mlir::LLVM::LLVMPointerType::get(ctx);
+    llvm::SmallVector<mlir::Type> results;
+    if (mlir::failed(
+            getTypeConverter()->convertTypes(op.getResultTypes(), results)))
+      return mlir::failure();
+    auto code = mlir::LLVM::ExtractValueOp::create(
+        rewriter, loc, ptrTy, adaptor.getCallee(), llvm::ArrayRef<int64_t>{0});
+    auto env = mlir::LLVM::ExtractValueOp::create(
+        rewriter, loc, ptrTy, adaptor.getCallee(), llvm::ArrayRef<int64_t>{1});
+    llvm::SmallVector<mlir::Type> params{ptrTy};
+    llvm::SmallVector<mlir::Value> operands{code, env};
+    for (auto arg : adaptor.getArgs()) {
+      params.push_back(arg.getType());
+      operands.push_back(arg);
+    }
+    auto type = mlir::LLVM::LLVMFunctionType::get(
+        results.empty() ? mlir::LLVM::LLVMVoidType::get(ctx) : results.front(),
+        params);
+    auto call = mlir::LLVM::CallOp::create(rewriter, loc, type, operands);
+    rewriter.replaceOp(op, call.getResults());
+    return mlir::success();
+  }
+};
+
 // A string literal is the address of a constant global holding it, one per
 // distinct string in the module.
 struct StringLowering : public mlir::OpConversionPattern<smn::StringOp> {
@@ -567,7 +711,9 @@ struct MIRToLLVMPass
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering, ExtractLowering, VariantLowering, TagLowering,
                  PayloadLowering, ElementLowering, UnreachableLowering,
-                 LocalLowering>(converter, &context);
+                 LocalLowering, CallIndirectLowering>(converter, &context);
+    unsigned partials = 0;
+    patterns.add<ClosureLowering>(converter, &context, partials);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
     patterns.add<StringLowering>(converter, &context, strings);
     unsigned constArrays = 0;
@@ -586,7 +732,8 @@ struct MIRToLLVMPass
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
                         smn::StringOp, smn::AggregateOp, smn::ExtractOp,
                         smn::VariantOp, smn::TagOp, smn::PayloadOp,
-                        smn::ElementOp, smn::UnreachableOp>();
+                        smn::ElementOp, smn::UnreachableOp, smn::ClosureOp,
+                        smn::CallIndirectOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

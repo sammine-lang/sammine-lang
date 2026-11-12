@@ -61,6 +61,31 @@ def DerefOp : Sammine_Op<"deref", [Pure,
   let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
 }
 
+def ClosureOp : Sammine_Op<"closure",
+    [Pure, DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "a function value: `callee` with its first arguments bound";
+  let description = [{
+    `f` as a value binds none; `add(1)`, a partial application, binds `1`.
+    The value takes the arguments not bound. What is bound lives in the
+    function that makes the value, as the AST codegen keeps it.
+  }];
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$bound);
+  let results = (outs Sammine_FnType:$result);
+  let assemblyFormat = [{
+    $callee `(` $bound `)` attr-dict `:` functional-type($bound, $result)
+  }];
+}
+
+def CallIndirectOp : Sammine_Op<"call_indirect"> {
+  let summary = "a call through a function value, `f(a)` for f a value";
+  let arguments = (ins Sammine_FnType:$callee, Variadic<AnyType>:$args);
+  let results = (outs Variadic<AnyType>:$results);
+  let assemblyFormat = [{
+    $callee `(` $args `)` attr-dict `:` type($callee) `,` functional-type($args, results)
+  }];
+  let hasVerifier = 1;
+}
+
 def LocalOp : Sammine_Op<"local", [MemoryEffects<[MemAlloc]>]> {
   let summary = "a binding's slot, `let x = v` when the code takes x's address";
   let description = [{

@@ -20,6 +20,7 @@
 //! literals, strings among them, parameters, `let`, `let (a, b) = t`;
 //! arithmetic, negation, comparisons, casts, operators through instances;
 //! calls to sammine and C functions, lending an owned pointer to a ptr<T>;
+//! function values, partial application and calls through a function value;
 //! struct, tuple, array and enum values, fields, checked `a[i]`, `len`,
 //! `case`; `alloc`, `free`, `*p` and
 //! `p[i]` read and written; `if`, `for`, `&&` and `||`, statements and
@@ -30,6 +31,12 @@ namespace sammine_lang {
 using namespace AST;
 
 namespace {
+
+// A function returning an array returns it through a pointer its caller
+// passes (sret), as the AST codegen and its callers agree; MIR doesn't yet.
+bool returnsArray(mlir::FunctionType type) {
+  return llvm::any_of(type.getResults(), llvm::IsaPred<smn::ArrayType>);
+}
 
 /// The bindings of a function body whose address its code takes: the
 /// variable at the root of `&x`, `&x.f` or `&a[i]`, or of `x[i]` through an
@@ -151,6 +158,15 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
     return smn::EnumType::get(builder_.getContext(), name, payloadSize,
                               variants);
   }
+  case TypeKind::Function: {
+    // A function value: a C function's `...` has no MIR type, and a
+    // function returning an array returns it through a pointer (sret).
+    auto &fn = std::get<FunctionType>(type.type_data);
+    auto signature = mirFunctionType(fn);
+    if (fn.is_var_arg() || !signature || returnsArray(*signature))
+      return std::nullopt;
+    return smn::FnType::get(builder_.getContext(), *signature);
+  }
   case TypeKind::Array: {
     auto &array = std::get<ArrayType>(type.type_data);
     auto element = mirType(array.get_element(), enclosing);
@@ -193,11 +209,6 @@ MIRLowering::mirFunctionType(const FunctionType &fn) const {
   return builder_.getFunctionType(inputs, {*result});
 }
 
-// A function returning an array returns it through a pointer its caller
-// passes (sret), as the AST codegen and its callers agree; MIR doesn't yet.
-static bool returnsArray(mlir::FunctionType type) {
-  return llvm::any_of(type.getResults(), llvm::IsaPred<smn::ArrayType>);
-}
 
 std::optional<mlir::FunctionType>
 MIRLowering::mirSignature(FuncDefAST *ast) const {
@@ -425,8 +436,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
 // `f(a, b)`, `f` a sammine function, a generic function's copy, an
 // instance's method or a C function, whether its body goes through MIR or not.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
-  // Not lowered yet: enum constructors, instances the compiler provides, and
-  // partial application.
   auto *cp = props_.call(call->id());
   if (cp->is_enum_constructor) {
     llvm::SmallVector<ExprAST *> payload;
@@ -446,33 +455,20 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
     return lowerBuiltinInstance(loc(call), *cp->builtin_instance, args,
                                 call->get_type());
   }
-  if (cp->is_partial)
-    return mlir::failure();
   auto name =
       props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
-  // Nor a call through a function value, which names no function.
+  // A name no function has is a binding holding a function value.
   auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
   if (!callee)
-    return mlir::failure();
+    return lowerIndirectCall(call);
   auto type =
       mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
-  // Nor a struct, tuple or array passed to or from C, which C moves in
-  // registers or memory as cabi decides, in emitCCall; nor an array passed
-  // to a kernel's wrapper, which takes it by pointer, or returned (sret).
-  auto isAggregate = [](mlir::Type t) {
-    return mlir::isa<smn::StructType, smn::TupleType, smn::ArrayType>(t);
-  };
-  bool passesAggregate = llvm::any_of(type->getInputs(), isAggregate) ||
-                         llvm::any_of(type->getResults(), isAggregate);
-  bool passesArray =
-      llvm::any_of(type->getInputs(), llvm::IsaPred<smn::ArrayType>);
-  if ((mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
-       passesAggregate) ||
-      (callee->hasAttr("sammine.kernel_wrapper") && passesArray) ||
-      returnsArray(*type))
+  if (!callableFromMIR(callee, *type))
     return mlir::failure();
+  if (cp->is_partial)
+    return lowerPartialApplication(call, name, *type);
 
   // The arguments for the declared parameters, then any passed through a C
   // function's `...`.
@@ -490,11 +486,76 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   return op.getNumResults() ? op.getResult(0) : mlir::Value();
 }
 
+// Whether MIR can call `callee`, of MIR signature `type`, yet. Not a struct,
+// tuple or array passed to or from C, which C moves in registers or memory
+// as cabi decides, in emitCCall; nor an array passed to a kernel's wrapper,
+// which takes it by pointer, or returned (sret).
+bool MIRLowering::callableFromMIR(mlir::FunctionOpInterface callee,
+                                  mlir::FunctionType type) const {
+  auto isAggregate = [](mlir::Type t) {
+    return mlir::isa<smn::StructType, smn::TupleType, smn::ArrayType>(t);
+  };
+  bool passesAggregate = llvm::any_of(type.getInputs(), isAggregate) ||
+                         llvm::any_of(type.getResults(), isAggregate);
+  bool passesArray =
+      llvm::any_of(type.getInputs(), llvm::IsaPred<smn::ArrayType>);
+  return !(mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
+           passesAggregate) &&
+         !(callee->hasAttr("sammine.kernel_wrapper") && passesArray) &&
+         !returnsArray(type);
+}
+
+// `f(a)`, f a binding holding a function value: a call through it.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerIndirectCall(CallExprAST *call) {
+  auto it = names_.find(call->functionName.mangled());
+  if (it == names_.end())
+    return mlir::failure();
+  mlir::Value callee = it->second;
+  if (mlir::isa<smn::PlaceType>(callee.getType()))
+    callee = read(loc(call), callee);
+  auto fn = mlir::dyn_cast<smn::FnType>(callee.getType());
+  if (!fn || fn.getSignature().getNumInputs() != call->arguments.size())
+    return mlir::failure();
+  llvm::SmallVector<mlir::Value, 4> args;
+  for (auto [arg, param] :
+       llvm::zip(call->arguments, fn.getSignature().getInputs())) {
+    auto value = lowerArgument(arg.get(), param);
+    if (mlir::failed(value))
+      return mlir::failure();
+    args.push_back(*value);
+  }
+  auto op = smn::CallIndirectOp::create(
+      builder_, loc(call), fn.getSignature().getResults(), callee, args);
+  return op.getNumResults() ? op.getResult(0) : mlir::Value();
+}
+
+// `add(1)`, giving fewer arguments than add takes: a function value of add
+// with them bound, which takes the rest.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
+                                     mlir::FunctionType type) {
+  auto result = mirType(call->get_type());
+  if (!result || !mlir::isa<smn::FnType>(*result) ||
+      call->arguments.size() > type.getNumInputs())
+    return mlir::failure();
+  llvm::SmallVector<mlir::Value, 4> bound;
+  for (auto [arg, param] : llvm::zip(call->arguments, type.getInputs())) {
+    auto value = lowerArgument(arg.get(), param, ViewLasts::Place);
+    if (mlir::failed(value))
+      return mlir::failure();
+    bound.push_back(*value);
+  }
+  return smn::ClosureOp::create(builder_, loc(call), *result, name, bound)
+      .getResult();
+}
+
 // An argument for a parameter of type `param`. An owned pointer passed to a
 // ptr<T> is lent: the callee gets a view of what it points at, and the caller
-// keeps it.
+// keeps it. `view` says how long the view lasts: the call, or, for an
+// argument a partial application binds, as long as what it points at.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
-                                                        mlir::Type param) {
+                                                        mlir::Type param,
+                                                        ViewLasts view) {
   auto value = lowerExpr(arg);
   if (mlir::failed(value) || !*value)
     return mlir::failure();
@@ -505,7 +566,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
       param != smn::PtrType::get(builder_.getContext(), ptr.getPointee(),
                                  smn::Ownership::View))
     return mlir::failure();
-  return lend(*value, loc(arg));
+  return lend(*value, loc(arg), view);
 }
 
 // An argument passed through a C function's `...`. Nothing declares its
@@ -516,19 +577,20 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
   if (mlir::failed(value) || !*value)
     return mlir::failure();
   if (smn::ownsMemory(value->getType()))
-    return lend(*value, loc(arg));
+    return lend(*value, loc(arg), ViewLasts::Call);
   return *value;
 }
 
-mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc) {
+mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc,
+                              ViewLasts view) {
   auto pointee = mlir::cast<smn::PtrType>(owner.getType()).getPointee();
   auto *ctx = builder_.getContext();
   auto place = smn::DerefOp::create(builder_, loc,
                                     smn::PlaceType::get(ctx, pointee), owner);
-  return smn::LendOp::create(
-             builder_, loc,
-             smn::PtrType::get(ctx, pointee, smn::Ownership::View), place)
-      .getResult();
+  auto type = smn::PtrType::get(ctx, pointee, smn::Ownership::View);
+  if (view == ViewLasts::Place)
+    return smn::AddrOp::create(builder_, loc, type, place).getResult();
+  return smn::LendOp::create(builder_, loc, type, place).getResult();
 }
 
 // The type an if's or a case's value has in MIR: none if it is () or never
@@ -939,6 +1001,21 @@ MIRLowering::lowerTupleLiteral(TupleLiteralExprAST *tuple) {
     exprs.push_back({i, element.get()});
   return lowerAggregate(loc(tuple), *type,
                         mlir::cast<smn::TupleType>(*type).getElements(), exprs);
+}
+
+// A function named as a value, `apply(f, x)`: f binding nothing.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerFunctionValue(VariableExprAST *var) {
+  auto type = mirType(var->get_type());
+  auto name = props_.symbol(var->variableName);
+  auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
+  if (!type || !mlir::isa<smn::FnType>(*type) || !callee ||
+      !callableFromMIR(callee,
+                       mlir::cast<smn::FnType>(*type).getSignature()))
+    return mlir::failure();
+  return smn::ClosureOp::create(builder_, loc(var), *type, name,
+                                mlir::ValueRange{})
+      .getResult();
 }
 
 // `p.x`, or `t.0` of a tuple: read from its place when it has one, so only
@@ -1355,7 +1432,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
     return lowerVariant(loc(var), var->get_type(), vp->enum_variant_index, {});
   auto it = names_.find(var->variableName.mangled());
   if (it == names_.end())
-    return mlir::failure();
+    return lowerFunctionValue(var);
   // A binding in a slot is read from it.
   if (mlir::isa<smn::PlaceType>(it->second.getType()))
     return read(loc(var), it->second);

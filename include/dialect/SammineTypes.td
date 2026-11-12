@@ -73,6 +73,17 @@ def Sammine_ArrayType : Sammine_Type<"Array", "array"> {
   let assemblyFormat = "`<` $size `,` $element `>`";
 }
 
+def Sammine_FnType : Sammine_Type<"Fn", "fn"> {
+  let summary = "a function value, `(A) -> R`: a function and what it binds";
+  let description = [{
+    `!sammine.fn<(i32) -> i64>`. Lowered to LLVM it is the AST codegen's
+    closure, the identified struct `sammine.closure` of the code to call and
+    an environment the code is passed first.
+  }];
+  let parameters = (ins "::mlir::FunctionType":$signature);
+  let assemblyFormat = "`<` $signature `>`";
+}
+
 def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
   let summary = "an enum: its name, its payload's size, and each variant's payload";
   let description = [{
