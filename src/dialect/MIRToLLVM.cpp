@@ -42,6 +42,21 @@ public:
         return std::nullopt;
       return llvmType;
     });
+    addConversion([](smn::EnumType type) -> mlir::Type {
+      // { i32 tag, [N x i8] payload }, or just the tag with no payload.
+      auto *ctx = type.getContext();
+      auto llvmType = mlir::LLVM::LLVMStructType::getIdentified(
+          ctx, ("sammine.enum." + type.getName()).str());
+      if (llvmType.isInitialized())
+        return llvmType;
+      llvm::SmallVector<mlir::Type, 2> fields{mlir::IntegerType::get(ctx, 32)};
+      if (type.getPayloadSize() > 0)
+        fields.push_back(mlir::LLVM::LLVMArrayType::get(
+            mlir::IntegerType::get(ctx, 8),
+            static_cast<uint64_t>(type.getPayloadSize())));
+      (void)llvmType.setBody(fields, /*isPacked=*/false);
+      return llvmType;
+    });
     addConversion([this](smn::TupleType type) -> std::optional<mlir::Type> {
       llvm::SmallVector<mlir::Type> elements;
       if (mlir::failed(convertTypes(type.getElements(), elements)))
@@ -247,6 +262,100 @@ struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
   }
 };
 
+/// A stack slot for one `type`, at the top of the function `op` is in, as the
+/// AST codegen makes them, so LLVM's mem2reg can remove it.
+mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
+                      mlir::Operation *op, mlir::Type type) {
+  mlir::OpBuilder::InsertionGuard guard(rewriter);
+  auto &entry = op->getParentOfType<mlir::FunctionOpInterface>()
+                    .getFunctionBody()
+                    .front();
+  rewriter.setInsertionPointToStart(&entry);
+  auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
+                                                rewriter.getI64Type(), 1);
+  return mlir::LLVM::AllocaOp::create(
+      rewriter, op->getLoc(), mlir::LLVM::LLVMPointerType::get(op->getContext()),
+      type, one);
+}
+
+/// Where the payload field at byte `offset` of the enum in `slot` is.
+mlir::Value payloadField(mlir::ConversionPatternRewriter &rewriter,
+                         mlir::Location loc, mlir::Type enumType,
+                         mlir::Value slot, int64_t offset) {
+  auto ptrTy = mlir::LLVM::LLVMPointerType::get(rewriter.getContext());
+  mlir::Value payload = mlir::LLVM::GEPOp::create(
+      rewriter, loc, ptrTy, enumType, slot,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
+      mlir::LLVM::GEPNoWrapFlags::inbounds);
+  if (offset == 0)
+    return payload;
+  return mlir::LLVM::GEPOp::create(
+      rewriter, loc, ptrTy, rewriter.getI8Type(), payload,
+      llvm::ArrayRef<mlir::LLVM::GEPArg>{static_cast<int32_t>(offset)},
+      mlir::LLVM::GEPNoWrapFlags::inbounds);
+}
+
+// An enum value is built in memory: its tag, then each payload field at its
+// offset, then loaded whole.
+struct VariantLowering : public mlir::OpConversionPattern<smn::VariantOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::VariantOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto enumType = getTypeConverter()->convertType(op.getType());
+    if (!enumType)
+      return mlir::failure();
+    auto slot = entrySlot(rewriter, op, enumType);
+    auto tag = mlir::arith::ConstantIntOp::create(
+        rewriter, loc, rewriter.getI32Type(),
+        static_cast<int64_t>(op.getIndex()));
+    auto tagPtr = mlir::LLVM::GEPOp::create(
+        rewriter, loc, mlir::LLVM::LLVMPointerType::get(op.getContext()),
+        enumType, slot, llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+    mlir::LLVM::StoreOp::create(rewriter, loc, tag, tagPtr);
+    for (auto [field, offset] : llvm::zip(adaptor.getPayload(), op.getOffsets()))
+      mlir::LLVM::StoreOp::create(
+          rewriter, loc, field,
+          payloadField(rewriter, loc, enumType, slot, offset));
+    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, enumType, slot);
+    return mlir::success();
+  }
+};
+
+struct TagLowering : public mlir::OpConversionPattern<smn::TagOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::TagOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<mlir::LLVM::ExtractValueOp>(
+        op, adaptor.getValue(), llvm::ArrayRef<int64_t>{0});
+    return mlir::success();
+  }
+};
+
+// A payload field is read through memory, from its offset.
+struct PayloadLowering : public mlir::OpConversionPattern<smn::PayloadOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::PayloadOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto loc = op.getLoc();
+    auto enumType = adaptor.getValue().getType();
+    auto fieldType = getTypeConverter()->convertType(op.getType());
+    if (!fieldType)
+      return mlir::failure();
+    auto slot = entrySlot(rewriter, op, enumType);
+    mlir::LLVM::StoreOp::create(rewriter, loc, adaptor.getValue(), slot);
+    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(
+        op, fieldType,
+        payloadField(rewriter, loc, enumType, slot,
+                     static_cast<int64_t>(op.getOffset())));
+    return mlir::success();
+  }
+};
+
 // A string literal is the address of a constant global holding it, one per
 // distinct string in the module.
 struct StringLowering : public mlir::OpConversionPattern<smn::StringOp> {
@@ -297,7 +406,8 @@ struct MIRToLLVMPass
                  SameAddressLowering<smn::LendOp>,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering, AggregateLowering,
-                 ExtractLowering>(converter, &context);
+                 ExtractLowering, VariantLowering, TagLowering,
+                 PayloadLowering>(converter, &context);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
     patterns.add<StringLowering>(converter, &context, strings);
 
@@ -310,7 +420,8 @@ struct MIRToLLVMPass
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
-                        smn::StringOp, smn::AggregateOp, smn::ExtractOp>();
+                        smn::StringOp, smn::AggregateOp, smn::ExtractOp,
+                        smn::VariantOp, smn::TagOp, smn::PayloadOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

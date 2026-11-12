@@ -54,13 +54,35 @@ def Sammine_StructType : Sammine_Type<"Struct", "struct"> {
   }];
   let parameters = (ins StringRefParameter<"the struct's name">:$name,
                         ArrayRefParameter<"::mlir::Type", "field types">:$fields);
-  let assemblyFormat = "`<` $name `,` `(` $fields `)` `>`";
+  let assemblyFormat = "`<` $name `,` `(` custom<TypeList>($fields) `)` `>`";
 }
 
 def Sammine_TupleType : Sammine_Type<"Tuple", "tuple"> {
   let summary = "a tuple of the types of its elements, in order";
   let parameters = (ins ArrayRefParameter<"::mlir::Type", "element types">:$elements);
-  let assemblyFormat = "`<` $elements `>`";
+  let assemblyFormat = "`<` custom<TypeList>($elements) `>`";
+}
+
+def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
+  let summary = "an enum: its name, its payload's size, and each variant's payload";
+  let description = [{
+    `!sammine.enum<"Option<i64>", 8, (!sammine.tuple<i64>, !sammine.tuple<>)>`:
+    variant k's payload is the k-th tuple's elements. Lowered to LLVM it is
+    the identified struct `sammine.enum.<name>`, an i32 tag then the payload
+    bytes, the AST codegen's very type for it: payload fields sit at the
+    byte offsets layout:: gives, which the ops that read and write them
+    carry.
+  }];
+  let parameters = (ins StringRefParameter<"the enum's name">:$name,
+                        "int64_t":$payloadSize,
+                        ArrayRefParameter<"::mlir::Type", "variant payloads">:$variants);
+  let assemblyFormat = "`<` $name `,` $payloadSize `,` `(` custom<TypeList>($variants) `)` `>`";
+  let extraClassDeclaration = [{
+    /// The types of variant `index`'s payload.
+    ::llvm::ArrayRef<::mlir::Type> getPayload(uint64_t index) const {
+      return ::llvm::cast<TupleType>(getVariants()[index]).getElements();
+    }
+  }];
 }
 
 def Sammine_OwnedPtr : Type<

@@ -12,6 +12,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 
+#include <functional>
 #include <optional>
 
 //! \file MIRLowering.h
@@ -93,7 +94,23 @@ private:
   mlir::FailureOr<mlir::Value> lowerVariable(AST::VariableExprAST *var);
   mlir::FailureOr<mlir::Value> lowerBinary(AST::BinaryExprAST *bin);
   mlir::FailureOr<mlir::Value> lowerLogical(AST::BinaryExprAST *bin);
+  /// An arm of an if or a case: the block it starts in, what its pattern
+  /// binds (if anything), and its body.
+  struct Arm {
+    mlir::Block *block;
+    AST::BlockAST *body;
+    std::function<void()> bind;
+  };
+  mlir::FailureOr<std::optional<mlir::Type>>
+  branchResultType(const Type &type) const;
+  mlir::FailureOr<mlir::Value> lowerArms(mlir::Location location,
+                                         std::optional<mlir::Type> resultType,
+                                         llvm::ArrayRef<Arm> arms);
   mlir::FailureOr<mlir::Value> lowerIf(AST::IfExprAST *ifExpr);
+  mlir::FailureOr<mlir::Value> lowerCase(AST::CaseExprAST *caseExpr);
+  mlir::FailureOr<mlir::Value>
+  lowerVariant(mlir::Location location, const Type &type, size_t index,
+               llvm::ArrayRef<AST::ExprAST *> payload);
 };
 
 } // namespace sammine_lang

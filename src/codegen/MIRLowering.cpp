@@ -1,5 +1,6 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/TypeLayout.h"
 #include "dialect/SammineDialect.h"
 #include "util/Utilities.h"
 
@@ -13,7 +14,8 @@
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
 //! floats, bool, char), pointers, structs and tuples of them, returning one or
-//! `()`; struct and tuple literals, fields, `let (a, b) = t`; their
+//! `()`; struct and tuple literals, fields, `let (a, b) = t`; enums with
+//! payloads, their variants and `case` on them; their
 //! literals, strings among them, parameters, `let`, arithmetic, calls to
 //! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
 //! `free`, `*p` read and written, negation, comparisons, `if`, `&&` and `||`,
@@ -73,6 +75,31 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
     }
     enclosing.erase(name);
     return smn::StructType::get(builder_.getContext(), name, fields);
+  }
+  case TypeKind::Enum: {
+    auto &et = std::get<EnumType>(type.type_data);
+    auto name = et.get_name().mangled();
+    // An integer-backed enum isn't lowered yet, nor an enum that reaches
+    // itself through a pointer.
+    if (et.is_integer_backed() || !enclosing.insert(name).second)
+      return std::nullopt;
+    llvm::SmallVector<mlir::Type> variants;
+    int64_t payloadSize = 0;
+    for (auto &variant : et.get_variants()) {
+      llvm::SmallVector<mlir::Type> fields;
+      for (auto &field : variant.payload_types) {
+        auto fieldType = mirType(field, enclosing);
+        if (!fieldType)
+          return std::nullopt;
+        fields.push_back(*fieldType);
+      }
+      variants.push_back(smn::TupleType::get(builder_.getContext(), fields));
+      payloadSize = std::max(payloadSize,
+                             layout::variantPayloadSize(variant.payload_types));
+    }
+    enclosing.erase(name);
+    return smn::EnumType::get(builder_.getContext(), name, payloadSize,
+                              variants);
   }
   case TypeKind::Tuple: {
     llvm::SmallVector<mlir::Type> elements;
@@ -241,6 +268,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   }
   if (auto *ifExpr = llvm::dyn_cast<IfExprAST>(expr))
     return lowerIf(ifExpr);
+  if (auto *caseExpr = llvm::dyn_cast<CaseExprAST>(expr))
+    return lowerCase(caseExpr);
   if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
     if (!neg->get_type().is_integer() && !neg->get_type().is_float())
       return mlir::failure();
@@ -276,7 +305,14 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   // Not lowered yet: enum constructors, instances the compiler provides, and
   // partial application.
   auto *cp = props_.call(call->id());
-  if (cp->is_enum_constructor || cp->builtin_instance || cp->is_partial)
+  if (cp->is_enum_constructor) {
+    llvm::SmallVector<ExprAST *> payload;
+    for (auto &arg : call->arguments)
+      payload.push_back(arg.get());
+    return lowerVariant(loc(call), call->get_type(), cp->enum_variant_index,
+                        payload);
+  }
+  if (cp->builtin_instance || cp->is_partial)
     return mlir::failure();
   auto name =
       props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
@@ -355,42 +391,44 @@ mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc) {
       .getResult();
 }
 
-// `if c { a } else { b }`: c branches to a block for each side, and a side
-// that doesn't return goes on to the block after, which takes the if's
-// value. There is none if both sides return.
-mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
-  auto cond = lowerExpr(ifExpr->bool_expr.get());
-  if (mlir::failed(cond) || !*cond)
+// The type an if's or a case's value has in MIR: none if it is () or never
+// reached; failure if MIR has no type for it.
+mlir::FailureOr<std::optional<mlir::Type>>
+MIRLowering::branchResultType(const Type &type) const {
+  if (type.type_kind == TypeKind::Unit || type.type_kind == TypeKind::Never)
+    return std::optional<mlir::Type>();
+  auto mir = mirType(type);
+  if (!mir)
     return mlir::failure();
-  std::optional<mlir::Type> resultType;
-  auto type = ifExpr->get_type();
-  if (type.type_kind != TypeKind::Unit && type.type_kind != TypeKind::Never) {
-    resultType = mirType(type);
-    if (!*resultType)
-      return mlir::failure();
-  }
+  return mir;
+}
 
-  auto *region = builder_.getInsertionBlock()->getParent();
-  auto *thenBlock = &region->emplaceBlock();
-  auto *elseBlock = &region->emplaceBlock();
+// Each arm in its block: what its pattern binds, then its body. The arms
+// that don't return go on to a block after, which takes their value, of
+// `resultType`. There is none if every arm returns.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerArms(mlir::Location location,
+                       std::optional<mlir::Type> resultType,
+                       llvm::ArrayRef<Arm> arms) {
+  auto *region = arms.front().block->getParent();
   auto *after = &region->emplaceBlock();
   if (resultType)
-    after->addArgument(*resultType, loc(ifExpr));
-  mlir::cf::CondBranchOp::create(builder_, loc(ifExpr), *cond, thenBlock,
-                                 elseBlock);
-
+    after->addArgument(*resultType, location);
   bool reached = false;
-  for (auto [block, body] : {std::pair{thenBlock, ifExpr->thenBlockAST.get()},
-                             std::pair{elseBlock, ifExpr->elseBlockAST.get()}}) {
-    builder_.setInsertionPointToStart(block);
-    auto value = lowerStatements(body);
+  for (auto &arm : arms) {
+    builder_.setInsertionPointToStart(arm.block);
+    auto outer = names_;
+    if (arm.bind)
+      arm.bind();
+    auto value = lowerStatements(arm.body);
+    names_ = std::move(outer);
     if (mlir::failed(value))
       return mlir::failure();
     if (terminated())
       continue;
     if (resultType && !*value)
       return mlir::failure();
-    mlir::cf::BranchOp::create(builder_, loc(ifExpr), after,
+    mlir::cf::BranchOp::create(builder_, location, after,
                                resultType ? mlir::ValueRange{*value}
                                           : mlir::ValueRange{});
     reached = true;
@@ -399,10 +437,125 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
     after->erase();
     return mlir::Value();
   }
-  // After the blocks the branches made.
+  // After the blocks the arms made.
   after->moveBefore(region, region->end());
   builder_.setInsertionPointToStart(after);
   return resultType ? after->getArgument(0) : mlir::Value();
+}
+
+// `if c { a } else { b }`: c branches to a block for each side.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
+  auto resultType = branchResultType(ifExpr->get_type());
+  if (mlir::failed(resultType))
+    return mlir::failure();
+  auto cond = lowerExpr(ifExpr->bool_expr.get());
+  if (mlir::failed(cond) || !*cond)
+    return mlir::failure();
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *thenBlock = &region->emplaceBlock();
+  auto *elseBlock = &region->emplaceBlock();
+  mlir::cf::CondBranchOp::create(builder_, loc(ifExpr), *cond, thenBlock,
+                                 elseBlock);
+  return lowerArms(loc(ifExpr), *resultType,
+                   {Arm{thenBlock, ifExpr->thenBlockAST.get(), nullptr},
+                    Arm{elseBlock, ifExpr->elseBlockAST.get(), nullptr}});
+}
+
+// `case e { Some(x) => a, None => b }` on an enum: the tag picks the arm's
+// block, where the pattern's names are bound to the payload. With no
+// wildcard, any other tag goes to the last arm: the arms cover every
+// variant.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
+  auto scrutineeType = caseExpr->scrutinee->get_type();
+  if (scrutineeType.type_kind != TypeKind::Enum || caseExpr->arms.empty())
+    return mlir::failure();
+  auto et = std::get<EnumType>(scrutineeType.type_data);
+  auto resultType = branchResultType(caseExpr->get_type());
+  if (mlir::failed(resultType))
+    return mlir::failure();
+  auto value = lowerExpr(caseExpr->scrutinee.get());
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  auto enumType = mlir::dyn_cast<smn::EnumType>(value->getType());
+  if (!enumType)
+    return mlir::failure();
+
+  auto location = loc(caseExpr);
+  auto tag =
+      smn::TagOp::create(builder_, location, builder_.getI32Type(), *value);
+  auto *region = builder_.getInsertionBlock()->getParent();
+  llvm::SmallVector<Arm> arms;
+  llvm::SmallVector<int32_t> tags;
+  llvm::SmallVector<mlir::Block *> dests;
+  mlir::Block *otherwise = nullptr;
+  for (auto &arm : caseExpr->arms) {
+    auto &pattern = arm.pattern;
+    if (pattern.is_literal)
+      return mlir::failure();
+    auto *block = &region->emplaceBlock();
+    if (pattern.is_wildcard) {
+      otherwise = block;
+      arms.push_back(Arm{block, arm.body.get(), nullptr});
+      continue;
+    }
+    tags.push_back(static_cast<int32_t>(pattern.variant_index));
+    dests.push_back(block);
+    auto &payloadTypes = et.get_variant(pattern.variant_index).payload_types;
+    auto mirPayload = enumType.getPayload(pattern.variant_index);
+    if (pattern.bindings.size() > payloadTypes.size())
+      return mlir::failure();
+    // Run by lowerArms, after this loop: it holds only what outlives it.
+    arms.push_back(Arm{block, arm.body.get(),
+                       [this, &pattern, &payloadTypes, mirPayload,
+                        scrutinee = *value, location] {
+      int64_t offset = 0;
+      for (auto [i, name] : llvm::enumerate(pattern.bindings)) {
+        auto at = layout::advancePayloadOffset(offset, payloadTypes[i]);
+        names_[name] = smn::PayloadOp::create(builder_, location,
+                                              mirPayload[i], scrutinee,
+                                              pattern.variant_index, i,
+                                              static_cast<uint64_t>(at))
+                           .getResult();
+      }
+    }});
+  }
+  if (!otherwise) {
+    otherwise = dests.pop_back_val();
+    tags.pop_back();
+  }
+  llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
+  mlir::cf::SwitchOp::create(builder_, location, tag, otherwise,
+                             mlir::ValueRange{}, tags, dests, noOperands);
+  return lowerArms(location, *resultType, arms);
+}
+
+// `Option<i64>::Some(x)`, or a variant with no payload, `None`: its payload
+// fields at the offsets layout:: gives them, as the AST codegen puts them.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerVariant(mlir::Location location, const Type &type,
+                          size_t index, llvm::ArrayRef<ExprAST *> payload) {
+  auto mir = mirType(type);
+  if (!mir)
+    return mlir::failure();
+  auto enumType = mlir::cast<smn::EnumType>(*mir);
+  auto &payloadTypes =
+      std::get<EnumType>(type.type_data).get_variant(index).payload_types;
+  if (payload.size() != payloadTypes.size())
+    return mlir::failure();
+  llvm::SmallVector<mlir::Value> fields;
+  llvm::SmallVector<int64_t> offsets;
+  int64_t offset = 0;
+  for (auto [expr, fieldType, mirField] :
+       llvm::zip(payload, payloadTypes, enumType.getPayload(index))) {
+    auto value = lowerExpr(expr);
+    if (mlir::failed(value) || !*value || value->getType() != mirField)
+      return mlir::failure();
+    fields.push_back(*value);
+    offsets.push_back(layout::advancePayloadOffset(offset, fieldType));
+  }
+  return smn::VariantOp::create(builder_, location, enumType, index, offsets,
+                                fields)
+      .getResult();
 }
 
 // `a && b` reads b only if a is true, `a || b` only if a is false; the other
@@ -603,6 +756,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
+  if (auto *vp = props_.variable(var->id()); vp && vp->is_enum_unit_variant)
+    return lowerVariant(loc(var), var->get_type(), vp->enum_variant_index, {});
   auto it = names_.find(var->variableName.mangled());
   if (it == names_.end())
     return mlir::failure();

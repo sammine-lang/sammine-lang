@@ -11,6 +11,30 @@
 
 #include "SammineEnums.cpp.inc"
 
+// A comma-separated list of types, which may be empty: a tuple's elements,
+// a struct's fields, an enum's variants' payloads, as `custom<TypeList>`.
+static mlir::ParseResult
+parseTypeList(mlir::AsmParser &parser, llvm::SmallVector<mlir::Type> &types) {
+  mlir::Type type;
+  auto first = parser.parseOptionalType(type);
+  if (!first.has_value())
+    return mlir::success();
+  if (mlir::failed(*first))
+    return mlir::failure();
+  types.push_back(type);
+  while (mlir::succeeded(parser.parseOptionalComma())) {
+    if (parser.parseType(type))
+      return mlir::failure();
+    types.push_back(type);
+  }
+  return mlir::success();
+}
+
+static void printTypeList(mlir::AsmPrinter &printer,
+                          llvm::ArrayRef<mlir::Type> types) {
+  llvm::interleaveComma(types, printer);
+}
+
 #define GET_TYPEDEF_CLASSES
 #include "SammineTypes.cpp.inc"
 
@@ -45,7 +69,43 @@ bool ownsMemory(mlir::Type type) {
     return ptr.isOwned();
   if (auto fields = fieldTypes(type))
     return llvm::any_of(*fields, ownsMemory);
+  if (auto enumType = mlir::dyn_cast<EnumType>(type))
+    return llvm::any_of(enumType.getVariants(), ownsMemory);
   return false;
+}
+
+mlir::LogicalResult VariantOp::verify() {
+  auto type = getResult().getType();
+  auto index = getIndex();
+  if (index >= type.getVariants().size())
+    return emitOpError("builds variant ")
+           << index << " of " << type << ", which has "
+           << type.getVariants().size();
+  if (!llvm::equal(type.getPayload(index), getPayload().getTypes()))
+    return emitOpError("takes the payload of variant ")
+           << index << " of " << type;
+  if (getOffsets().size() != getPayload().size())
+    return emitOpError("needs an offset for each payload field");
+  return mlir::success();
+}
+
+mlir::LogicalResult PayloadOp::verify() {
+  auto type = getValue().getType();
+  auto variant = getVariant();
+  if (variant >= type.getVariants().size())
+    return emitOpError("reads variant ")
+           << variant << " of " << type << ", which has "
+           << type.getVariants().size();
+  auto payload = type.getPayload(variant);
+  auto field = getField();
+  if (field >= payload.size())
+    return emitOpError("reads field ")
+           << field << " of variant " << variant << "'s payload, which has "
+           << payload.size();
+  if (payload[field] != getResult().getType())
+    return emitOpError("gives the field as ")
+           << getResult().getType() << ", but it is " << payload[field];
+  return mlir::success();
 }
 
 mlir::LogicalResult AggregateOp::verify() {

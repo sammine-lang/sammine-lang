@@ -19,7 +19,7 @@ namespace sammine_lang::smn {
 constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 
 /// Whether a value of `type` owns memory, which its holder must free or hand
-/// on: an owned pointer, or a struct or tuple with a field that does.
+/// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);
 } // namespace sammine_lang::smn
 

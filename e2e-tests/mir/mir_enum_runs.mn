@@ -1,0 +1,46 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Enums through MIR give the same answers: payload fields of mixed sizes at
+// the AST codegen's offsets, a variant with none, a wildcard arm, an enum
+// in a payload, a payload that owns memory, and a for loop the AST codegen
+// emits over MIR's Iterator<Range>::next.
+// CHECK: 0 7 120
+// CHECK-NEXT: 2 9
+// CHECK-NEXT: 42
+// CHECK-NEXT: 10
+import std;
+
+type Shape = Dot | Tagged(char, i64) | Box(i32, f64, i32);
+type Wrap = Empty | Inner(Shape);
+type Owned = Nothing | Holds('ptr<i32>);
+
+let size(s: Shape) -> i64 {
+  case s {
+    Shape::Dot => 0i64,
+    Shape::Tagged(c, n) => n,
+    Shape::Box(a, f, b) => (a * b) as i64,
+  }
+}
+let depth(w: Wrap) -> i32 {
+  case w {
+    Wrap::Inner(s) => case s { Shape::Dot => 1, _ => 2 },
+    _ => 9,
+  }
+}
+let take(o: Owned) -> i32 {
+  case o {
+    Owned::Holds(p) => { let v = *p; free(p); v },
+    Owned::Nothing => 0,
+  }
+}
+let sum_to(n: i32) -> i32 { let s = alloc<i32>(1); *s = 0; for i in 0..n { *s = *s + i; }; let v = *s; free(s); v }
+let make(v: i32) -> Owned { let p = alloc<i32>(1); *p = v; Owned::Holds(p) }
+
+let main() -> i32 {
+  std::printf("%lld %lld %lld\n", size(Shape::Dot), size(Shape::Tagged('x', 7i64)),
+              size(Shape::Box(10, 1.5, 12)));
+  std::printf("%d %d\n", depth(Wrap::Inner(Shape::Tagged('y', 1i64))), depth(Wrap::Empty));
+  std::printf("%d\n", take(make(42)));
+  let total = sum_to(5);
+  std::printf("%d\n", total);
+  0
+}

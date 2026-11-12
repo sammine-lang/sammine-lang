@@ -239,7 +239,8 @@ through `cabi::emitCall`, as the AST codegen does); string literals
 took MIR from 1771 to 1862 functions of 3711; (7) `if`/`else`,
 comparisons, `&&`/`||` and negation, to 1948; (6) structs and tuples, as
 values (`sammine.aggregate`, `sammine.extract`) until locals are places, to
-2058.
+2058; (8) enums with payloads and `case` on them, which let the standard
+library's `Iterator<Range>::next` in, to 3416 of 3711.
 
 A call is `sammine.call`, not `func.call`: when a caller is lowered, its
 callee may not have been offered to MIR yet, so its signature (MIR's types

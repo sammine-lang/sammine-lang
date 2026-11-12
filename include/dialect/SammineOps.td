@@ -111,6 +111,44 @@ def ExtractOp : Sammine_Op<"extract", [Pure]> {
   let hasVerifier = 1;
 }
 
+def VariantOp : Sammine_Op<"variant", [Pure]> {
+  let summary = "an enum value of variant `index`, with its payload";
+  let description = [{
+    `Option<i64>::Some(x)`. `offsets` are the payload fields' byte offsets.
+    A payload field that owns memory is moved in.
+  }];
+  let arguments = (ins I64Attr:$index, DenseI64ArrayAttr:$offsets,
+                       Variadic<AnyType>:$payload);
+  let results = (outs Sammine_EnumType:$result);
+  let assemblyFormat = [{
+    $index `(` $payload `)` `at` $offsets attr-dict `:` functional-type($payload, $result)
+  }];
+  let hasVerifier = 1;
+}
+
+def TagOp : Sammine_Op<"tag", [Pure]> {
+  let summary = "which variant an enum value is, as its index";
+  let arguments = (ins Sammine_EnumType:$value);
+  let results = (outs I32:$result);
+  let assemblyFormat = "$value attr-dict `:` type($value)";
+}
+
+def PayloadOp : Sammine_Op<"payload", [Pure]> {
+  let summary = "field `field` of the payload of an enum value of variant `variant`";
+  let description = [{
+    What a case arm binds. The value must be of that variant: the arm's
+    block is only reached when its tag says so. `offset` is the field's byte
+    offset. A field that owns memory is moved out.
+  }];
+  let arguments = (ins Sammine_EnumType:$value, I64Attr:$variant,
+                       I64Attr:$field, I64Attr:$offset);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = [{
+    $value `[` $variant `,` $field `]` `at` $offset attr-dict `:` type($value) `->` type($result)
+  }];
+  let hasVerifier = 1;
+}
+
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,
     TypesMatchWith<"the result is what the place holds",
                    "place", "result", ValueOfPlace>]> {
