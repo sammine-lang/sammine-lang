@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// The element comes back by value while the Vec still holds it.
+// CHECK: Indexing 'vec::Vec<'ptr<i32>>' would copy out ''ptr<i32>', which owns memory the collection still owns
+import vec;
+
+let main() -> i32 {
+  let v = vec::push<'ptr<i32>>(vec::new<'ptr<i32>>(1), alloc<i32>(1));
+  let p = v[0];
+  return 0;
+}

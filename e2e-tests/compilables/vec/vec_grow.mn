@@ -4,7 +4,7 @@
 import std;
 import vec;
 
-let unsafe main() -> i32 {
+let main() -> i32 {
   let v0 = vec::new<i32>(2);
   let v1 = vec::push<i32>(v0, 0);
   let v2 = vec::push<i32>(v1, 1);
@@ -17,8 +17,8 @@ let unsafe main() -> i32 {
   let v9 = vec::push<i32>(v8, 8);
   let v10 = vec::push<i32>(v9, 9);
   std::printf("%d %d %d %d %d %d %d %d %d %d",
-    v10.data[0], v10.data[1], v10.data[2], v10.data[3], v10.data[4],
-    v10.data[5], v10.data[6], v10.data[7], v10.data[8], v10.data[9]);
+    v10[0], v10[1], v10[2], v10[3], v10[4],
+    v10[5], v10[6], v10[7], v10[8], v10[9]);
   vec::delete<i32>(v10);
   return 0;
 }

@@ -746,19 +746,31 @@ let older = Version { major: 1, minor: 4 } < Version { major: 2, minor: 1 };  //
 
 **`Convert<From, To>`** -- conversion, used by `as` (see [Conversions with `as`](#conversions-with-as)). It is built in between the number types, and between `char` and the integer types, so `Convert<char, i32>('a')` is `'a' as i32`.
 
-**`Indexer<Collection, Element>`** -- custom indexing:
+**`Indexer<Collection, Element>`** -- custom indexing. `x[i]`, for an `x` that
+is neither an array nor a pointer, calls the one `Indexer` instance for `x`'s
+type. The collection is lent as a `ptr`, so indexing doesn't use it up, and the
+index is an `i64`:
 
 ```sammine
 struct IntList { a: i32, b: i32, c: i32, };
 
 instance Indexer<IntList, i32> {
-  let Indexer(coll: IntList, idx: i64) -> i32 {
-    if idx == 0i64 { coll.a }
-    else if idx == 1i64 { coll.b }
-    else { coll.c }
+  let Indexer(coll: ptr<IntList>, idx: i64) -> i32 {
+    if idx == 0i64 { (*coll).a }
+    else if idx == 1i64 { (*coll).b }
+    else { (*coll).c }
   }
 }
+
+let list = IntList { a: 10, b: 20, c: 30 };
+let x = list[1];                               // 20
+let y = Indexer<IntList, i32>(&list, 2i64);    // 30, the same call by name
 ```
+
+`x[i]` only reads: `x[i] = v` is an error. The element comes back by value
+while the collection still holds it, so an element type that owns memory, like
+`'ptr<i32>`, can't be indexed this way. Two instances for one collection type
+with different element types make `x[i]` ambiguous.
 
 ---
 
@@ -1115,12 +1127,12 @@ A generic function is compiled in each module that uses it, for the types it is 
 import std;
 import vec;
 
-let unsafe main() -> i32 {               // unsafe: reads v3.data[i]
+let main() -> i32 {
   let v0 = vec::new<i32>(4);             // create with initial capacity 4
   let v1 = vec::push<i32>(v0, 10);       // push returns new Vec
   let v2 = vec::push<i32>(v1, 20);
   let v3 = vec::push<i32>(v2, 30);
-  std::printf("%d %d %d", v3.data[0], v3.data[1], v3.data[2]);  // 10 20 30
+  std::printf("%d %d %d", v3[0], v3[1], v3[2]);  // 10 20 30
   vec::delete<i32>(v3);                   // must free (linear data pointer)
   return 0;
 }
@@ -1133,6 +1145,7 @@ let unsafe main() -> i32 {               // unsafe: reads v3.data[i]
 | `vec::new<T>(cap)` | `(i64) -> Vec<T>` | Create a new Vec with given capacity |
 | `vec::push<T>(v, val)` | `(Vec<T>, T) -> Vec<T>` | Append an element, auto-grows if full |
 | `vec::delete<T>(v)` | `(Vec<T>) -> unit` | Free the underlying memory |
+| `v[i]` | `Indexer<Vec<T>, T>` | Element `i`, for an element type that owns nothing. Not bounds-checked yet |
 
 ### Vec\<T\> Structure
 

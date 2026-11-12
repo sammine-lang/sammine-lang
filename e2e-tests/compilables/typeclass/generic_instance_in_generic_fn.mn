@@ -6,13 +6,15 @@ import std;
 struct Box<T> { v: T, };
 
 instance<T> Indexer<Box<T>, T> {
-  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+  let Indexer(b: ptr<Box<T>>, i: i64) -> T { (*b).v }
 }
 
-let first<T>(b: Box<T>) -> T { Indexer<Box<T>, T>(b, 0i64) }
+let first<T>(b: Box<T>) -> T { Indexer<Box<T>, T>(&b, 0i64) }
+let second<T>(b: Box<T>) -> T { b[1] }
 
 let main() -> i32 {
-  // CHECK: 7 c
-  std::printf("%d %c\n", first(Box<i32> { v: 7 }), first(Box<char> { v: 'c' }));
+  // CHECK: 7 c 7
+  std::printf("%d %c %d\n", first(Box<i32> { v: 7 }), first(Box<char> { v: 'c' }),
+              second(Box<i32> { v: 7 }));
   return 0;
 }

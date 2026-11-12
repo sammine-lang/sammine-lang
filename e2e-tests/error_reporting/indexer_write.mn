@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// CHECK: Cannot write into 'vec::Vec<i32>' by index: its Indexer only reads
+import vec;
+
+let main() -> i32 {
+  let v = vec::push<i32>(vec::new<i32>(1), 10);
+  v[0] = 5;
+  vec::delete<i32>(v);
+  return 0;
+}

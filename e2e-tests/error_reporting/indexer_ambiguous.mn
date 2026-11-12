@@ -1,0 +1,19 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// These don't overlap as instances, but p[0] can't tell which one it means.
+// CHECK: Indexing 'Pair' is ambiguous: Indexer<Pair, f64>, Indexer<Pair, i32> all apply
+
+struct Pair { a: i32, b: f64, };
+
+instance Indexer<Pair, i32> {
+  let Indexer(p: ptr<Pair>, i: i64) -> i32 { (*p).a }
+}
+
+instance Indexer<Pair, f64> {
+  let Indexer(p: ptr<Pair>, i: i64) -> f64 { (*p).b }
+}
+
+let main() -> i32 {
+  let p = Pair { a: 1, b: 2.0 };
+  let x = p[0];
+  return 0;
+}

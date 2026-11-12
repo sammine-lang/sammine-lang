@@ -1,5 +1,6 @@
 // RUN: %sammine_jit --file %full | %check %full
 // CHECK:      30
+// CHECK-NEXT: 20
 
 import std;
 
@@ -10,16 +11,18 @@ struct IntList {
 };
 
 instance Indexer<IntList, i32> {
-  let Indexer(coll: IntList, idx: i64) -> i32 {
-    if idx == 0i64 { coll.a }
-    else if idx == 1i64 { coll.b }
-    else { coll.c }
+  let Indexer(coll: ptr<IntList>, idx: i64) -> i32 {
+    if idx == 0i64 { (*coll).a }
+    else if idx == 1i64 { (*coll).b }
+    else { (*coll).c }
   }
 }
 
 let main() -> i32 {
   let list: IntList = IntList { a: 10, b: 20, c: 30 };
-  let val: i32 = Indexer<IntList, i32>(list, 2i64);
+  let val: i32 = Indexer<IntList, i32>(&list, 2i64);
   std::printf("%d\n", val);
+  // list[1] calls the same method, lending it list.
+  std::printf("%d\n", list[1]);
   return 0;
 }

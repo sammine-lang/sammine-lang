@@ -83,8 +83,10 @@ typeclass Hash<T> {
   Hash(val: T) -> u64;
 }
 
+// coll[idx], for a coll that is neither an array nor a pointer. The
+// collection is lent, so indexing doesn't use it up.
 typeclass Indexer<T, E> {
-  Indexer(coll: T, idx: i64) -> E;
+  Indexer(coll: ptr<T>, idx: i64) -> E;
 }
 
 export type Option<T> = Some(T) | None;

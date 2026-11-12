@@ -2,7 +2,7 @@ export struct Box<T> { v: T, };
 
 // Exported: importers get a copy for the types they use.
 export instance<T> Indexer<Box<T>, T> {
-  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+  let Indexer(b: ptr<Box<T>>, i: i64) -> T { (*b).v }
 }
 
 // Not exported: only this module's code may use it, including its generic

@@ -556,10 +556,15 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::IndexExprAST: {
     auto *index = llvm::cast<IndexExprAST>(expr);
     auto *base = index->array_expr.get();
-    if (base->get_type().type_kind == TypeKind::Pointer)
+    auto base_kind = base->get_type().type_kind;
+    if (base_kind == TypeKind::Pointer)
       check_through_pointer(base, use, loc, "index");
-    else
+    else if (base_kind == TypeKind::Array)
       check_expr(base, use.toward_place(loc, "index"));
+    else
+      // Through an Indexer instance, which is lent the collection and hands
+      // back an element that owns nothing.
+      read_child(base);
     read_child(index->index_expr.get());
     break;
   }

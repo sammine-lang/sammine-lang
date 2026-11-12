@@ -2,9 +2,9 @@
 // CHECK: indexer_wrong_arity.mn:30:34
 // CHECK-NEXT:   28|let main() -> i32 {
 // CHECK-NEXT:   29|  let list: IntList = IntList { a: 10, b: 20, c: 30 };
-// CHECK-NEXT:   30|  let val: i32 = Indexer<IntList>(list, 0i64);
-// CHECK-NEXT:     |                                  ─────────┬
-// CHECK-NEXT:     |                                           ╰─ Type class 'Indexer' expects 2 type argument(s), got 1
+// CHECK-NEXT:   30|  let val: i32 = Indexer<IntList>(&list, 0i64);
+// CHECK-NEXT:     |                                  ──────────┬
+// CHECK-NEXT:     |                                            ╰─ Type class 'Indexer' expects 2 type argument(s), got 1
 // CHECK-NEXT:   31|  return 0;
 // CHECK-NEXT:   32|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -20,13 +20,13 @@ struct IntList {
 };
 
 instance Indexer<IntList, i32> {
-  let Indexer(coll: IntList, idx: i64) -> i32 {
-    coll.a
+  let Indexer(coll: ptr<IntList>, idx: i64) -> i32 {
+    (*coll).a
   }
 }
 
 let main() -> i32 {
   let list: IntList = IntList { a: 10, b: 20, c: 30 };
-  let val: i32 = Indexer<IntList>(list, 0i64);
+  let val: i32 = Indexer<IntList>(&list, 0i64);
   return 0;
 }

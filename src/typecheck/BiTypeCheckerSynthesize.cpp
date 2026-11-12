@@ -1,5 +1,6 @@
 #include "ast/Ast.h"
 #include "fmt/format.h"
+#include "fmt/ranges.h"
 #include "typecheck/BiTypeChecker.h"
 #include "typecheck/BuiltinInstances.h"
 #include "typecheck/Types.h"
@@ -855,7 +856,7 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
 // its base, while `*p` and `p[i]` reach memory through the pointer `p`.
 static const ExprAST *write_root(const ExprAST *target) {
   if (auto *idx = llvm::dyn_cast<IndexExprAST>(target);
-      idx && idx->array_expr->get_type().type_kind != TypeKind::Pointer)
+      idx && idx->array_expr->get_type().type_kind == TypeKind::Array)
     return write_root(idx->array_expr.get());
   if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(target))
     return write_root(field->object_expr.get());
@@ -881,6 +882,14 @@ void BiTypeCheckerVisitor::check_unsafe_allowed(sammine_util::Location loc,
 bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
   auto *target = ast->LHS.get();
   auto *root = write_root(target);
+  if (auto *idx = llvm::dyn_cast<IndexExprAST>(root);
+      idx && props_.index(idx->id()).indexer_method) {
+    this->add_error(
+        root->get_location(),
+        fmt::format("Cannot write into '{}' by index: its Indexer only reads",
+                    idx->array_expr->get_type().to_string()));
+    return false;
+  }
   if (llvm::isa<DerefExprAST, IndexExprAST>(root))
     return true;
   // A root whose type is unknown has already been reported.
@@ -1396,6 +1405,11 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
 
   auto arr_type = ast->array_expr->accept_synthesis(this);
 
+  // Anything else that can be indexed goes through its Indexer instance.
+  if (arr_type.type_kind != TypeKind::Array &&
+      arr_type.type_kind != TypeKind::Pointer && !arr_type.is_poisoned())
+    return ast->set_type(synthesize_indexer(ast, arr_type));
+
   // Validate index type (shared for both array and pointer)
   auto idx_type = ast->index_expr->accept_synthesis(this);
   if (idx_type.type_kind == TypeKind::Integer) {
@@ -1439,11 +1453,94 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     return ast->set_type(ptr_data.get_pointee());
   }
 
-  this->add_error(
-      ast->get_location(),
-      fmt::format("Cannot index type '{}' — no Indexer instance found",
-                  arr_type.to_string()));
   return ast->set_type(Type::Poisoned());
+}
+
+std::vector<MonomorphizedKey>
+BiTypeCheckerVisitor::indexer_instances_for(const Type &coll) const {
+  std::vector<MonomorphizedKey> found;
+  auto add = [&](MonomorphizedKey key) {
+    if (std::ranges::find(found, key) == found.end())
+      found.push_back(std::move(key));
+  };
+  for (auto &key : type_class_instances)
+    if (key.name == kIndexerClass && key.type_args.size() == 2 &&
+        key.type_args[0] == coll)
+      add(key);
+  if (auto it = generic_instances.find(std::string(kIndexerClass));
+      it != generic_instances.end())
+    for (auto &generic : it->second) {
+      TypeBindings bindings;
+      if (generic.types.size() != 2 ||
+          !unify(generic.types[0], coll, bindings))
+        continue;
+      // The collection's type must decide the element's.
+      auto element = substitute(generic.types[1], bindings);
+      if (std::ranges::any_of(generic.ast->type_params, [&](auto &tp) {
+            return contains_type_param(element, tp);
+          }))
+        continue;
+      add(MonomorphizedKey{std::string(kIndexerClass), {coll, element}});
+    }
+  return found;
+}
+
+// x[i], for x neither an array nor a pointer, calls the one Indexer instance
+// for x's type, lending it x: Indexer<T, E>::Indexer(&x, i) -> E.
+Type BiTypeCheckerVisitor::synthesize_indexer(IndexExprAST *ast,
+                                              const Type &coll) {
+  auto idx_type = ast->index_expr->accept_synthesis(this);
+  if (idx_type.type_kind == TypeKind::Integer) {
+    resolve_literal_type(ast->index_expr.get(), Type::I64_t());
+    idx_type = Type::I64_t();
+  }
+
+  auto keys = indexer_instances_for(coll);
+  if (keys.empty()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Cannot index type '{}' — no Indexer instance found",
+                    coll.to_string()));
+    return Type::Poisoned();
+  }
+  if (keys.size() > 1) {
+    std::vector<std::string> names;
+    for (auto &key : keys)
+      names.push_back(fmt::format("{}<{}>", key.name, key.type_args_string()));
+    std::ranges::sort(names);
+    this->add_error(ast->get_location(),
+                    fmt::format("Indexing '{}' is ambiguous: {} all apply",
+                                coll.to_string(), fmt::join(names, ", ")));
+    return Type::Poisoned();
+  }
+  auto &key = keys.front();
+  if (!has_instance(key)) {
+    this->add_error(ast->get_location(),
+                    missing_instance(key, fmt::format("No instance of {}<{}>",
+                                                      key.name,
+                                                      key.type_args_string())));
+    return Type::Poisoned();
+  }
+  if (!idx_type.is_poisoned() && idx_type != Type::I64_t()) {
+    this->add_error(ast->index_expr->get_location(),
+                    fmt::format("Indexing '{}' takes an i64 index, got '{}'",
+                                coll.to_string(), idx_type.to_string()));
+    return Type::Poisoned();
+  }
+  // The element comes back by value, and the collection still holds it: an
+  // owning element would then have two owners.
+  auto element = key.type_args[1];
+  if (element.containsLinearTypes()) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("Indexing '{}' would copy out '{}', which owns memory "
+                    "the collection still owns",
+                    coll.to_string(), element.to_string()));
+    return Type::Poisoned();
+  }
+  props_.index(ast->id()).indexer_method =
+      key.to_typeclass_name(std::string(kIndexerClass));
+  return element;
 }
 Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   if (ast->synthesized())

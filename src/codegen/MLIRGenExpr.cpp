@@ -856,7 +856,47 @@ mlir::Value MLIRGenImpl::emitRangeExpr(AST::RangeExprAST *ast) {
   return alloca;
 }
 
+// Whether emitLValue can give `expr`'s address: a variable, what a pointer
+// points at, or a field or array element of one of those.
+static bool has_address(const AST::ExprAST *expr,
+                        const AST::ASTProperties &props) {
+  if (llvm::isa<AST::VariableExprAST, AST::DerefExprAST>(expr))
+    return true;
+  if (auto *field = llvm::dyn_cast<AST::FieldAccessExprAST>(expr))
+    return has_address(field->object_expr.get(), props);
+  if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(expr)) {
+    if (auto *ip = props.index(idx->id()); ip && ip->indexer_method)
+      return false;
+    return idx->array_expr->get_type().type_kind == TypeKind::Pointer ||
+           has_address(idx->array_expr.get(), props);
+  }
+  return false;
+}
+
+// x[i] through an Indexer instance: its method is lent x's address, or the
+// address of a copy when x is a temporary.
+mlir::Value MLIRGenImpl::emitIndexerCall(
+    AST::IndexExprAST *ast, const sammine_util::QualifiedName &method) {
+  auto location = loc(ast);
+  auto *base = ast->array_expr.get();
+  auto coll =
+      has_address(base, props_) ? emitLValue(base) : emitExpr(base);
+  auto idx = emitExpr(ast->index_expr.get());
+  if (!coll || !idx)
+    return nullptr;
+  coll = ensurePointer(coll, location);
+  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(method.mangled());
+  if (!funcOp)
+    imm_error(fmt::format("no function for '{}'", method.mangled()),
+              ast->get_location());
+  return mlir::func::CallOp::create(builder, location, funcOp,
+                                    mlir::ValueRange{coll, idx})
+      .getResult(0);
+}
+
 mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
+  if (auto *ip = props_.index(ast->id()); ip && ip->indexer_method)
+    return emitIndexerCall(ast, *ip->indexer_method);
   auto location = loc(ast);
   auto arr = emitExpr(ast->array_expr.get());
   auto idx = emitExpr(ast->index_expr.get());

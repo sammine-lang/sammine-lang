@@ -265,6 +265,8 @@ public:
   mlir::Value emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast);
   mlir::Value emitRangeExpr(AST::RangeExprAST *ast);
   mlir::Value emitIndexExpr(AST::IndexExprAST *ast);
+  mlir::Value emitIndexerCall(AST::IndexExprAST *ast,
+                              const sammine_util::QualifiedName &method);
   mlir::Value emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
                               const ArrayType &arrType,
                               mlir::Location location);

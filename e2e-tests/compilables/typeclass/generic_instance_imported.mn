@@ -9,7 +9,7 @@ let bit(x: bool) -> i32 { if x { 1 } else { 0 } }
 let main() -> i32 {
   let b = boxes::Box<i64> { v: 9i64 };
   // CHECK: 9 1 0
-  std::printf("%lld %d %d\n", Indexer<boxes::Box<i64>, i64>(b, 0i64),
+  std::printf("%lld %d %d\n", b[0],
               bit(boxes::same(b, b)),
               bit(boxes::same(b, boxes::Box<i64> { v: 1i64 })));
   return 0;

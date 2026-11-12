@@ -4,6 +4,11 @@ export struct Vec<T> {
   cap: i64,
 };
 
+// v[i]: element i of the first v.length. Not bounds-checked yet.
+export instance<T> Indexer<Vec<T>, T> {
+  let unsafe Indexer(v: ptr<Vec<T>>, i: i64) -> T { (*v).data[i] }
+}
+
 export let new<T>(cap: i64) -> Vec<T> {
   Vec<T> { data: alloc<T>(cap), length: 0i64, cap: cap }
 }

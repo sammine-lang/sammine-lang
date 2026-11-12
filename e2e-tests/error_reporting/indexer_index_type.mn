@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// CHECK: Indexing 'vec::Vec<i32>' takes an i64 index, got 'i32'
+import vec;
+
+let main() -> i32 {
+  let v = vec::push<i32>(vec::new<i32>(1), 10);
+  let i = 0;
+  let x = v[i];
+  vec::delete<i32>(v);
+  return 0;
+}

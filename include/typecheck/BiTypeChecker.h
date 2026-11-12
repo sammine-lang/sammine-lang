@@ -329,6 +329,12 @@ public:
 
   // Binary expression synthesis helper
   bool check_assign_target(BinaryExprAST *ast);
+  // x[i] for an x that is neither an array nor a pointer.
+  static constexpr std::string_view kIndexerClass = "Indexer";
+  Type synthesize_indexer(IndexExprAST *ast, const Type &coll);
+  /// The Indexer instances, concrete or from a generic one, whose collection
+  /// type is `coll`.
+  std::vector<MonomorphizedKey> indexer_instances_for(const Type &coll) const;
   // Reports `what` unless the enclosing function is declared `let unsafe`.
   void check_unsafe_allowed(sammine_util::Location loc, std::string_view what);
   bool check_addr_of_operand(AddrOfExprAST *ast);
