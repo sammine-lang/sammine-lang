@@ -61,6 +61,51 @@ def DerefOp : Sammine_Op<"deref", [Pure,
   let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
 }
 
+def LocalOp : Sammine_Op<"local", [MemoryEffects<[MemAlloc]>]> {
+  let summary = "a binding's slot, `let x = v` when the code takes x's address";
+  let description = [{
+    Holds no value until one is stored. Only a binding whose address is taken
+    (`&x`, or `x[i]` through an Indexer, which lends x) lives in a slot: any
+    other is the value it names.
+  }];
+  let arguments = (ins StrAttr:$name);
+  let results = (outs Sammine_PlaceType:$place);
+  let assemblyFormat = "$name attr-dict `:` type($place)";
+}
+
+def FieldOp : Sammine_Op<"field", [Pure]> {
+  let summary = "the place of field `index` of the struct or tuple in a place, `x.f`";
+  let arguments = (ins Sammine_PlaceType:$base, I64Attr:$index);
+  let results = (outs Sammine_PlaceType:$place);
+  let assemblyFormat = "$base `[` $index `]` attr-dict `:` type($base) `->` type($place)";
+  let hasVerifier = 1;
+}
+
+def ElemOp : Sammine_Op<"elem", [Pure]> {
+  let summary = "the place of element `index` of the array in a place, `a[i]`";
+  let description = [{
+    Nothing checks the index here: MIR checks it before, as for
+    sammine.element.
+  }];
+  let arguments = (ins Sammine_PlaceType:$base, AnySignlessInteger:$index);
+  let results = (outs Sammine_PlaceType:$place);
+  let assemblyFormat = "$base `[` $index `]` attr-dict `:` type($base) `,` type($index) `->` type($place)";
+  let hasVerifier = 1;
+}
+
+def AddrOp : Sammine_Op<"addr", [Pure,
+    TypesMatchWith<"the result is a view of what the place holds",
+                   "place", "result", ViewOfPlace>]> {
+  let summary = "a view of a place, `&x`, for as long as the place lives";
+  let description = [{
+    Unlike sammine.lend, the view may outlive a call: `let p = &x` keeps it.
+    Nothing writes through a view, so the place keeps its value.
+  }];
+  let arguments = (ins Sammine_PlaceType:$place);
+  let results = (outs Sammine_PtrType:$result);
+  let assemblyFormat = "$place attr-dict `:` type($place)";
+}
+
 def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
     TypesMatchWith<"the place holds what the pointer points at",
                    "ptr", "place", PlaceOfPointee>]> {

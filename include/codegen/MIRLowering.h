@@ -43,6 +43,18 @@ private:
   /// What each name in the current function stands for: its parameters and
   /// `let`s so far. A later `let` of a name shadows the earlier one.
   llvm::StringMap<mlir::Value> names_;
+  /// The bindings of the function being lowered whose address its code
+  /// takes: each lives in a slot, and names_ names that place.
+  llvm::StringSet<> addressed_;
+
+  /// Makes `name` name `value`, or a slot holding it if it is addressed.
+  void bind(llvm::StringRef name, mlir::Value value, mlir::Location location);
+  bool hasPlace(AST::ExprAST *expr) const;
+  std::optional<size_t> fieldIndex(AST::FieldAccessExprAST *access) const;
+  mlir::FailureOr<mlir::Value> lowerAddrOf(AST::AddrOfExprAST *addr);
+  mlir::FailureOr<mlir::Value>
+  lowerIndexerCall(AST::IndexExprAST *index,
+                   const sammine_util::QualifiedName &method);
 
   mlir::Location loc(const AST::AstBase *ast) const {
     return locator_.loc(builder_, ast);

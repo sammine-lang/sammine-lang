@@ -81,7 +81,7 @@ Places (pure; they name storage, read nothing):
 
 | Op | Meaning |
 |---|---|
-| `sammine.local "x" : place<T>` | a local's slot, declared once per `let`/parameter, with its source location |
+| `sammine.local "x" : place<T>` | a binding's slot, only for a binding whose address the code takes (`&x`, `x[i]` through an Indexer); any other binding is the value it names |
 | `sammine.field %p, "f"` | field `f` (or tuple element) of place `%p` |
 | `sammine.deref %v` | the place an owned or view pointer value points at |
 | `sammine.elem %p, %i` | an array element (bounds-checked when lowered) |
@@ -95,7 +95,8 @@ checker reads:
 |---|---|
 | `sammine.move %p -> T` | takes the value out; the place is empty after |
 | `sammine.copy %p -> T` | reads a value that owns nothing (verifier: `T` must not contain linear types) |
-| `sammine.lend %p -> ptr<T>` | a view of the place for the length of a call (`ptr<T>` parameters, `x[i]` through `Indexer`, `&x`) |
+| `sammine.lend %p -> ptr<T>` | a view of the place for the length of a call (`ptr<T>` parameters, `x[i]` through `Indexer`) |
+| `sammine.addr %p -> ptr<T>` | `&x`: a view of the place for as long as it lives (`let p = &x` keeps it) |
 | `sammine.store %v, %p` | puts a value in a place; the place must not hold a live owner |
 
 Values:

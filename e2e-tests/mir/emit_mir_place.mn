@@ -1,0 +1,36 @@
+// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// A binding whose address the code takes lives in a slot, sammine.local; any
+// other is the value it names. &x.f and &a[i] are views of places within it
+// (sammine.field, sammine.elem, the index checked first). x[i] through an
+// Indexer lends the method x's place, or a slot holding a temporary.
+// CHECK-LABEL: func.func private @second(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.local "t" : <!sammine.struct<"Trio", (i32, i32, i32)>>
+// CHECK: sammine.lend
+// CHECK-NEXT: sammine.call @"Indexer<Trio, i32>::Indexer"(
+// CHECK-LABEL: func.func private @fresh(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.local "" : <!sammine.struct<"Trio", (i32, i32, i32)>>
+// CHECK-LABEL: func.func private @field_view(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.field %{{[0-9]+}}[1] : <!sammine.struct<"Trio", (i32, i32, i32)>> -> <i32>
+// CHECK-NEXT: sammine.addr
+// CHECK-LABEL: func.func private @elem_view(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.elem %{{[0-9]+}}[%arg1] : <!sammine.array<3, i32>>, i32 -> <i32>
+// CHECK-NEXT: sammine.addr
+struct Trio { a: i32, b: i32, c: i32 };
+
+instance Indexer<Trio, i32> {
+  let Indexer(t: ptr<Trio>, i: i64) -> i32 {
+    if i == 0i64 { (*t).a } else if i == 1i64 { (*t).b } else { (*t).c }
+  }
+}
+
+let look(p: ptr<i32>) -> i32 { *p }
+let second(t: Trio) -> i32 { t[1i64] }
+let fresh(n: i32) -> i32 { Trio { a: n, b: n, c: n }[0i64] }
+let field_view(t: Trio) -> i32 { look(&t.b) }
+let elem_view(a: [3]i32, i: i32) -> i32 { look(&a[i]) }
+
+let main() -> i32 { 0 }

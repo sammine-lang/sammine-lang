@@ -175,6 +175,44 @@ struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
   }
 };
 
+// A field's or an element's place: a GEP into what the base place holds.
+struct FieldLowering : public mlir::OpConversionPattern<smn::FieldOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::FieldOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto base =
+        getTypeConverter()->convertType(op.getBase().getType().getValueType());
+    if (!base)
+      return mlir::failure();
+    rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
+        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), base,
+        adaptor.getBase(),
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{
+            0, static_cast<int32_t>(op.getIndex())},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+    return mlir::success();
+  }
+};
+
+struct ElemLowering : public mlir::OpConversionPattern<smn::ElemOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::ElemOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto base =
+        getTypeConverter()->convertType(op.getBase().getType().getValueType());
+    if (!base)
+      return mlir::failure();
+    rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
+        op, mlir::LLVM::LLVMPointerType::get(op.getContext()), base,
+        adaptor.getBase(),
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+    return mlir::success();
+  }
+};
+
 // Copying and moving both read the place; what differs is only what the
 // ownership check makes of them.
 template <typename ReadOp>
@@ -348,6 +386,21 @@ mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
       type, one);
 }
 
+// A slot at the top of the function, as the AST codegen makes them.
+struct LocalLowering : public mlir::OpConversionPattern<smn::LocalOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::LocalOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto type =
+        getTypeConverter()->convertType(op.getPlace().getType().getValueType());
+    if (!type)
+      return mlir::failure();
+    rewriter.replaceOp(op, entrySlot(rewriter, op, type));
+    return mlir::success();
+  }
+};
+
 /// Where the payload field at byte `offset` of the enum in `slot` is.
 mlir::Value payloadField(mlir::ConversionPatternRewriter &rewriter,
                          mlir::Location loc, mlir::Type enumType,
@@ -508,11 +561,13 @@ struct MIRToLLVMPass
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
     patterns.add<FuncLowering, AllocLowering, FreeLowering,
                  SameAddressLowering<smn::DerefOp>,
-                 SameAddressLowering<smn::LendOp>, PtrElemLowering,
+                 SameAddressLowering<smn::LendOp>,
+                 SameAddressLowering<smn::AddrOp>, PtrElemLowering,
+                 FieldLowering, ElemLowering,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering, ExtractLowering, VariantLowering, TagLowering,
-                 PayloadLowering, ElementLowering, UnreachableLowering>(
-        converter, &context);
+                 PayloadLowering, ElementLowering, UnreachableLowering,
+                 LocalLowering>(converter, &context);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
     patterns.add<StringLowering>(converter, &context, strings);
     unsigned constArrays = 0;
@@ -526,7 +581,8 @@ struct MIRToLLVMPass
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
-                        smn::PtrElemOp,
+                        smn::PtrElemOp, smn::AddrOp, smn::FieldOp,
+                        smn::ElemOp, smn::LocalOp,
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
                         smn::StringOp, smn::AggregateOp, smn::ExtractOp,
                         smn::VariantOp, smn::TagOp, smn::PayloadOp,

@@ -1,5 +1,5 @@
-// RUN: %sammine --file %full --emit mlir | %check %full
-// RUN: %sammine_jit --file %full | %check %full --check-prefix OUT
+// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// RUN: %sammine_jit --mir --file %full | %check %full --check-prefix OUT
 // A function that writes `-> unit` and runs off its end returns (): MIR
 // adds the return, as the AST codegen did.
 // CHECK-LABEL: func.func private @shout(

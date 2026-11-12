@@ -86,6 +86,34 @@ bool ownsMemory(mlir::Type type) {
   return false;
 }
 
+mlir::LogicalResult FieldOp::verify() {
+  auto base = getBase().getType().getValueType();
+  auto fields = fieldTypes(base);
+  if (!fields)
+    return emitOpError("names a field of a struct or tuple, not ") << base;
+  auto index = getIndex();
+  if (index >= fields->size())
+    return emitOpError("names field ")
+           << index << " of " << base << ", which has " << fields->size();
+  if (getPlace().getType().getValueType() != (*fields)[index])
+    return emitOpError("gives a place of ")
+           << getPlace().getType().getValueType() << " for field " << index
+           << ", which is " << (*fields)[index];
+  return mlir::success();
+}
+
+mlir::LogicalResult ElemOp::verify() {
+  auto array = mlir::dyn_cast<ArrayType>(getBase().getType().getValueType());
+  if (!array)
+    return emitOpError("names an element of an array, not ")
+           << getBase().getType().getValueType();
+  if (getPlace().getType().getValueType() != array.getElement())
+    return emitOpError("gives a place of ")
+           << getPlace().getType().getValueType() << " for an element of "
+           << array;
+  return mlir::success();
+}
+
 mlir::LogicalResult ElementOp::verify() {
   if (getArray().getType().getElement() != getResult().getType())
     return emitOpError("gives an element of ")

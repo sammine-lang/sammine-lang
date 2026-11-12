@@ -29,6 +29,47 @@ namespace sammine_lang {
 
 using namespace AST;
 
+namespace {
+
+/// The bindings of a function body whose address its code takes: the
+/// variable at the root of `&x`, `&x.f` or `&a[i]`, or of `x[i]` through an
+/// Indexer, which lends x. By name, so a binding a later one shadows counts
+/// too.
+class AddressedBindings : public ASTVisitor {
+public:
+  explicit AddressedBindings(const ASTProperties &props) : props(props) {}
+  llvm::StringSet<> names;
+
+  void preorder_walk(AddrOfExprAST *ast) override {
+    addRoot(ast->operand.get());
+  }
+  void preorder_walk(IndexExprAST *ast) override {
+    if (auto *ip = props.index(ast->id()); ip && ip->indexer_method)
+      addRoot(ast->array_expr.get());
+  }
+
+private:
+  const ASTProperties &props;
+
+  void addRoot(ExprAST *expr) {
+    while (true) {
+      if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(expr)) {
+        expr = field->object_expr.get();
+      } else if (auto *index = llvm::dyn_cast<IndexExprAST>(expr);
+                 index && index->array_expr->get_type().type_kind ==
+                              TypeKind::Array) {
+        expr = index->array_expr.get();
+      } else {
+        if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
+          names.insert(var->variableName.mangled());
+        return;
+      }
+    }
+  }
+};
+
+} // namespace
+
 std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
   llvm::StringSet<> enclosing;
   return mirType(type, enclosing);
@@ -187,9 +228,12 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
 
   module_ = decl->getParentOfType<mlir::ModuleOp>();
   names_.clear();
+  AddressedBindings addressed(props_);
+  ast->Block->accept_vis(&addressed);
+  addressed_ = std::move(addressed.names);
   for (auto [param, arg] :
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
-    names_[param->name] = arg;
+    bind(param->name, arg, loc(ast));
 
   // GeneralSemanticsVisitor makes a body's implicit return explicit, but
   // not in a function that writes `-> unit`: one that runs off its end
@@ -256,18 +300,33 @@ mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
   if (mlir::failed(value) || !*value)
     return mlir::failure();
   if (!def->is_tuple_destructure) {
-    names_[def->TypedVar->name] = *value;
+    bind(def->TypedVar->name, *value, loc(def));
     return mlir::success();
   }
   auto tuple = mlir::dyn_cast<smn::TupleType>(value->getType());
   if (!tuple || tuple.getElements().size() != def->destructure_vars.size())
     return mlir::failure();
   for (auto [i, var] : llvm::enumerate(def->destructure_vars))
-    names_[var->name] =
-        smn::ExtractOp::create(builder_, loc(def), tuple.getElements()[i],
-                               *value, i)
-            .getResult();
+    bind(var->name,
+         smn::ExtractOp::create(builder_, loc(def), tuple.getElements()[i],
+                                *value, i),
+         loc(def));
   return mlir::success();
+}
+
+// `name` names `value` from here on: the value itself, or, if the code
+// takes its address, a slot holding it.
+void MIRLowering::bind(llvm::StringRef name, mlir::Value value,
+                       mlir::Location location) {
+  if (!addressed_.contains(name)) {
+    names_[name] = value;
+    return;
+  }
+  auto slot = smn::LocalOp::create(
+      builder_, location,
+      smn::PlaceType::get(builder_.getContext(), value.getType()), name);
+  smn::StoreOp::create(builder_, location, value, slot);
+  names_[name] = slot;
 }
 
 mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
@@ -328,13 +387,16 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (llvm::isa<DerefExprAST>(expr))
     return lowerPlaceRead(expr);
   if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
-    auto baseKind = index->array_expr->get_type().type_kind;
-    if (baseKind == TypeKind::Array)
+    if (auto *ip = props_.index(index->id()); ip && ip->indexer_method)
+      return lowerIndexerCall(index, *ip->indexer_method);
+    if (hasPlace(index))
+      return lowerPlaceRead(expr);
+    if (index->array_expr->get_type().type_kind == TypeKind::Array)
       return lowerArrayIndex(index);
-    if (baseKind != TypeKind::Pointer)
-      return mlir::failure();
-    return lowerPlaceRead(expr);
+    return mlir::failure();
   }
+  if (auto *addr = llvm::dyn_cast<AddrOfExprAST>(expr))
+    return lowerAddrOf(addr);
   if (auto *array = llvm::dyn_cast<ArrayLiteralExprAST>(expr))
     return lowerArrayLiteral(array);
   if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
@@ -592,11 +654,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
       int64_t offset = 0;
       for (auto [i, name] : llvm::enumerate(pattern.bindings)) {
         auto at = layout::advancePayloadOffset(offset, payloadTypes[i]);
-        names_[name] = smn::PayloadOp::create(builder_, location,
-                                              mirPayload[i], scrutinee,
-                                              pattern.variant_index, i,
-                                              static_cast<uint64_t>(at))
-                           .getResult();
+        bind(name,
+             smn::PayloadOp::create(builder_, location, mirPayload[i],
+                                    scrutinee, pattern.variant_index, i,
+                                    static_cast<uint64_t>(at)),
+             location);
       }
     }});
   }
@@ -664,8 +726,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
                                      /*variant=*/0, /*field=*/0, /*offset=*/0);
   auto next = smn::ExtractOp::create(builder_, location, *rangeType, step, 0);
   auto outer = names_;
-  names_[forExpr->loop_var] =
-      smn::ExtractOp::create(builder_, location, *element, step, 1);
+  bind(forExpr->loop_var,
+       smn::ExtractOp::create(builder_, location, *element, step, 1),
+       location);
   auto value = lowerStatements(forExpr->body.get());
   names_ = std::move(outer);
   if (mlir::failed(value))
@@ -878,16 +941,13 @@ MIRLowering::lowerTupleLiteral(TupleLiteralExprAST *tuple) {
                         mlir::cast<smn::TupleType>(*type).getElements(), exprs);
 }
 
-// `p.x`, or `t.0` of a tuple.
+// `p.x`, or `t.0` of a tuple: read from its place when it has one, so only
+// the field is copied or moved, else taken from the aggregate's value.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerFieldAccess(FieldAccessExprAST *access) {
-  auto objectType = access->object_expr->get_type();
-  std::optional<size_t> index;
-  if (objectType.type_kind == TypeKind::Tuple)
-    index = std::stoul(access->field_name);
-  else if (objectType.type_kind == TypeKind::Struct)
-    index = std::get<StructType>(objectType.type_data)
-                .get_field_index(access->field_name);
+  if (hasPlace(access))
+    return lowerPlaceRead(access);
+  auto index = fieldIndex(access);
   auto type = mirType(access->get_type());
   if (!index || !type)
     return mlir::failure();
@@ -1088,13 +1148,132 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlaceRead(ExprAST *expr) {
   return read(loc(expr), *place);
 }
 
-// The place `target` names, if MIR has one: `*p`, or `p[i]` of a pointer.
+// Whether `expr` names a place, as the AST codegen's has_address has it: a
+// binding in a slot, what a pointer points at, or a field or array element
+// of a place, or an element past a pointer. Lowers nothing.
+bool MIRLowering::hasPlace(ExprAST *expr) const {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr)) {
+    auto it = names_.find(var->variableName.mangled());
+    return it != names_.end() &&
+           mlir::isa<smn::PlaceType>(it->second.getType());
+  }
+  if (llvm::isa<DerefExprAST>(expr))
+    return true;
+  if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(expr))
+    return hasPlace(field->object_expr.get());
+  if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
+    if (auto *ip = props_.index(index->id()); ip && ip->indexer_method)
+      return false;
+    auto kind = index->array_expr->get_type().type_kind;
+    return kind == TypeKind::Pointer ||
+           (kind == TypeKind::Array && hasPlace(index->array_expr.get()));
+  }
+  return false;
+}
+
+// The place `target` names, which hasPlace says it has.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(target)) {
+    auto it = names_.find(var->variableName.mangled());
+    if (it == names_.end() || !mlir::isa<smn::PlaceType>(it->second.getType()))
+      return mlir::failure();
+    return it->second;
+  }
   if (auto *deref = llvm::dyn_cast<DerefExprAST>(target))
     return lowerDerefPlace(deref);
-  if (auto *index = llvm::dyn_cast<IndexExprAST>(target))
-    return lowerPtrElemPlace(index);
+  if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(target)) {
+    auto base = lowerPlace(field->object_expr.get());
+    if (mlir::failed(base))
+      return mlir::failure();
+    auto index = fieldIndex(field);
+    auto type = mirType(field->get_type());
+    if (!index || !type)
+      return mlir::failure();
+    return smn::FieldOp::create(
+               builder_, loc(field),
+               smn::PlaceType::get(builder_.getContext(), *type), *base, *index)
+        .getResult();
+  }
+  if (auto *index = llvm::dyn_cast<IndexExprAST>(target)) {
+    if (index->array_expr->get_type().type_kind == TypeKind::Pointer)
+      return lowerPtrElemPlace(index);
+    auto base = lowerPlace(index->array_expr.get());
+    if (mlir::failed(base))
+      return mlir::failure();
+    auto array = mlir::dyn_cast<smn::ArrayType>(
+        mlir::cast<smn::PlaceType>(base->getType()).getValueType());
+    auto offset = lowerExpr(index->index_expr.get());
+    if (!array || mlir::failed(offset) || !*offset ||
+        mlir::failed(checkBounds(loc(index), *offset, array.getSize())))
+      return mlir::failure();
+    return smn::ElemOp::create(
+               builder_, loc(index),
+               smn::PlaceType::get(builder_.getContext(), array.getElement()),
+               *base, *offset)
+        .getResult();
+  }
   return mlir::failure();
+}
+
+// `&x`: a view of the place x names, for as long as it lives.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerAddrOf(AddrOfExprAST *addr) {
+  if (!hasPlace(addr->operand.get()))
+    return mlir::failure();
+  auto place = lowerPlace(addr->operand.get());
+  if (mlir::failed(place))
+    return mlir::failure();
+  auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
+  return smn::AddrOp::create(
+             builder_, loc(addr),
+             smn::PtrType::get(builder_.getContext(), holds,
+                               smn::Ownership::View),
+             *place)
+      .getResult();
+}
+
+// `x[i]` through an Indexer instance: its method is lent x's place, or a
+// slot holding x's value when x names none, as the AST codegen does.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerIndexerCall(IndexExprAST *index,
+                              const sammine_util::QualifiedName &method) {
+  auto location = loc(index);
+  mlir::FailureOr<mlir::Value> place = mlir::failure();
+  if (hasPlace(index->array_expr.get())) {
+    place = lowerPlace(index->array_expr.get());
+  } else {
+    auto value = lowerExpr(index->array_expr.get());
+    if (mlir::failed(value) || !*value)
+      return mlir::failure();
+    place = smn::LocalOp::create(
+                builder_, location,
+                smn::PlaceType::get(builder_.getContext(), value->getType()),
+                "")
+                .getResult();
+    smn::StoreOp::create(builder_, location, *value, *place);
+  }
+  if (mlir::failed(place))
+    return mlir::failure();
+  auto offset = lowerExpr(index->index_expr.get());
+  if (mlir::failed(offset) || !*offset)
+    return mlir::failure();
+  auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
+  auto view = smn::LendOp::create(
+      builder_, location,
+      smn::PtrType::get(builder_.getContext(), holds, smn::Ownership::View),
+      *place);
+  return callMethod(location, method, {view, *offset}, index->get_type());
+}
+
+/// Which field of its struct or tuple `access` reads.
+std::optional<size_t>
+MIRLowering::fieldIndex(FieldAccessExprAST *access) const {
+  auto objectType = access->object_expr->get_type();
+  if (objectType.type_kind == TypeKind::Tuple)
+    return std::stoul(access->field_name);
+  if (objectType.type_kind == TypeKind::Struct)
+    return std::get<StructType>(objectType.type_data)
+        .get_field_index(access->field_name);
+  return std::nullopt;
 }
 
 // `p[i]`, for p a pointer, in an unsafe function: the type checker allows it
@@ -1177,6 +1356,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   auto it = names_.find(var->variableName.mangled());
   if (it == names_.end())
     return mlir::failure();
+  // A binding in a slot is read from it.
+  if (mlir::isa<smn::PlaceType>(it->second.getType()))
+    return read(loc(var), it->second);
   return it->second;
 }
 

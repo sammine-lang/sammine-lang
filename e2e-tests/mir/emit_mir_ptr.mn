@@ -1,19 +1,20 @@
 // RUN: %sammine --file %full --mir --emit mlir | %check %full
 // A function over pointers goes through MIR with !sammine.ptr in its
-// signature: 'ptr<T> is owned, ptr<T> a view. A call from code emitted from
-// the AST casts its !llvm.ptr arguments to them, and the result back.
+// signature: 'ptr<T> is owned, ptr<T> a view. `&x` makes x's binding live in
+// a slot (sammine.local), and is a view of it (sammine.addr), the same one
+// each time.
 // CHECK-LABEL: func.func private @pass(%arg0: !sammine.ptr<i32, owned>{{.*}}) -> !sammine.ptr<i32, owned>
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: return %arg0 : !sammine.ptr<i32, owned>
 // CHECK-LABEL: func.func private @pick(%arg0: !sammine.ptr<i64, view>{{.*}}, %arg1: !sammine.ptr<i64, view>{{.*}}) -> i32
 // CHECK-SAME: sammine.mir
 // CHECK-LABEL: func.func @main
-// CHECK: builtin.unrealized_conversion_cast %{{[0-9]+}} : !llvm.ptr to !sammine.ptr<i32, owned>
-// CHECK-NEXT: call @pass(%{{[0-9]+}}) : (!sammine.ptr<i32, owned>) -> !sammine.ptr<i32, owned>
-// CHECK-NEXT: builtin.unrealized_conversion_cast %{{[0-9]+}} : !sammine.ptr<i32, owned> to !llvm.ptr
-// CHECK: builtin.unrealized_conversion_cast %{{.*}} : !llvm.ptr to !sammine.ptr<i64, view>
-// CHECK: call @pick(
-
+// CHECK-SAME: sammine.mir
+// CHECK: %3 = sammine.local "x" : <i64>
+// CHECK-NEXT: sammine.store %c3_i64, %3 : <i64>
+// CHECK: sammine.addr %3 : <i64>
+// CHECK-NEXT: sammine.addr %3 : <i64>
+// CHECK-NEXT: sammine.call @pick(
 let pass(p: 'ptr<i32>) -> 'ptr<i32> { p }
 let pick(a: ptr<i64>, b: ptr<i64>) -> i32 { 7 }
 
