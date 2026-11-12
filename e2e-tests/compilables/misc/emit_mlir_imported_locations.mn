@@ -1,0 +1,11 @@
+// RUN: %sammine --file %full %O --emit mlir | %check %full
+// Code from an imported module, as vec::push compiled here for i32, is
+// located in that module's file, not at offsets into this one.
+// CHECK: vec.mn:{{[0-9]+}}:{{[0-9]+}}
+import vec;
+
+let main() -> i32 {
+  let v = vec::push<i32>(vec::new<i32>(1), 1);
+  vec::delete<i32>(v);
+  0
+}
