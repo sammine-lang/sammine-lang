@@ -5,6 +5,7 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGen.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRLowering.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/TypeLayout.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenExpr.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenBinaryOps.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenKernel.cpp

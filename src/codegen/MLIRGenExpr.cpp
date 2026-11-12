@@ -243,7 +243,7 @@ mlir::Value MLIRGenImpl::emitEnumEquality(mlir::Value lhs, mlir::Value rhs,
     int64_t byteOffset = 0;
     for (auto &fieldType : variant.payload_types) {
       auto offset = static_cast<int32_t>(
-          advancePayloadOffset(byteOffset, fieldType));
+          layout::advancePayloadOffset(byteOffset, fieldType));
       auto at = [&](mlir::Value payload) -> mlir::Value {
         return mlir::LLVM::GEPOp::create(
             builder, location, llvmPtrTy(), builder.getI8Type(), payload,
@@ -978,7 +978,7 @@ mlir::Value MLIRGenImpl::emitAllocExpr(AST::AllocExprAST *ast) {
 
   // Extract pointee type T from result type ptr<T>
   auto ptrType = std::get<PointerType>(ast->get_type().type_data);
-  int64_t elemSize = getTypeSize(ptrType.get_pointee());
+  int64_t elemSize = layout::typeSize(ptrType.get_pointee());
 
   auto ptrTy = llvmPtrTy();
   auto i64Ty = builder.getI64Type();
@@ -1138,7 +1138,7 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
     for (size_t i = 0; i < ast->arguments.size(); i++) {
       auto argVal = emitRValue(ast->arguments[i].get());
       int64_t field_offset =
-          advancePayloadOffset(byte_offset, vi.payload_types[i]);
+          layout::advancePayloadOffset(byte_offset, vi.payload_types[i]);
       mlir::Value dest;
       if (field_offset == 0) {
         dest = payloadPtr;
@@ -1356,7 +1356,7 @@ mlir::Value MLIRGenImpl::emitPayloadCaseExpr(AST::CaseExprAST *ast,
         for (size_t j = 0; j < arm.pattern.bindings.size(); j++) {
           auto fieldMlirTy = convertType(vi.payload_types[j]);
           int64_t field_offset =
-              advancePayloadOffset(byte_offset, vi.payload_types[j]);
+              layout::advancePayloadOffset(byte_offset, vi.payload_types[j]);
           mlir::Value fieldPtr;
           if (field_offset == 0) {
             fieldPtr = payloadPtr;

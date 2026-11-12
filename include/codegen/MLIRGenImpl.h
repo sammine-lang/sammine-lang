@@ -4,6 +4,7 @@
 #include "ast/Ast.h"
 #include "codegen/MIRLowering.h"
 #include "codegen/SourceLocator.h"
+#include "codegen/TypeLayout.h"
 #include "compiler/Compiler.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
@@ -374,9 +375,6 @@ public:
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
   /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
   mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);
-  int64_t getTypeSize(const Type &type);
-  int64_t getVariantPayloadSize(const std::vector<Type> &payload_types);
-  int64_t advancePayloadOffset(int64_t &byte_offset, const Type &field_type);
   mlir::Value getOrCreateGlobalString(llvm::StringRef name,
                                       llvm::StringRef value,
                                       mlir::Location location);
