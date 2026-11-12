@@ -54,5 +54,6 @@ target_link_libraries(MLIRBackend PRIVATE
 
 # Final linkage for folder
 add_library(_codegen)
-target_include_directories(_codegen PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
+target_include_directories(_codegen PRIVATE ${INCLUDE_PROJECT_DIR})
+target_include_directories(_codegen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 target_link_libraries(_codegen SammineJIT MLIRBackend SammineDialect SammineDialectTransforms LLVMSupport ${llvm_libs} ${llvm_targets})

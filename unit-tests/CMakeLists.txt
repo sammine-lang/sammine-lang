@@ -8,7 +8,8 @@ set(lib_source Lexer Parser util _ast typecheck fmt::fmt)
 add_executable(tests)
 target_sources(tests PRIVATE ${test_sources})
 
-target_include_directories(tests PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS})
+target_include_directories(tests PRIVATE ${INCLUDE_PROJECT_DIR})
+target_include_directories(tests SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_link_libraries(tests PRIVATE Catch2::Catch2WithMain ${llvm_libs} ${lib_source})
 
 catch_discover_tests(tests  WORKING_DIRECTORY  ${CMAKE_CURRENT_LIST_DIR}

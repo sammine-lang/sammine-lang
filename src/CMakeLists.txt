@@ -63,7 +63,8 @@ add_subdirectory(util)
 add_subdirectory(compiler)
 
 add_executable(sammine ${CMAKE_CURRENT_LIST_DIR}/compiler/sammine.cpp)
-target_include_directories(sammine PRIVATE ${INCLUDE_PROJECT_DIR} ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
+target_include_directories(sammine PRIVATE ${INCLUDE_PROJECT_DIR})
+target_include_directories(sammine SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
 target_link_libraries(sammine project_options compiler cpptrace::cpptrace util _ast Lexer Parser
      semantics typecheck _codegen fmt CLI11::CLI11 options)
 
