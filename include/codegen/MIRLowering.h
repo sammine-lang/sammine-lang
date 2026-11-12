@@ -62,6 +62,31 @@ private:
   /// takes: each lives in a slot, and names_ names that place.
   llvm::StringSet<> addressed_;
 
+  /// Restores names_ when it ends: the names made in a block, an arm or a
+  /// loop's body end with it.
+  class NameScope {
+  public:
+    explicit NameScope(MIRLowering &lowering)
+        : lowering_(lowering), outer_(lowering.names_) {}
+    ~NameScope() { lowering_.names_ = std::move(outer_); }
+    NameScope(const NameScope &) = delete;
+    NameScope &operator=(const NameScope &) = delete;
+
+  private:
+    MIRLowering &lowering_;
+    llvm::StringMap<mlir::Value> outer_;
+  };
+
+  mlir::Value intConstant(mlir::Location location, mlir::Type type,
+                          int64_t value);
+  /// The type of a place holding a `type`.
+  smn::PlaceType placeOf(mlir::Type type) const;
+  /// The type of a view of a `pointee`.
+  smn::PtrType viewOf(mlir::Type pointee) const;
+  /// Moves `block` to the end of its region and builds from its start, as
+  /// where control continues once the blocks before it are built.
+  void continueIn(mlir::Block *block);
+
   /// Makes `name` name `value`, or a slot holding it if it is addressed.
   void bind(llvm::StringRef name, mlir::Value value, mlir::Location location);
   bool hasPlace(AST::ExprAST *expr) const;
@@ -93,6 +118,10 @@ private:
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
   /// The value of `expr`, or a null value for an expression of type `()`.
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
+  /// The value of `expr`, failing for one of type `()`.
+  mlir::FailureOr<mlir::Value> lowerValue(AST::ExprAST *expr);
+  mlir::FailureOr<mlir::Value> lowerNegation(AST::UnaryNegExprAST *neg);
+  mlir::FailureOr<mlir::Value> lowerLen(AST::LenExprAST *len);
   mlir::FailureOr<mlir::Value> lowerCall(AST::CallExprAST *call);
   /// How long a view of what an owned pointer points at lasts: a call
   /// (sammine.lend), or as long as what it points at (sammine.addr), as a

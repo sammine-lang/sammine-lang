@@ -191,7 +191,7 @@ bool MIRLowering::terminated() const {
 // `let`s make end with it. Once one returns, the rest never run and aren't
 // lowered: the result is then a null value, and `terminated()` is true.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
-  auto outer = names_;
+  NameScope scope(*this);
   mlir::Value last;
   for (auto &stmt : block->Statements) {
     if (terminated())
@@ -209,7 +209,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
       return mlir::failure();
     last = *value;
   }
-  names_ = std::move(outer);
   return last;
 }
 
@@ -220,8 +219,8 @@ mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
   // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.
   if (!def->is_tuple_destructure && !types_.mirType(def->get_type()))
     return mlir::failure();
-  auto value = lowerExpr(def->Expression.get());
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(def->Expression.get());
+  if (mlir::failed(value))
     return mlir::failure();
   if (!def->is_tuple_destructure) {
     bind(def->TypedVar->name, *value, loc(def));
@@ -248,7 +247,7 @@ void MIRLowering::bind(llvm::StringRef name, mlir::Value value,
   }
   auto slot = smn::LocalOp::create(
       builder_, location,
-      smn::PlaceType::get(builder_.getContext(), value.getType()), name);
+      placeOf(value.getType()), name);
   smn::StoreOp::create(builder_, location, value, slot);
   names_[name] = slot;
 }
@@ -268,6 +267,33 @@ mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
                                *value ? mlir::ValueRange{*value}
                                       : mlir::ValueRange{});
   return mlir::success();
+}
+
+mlir::FailureOr<mlir::Value> MIRLowering::lowerValue(ExprAST *expr) {
+  auto value = lowerExpr(expr);
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  return value;
+}
+
+mlir::Value MIRLowering::intConstant(mlir::Location location, mlir::Type type,
+                                     int64_t value) {
+  return mlir::arith::ConstantIntOp::create(builder_, location, type, value);
+}
+
+smn::PlaceType MIRLowering::placeOf(mlir::Type type) const {
+  return smn::PlaceType::get(builder_.getContext(), type);
+}
+
+smn::PtrType MIRLowering::viewOf(mlir::Type pointee) const {
+  return smn::PtrType::get(builder_.getContext(), pointee,
+                           smn::Ownership::View);
+}
+
+void MIRLowering::continueIn(mlir::Block *block) {
+  auto *region = block->getParent();
+  block->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(block);
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
@@ -294,14 +320,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerCase(caseExpr);
   if (auto *forExpr = llvm::dyn_cast<ForExprAST>(expr))
     return lowerFor(forExpr);
-  if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
-    if (!neg->get_type().is_integer() && !neg->get_type().is_float())
-      return mlir::failure();
-    auto value = lowerExpr(neg->operand.get());
-    if (mlir::failed(value) || !*value)
-      return mlir::failure();
-    return emitNegation(builder_, loc(neg), *value);
-  }
+  if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr))
+    return lowerNegation(neg);
   if (auto *call = llvm::dyn_cast<CallExprAST>(expr))
     return lowerCall(call);
   if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr))
@@ -327,16 +347,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerRangeArray(range);
   if (auto *dim = llvm::dyn_cast<DimExprAST>(expr))
     return lowerDim(dim);
-  if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
-    auto operand = len->operand->get_type();
-    if (operand.type_kind != TypeKind::Array)
-      return mlir::failure();
-    return mlir::arith::ConstantIntOp::create(
-               builder_, loc(len), builder_.getI32Type(),
-               static_cast<int64_t>(
-                   std::get<ArrayType>(operand.type_data).get_size()))
-        .getResult();
-  }
+  if (auto *len = llvm::dyn_cast<LenExprAST>(expr))
+    return lowerLen(len);
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
   if (auto *lit = llvm::dyn_cast<StructLiteralExprAST>(expr))
@@ -351,7 +363,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
 }
 
 // `f(a, b)`, `f` a sammine function, a generic function's copy, an
-// instance's method or a C function, whether its body goes through MIR or not.
+// instance's method or a C function.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   auto *cp = props_.call(call->id());
   if (cp->is_enum_constructor) {
@@ -364,8 +376,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   if (cp->builtin_instance) {
     llvm::SmallVector<mlir::Value, 2> args;
     for (auto &arg : call->arguments) {
-      auto value = lowerExpr(arg.get());
-      if (mlir::failed(value) || !*value)
+      auto value = lowerValue(arg.get());
+      if (mlir::failed(value))
         return mlir::failure();
       args.push_back(*value);
     }
@@ -452,15 +464,14 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
 mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
                                                         mlir::Type param,
                                                         ViewLasts view) {
-  auto value = lowerExpr(arg);
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(arg);
+  if (mlir::failed(value))
     return mlir::failure();
   if (value->getType() == param)
     return *value;
   auto ptr = mlir::dyn_cast<smn::PtrType>(value->getType());
   if (!ptr || !ptr.isOwned() ||
-      param != smn::PtrType::get(builder_.getContext(), ptr.getPointee(),
-                                 smn::Ownership::View))
+      param != viewOf(ptr.getPointee()))
     return mlir::failure();
   return lend(*value, loc(arg), view);
 }
@@ -469,8 +480,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
 // type, and C only reads what sammine passes it (the type checker keeps
 // addresses out), so an owned pointer is lent, as the linear checker has it.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
-  auto value = lowerExpr(arg);
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(arg);
+  if (mlir::failed(value))
     return mlir::failure();
   if (smn::ownsMemory(value->getType()))
     return lend(*value, loc(arg), ViewLasts::Call);
@@ -480,10 +491,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
 mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc,
                               ViewLasts view) {
   auto pointee = mlir::cast<smn::PtrType>(owner.getType()).getPointee();
-  auto *ctx = builder_.getContext();
   auto place = smn::DerefOp::create(builder_, loc,
-                                    smn::PlaceType::get(ctx, pointee), owner);
-  auto type = smn::PtrType::get(ctx, pointee, smn::Ownership::View);
+                                    placeOf(pointee), owner);
+  auto type = viewOf(pointee);
   if (view == ViewLasts::Place)
     return smn::AddrOp::create(builder_, loc, type, place).getResult();
   return smn::LendOp::create(builder_, loc, type, place).getResult();
@@ -515,11 +525,13 @@ MIRLowering::lowerArms(mlir::Location location,
   bool reached = false;
   for (auto &arm : arms) {
     builder_.setInsertionPointToStart(arm.block);
-    auto outer = names_;
-    if (arm.bind)
-      arm.bind();
-    auto value = lowerStatements(arm.body);
-    names_ = std::move(outer);
+    mlir::FailureOr<mlir::Value> value;
+    {
+      NameScope scope(*this);
+      if (arm.bind)
+        arm.bind();
+      value = lowerStatements(arm.body);
+    }
     if (mlir::failed(value))
       return mlir::failure();
     if (terminated())
@@ -536,8 +548,7 @@ MIRLowering::lowerArms(mlir::Location location,
     return mlir::Value();
   }
   // After the blocks the arms made.
-  after->moveBefore(region, region->end());
-  builder_.setInsertionPointToStart(after);
+  continueIn(after);
   return resultType ? after->getArgument(0) : mlir::Value();
 }
 
@@ -546,8 +557,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
   auto resultType = branchResultType(ifExpr->get_type());
   if (mlir::failed(resultType))
     return mlir::failure();
-  auto cond = lowerExpr(ifExpr->bool_expr.get());
-  if (mlir::failed(cond) || !*cond)
+  auto cond = lowerValue(ifExpr->bool_expr.get());
+  if (mlir::failed(cond))
     return mlir::failure();
   auto *region = builder_.getInsertionBlock()->getParent();
   auto *thenBlock = &region->emplaceBlock();
@@ -574,8 +585,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   auto resultType = branchResultType(caseExpr->get_type());
   if (mlir::failed(resultType))
     return mlir::failure();
-  auto value = lowerExpr(caseExpr->scrutinee.get());
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(caseExpr->scrutinee.get());
+  if (mlir::failed(value))
     return mlir::failure();
   auto enumType = mlir::dyn_cast<smn::EnumType>(value->getType());
   if (!enumType)
@@ -647,11 +658,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
     return mlir::failure();
   auto location = loc(forExpr);
 
-  auto start = lowerExpr(forExpr->start.get());
-  if (mlir::failed(start) || !*start)
+  auto start = lowerValue(forExpr->start.get());
+  if (mlir::failed(start))
     return mlir::failure();
-  auto end = lowerExpr(forExpr->end.get());
-  if (mlir::failed(end) || !*end)
+  auto end = lowerValue(forExpr->end.get());
+  if (mlir::failed(end))
     return mlir::failure();
   auto range = smn::AggregateOp::create(builder_, location, *rangeType,
                                         mlir::ValueRange{*start, *end});
@@ -669,7 +680,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
                     .getResult(0);
   auto tag = smn::TagOp::create(builder_, location, builder_.getI32Type(),
                                 option);
-  auto some = mlir::arith::ConstantIntOp::create(builder_, location,
+  auto some = intConstant(location,
                                                  builder_.getI32Type(), 0);
   auto isSome = mlir::arith::CmpIOp::create(
       builder_, location, mlir::arith::CmpIPredicate::eq, tag, some);
@@ -681,20 +692,21 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
   auto step = smn::PayloadOp::create(builder_, location, *stepType, option,
                                      /*variant=*/0, /*field=*/0, /*offset=*/0);
   auto next = smn::ExtractOp::create(builder_, location, *rangeType, step, 0);
-  auto outer = names_;
-  bind(forExpr->loop_var,
-       smn::ExtractOp::create(builder_, location, *element, step, 1),
-       location);
-  auto value = lowerStatements(forExpr->body.get());
-  names_ = std::move(outer);
+  mlir::FailureOr<mlir::Value> value;
+  {
+    NameScope scope(*this);
+    bind(forExpr->loop_var,
+         smn::ExtractOp::create(builder_, location, *element, step, 1),
+         location);
+    value = lowerStatements(forExpr->body.get());
+  }
   if (mlir::failed(value))
     return mlir::failure();
   if (!terminated())
     mlir::cf::BranchOp::create(builder_, location, header,
                                mlir::ValueRange{next});
 
-  exit->moveBefore(region, region->end());
-  builder_.setInsertionPointToStart(exit);
+  continueIn(exit);
   return mlir::Value();
 }
 
@@ -711,8 +723,8 @@ MIRLowering::lowerScalarCase(CaseExprAST *caseExpr) {
   auto resultType = branchResultType(caseExpr->get_type());
   if (mlir::failed(resultType))
     return mlir::failure();
-  auto value = lowerExpr(caseExpr->scrutinee.get());
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(caseExpr->scrutinee.get());
+  if (mlir::failed(value))
     return mlir::failure();
   auto flagType = mlir::dyn_cast<mlir::IntegerType>(value->getType());
   if (!flagType)
@@ -817,9 +829,8 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
         std::get<EnumType>(type.type_data).get_variant(index).discriminant_value;
     if (!discriminant || !payload.empty())
       return mlir::failure();
-    return mlir::arith::ConstantIntOp::create(builder_, location, backing,
-                                              *discriminant)
-        .getResult();
+    return intConstant(location, backing,
+                                              *discriminant);
   }
   auto enumType = mlir::cast<smn::EnumType>(*mir);
   auto &payloadTypes =
@@ -831,8 +842,8 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
   int64_t offset = 0;
   for (auto [expr, fieldType, mirField] :
        llvm::zip(payload, payloadTypes, enumType.getPayload(index))) {
-    auto value = lowerExpr(expr);
-    if (mlir::failed(value) || !*value || value->getType() != mirField)
+    auto value = lowerValue(expr);
+    if (mlir::failed(value) || value->getType() != mirField)
       return mlir::failure();
     fields.push_back(*value);
     offsets.push_back(layout::advancePayloadOffset(offset, fieldType));
@@ -845,13 +856,12 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
 // `a && b` reads b only if a is true, `a || b` only if a is false; the other
 // way, the result is a.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
-  auto lhs = lowerExpr(bin->LHS.get());
-  if (mlir::failed(lhs) || !*lhs)
+  auto lhs = lowerValue(bin->LHS.get());
+  if (mlir::failed(lhs))
     return mlir::failure();
   bool isAnd = bin->Op->tok_type == TokAND;
   auto location = loc(bin);
-  auto shortCut = mlir::arith::ConstantIntOp::create(
-      builder_, location, builder_.getI1Type(), isAnd ? 0 : 1);
+  auto shortCut = intConstant(location, builder_.getI1Type(), isAnd ? 0 : 1);
 
   auto *region = builder_.getInsertionBlock()->getParent();
   auto *rhsBlock = &region->emplaceBlock();
@@ -867,13 +877,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
                                    mlir::ValueRange{});
 
   builder_.setInsertionPointToStart(rhsBlock);
-  auto rhs = lowerExpr(bin->RHS.get());
-  if (mlir::failed(rhs) || !*rhs || terminated())
+  auto rhs = lowerValue(bin->RHS.get());
+  if (mlir::failed(rhs) || terminated())
     return mlir::failure();
   mlir::cf::BranchOp::create(builder_, location, after,
                              mlir::ValueRange{*rhs});
-  after->moveBefore(region, region->end());
-  builder_.setInsertionPointToStart(after);
+  continueIn(after);
   return after->getArgument(0);
 }
 
@@ -884,8 +893,8 @@ MIRLowering::lowerAggregate(mlir::Location location, mlir::Type type,
                             llvm::ArrayRef<std::pair<size_t, ExprAST *>> exprs) {
   llvm::SmallVector<mlir::Value> fields(fieldTypes.size());
   for (auto [index, expr] : exprs) {
-    auto value = lowerExpr(expr);
-    if (mlir::failed(value) || !*value || value->getType() != fieldTypes[index])
+    auto value = lowerValue(expr);
+    if (mlir::failed(value) || value->getType() != fieldTypes[index])
       return mlir::failure();
     fields[index] = *value;
   }
@@ -948,8 +957,8 @@ MIRLowering::lowerFieldAccess(FieldAccessExprAST *access) {
   auto type = types_.mirType(access->get_type());
   if (!index || !type)
     return mlir::failure();
-  auto object = lowerExpr(access->object_expr.get());
-  if (mlir::failed(object) || !*object)
+  auto object = lowerValue(access->object_expr.get());
+  if (mlir::failed(object))
     return mlir::failure();
   return smn::ExtractOp::create(builder_, loc(access), *type, *object, *index)
       .getResult();
@@ -1019,16 +1028,12 @@ MIRLowering::lowerRangeArray(RangeExprAST *range) {
   auto element = mlir::dyn_cast<mlir::IntegerType>(array.getElement());
   if (!element)
     return mlir::failure();
-  auto start = lowerExpr(range->start.get());
-  if (mlir::failed(start) || !*start || start->getType() != element)
+  auto start = lowerValue(range->start.get());
+  if (mlir::failed(start) || start->getType() != element)
     return mlir::failure();
   auto location = loc(range);
-  auto *ctx = builder_.getContext();
   auto slot = smn::LocalOp::create(builder_, location,
-                                   smn::PlaceType::get(ctx, array), "");
-  auto constant = [&](int64_t v) -> mlir::Value {
-    return mlir::arith::ConstantIntOp::create(builder_, location, element, v);
-  };
+                                   placeOf(array), "");
 
   auto *region = builder_.getInsertionBlock()->getParent();
   auto *header = &region->emplaceBlock();
@@ -1036,24 +1041,23 @@ MIRLowering::lowerRangeArray(RangeExprAST *range) {
   auto *body = &region->emplaceBlock();
   auto *after = &region->emplaceBlock();
   mlir::cf::BranchOp::create(builder_, location, header,
-                             mlir::ValueRange{constant(0)});
+                             mlir::ValueRange{intConstant(location, element, 0)});
   builder_.setInsertionPointToStart(header);
   auto index = header->getArgument(0);
   auto more = mlir::arith::CmpIOp::create(builder_, location,
                                           mlir::arith::CmpIPredicate::slt,
-                                          index, constant(array.getSize()));
+                                          index, intConstant(location, element, array.getSize()));
   mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
   builder_.setInsertionPointToStart(body);
   auto value = mlir::arith::AddIOp::create(builder_, location, *start, index);
   auto at = smn::ElemOp::create(builder_, location,
-                                smn::PlaceType::get(ctx, element), slot, index);
+                                placeOf(element), slot, index);
   smn::StoreOp::create(builder_, location, value, at);
   auto next = mlir::arith::AddIOp::create(builder_, location, index,
-                                          constant(1));
+                                          intConstant(location, element, 1));
   mlir::cf::BranchOp::create(builder_, location, header,
                              mlir::ValueRange{next});
-  after->moveBefore(region, region->end());
-  builder_.setInsertionPointToStart(after);
+  continueIn(after);
   return read(location, slot);
 }
 
@@ -1067,8 +1071,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
   for (Type current = dim->operand->get_type();
        current.type_kind == TypeKind::Array;
        current = std::get<ArrayType>(current.type_data).get_element())
-    sizes.push_back(mlir::arith::ConstantIntOp::create(
-        builder_, loc(dim), builder_.getI32Type(),
+    sizes.push_back(intConstant(loc(dim), builder_.getI32Type(),
         static_cast<int64_t>(
             std::get<ArrayType>(current.type_data).get_size())));
   return smn::AggregateOp::create(builder_, loc(dim), *type, sizes)
@@ -1079,11 +1082,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
 // stderr before the program exits.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerArrayIndex(IndexExprAST *index) {
-  auto array = lowerExpr(index->array_expr.get());
-  if (mlir::failed(array) || !*array)
+  auto array = lowerValue(index->array_expr.get());
+  if (mlir::failed(array))
     return mlir::failure();
-  auto offset = lowerExpr(index->index_expr.get());
-  if (mlir::failed(offset) || !*offset)
+  auto offset = lowerValue(index->index_expr.get());
+  if (mlir::failed(offset))
     return mlir::failure();
   auto arrayType = mlir::dyn_cast<smn::ArrayType>(array->getType());
   if (!arrayType || !mlir::isa<mlir::IntegerType>(offset->getType()))
@@ -1109,9 +1112,9 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
   mlir::Value wide = offset;
   if (offset.getType() != i64)
     wide = mlir::arith::ExtSIOp::create(builder_, location, i64, offset);
-  auto sizeValue = mlir::arith::ConstantIntOp::create(builder_, location, i64,
+  auto sizeValue = intConstant(location, i64,
                                                       size);
-  auto zero = mlir::arith::ConstantIntOp::create(builder_, location, i64, 0);
+  auto zero = intConstant(location, i64, 0);
   auto high = mlir::arith::CmpIOp::create(
       builder_, location, mlir::arith::CmpIPredicate::sge, wide, sizeValue);
   auto low = mlir::arith::CmpIOp::create(
@@ -1126,14 +1129,13 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
   builder_.setInsertionPointToStart(fail);
   auto message = smn::StringOp::create(
       builder_, location,
-      smn::PtrType::get(builder_.getContext(), builder_.getI8Type(),
-                        smn::Ownership::View),
+      viewOf(builder_.getI8Type()),
       "index %lld out of bounds for an array of length %lld\n");
   auto stderrFd =
-      mlir::arith::ConstantIntOp::create(builder_, location, i32, 2);
+      intConstant(location, i32, 2);
   smn::CallOp::create(builder_, location, mlir::TypeRange{i32}, kDprintfFunc,
                       mlir::ValueRange{stderrFd, message, wide, sizeValue});
-  auto one = mlir::arith::ConstantIntOp::create(builder_, location, i32, 1);
+  auto one = intConstant(location, i32, 1);
   smn::CallOp::create(builder_, location, mlir::TypeRange{}, kExitFunc,
                       mlir::ValueRange{one});
   smn::UnreachableOp::create(builder_, location);
@@ -1147,8 +1149,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
   auto *cp = props_.cast(cast->id());
   if (!cp || !cp->instance)
     return mlir::failure();
-  auto value = lowerExpr(cast->operand.get());
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(cast->operand.get());
+  if (mlir::failed(value))
     return mlir::failure();
   auto &key = *cp->instance;
   if (is_builtin_instance(key))
@@ -1161,15 +1163,15 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
   auto type = types_.mirType(alloc->get_type());
-  auto count = lowerExpr(alloc->operand.get());
-  if (!type || mlir::failed(count) || !*count)
+  auto count = lowerValue(alloc->operand.get());
+  if (!type || mlir::failed(count))
     return mlir::failure();
   return smn::AllocOp::create(builder_, loc(alloc), *type, *count).getResult();
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
-  auto ptr = lowerExpr(free->operand.get());
-  if (mlir::failed(ptr) || !*ptr)
+  auto ptr = lowerValue(free->operand.get());
+  if (mlir::failed(ptr))
     return mlir::failure();
   smn::FreeOp::create(builder_, loc(free), *ptr);
   return mlir::Value();
@@ -1179,12 +1181,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
   if (!types_.mirType(deref->operand->get_type()))
     return mlir::failure();
-  auto ptr = lowerExpr(deref->operand.get());
-  if (mlir::failed(ptr) || !*ptr)
+  auto ptr = lowerValue(deref->operand.get());
+  if (mlir::failed(ptr))
     return mlir::failure();
   auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
   return smn::DerefOp::create(builder_, loc(deref),
-                              smn::PlaceType::get(builder_.getContext(), pointee),
+                              placeOf(pointee),
                               *ptr)
       .getResult();
 }
@@ -1240,7 +1242,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
       return mlir::failure();
     return smn::FieldOp::create(
                builder_, loc(field),
-               smn::PlaceType::get(builder_.getContext(), *type), *base, *index)
+               placeOf(*type), *base, *index)
         .getResult();
   }
   if (auto *index = llvm::dyn_cast<IndexExprAST>(target)) {
@@ -1251,13 +1253,13 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
       return mlir::failure();
     auto array = mlir::dyn_cast<smn::ArrayType>(
         mlir::cast<smn::PlaceType>(base->getType()).getValueType());
-    auto offset = lowerExpr(index->index_expr.get());
-    if (!array || mlir::failed(offset) || !*offset ||
+    auto offset = lowerValue(index->index_expr.get());
+    if (!array || mlir::failed(offset) ||
         mlir::failed(checkBounds(loc(index), *offset, array.getSize())))
       return mlir::failure();
     return smn::ElemOp::create(
                builder_, loc(index),
-               smn::PlaceType::get(builder_.getContext(), array.getElement()),
+               placeOf(array.getElement()),
                *base, *offset)
         .getResult();
   }
@@ -1274,8 +1276,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAddrOf(AddrOfExprAST *addr) {
   auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
   return smn::AddrOp::create(
              builder_, loc(addr),
-             smn::PtrType::get(builder_.getContext(), holds,
-                               smn::Ownership::View),
+             viewOf(holds),
              *place)
       .getResult();
 }
@@ -1290,25 +1291,25 @@ MIRLowering::lowerIndexerCall(IndexExprAST *index,
   if (hasPlace(index->array_expr.get())) {
     place = lowerPlace(index->array_expr.get());
   } else {
-    auto value = lowerExpr(index->array_expr.get());
-    if (mlir::failed(value) || !*value)
+    auto value = lowerValue(index->array_expr.get());
+    if (mlir::failed(value))
       return mlir::failure();
     place = smn::LocalOp::create(
                 builder_, location,
-                smn::PlaceType::get(builder_.getContext(), value->getType()),
+                placeOf(value->getType()),
                 "")
                 .getResult();
     smn::StoreOp::create(builder_, location, *value, *place);
   }
   if (mlir::failed(place))
     return mlir::failure();
-  auto offset = lowerExpr(index->index_expr.get());
-  if (mlir::failed(offset) || !*offset)
+  auto offset = lowerValue(index->index_expr.get());
+  if (mlir::failed(offset))
     return mlir::failure();
   auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
   auto view = smn::LendOp::create(
       builder_, location,
-      smn::PtrType::get(builder_.getContext(), holds, smn::Ownership::View),
+      viewOf(holds),
       *place);
   return callMethod(location, method, {view, *offset}, index->get_type());
 }
@@ -1331,16 +1332,16 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerPtrElemPlace(IndexExprAST *index) {
   if (index->array_expr->get_type().type_kind != TypeKind::Pointer)
     return mlir::failure();
-  auto ptr = lowerExpr(index->array_expr.get());
-  if (mlir::failed(ptr) || !*ptr)
+  auto ptr = lowerValue(index->array_expr.get());
+  if (mlir::failed(ptr))
     return mlir::failure();
-  auto offset = lowerExpr(index->index_expr.get());
-  if (mlir::failed(offset) || !*offset)
+  auto offset = lowerValue(index->index_expr.get());
+  if (mlir::failed(offset))
     return mlir::failure();
   auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
   return smn::PtrElemOp::create(
              builder_, loc(index),
-             smn::PlaceType::get(builder_.getContext(), pointee), *ptr, *offset)
+             placeOf(pointee), *ptr, *offset)
       .getResult();
 }
 
@@ -1353,10 +1354,11 @@ mlir::Value MIRLowering::read(mlir::Location location, mlir::Value place) {
   return smn::CopyOp::create(builder_, location, valueType, place);
 }
 
-// `*p = v` or `p[i] = v`. Writing a field isn't lowered yet.
+// `x = v`, `*p = v`, `s.f = v` or `a[i] = v`: a store to the place on the
+// left.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerAssign(BinaryExprAST *assign) {
-  auto value = lowerExpr(assign->RHS.get());
-  if (mlir::failed(value) || !*value)
+  auto value = lowerValue(assign->RHS.get());
+  if (mlir::failed(value))
     return mlir::failure();
   auto place = lowerPlace(assign->LHS.get());
   if (mlir::failed(place))
@@ -1372,10 +1374,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
   if (auto floatType = mlir::dyn_cast<mlir::FloatType>(*type))
     return emitFloatConstant(builder_, loc(num), std::stod(num->number),
                              floatType);
-  return mlir::arith::ConstantIntOp::create(
-             builder_, loc(num), *type,
-             sammine_util::literal_int_bits(num->number))
-      .getResult();
+  return intConstant(loc(num), *type,
+             sammine_util::literal_int_bits(num->number));
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
@@ -1386,17 +1386,35 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
       .getResult();
 }
 
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
+  if (!neg->get_type().is_integer() && !neg->get_type().is_float())
+    return mlir::failure();
+  auto value = lowerValue(neg->operand.get());
+  if (mlir::failed(value))
+    return mlir::failure();
+  return emitNegation(builder_, loc(neg), *value);
+}
+
+// An array's length is in its type.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerLen(LenExprAST *len) {
+  auto operand = len->operand->get_type();
+  if (operand.type_kind != TypeKind::Array)
+    return mlir::failure();
+  auto size = std::get<ArrayType>(operand.type_data).get_size();
+  return intConstant(loc(len), builder_.getI32Type(),
+                     static_cast<int64_t>(size));
+}
+
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBool(BoolExprAST *b) {
-  return mlir::arith::ConstantIntOp::create(builder_, loc(b),
-                                            builder_.getI1Type(), b->b ? 1 : 0)
-      .getResult();
+  return intConstant(loc(b),
+                                            builder_.getI1Type(), b->b ? 1 : 0);
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
-  return mlir::arith::ConstantIntOp::create(builder_, loc(c),
+  return intConstant(loc(c),
                                             builder_.getI8Type(),
-                                            static_cast<uint8_t>(c->value))
-      .getResult();
+                                            static_cast<uint8_t>(c->value));
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
@@ -1415,20 +1433,20 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
 // declares is a call to its method, one the compiler provides lowerOperator.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   if (auto *bp = props_.binary(bin->id()); bp && bp->resolved_op_method) {
-    auto lhs = lowerExpr(bin->LHS.get());
-    if (mlir::failed(lhs) || !*lhs)
+    auto lhs = lowerValue(bin->LHS.get());
+    if (mlir::failed(lhs))
       return mlir::failure();
-    auto rhs = lowerExpr(bin->RHS.get());
-    if (mlir::failed(rhs) || !*rhs)
+    auto rhs = lowerValue(bin->RHS.get());
+    if (mlir::failed(rhs))
       return mlir::failure();
     return callMethod(loc(bin), *bp->resolved_op_method, {*lhs, *rhs},
                       bin->get_type());
   }
-  auto lhs = lowerExpr(bin->LHS.get());
-  if (mlir::failed(lhs) || !*lhs)
+  auto lhs = lowerValue(bin->LHS.get());
+  if (mlir::failed(lhs))
     return mlir::failure();
-  auto rhs = lowerExpr(bin->RHS.get());
-  if (mlir::failed(rhs) || !*rhs)
+  auto rhs = lowerValue(bin->RHS.get());
+  if (mlir::failed(rhs))
     return mlir::failure();
   // The operands' type decides what the operator does; a comparison's own
   // type is bool.
@@ -1470,7 +1488,7 @@ MIRLowering::lowerOperator(mlir::Location location, TokenType op,
     auto equal = lowerEquality(location, lhs, rhs, type);
     if (mlir::failed(equal) || op == TokEQUAL)
       return equal;
-    auto one = mlir::arith::ConstantIntOp::create(builder_, location,
+    auto one = intConstant(location,
                                                   builder_.getI1Type(), 1);
     return mlir::arith::XOrIOp::create(builder_, location, *equal, one)
         .getResult();
@@ -1504,9 +1522,6 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
                            mlir::Value rhs, const Type &type) {
   auto i1 = builder_.getI1Type();
-  auto constant = [&](mlir::Type t, int64_t v) -> mlir::Value {
-    return mlir::arith::ConstantIntOp::create(builder_, location, t, v);
-  };
   auto *region = builder_.getInsertionBlock()->getParent();
 
   if (type.type_kind == TypeKind::Array) {
@@ -1521,15 +1536,15 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     auto *after = &region->emplaceBlock();
     after->addArgument(i1, location);
     mlir::cf::BranchOp::create(builder_, location, header,
-                               mlir::ValueRange{constant(i64, 0)});
+                               mlir::ValueRange{intConstant(location, i64, 0)});
     builder_.setInsertionPointToStart(header);
     auto index = header->getArgument(0);
     auto more = mlir::arith::CmpIOp::create(
         builder_, location, mlir::arith::CmpIPredicate::slt, index,
-        constant(i64, static_cast<int64_t>(array.get_size())));
+        intConstant(location, i64, static_cast<int64_t>(array.get_size())));
     mlir::cf::CondBranchOp::create(builder_, location, more, body,
                                    mlir::ValueRange{}, after,
-                                   mlir::ValueRange{constant(i1, 1)});
+                                   mlir::ValueRange{intConstant(location, i1, 1)});
     builder_.setInsertionPointToStart(body);
     auto element = mirArray.getElement();
     auto a = smn::ElementOp::create(builder_, location, element, lhs, index);
@@ -1538,12 +1553,11 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     if (mlir::failed(same))
       return mlir::failure();
     auto next = mlir::arith::AddIOp::create(builder_, location, index,
-                                            constant(i64, 1));
+                                            intConstant(location, i64, 1));
     mlir::cf::CondBranchOp::create(builder_, location, *same, header,
                                    mlir::ValueRange{next}, after,
-                                   mlir::ValueRange{constant(i1, 0)});
-    after->moveBefore(region, region->end());
-    builder_.setInsertionPointToStart(after);
+                                   mlir::ValueRange{intConstant(location, i1, 0)});
+    continueIn(after);
     return after->getArgument(0);
   }
 
@@ -1563,10 +1577,10 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
   after->addArgument(i1, location);
   mlir::cf::CondBranchOp::create(builder_, location, sameTag, check,
                                  mlir::ValueRange{}, after,
-                                 mlir::ValueRange{constant(i1, 0)});
+                                 mlir::ValueRange{intConstant(location, i1, 0)});
   // The same variant: with no payload, equal; else equal if its fields are.
   builder_.setInsertionPointToStart(check);
-  auto equalTrue = constant(i1, 1);
+  auto equalTrue = intConstant(location, i1, 1);
   llvm::SmallVector<int32_t> tags;
   llvm::SmallVector<mlir::Block *> dests;
   for (auto [v, variant] : llvm::enumerate(et.get_variants()))
@@ -1580,7 +1594,7 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     auto variant = static_cast<uint64_t>(tag);
     auto &fields = et.get_variant(variant).payload_types;
     auto mirFields = enumType.getPayload(variant);
-    mlir::Value all = constant(i1, 1);
+    mlir::Value all = intConstant(location, i1, 1);
     int64_t offset = 0;
     for (auto [i, field] : llvm::enumerate(fields)) {
       auto at = static_cast<uint64_t>(layout::advancePayloadOffset(offset, field));
@@ -1596,8 +1610,7 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     mlir::cf::BranchOp::create(builder_, location, after,
                                mlir::ValueRange{all});
   }
-  after->moveBefore(region, region->end());
-  builder_.setInsertionPointToStart(after);
+  continueIn(after);
   return after->getArgument(0);
 }
 
