@@ -67,7 +67,7 @@ def ClosureOp : Sammine_Op<"closure",
   let description = [{
     `f` as a value binds none; `add(1)`, a partial application, binds `1`.
     The value takes the arguments not bound. What is bound lives in the
-    function that makes the value, as the AST codegen keeps it.
+    function that makes the value.
   }];
   let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$bound);
   let results = (outs Sammine_FnType:$result);
@@ -147,8 +147,8 @@ def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
 def AddressOp : Sammine_Op<"address", [Pure]> {
   let summary = "the address a pointer holds, as an integer";
   let description = [{
-    What comparing two pointers compares, as the AST codegen does: their
-    addresses, as signed integers.
+    What comparing two pointers compares: their addresses, as signed
+    integers.
   }];
   let arguments = (ins Sammine_PtrType:$ptr);
   let results = (outs I64:$result);
@@ -304,11 +304,11 @@ def CallOp : Sammine_Op<"call",
   let summary = "call a function by name, `f(a, b)`";
   let description = [{
     The operands and results have the types MIR gives the call's sammine
-    types. While MIR and the AST codegen both make functions, the callee may
-    have been emitted from the AST, with LLVM types where MIR has its own
-    (`!llvm.ptr` for `!sammine.ptr`): then only the counts must match. A
-    callee that went through MIR (marked `sammine.mir`) must take and give
-    exactly these types. Lowering to LLVM makes both the same.
+    types. A callee MIR defines (marked `sammine.mir`) must take and give
+    exactly these. One only declared, a function of another module, a C
+    binding or a kernel's wrapper, has LLVM types where MIR has its own
+    (`!llvm.ptr` for `!sammine.ptr`): then only the counts must match, and
+    lowering to LLVM makes the types the same.
 
     The callee may be a C function, an `llvm.func`: a variadic one takes any
     number of arguments after those it declares, which lowering promotes as

@@ -245,7 +245,7 @@ ClosureOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
     return emitOpError("binds ")
            << getBound().size() << " of '" << getCallee() << "', whose "
            << params.size() << " arguments don't fit " << signature;
-  // A callee emitted from the AST has LLVM types where MIR has its own.
+  // A callee only declared, not MIR, has LLVM types where MIR has its own.
   if (!callee->hasAttr(kMirAttr))
     return mlir::success();
   if (!llvm::equal(params.take_front(getBound().size()),
@@ -290,7 +290,7 @@ CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
            << ", but '" << getCallee() << "' takes "
            << (variadic ? "at least " : "") << params.size()
            << " and gives back " << resultCount;
-  // A callee emitted from the AST has LLVM types where MIR has its own.
+  // A callee only declared, not MIR, has LLVM types where MIR has its own.
   if (!callee->hasAttr(kMirAttr))
     return mlir::success();
   if (!llvm::equal(params, getArgs().getTypes()) ||

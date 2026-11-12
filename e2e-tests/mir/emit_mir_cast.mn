@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // `as` between numbers is a conversion, signed or unsigned as each side is;
 // through a Convert instance the program declares, and an operator through
 // its own instance, it is a call to the instance's method. A built-in

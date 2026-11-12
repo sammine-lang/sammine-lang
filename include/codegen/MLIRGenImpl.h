@@ -15,7 +15,6 @@
 
 #include "llvm/ADT/StringRef.h"
 
-#include <functional>
 #include <map>
 #include <string>
 
@@ -24,36 +23,30 @@ namespace sammine_lang {
 // Named constants for magic strings used across MLIR codegen
 static constexpr llvm::StringLiteral kClosureTypeName = "sammine.closure";
 static constexpr llvm::StringLiteral kStructTypePrefix = "sammine.struct.";
-static constexpr llvm::StringLiteral kWrapperPrefix = "__wrap_";
-static constexpr llvm::StringLiteral kPartialPrefix = "__partial_";
-static constexpr llvm::StringLiteral kStringPrefix = ".str.";
-static constexpr llvm::StringLiteral kConstArrayPrefix = ".const_arr.";
 static constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
 static constexpr llvm::StringLiteral kMallocFunc = "malloc";
 static constexpr llvm::StringLiteral kFreeFunc = "free";
 static constexpr llvm::StringLiteral kExitFunc = "exit";
 static constexpr llvm::StringLiteral kDprintfFunc = "dprintf";
 
-/// Implementation class for MLIR generation from a sammine AST.
-/// Declared in a header so method definitions can be split across
-/// MLIRGen.cpp, MLIRGenFunction.cpp, and MLIRGenExpr.cpp.
+/// Builds a program's MLIR module: its types, its functions' declarations,
+/// whose bodies MIRLowering gives them, its C bindings, and its kernels.
+/// Split across MLIRGen.cpp, MLIRGenFunction.cpp and MLIRGenKernel.cpp.
 class MLIRGenImpl {
 public:
   MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName_,
               const std::string &fileName_, const std::string &sourceText,
-              const AST::ASTProperties &props, GPUMode gpu_mode, bool use_mir)
+              const AST::ASTProperties &props, GPUMode gpu_mode)
       : builder(&context), moduleName(moduleName_),
         locator(fileName_, sourceText), reporter(fileName_, sourceText, 3),
-        gpu_mode_(gpu_mode), use_mir_(use_mir), props_(props) {
-    // Kernels' scalar code goes through MIR too, with or without use_mir.
+        gpu_mode_(gpu_mode), props_(props) {
     mirLowering = std::make_unique<MIRLowering>(builder, props_, locator);
   }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
-  /// Gives each function MIR can lower its MIR signature and body.
+  /// Gives each function its body through MIR; one MIR can't lower is an
+  /// error.
   void lowerThroughMIR(AST::ProgramAST *program);
-
-  // --- Member variables ---
 
   mlir::ModuleOp theModule;
   /// Separate module for kernel functions (tensor/linalg dialect only).
@@ -63,16 +56,10 @@ public:
   std::string moduleName;
   SourceLocator locator;
   sammine_util::Reporter reporter;
-  /// Set with --mir: each function's body is lowered through MIR when it can
-  /// be, and emitted from the AST otherwise.
+  /// Lowers each function's body, and kernels' scalar code.
   std::unique_ptr<MIRLowering> mirLowering;
-  /// Functions given a body, and how many of those went through MIR.
-  size_t functionCount = 0;
-  size_t mirFunctionCount = 0;
 
   GPUMode gpu_mode_;
-  /// Whether function bodies are lowered through MIR (lowerThroughMIR).
-  bool use_mir_;
 
   /// Emit an ariadne-style error before aborting. If a Location is provided,
   /// the error points to the offending source span; otherwise shows "In
@@ -86,36 +73,16 @@ public:
 
   AST::LexicalStack<mlir::Value> symbolTable;
 
-  int strCounter = 0;
-  int constArrayCounter = 0;
-
   std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
       structTypes;
   std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
       enumTypes;
 
   mlir::LLVM::LLVMStructType closureType;
-  std::map<std::string, std::string> closureWrappers;
-  int partialCounter = 0;
-
-  mlir::Value currentSretBuffer = nullptr;
 
   const AST::ASTProperties &props_;
   bool targetGPU() const {
     return gpu_mode_ != GPUMode::NONE;
-  }
-
-  /// Flag: true when emitting inside a linalg.map/linalg.reduce body builder.
-  /// Guards against emitting LLVM ops (alloca, malloc, free) that are invalid
-  /// inside linalg body regions. Only arith/math ops are valid there.
-  bool in_kernel_lambda_body = false;
-
-  // --- Block helper ---
-  /// Create a new block and immediately insert it into the given region.
-  mlir::Block *addBlockTo(mlir::Region *region) {
-    auto *block = new mlir::Block();
-    region->push_back(block);
-    return block;
   }
 
   // --- Inline type helpers ---
@@ -134,17 +101,8 @@ public:
 
   // --- Type conversion ---
   mlir::Type convertType(const Type &type);
-  bool isIntegerType(const Type &type);
   bool isUnsignedIntegerType(const Type &type);
   bool isFloatType(const Type &type);
-  bool isBoolType(const Type &type);
-  /// Emit an integer constant with the given value and sammine type.
-  mlir::Value emitIntConstant(int64_t value, const Type &type,
-                              mlir::Location loc);
-  /// Emit a float constant with the given value and sammine type.
-  /// Handles F32 precision conversion via APFloat.
-  mlir::Value emitFloatConstant(double value, const Type &type,
-                                mlir::Location loc);
   mlir::Type getEnumBackingMLIRType(const EnumType &et);
 
   // --- Kernel type conversion ---
@@ -185,25 +143,7 @@ public:
   /// The symbol `qn` is defined and called as, as NameResolver decided it.
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 
-  // --- Expression dispatcher + block/vardef (MLIRGen.cpp) ---
-  mlir::Value emitExpr(AST::ExprAST *ast);
-  /// emitExpr + load if the result is a pointer but the semantic type is not.
-  mlir::Value emitRValue(AST::ExprAST *ast);
-  /// Returns the address of the expression (for assignment LHS, &expr).
-  mlir::Value emitLValue(AST::ExprAST *ast);
-  mlir::Value emitBlock(AST::BlockAST *ast);
-  mlir::Value emitVarDef(AST::VarDefAST *ast);
-
-  // VarDef handlers (return non-null = handled)
-  mlir::Value emitVarDefTupleDestructure(AST::VarDefAST *ast,
-                                         mlir::Value initVal,
-                                         mlir::Location location);
-  mlir::Value emitVarDefArray(AST::VarDefAST *ast, mlir::Value initVal,
-                              mlir::Location location);
-  mlir::Value emitVarDefScalar(AST::VarDefAST *ast, mlir::Value initVal,
-                               mlir::Location location);
-
-  // --- Functions/externs/closures/calls (MLIRGenFunction.cpp) ---
+  // --- Functions and externs (MLIRGenFunction.cpp) ---
   void forwardDeclareFunc(AST::PrototypeAST *proto);
   /// Who a function emitted here is for.
   enum class Linkage {
@@ -223,174 +163,6 @@ public:
   Linkage functionLinkage(AST::DefinitionAST *def);
   void emitFunction(AST::FuncDefAST *ast, Linkage linkage);
   void emitExtern(AST::ExternAST *ast);
-  mlir::Value buildClosure(mlir::Value codePtr, mlir::Value envPtr,
-                           mlir::Location loc);
-  mlir::LLVM::LLVMFunctionType getClosureFuncType(const FunctionType &ft);
-  std::string getOrCreateClosureWrapper(const std::string &funcName,
-                                        const FunctionType &ft);
-  mlir::Value emitCallExpr(AST::CallExprAST *ast);
-  mlir::Value emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
-                        llvm::SmallVector<mlir::Value, 4> operands,
-                        const Type &semRetType, mlir::Location location);
-  mlir::Value emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
-                             llvm::SmallVector<mlir::Value, 4> &operands,
-                             mlir::Location location);
-  mlir::Value emitPartialApplication(AST::CallExprAST *ast,
-                                     const std::string &calleeName,
-                                     llvm::ArrayRef<mlir::Value> boundArgs);
-  /// A call to an instance the compiler provides, such as Add<i32>(a, b),
-  /// emitted as the instruction itself.
-  mlir::Value emitBuiltinInstanceCall(AST::CallExprAST *ast,
-                                      const MonomorphizedKey &key);
-  mlir::Value emitIndirectCall(AST::CallExprAST *ast,
-                               llvm::ArrayRef<mlir::Value> operands);
-  /// Calls the sammine function `callee` with `args`, giving results of
-  /// `resultTypes`. A function lowered through MIR takes and returns MIR
-  /// types where this path has LLVM ones; each argument or result whose type
-  /// differs from the callee's is bridged with an unrealized_conversion_cast,
-  /// which lowering removes.
-  llvm::SmallVector<mlir::Value, 1> emitSammineCall(llvm::StringRef callee,
-                                                    mlir::ValueRange args,
-                                                    mlir::TypeRange resultTypes,
-                                                    mlir::Location location);
-  void emitFuncCallAndLLVMReturn(llvm::StringRef callee, const Type &retType,
-                                 mlir::ValueRange args, mlir::Location loc);
-  mlir::Value emitReturnStmt(AST::ReturnStmtAST *ast);
-
-  // --- Expression emission (MLIRGenExpr.cpp) ---
-  mlir::Value emitNumberExpr(AST::NumberExprAST *ast);
-  mlir::Value emitBoolExpr(AST::BoolExprAST *ast);
-  mlir::Value emitCharExpr(AST::CharExprAST *ast);
-  mlir::Value emitUnitExpr(AST::UnitExprAST *ast);
-  mlir::Value emitVariableExpr(AST::VariableExprAST *ast);
-  mlir::Value emitBinaryExpr(AST::BinaryExprAST *ast);
-  mlir::Value emitShortCircuit(AST::BinaryExprAST *ast,
-                               mlir::Location location);
-
-  // Binary expression handlers (return non-null = handled)
-  mlir::Value emitBinaryAssign(AST::BinaryExprAST *ast,
-                               mlir::Location location);
-  mlir::Value emitBinaryIntArith(AST::BinaryExprAST *ast, mlir::Value lhs,
-                                 mlir::Value rhs, mlir::Location location);
-  mlir::Value emitBinaryFloatArith(AST::BinaryExprAST *ast, mlir::Value lhs,
-                                   mlir::Value rhs, mlir::Location location);
-  mlir::Value emitBinaryComparison(AST::BinaryExprAST *ast, mlir::Value lhs,
-                                   mlir::Value rhs, mlir::Location location);
-  mlir::Value emitBinaryEnumBitwise(AST::BinaryExprAST *ast, mlir::Value lhs,
-                                    mlir::Value rhs, mlir::Location location);
-  mlir::Value emitBinaryTypeclassOp(AST::BinaryExprAST *ast, mlir::Value lhs,
-                                    mlir::Value rhs, mlir::Location location);
-
-  mlir::Value emitUnaryNegExpr(AST::UnaryNegExprAST *ast);
-  mlir::Value emitIfExpr(AST::IfExprAST *ast);
-  mlir::Value emitForExpr(AST::ForExprAST *ast);
-  mlir::Value emitStringExpr(AST::StringExprAST *ast);
-  mlir::Value emitArrayLiteralExpr(AST::ArrayLiteralExprAST *ast);
-  mlir::Value emitRangeExpr(AST::RangeExprAST *ast);
-  mlir::Value emitIndexExpr(AST::IndexExprAST *ast);
-  mlir::Value emitIndexerCall(AST::IndexExprAST *ast,
-                              const sammine_util::QualifiedName &method);
-  mlir::Value emitPtrArrayGEP(mlir::Value ptr, mlir::Value idx,
-                              const ArrayType &arrType,
-                              mlir::Location location);
-  mlir::Value emitPtrArrayLoad(mlir::Value ptr, mlir::Value idx,
-                               const ArrayType &arrType,
-                               mlir::Location location);
-  void emitPtrArrayStore(mlir::Value ptr, mlir::Value idx, mlir::Value val,
-                         const ArrayType &arrType, mlir::Location location);
-  mlir::Value emitPtrElementGEP(mlir::Value ptr, mlir::Value idx,
-                                const Type &pointeeType,
-                                mlir::Location location);
-  mlir::Value emitLenExpr(AST::LenExprAST *ast);
-  mlir::Value emitDimExpr(AST::DimExprAST *ast);
-  mlir::Value emitDerefExpr(AST::DerefExprAST *ast);
-  mlir::Value emitAddrOfExpr(AST::AddrOfExprAST *ast);
-  mlir::Value emitAllocExpr(AST::AllocExprAST *ast);
-  mlir::Value emitFreeExpr(AST::FreeExprAST *ast);
-  mlir::Value emitCastExpr(AST::CastExprAST *ast);
-  /// A built-in Convert<from, to>: one conversion instruction, or none.
-  mlir::Value emitBuiltinConvert(mlir::Value value, const Type &from,
-                                 const Type &to, mlir::Location location);
-  mlir::Value emitStructLiteralExpr(AST::StructLiteralExprAST *ast);
-  mlir::Value emitFieldAccessExpr(AST::FieldAccessExprAST *ast);
-  mlir::Value emitEnumConstructor(AST::CallExprAST *ast);
-  mlir::Value emitCaseExpr(AST::CaseExprAST *ast);
-  mlir::Value emitTupleLiteralExpr(AST::TupleLiteralExprAST *ast);
-  mlir::Value emitPayloadCaseExpr(AST::CaseExprAST *ast,
-                                  mlir::Value scrutineeVal, const EnumType &et);
-  mlir::Value emitIntegerBackedCaseExpr(AST::CaseExprAST *ast,
-                                        mlir::Value scrutineeVal,
-                                        const EnumType &et);
-  mlir::Value emitLiteralCaseExpr(AST::CaseExprAST *ast,
-                                  mlir::Value scrutineeVal);
-
-  /// Given a case arm, produce the integer constant that the scrutinee should
-  /// be compared against.
-  ///
-  /// - emitIntegerBackedCaseExpr passes a lambda that looks up the enum
-  ///   variant's discriminant value  (e.g. HUP(1) → 1).
-  /// - emitLiteralCaseExpr passes a lambda that parses the source literal
-  ///   (e.g. "42" → 42, "true" → 1).
-  using ArmToComparisonConst =
-      std::function<mlir::Value(const AST::CaseArm &, mlir::Location)>;
-
-  /// Optional per-arm preamble executed before emitBlock in each arm.
-  /// Used by payload enums to extract bindings from the union.
-  using ArmPreamble =
-      std::function<void(const AST::CaseArm &, mlir::Location)>;
-
-  /// Shared codegen for case expressions where every arm boils down to
-  /// "compare scrutinee against an integer constant".  This covers
-  /// integer-backed enums, literal (i32/bool/char) patterns, and
-  /// payload enums (via the optional armPreamble callback).
-  ///
-  /// Emits a cascading chain of:
-  ///     if (scrutinee == armConst) goto armBlock; else goto nextCheck;
-  /// where `armConst` is produced by the caller-supplied callback.
-  /// If `armPreamble` is non-null, it is called at the start of each
-  /// arm block (before emitBlock) to emit per-arm setup code.
-  mlir::Value emitScalarCaseExpr(AST::CaseExprAST *ast,
-                                 mlir::Value scrutineeVal,
-                                 ArmToComparisonConst armToConst,
-                                 ArmPreamble armPreamble = nullptr);
-
-  void emitBoundsCheck(mlir::Value idx, size_t arrSize,
-                       mlir::Location location);
-  /// The built-in comparison `op` (==, <, ...) of two values of `type`, or
-  /// nullptr if `type` has none.
-  mlir::Value emitComparison(TokenType op, mlir::Value lhs, mlir::Value rhs,
-                             const Type &type, mlir::Location location);
-  /// Whether two values of the enum `type` are the same variant with equal
-  /// payloads, as an i1.
-  mlir::Value emitEnumEquality(mlir::Value lhs, mlir::Value rhs,
-                               const Type &type, mlir::Location location);
-  mlir::Value emitArrayComparison(mlir::Value lhs, mlir::Value rhs,
-                                  const Type &arrType, TokenType tok,
-                                  mlir::Location location);
-
-  // --- Helpers (MLIRGen.cpp) ---
-  /// Build a memref descriptor (LLVM struct) wrapping a raw pointer.
-  /// Returns a memref<sizexelemType> via unrealized_conversion_cast.
-  mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
-  /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
-  mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);
-  mlir::Value getOrCreateGlobalString(llvm::StringRef name,
-                                      llvm::StringRef value,
-                                      mlir::Location location);
-  /// Try to build a DenseElementsAttr from an array literal whose elements
-  /// are all compile-time constants.  Returns std::nullopt if any element
-  /// is not a literal.
-  std::optional<mlir::DenseElementsAttr>
-  tryBuildDenseAttr(AST::ArrayLiteralExprAST *ast);
-
-  /// Emit a global constant array from a DenseElementsAttr (no initializer
-  /// region needed).  Returns a pointer to the global.
-  mlir::Value emitGlobalConstArrayDense(mlir::DenseElementsAttr denseAttr,
-                                        mlir::LLVM::LLVMArrayType arrType,
-                                        mlir::Location location);
-
-  mlir::Value emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
-                                   const Type &type, mlir::Location location);
 };
 
 } // namespace sammine_lang

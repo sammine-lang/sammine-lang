@@ -31,9 +31,9 @@ using sammine_util::cautious_value;
 namespace sammine_lang {
 
 // ===--- generate() ---===
-// Entry point for MLIR code generation. Uses direct recursive dispatch
-// (emitExpr → dynamic_cast chain) rather than the visitor pattern, because
-// codegen needs to return mlir::Value from each node.
+// Entry point for MLIR code generation. Function bodies go through MIR
+// (lowerThroughMIR); what is emitted here is the module around them: types,
+// declarations, C bindings, kernels.
 //
 // Three pre-passes before emitting definitions:
 // 1) Declare runtime functions (malloc, free, exit)
@@ -196,10 +196,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
     }
   }
 
-  // With --mir, MIR takes every function body it can before any is emitted
-  // here, so a call emitted below sees its callee's final signature.
-  if (use_mir_)
-    lowerThroughMIR(program);
+  // Every function body goes through MIR, before any definition is emitted
+  // here, so a kernel's wrapper sees its callees' final signatures.
+  lowerThroughMIR(program);
 
   for (auto &def : program->DefinitionVec)
     emitDefinition(def.get());
@@ -350,15 +349,6 @@ mlir::Type MLIRGenImpl::convertType(const Type &type) {
   }
 }
 
-bool MLIRGenImpl::isIntegerType(const Type &type) {
-  return type.type_kind == TypeKind::I32_t ||
-         type.type_kind == TypeKind::I64_t ||
-         type.type_kind == TypeKind::U32_t ||
-         type.type_kind == TypeKind::U64_t ||
-         type.type_kind == TypeKind::Integer ||
-         type.type_kind == TypeKind::Char;
-}
-
 bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
   return type.type_kind == TypeKind::U32_t || type.type_kind == TypeKind::U64_t;
 }
@@ -366,10 +356,6 @@ bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
 bool MLIRGenImpl::isFloatType(const Type &type) {
   return type.type_kind == TypeKind::F64_t ||
          type.type_kind == TypeKind::F32_t || type.type_kind == TypeKind::Flt;
-}
-
-bool MLIRGenImpl::isBoolType(const Type &type) {
-  return type.type_kind == TypeKind::Bool;
 }
 
 mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
@@ -447,32 +433,33 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
 void MLIRGenImpl::lowerThroughMIR(AST::ProgramAST *program) {
   for (auto &def : program->DefinitionVec)
     for (auto *fd : functionBodies(def.get())) {
-      auto decl = theModule.lookupSymbol<mlir::func::FuncOp>(
-          mangleName(fd->Prototype->functionName));
-      if (decl && decl.isDeclaration() && mirLowering->lowerFunction(fd, decl))
-        ++mirFunctionCount;
+      auto name = mangleName(fd->Prototype->functionName);
+      auto decl = theModule.lookupSymbol<mlir::func::FuncOp>(name);
+      if (!decl || !decl.isDeclaration())
+        continue;
+      if (!mirLowering->lowerFunction(fd, decl))
+        imm_error(fmt::format("the compiler can't compile '{}': MIR doesn't "
+                              "lower what it does yet",
+                              name),
+                  fd->Prototype->get_location());
     }
 }
 
+// A function's declaration, in LLVM types: what MIR defines it as, once
+// lowered, so a call from another module, which declares it from here,
+// agrees. An array is returned by value, as MIR returns it.
 mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
   llvm::SmallVector<mlir::Type, 4> argTypes;
   for (auto &param : proto->parameterVectors)
     argTypes.push_back(convertType(param->get_type()));
 
   llvm::SmallVector<mlir::Type, 1> retTypes;
-  // proto->get_type() is the full FunctionType — extract the return type from
-  // it
   if (proto->get_type().type_kind == TypeKind::Function) {
-    auto funcType = std::get<FunctionType>(proto->get_type().type_data);
-    auto retType = funcType.get_return_type();
-    if (retType.type_kind == TypeKind::Array) {
-      // sret: array returns become a trailing !llvm.ptr parameter, void return
-      argTypes.push_back(llvmPtrTy());
-    } else if (retType.type_kind != TypeKind::Unit) {
+    auto retType =
+        std::get<FunctionType>(proto->get_type().type_data).get_return_type();
+    if (retType.type_kind != TypeKind::Unit)
       retTypes.push_back(convertType(retType));
-    }
   }
-
   return builder.getFunctionType(argTypes, retTypes);
 }
 
@@ -485,347 +472,9 @@ MLIRGenImpl::mangleName(const sammine_util::QualifiedName &qn) const {
 // Central dispatch for all expressions. Uses dynamic_cast chain (not visitor)
 // because each emit* method returns an mlir::Value.
 
-mlir::Value MLIRGenImpl::emitExpr(AST::ExprAST *ast) {
-  using NK = AST::NodeKind;
-  switch (ast->getKind()) {
-  case NK::NumberExprAST:
-    return emitNumberExpr(llvm::cast<AST::NumberExprAST>(ast));
-  case NK::BoolExprAST:
-    return emitBoolExpr(llvm::cast<AST::BoolExprAST>(ast));
-  case NK::CharExprAST:
-    return emitCharExpr(llvm::cast<AST::CharExprAST>(ast));
-  case NK::UnitExprAST:
-    return emitUnitExpr(llvm::cast<AST::UnitExprAST>(ast));
-  case NK::VariableExprAST:
-    return emitVariableExpr(llvm::cast<AST::VariableExprAST>(ast));
-  case NK::BinaryExprAST:
-    return emitBinaryExpr(llvm::cast<AST::BinaryExprAST>(ast));
-  case NK::CallExprAST:
-    return emitCallExpr(llvm::cast<AST::CallExprAST>(ast));
-  case NK::ReturnStmtAST:
-    return emitReturnStmt(llvm::cast<AST::ReturnStmtAST>(ast));
-  case NK::VarDefAST:
-    return emitVarDef(llvm::cast<AST::VarDefAST>(ast));
-  case NK::IfExprAST:
-    return emitIfExpr(llvm::cast<AST::IfExprAST>(ast));
-  case NK::ForExprAST:
-    return emitForExpr(llvm::cast<AST::ForExprAST>(ast));
-  case NK::UnaryNegExprAST:
-    return emitUnaryNegExpr(llvm::cast<AST::UnaryNegExprAST>(ast));
-  case NK::StringExprAST:
-    return emitStringExpr(llvm::cast<AST::StringExprAST>(ast));
-  case NK::ArrayLiteralExprAST:
-    return emitArrayLiteralExpr(llvm::cast<AST::ArrayLiteralExprAST>(ast));
-  case NK::RangeExprAST:
-    return emitRangeExpr(llvm::cast<AST::RangeExprAST>(ast));
-  case NK::IndexExprAST:
-    return emitIndexExpr(llvm::cast<AST::IndexExprAST>(ast));
-  case NK::LenExprAST:
-    return emitLenExpr(llvm::cast<AST::LenExprAST>(ast));
-  case NK::DimExprAST:
-    return emitDimExpr(llvm::cast<AST::DimExprAST>(ast));
-  case NK::DerefExprAST:
-    return emitDerefExpr(llvm::cast<AST::DerefExprAST>(ast));
-  case NK::AddrOfExprAST:
-    return emitAddrOfExpr(llvm::cast<AST::AddrOfExprAST>(ast));
-  case NK::AllocExprAST:
-    return emitAllocExpr(llvm::cast<AST::AllocExprAST>(ast));
-  case NK::CastExprAST:
-    return emitCastExpr(llvm::cast<AST::CastExprAST>(ast));
-  case NK::FreeExprAST:
-    return emitFreeExpr(llvm::cast<AST::FreeExprAST>(ast));
-  case NK::StructLiteralExprAST:
-    return emitStructLiteralExpr(llvm::cast<AST::StructLiteralExprAST>(ast));
-  case NK::FieldAccessExprAST:
-    return emitFieldAccessExpr(llvm::cast<AST::FieldAccessExprAST>(ast));
-  case NK::CaseExprAST:
-    return emitCaseExpr(llvm::cast<AST::CaseExprAST>(ast));
-  case NK::TupleLiteralExprAST:
-    return emitTupleLiteralExpr(llvm::cast<AST::TupleLiteralExprAST>(ast));
-  default:
-    imm_error(
-        fmt::format("unsupported expression type '{}'", ast->getTreeName()),
-        ast->get_location());
-  }
-}
-
 // ===--- Block and variable definition ---===
 
-mlir::Value MLIRGenImpl::emitBlock(AST::BlockAST *ast) {
-  // A block is a scope, so names declared in it end with it.
-  decltype(symbolTable)::Guard scope(symbolTable);
-  mlir::Value lastVal = nullptr;
-
-  for (auto &stmt : ast->Statements) {
-    // If the current block already has a terminator (e.g. a return),
-    // don't emit more statements after it.
-    auto *currentBlock = builder.getInsertionBlock();
-    if (!currentBlock->empty() &&
-        currentBlock->back().hasTrait<mlir::OpTrait::IsTerminator>())
-      break;
-
-    lastVal = emitExpr(stmt.get());
-  }
-
-  return lastVal;
-}
-
-mlir::Value MLIRGenImpl::emitVarDefTupleDestructure(AST::VarDefAST *ast,
-                                                    mlir::Value initVal,
-                                                    mlir::Location location) {
-  if (!ast->is_tuple_destructure)
-    return nullptr;
-
-  for (size_t i = 0; i < ast->destructure_vars.size(); i++) {
-    auto elemVal = mlir::LLVM::ExtractValueOp::create(
-        builder, location, initVal,
-        llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
-    auto elemType = convertType(ast->destructure_vars[i]->get_type());
-    auto alloca = emitAllocaOne(elemType, location);
-    mlir::LLVM::StoreOp::create(builder, location, elemVal, alloca);
-    symbolTable.registerNameT(ast->destructure_vars[i]->name, alloca);
-  }
-  return initVal;
-}
-
-mlir::Value MLIRGenImpl::emitVarDefArray(AST::VarDefAST *ast,
-                                         mlir::Value initVal,
-                                         mlir::Location location) {
-  if (ast->get_type().type_kind != TypeKind::Array)
-    return nullptr;
-
-  // Arrays are immutable in sammine, so we can alias the source pointer
-  // directly (whether it's a global constant or an sret buffer from a
-  // call). No need to copy.
-  symbolTable.registerNameT(ast->TypedVar->name, initVal);
-  return initVal;
-}
-
-mlir::Value MLIRGenImpl::emitVarDefScalar(AST::VarDefAST *ast,
-                                          mlir::Value initVal,
-                                          mlir::Location location) {
-  auto alloca = emitAllocaOne(convertType(ast->get_type()), location);
-  mlir::LLVM::StoreOp::create(builder, location, initVal, alloca);
-  symbolTable.registerNameT(ast->TypedVar->name, alloca);
-  return initVal;
-}
-
-mlir::Value MLIRGenImpl::emitVarDef(AST::VarDefAST *ast) {
-  if (in_kernel_lambda_body)
-    imm_error(
-        "Variable definitions (let bindings) not allowed in kernel lambdas",
-        ast->get_location());
-  auto location = loc(ast);
-  mlir::Value initVal = emitExpr(ast->Expression.get());
-  if (!initVal)
-    return nullptr;
-
-  using Handler = mlir::Value (MLIRGenImpl::*)(AST::VarDefAST *, mlir::Value,
-                                               mlir::Location);
-  static constexpr Handler handlers[] = {
-      &MLIRGenImpl::emitVarDefTupleDestructure,
-      &MLIRGenImpl::emitVarDefArray,
-      &MLIRGenImpl::emitVarDefScalar,
-  };
-
-  for (auto handler : handlers) {
-    if (auto result = (this->*handler)(ast, initVal, location))
-      return result;
-  }
-  return nullptr;
-}
-
 // ===--- Helpers ---===
-
-mlir::Value MLIRGenImpl::emitAllocaOne(mlir::Type elemType,
-                                       mlir::Location location) {
-  if (in_kernel_lambda_body)
-    imm_error("Stack allocation not valid inside kernel lambdas");
-  // Hoist alloca to the entry block so Mem2Reg/SROA can eliminate it.
-  mlir::OpBuilder::InsertionGuard guard(builder);
-  auto *currentBlock = builder.getInsertionBlock();
-  auto &entryBlock = currentBlock->getParent()->front();
-  builder.setInsertionPointToStart(&entryBlock);
-
-  auto one = mlir::arith::ConstantIntOp::create(builder, location,
-                                                builder.getI64Type(), 1);
-  return mlir::LLVM::AllocaOp::create(builder, location, llvmPtrTy(), elemType,
-                                      one);
-}
-
-mlir::Value MLIRGenImpl::emitRValue(AST::ExprAST *ast) {
-  auto val = emitExpr(ast);
-  if (!val)
-    return nullptr;
-  auto semTy = convertType(ast->get_type());
-  if (mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType()) &&
-      !mlir::isa<mlir::LLVM::LLVMPointerType>(semTy))
-    return mlir::LLVM::LoadOp::create(builder, loc(ast), semTy, val);
-  return val;
-}
-
-mlir::Value MLIRGenImpl::emitLValue(AST::ExprAST *ast) {
-  auto location = loc(ast);
-
-  // Variable: return its alloca
-  if (auto *var = llvm::dyn_cast<AST::VariableExprAST>(ast))
-    return symbolTable.recursive_get_from_name(var->variableName.mangled());
-
-  // Dereference: lvalue of *p is the value of p
-  if (auto *deref = llvm::dyn_cast<AST::DerefExprAST>(ast))
-    return emitRValue(deref->operand.get());
-
-  // Index: return GEP pointer to element
-  if (auto *idx = llvm::dyn_cast<AST::IndexExprAST>(ast)) {
-    auto *base = idx->array_expr.get();
-    auto baseType = base->get_type();
-    // An array element's address comes from its array's address when the
-    // array is itself a place, so (*p)[i][j] is reached through p, not a copy.
-    auto arr = baseType.type_kind == TypeKind::Array &&
-                       llvm::isa<AST::DerefExprAST, AST::IndexExprAST,
-                                 AST::FieldAccessExprAST>(base)
-                   ? emitLValue(base)
-                   : emitExpr(base);
-    auto idxVal = emitExpr(idx->index_expr.get());
-    if (!arr || !idxVal)
-      return nullptr;
-
-    if (baseType.type_kind == TypeKind::Pointer) {
-      auto &ptrData = std::get<PointerType>(baseType.type_data);
-      return emitPtrElementGEP(arr, idxVal, ptrData.get_pointee(), location);
-    }
-
-    auto arrType = std::get<ArrayType>(baseType.type_data);
-    auto indexVal = mlir::arith::IndexCastOp::create(
-        builder, location, builder.getIndexType(), idxVal);
-    emitBoundsCheck(indexVal, arrType.get_size(), location);
-    arr = ensurePointer(arr, location);
-    return emitPtrArrayGEP(arr, idxVal, arrType, location);
-  }
-
-  // Field: return GEP pointer into the struct or tuple's address
-  if (auto *field = llvm::dyn_cast<AST::FieldAccessExprAST>(ast)) {
-    auto *base = field->object_expr.get();
-    auto obj = emitLValue(base);
-    if (!obj)
-      return nullptr;
-
-    auto objType = base->get_type();
-    int32_t fieldIdx;
-    if (objType.type_kind == TypeKind::Tuple) {
-      fieldIdx = static_cast<int32_t>(std::stoul(field->field_name));
-    } else {
-      auto &st = std::get<StructType>(objType.type_data);
-      fieldIdx = static_cast<int32_t>(cautious_value(
-          st.get_field_index(field->field_name), "struct field index"));
-    }
-    return mlir::LLVM::GEPOp::create(
-        builder, location, llvmPtrTy(), convertType(objType), obj,
-        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, fieldIdx},
-        mlir::LLVM::GEPNoWrapFlags::inbounds);
-  }
-
-  imm_error("expression is not assignable", ast->get_location());
-}
-
-mlir::Value MLIRGenImpl::ensurePointer(mlir::Value val, mlir::Location loc) {
-  if (!mlir::isa<mlir::LLVM::LLVMPointerType>(val.getType())) {
-    auto alloca = emitAllocaOne(val.getType(), loc);
-    mlir::LLVM::StoreOp::create(builder, loc, val, alloca);
-    return alloca;
-  }
-  return val;
-}
-
-mlir::Value MLIRGenImpl::emitGlobalConstArrayDense(
-    mlir::DenseElementsAttr denseAttr, mlir::LLVM::LLVMArrayType arrType,
-    mlir::Location location) {
-  auto name = fmt::format("{}{}", kConstArrayPrefix.str(), constArrayCounter++);
-  {
-    mlir::OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(theModule.getBody());
-    mlir::LLVM::GlobalOp::create(builder, location, arrType,
-                                 /*isConstant=*/true,
-                                 mlir::LLVM::Linkage::Internal, name,
-                                 denseAttr);
-  }
-  return mlir::LLVM::AddressOfOp::create(builder, location, llvmPtrTy(), name);
-}
-
-mlir::Value MLIRGenImpl::emitGlobalConstArray(AST::ArrayLiteralExprAST *arrLit,
-                                              const Type &type,
-                                              mlir::Location location) {
-  auto arrType = std::get<ArrayType>(type.type_data);
-  auto elemType = convertType(arrType.get_element());
-  auto llvmArrayType =
-      mlir::LLVM::LLVMArrayType::get(elemType, arrType.get_size());
-
-  auto name = fmt::format("{}{}", kConstArrayPrefix.str(), constArrayCounter++);
-
-  // Build the global constant in the module scope, then return to caller scope
-  {
-    mlir::OpBuilder::InsertionGuard guard(builder);
-    builder.setInsertionPointToStart(theModule.getBody());
-
-    auto globalOp = mlir::LLVM::GlobalOp::create(
-        builder, location, llvmArrayType, /*isConstant=*/true,
-        mlir::LLVM::Linkage::Internal, name, mlir::Attribute{});
-
-    // Create an initializer region: poison + insertvalue for each element
-    auto &region = globalOp.getInitializerRegion();
-    auto *block = builder.createBlock(&region);
-    builder.setInsertionPointToStart(block);
-
-    auto poison =
-        mlir::LLVM::PoisonOp::create(builder, location, llvmArrayType);
-    mlir::Value current = poison;
-    for (size_t i = 0; i < arrLit->elements.size(); ++i) {
-      auto *elem = arrLit->elements[i].get();
-      mlir::Value elemVal;
-      if (auto *num = llvm::dyn_cast<AST::NumberExprAST>(elem)) {
-        auto elemSammineType = num->get_type();
-        if (isFloatType(elemSammineType)) {
-          auto mlirFloatType = mlir::cast<mlir::FloatType>(elemType);
-          double val = std::stod(num->number);
-          llvm::APFloat apVal(val);
-          if (elemSammineType.type_kind == TypeKind::F32_t) {
-            bool losesInfo = false;
-            apVal.convert(llvm::APFloat::IEEEsingle(),
-                          llvm::APFloat::rmNearestTiesToEven, &losesInfo);
-          }
-          elemVal = mlir::arith::ConstantFloatOp::create(builder, location,
-                                                         mlirFloatType, apVal);
-        } else {
-          int64_t val = sammine_util::literal_int_bits(num->number);
-          elemVal = mlir::arith::ConstantIntOp::create(builder, location,
-                                                       elemType, val);
-        }
-      } else if (auto *b = llvm::dyn_cast<AST::BoolExprAST>(elem)) {
-        elemVal = mlir::arith::ConstantIntOp::create(builder, location,
-                                                     b->b ? 1 : 0, 1);
-      } else if (auto *c = llvm::dyn_cast<AST::CharExprAST>(elem)) {
-        elemVal = mlir::arith::ConstantIntOp::create(
-            builder, location, static_cast<uint8_t>(c->value), 8);
-      }
-      current = mlir::LLVM::InsertValueOp::create(
-          builder, location, current, elemVal,
-          llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
-    }
-    mlir::LLVM::ReturnOp::create(builder, location, current);
-  } // guard restores insertion point here
-
-  return mlir::LLVM::AddressOfOp::create(builder, location, llvmPtrTy(), name);
-}
-
-mlir::Value MLIRGenImpl::getOrCreateGlobalString(llvm::StringRef name,
-                                                 llvm::StringRef value,
-                                                 mlir::Location location) {
-  if (!theModule.lookupSymbol<mlir::LLVM::GlobalOp>(name))
-    cabi::createString(builder, theModule, location, name, value);
-
-  auto ptrTy = llvmPtrTy();
-  return mlir::LLVM::AddressOfOp::create(builder, location, ptrTy, name);
-}
 
 // ===--- Public entry point ---===
 
@@ -834,14 +483,12 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &fileName,
                       const std::string &sourceText,
                       const AST::ASTProperties &props,
-                      GPUMode gpu_mode, bool use_mir) {
-  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpu_mode,
-                   use_mir);
+                      GPUMode gpu_mode) {
+  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpu_mode);
   auto cpuModule = impl.generate(program);
   if (!cpuModule)
     return {};
-  return {cpuModule, impl.kernelModule, impl.functionCount,
-          impl.mirFunctionCount};
+  return {cpuModule, impl.kernelModule};
 }
 
 } // namespace sammine_lang

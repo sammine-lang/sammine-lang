@@ -24,7 +24,7 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
-**codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenExpr.cpp`, `MLIRGenFunction.cpp`) translates the typed AST into an MLIR module using the Arith, Func, LLVM, SCF, and CF dialects. This stage uses direct recursive dispatch (not the visitor pattern). See Section 6 for details.
+**codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`) builds the MLIR module: types, function declarations, C bindings and kernels. Every function body goes through MIR, a mid-level IR in the `sammine` dialect (`MIRLowering.cpp`), which is lowered to the LLVM dialect first thing in the lowering to LLVM IR. See Section 6 for details.
 
 **optimize** -- The LLVM IR module (produced by MLIR lowering) is run through LLVM's `O2` optimization pipeline using the new pass manager. `--emit llvm`, `--emit llvm-opt` and `--emit llvm-diff` print the IR before optimization, after it, or a diff of the two, then stop. `--emit mlir` prints the MLIR module before it is lowered to LLVM IR.
 
@@ -54,8 +54,10 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `include/semantics/` | `ScopeGeneratorVisitor.h`, `GeneralSemanticsVisitor.h` | Visitor declarations. |
 | `src/typecheck/` | `BiTypeChecker.cpp`, `BiTypeCheckerSynthesize.cpp`, `LinearTypeChecker.cpp`, `Monomorphizer.cpp`, `Types.cpp` | Type checking, synthesis, linear checking, generic instantiation, type utilities. |
 | `include/typecheck/` | `BiTypeChecker.h`, `LinearTypeChecker.h`, `Monomorphizer.h`, `Types.h` | Type system definitions, checker/monomorphizer declarations. |
-| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenExpr.cpp`, `MLIRGenFunction.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | MLIR generation (split across three files), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
-| `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen class, LLVM resource wrapper, JIT declarations. |
+| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`, `MIRLowering.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR, MLIR-to-LLVM-IR lowering, JIT infrastructure. |
+| `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MIRLowering.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
+| `src/dialect/`, `include/dialect/` | `SammineOps.td`, `SammineTypes.td`, `MIRToLLVM.cpp` | The `sammine` dialect, MIR's types and ops, and its lowering to the LLVM dialect. |
+| `src/cabi/`, `include/cabi/` | `CABI.cpp`, `KernelABI.cpp` | Calling conventions: how C takes structs and variadic arguments, how a kernel's wrapper takes arrays. |
 | `src/compiler/` | `Compiler.cpp` | Pipeline orchestration (the `Compiler` class is defined and implemented entirely in this file). |
 | `include/compiler/` | `Compiler.h` | `CompilerRunner`, `compiler_option_enum`, and `LibFormat`. |
 | `src/util/` | `Utilities.cpp`, `Logging.cpp` | File I/O, `abort()`, reporter rendering, debug logging. |
@@ -266,61 +268,45 @@ Nodes invoke synthesis through `accept_synthesis(TypeCheckerVisitor*)`, which ca
 
 ## 6. MLIR Codegen
 
-The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/codegen/MLIRGenImpl.h`, with method bodies split across `MLIRGen.cpp`, `MLIRGenExpr.cpp`, and `MLIRGenFunction.cpp`).
+The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/codegen/MLIRGenImpl.h`, with method bodies split across `MLIRGen.cpp`, `MLIRGenFunction.cpp` and `MLIRGenKernel.cpp`). It builds the module around the code; function bodies go through MIR (`MIRLowering`, `knowledge_base/plans/mir.md`).
 
-### Dispatch Model
+### MIR
 
-Unlike the earlier passes, MLIR codegen does NOT use the visitor pattern. Instead, it uses direct recursive dispatch. The central `emitExpr(ExprAST*)` method contains a chain of `llvm::dyn_cast` calls:
-
-```cpp
-mlir::Value emitExpr(ExprAST *ast) {
-  if (auto *num = llvm::dyn_cast<NumberExprAST>(ast))
-    return emitNumberExpr(num);
-  if (auto *bin = llvm::dyn_cast<BinaryExprAST>(ast))
-    return emitBinaryExpr(bin);
-  // ... one branch per ExprAST subclass
-}
-```
-
-Top-level definitions are dispatched similarly in `emitDefinition(DefinitionAST*)`.
+`MIRLowering` lowers each type-checked, monomorphized function body to MIR, a mid-level IR in the `sammine` dialect (`include/dialect/`): blocks with explicit control flow (`cf.br`, `cf.cond_br`, `cf.switch`), every name resolved, operators and `for` desugared to calls, and memory and ownership explicit in its ops (`sammine.alloc`, `sammine.move`, `sammine.lend`, ...). It dispatches on the node kind with `llvm::dyn_cast` (`MIRLowering::lowerExpr`), as each node lowers to a value. A function it can't lower is a compiler error. `sammine-mir-to-llvm` (`src/dialect/MIRToLLVM.cpp`) then lowers MIR to the LLVM dialect.
 
 ### MLIR Dialects Used
 
+- **sammine** -- MIR: function bodies, their types and ops
 - **Arith** -- arithmetic operations on integers and floats (`arith.addi`, `arith.mulf`, `arith.cmpi`, etc.)
-- **Func** -- function definitions and calls for the `exit` runtime function (`func.func`, `func.call`, `func.return`)
-- **LLVM** -- low-level operations: `llvm.alloca`, `llvm.store`, `llvm.load`, `llvm.gep`, `llvm.func` (for externs, varargs, closures), `llvm.call`, struct types, pointer types, `llvm.mlir.undef`, `llvm.insertvalue`, `llvm.extractvalue`, `llvm.mlir.addressof`
-- **SCF** -- structured control flow for bounds checks (`scf.if` with `scf.yield`)
-- **CF** -- unstructured control flow for if/else and case expressions (`cf.cond_br`, `cf.br`)
+- **Func** -- functions and calls between them (`func.func`, `func.call`, `func.return`)
+- **CF** -- control flow (`cf.br`, `cf.cond_br`, `cf.switch`)
+- **LLVM** -- C bindings (`llvm.func`), and what MIR lowers to
+- **Linalg, Tensor, MemRef, GPU** -- kernels
 
 ### Generation Phases
 
 `MLIRGenImpl::generate()` runs several phases:
 
-1. **Runtime function declarations.** Declares `malloc`, `free`, and `exit` as LLVM/Func ops so they are available to `alloc`/`free` emission and bounds-check aborts. Also registers the closure struct type (`sammine.closure`).
+1. **Runtime function declarations.** Declares `malloc`, `free`, `exit` and `dprintf`, for allocation and bounds-check reports. Also registers the closure struct type (`sammine.closure`).
 
 2. **Pre-pass 1: Type registration.** Iterates over all `StructDefAST` and `EnumDefAST` nodes to create LLVM struct types (`LLVMStructType::getIdentified`) and store them in the `structTypes` / `enumTypes` maps. This must happen before any function signatures reference these types. Like functions, struct types are declared before any is defined: the first loop creates each struct type empty, and a second loop fills in its fields, so a struct can hold another struct defined later in `DefinitionVec` (generic instantiations such as `Box<Pt>` are injected at the front, before `Pt`). An enum's layout only needs payload sizes, so it is complete in the first loop.
 
-3. **Pre-pass 2: Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies). This enables mutual recursion and function-as-value references.
+3. **Pre-pass 2: Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies), and C bindings. This enables mutual recursion and function-as-value references.
 
-4. **Definition emission.** Iterates again, calling `emitDefinition()` for each node. Functions get full bodies; extern declarations are emitted via `emitExtern()`; struct/enum/type-alias/typeclass-decl nodes are no-ops (already handled). TypeClass instances emit each method as a regular function.
+4. **MIR.** `lowerThroughMIR` gives every function declaration its body through MIR.
 
-### Uniform Variable Model
-
-All non-array local variables use a uniform `llvm.alloca` + `llvm.store` model. `emitVarDef` allocates stack space, stores the initial value, and registers the alloca pointer in the `symbolTable`. `emitVariableExpr` then loads the value with `llvm.load`. Array variables are the exception: the array literal emitter returns an `!llvm.ptr` directly, and variable references to arrays return the pointer without loading.
-
-### Closures and Partial Application
-
-Function-typed values are represented as closure fat pointers: `!llvm.struct<"sammine.closure", (ptr, ptr)>` containing a code pointer and an environment pointer. When a named function is used as a value, a wrapper function is generated that adapts the calling convention. Partial application creates a heap-allocated environment struct containing the bound arguments.
+5. **Definition emission.** Iterates again, calling `emitDefinition()` for each node: functions get their linkage; kernels are emitted; struct/enum/type-alias/typeclass-decl nodes are no-ops (already handled).
 
 ### Lowering Pipeline
 
 `MLIRLowering.cpp` defines the pass pipeline that converts the multi-dialect MLIR module to pure LLVM IR:
 
-1. `SCF -> ControlFlow` -- lowers structured control flow to branches
-2. `Arith -> LLVM` -- lowers arithmetic ops to LLVM dialect ops
-3. `ControlFlow -> LLVM` -- lowers cf.br/cf.cond_br to LLVM branches
-4. `Func -> LLVM` -- lowers func.func/func.call/func.return to LLVM
-5. `ReconcileUnrealizedCasts` -- cleans up remaining type casts
+1. `sammine-mir-to-llvm` -- lowers MIR's types and ops to the LLVM dialect
+2. `SCF -> ControlFlow` -- lowers structured control flow to branches
+3. `Arith -> LLVM` -- lowers arithmetic ops to LLVM dialect ops
+4. `ControlFlow -> LLVM` -- lowers cf.br/cf.cond_br/cf.switch to LLVM branches
+5. `Func -> LLVM` -- lowers func.func/func.call/func.return to LLVM
+6. `ReconcileUnrealizedCasts` -- cleans up remaining type casts
 
 After lowering, `mlir::translateModuleToLLVMIR()` converts the MLIR LLVM dialect module into an `llvm::Module`.
 
@@ -363,9 +349,8 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 5. Update every `switch` on `TypeKind`. The compiler will help you find them via `-Wswitch` -- expect hits in:
    - `Types.cpp` (`compatible_to_from`, `structurally_compatible`, `TypeMapOrdering::populate`)
    - `BiTypeCheckerSynthesize.cpp` (type resolution)
-   - `MLIRGen.cpp` (`convertType`, `getTypeSize`, `isIntegerType`, `isFloatType`)
-   - `MLIRGenExpr.cpp` (expression emission for the new type)
-   - `MLIRGenFunction.cpp` (`buildFuncType`, `emitExtern`)
+   - `MLIRGen.cpp` (`convertType`) and `TypeLayout.cpp` (`layout::typeSize`)
+   - `MIRLowering.cpp` (`mirType`, and lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
    - `LinearTypeChecker.cpp` (if the type can be linear)
 6. Add parsing support in `Parser.cpp` if the type has new syntax.
 7. Add e2e tests in `e2e-tests/compilables/types/`.
@@ -383,7 +368,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
    - `GeneralSemanticsVisitor` -- semantic validation
    - `BiTypeCheckerVisitor` -- `visit()` + `synthesize()` methods
 8. Add to the `Monomorphizer` clone methods if the node can appear inside generic function bodies.
-9. Add MLIR emission in `emitExpr()` / `emitDefinition()` dispatch chain.
+9. Lower it to MIR in `MIRLowering::lowerExpr()` (an expression), or emit it in `emitDefinition()` (a definition).
 10. Add `to_string()` in `src/ast/AstToString.cpp` and printer support in `AstPrinterVisitor.cpp`.
 11. Add parser rules in `src/Parser.cpp`.
 
@@ -392,7 +377,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 1. Follow the "Adding a New AST Node" checklist above with the node in the `FirstExpr..LastExpr` range.
 2. Add parsing in `Parser.cpp`. If it is an infix operator, add it to the precedence table. If it is a prefix construct (like `alloc`, `free`, `len`), add a new parse method and call it from the appropriate entry point.
 3. Implement `synthesize()` in `BiTypeCheckerSynthesize.cpp` to compute the expression's type.
-4. Add an `emitMyExpr()` method to `MLIRGenImpl` and call it from the `emitExpr()` dispatch chain.
+4. Add a `lowerMyExpr()` method to `MIRLowering` and call it from `lowerExpr()`; if it needs new MIR ops, add them to `SammineOps.td` with their lowering in `MIRToLLVM.cpp`.
 
 ### Adding a New Definition
 

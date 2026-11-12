@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // The casts at calls into MIR disappear on the way to LLVM: the pointer
 // handed through `pass` is the one main allocated.
 // CHECK: 42 7

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // The same answers through MIR, and calls between MIR functions and ones
 // emitted from the AST (main, local) both ways.
 // CHECK: 42 6 1333333333 9

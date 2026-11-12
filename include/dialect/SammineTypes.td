@@ -50,7 +50,7 @@ def Sammine_StructType : Sammine_Type<"Struct", "struct"> {
     `!sammine.struct<"Point", (i32, i32)>`. The name is the struct's, as
     NameResolver gives it (`shapes::Point`, `Range<i32>`): lowered to LLVM
     it is the identified struct `sammine.struct.<name>`, the very type the
-    AST codegen makes for it.
+    module's other code, and its declarations, use for it.
   }];
   let parameters = (ins StringRefParameter<"the struct's name">:$name,
                         ArrayRefParameter<"::mlir::Type", "field types">:$fields);
@@ -66,8 +66,7 @@ def Sammine_TupleType : Sammine_Type<"Tuple", "tuple"> {
 def Sammine_ArrayType : Sammine_Type<"Array", "array"> {
   let summary = "a fixed-size array, `[N]T`, a value";
   let description = [{
-    `!sammine.array<4, i32>`. Lowered to LLVM it is `!llvm.array<4 x i32>`,
-    as the AST codegen has it.
+    `!sammine.array<4, i32>`. Lowered to LLVM it is `!llvm.array<4 x i32>`.
   }];
   let parameters = (ins "int64_t":$size, "::mlir::Type":$element);
   let assemblyFormat = "`<` $size `,` $element `>`";
@@ -76,9 +75,9 @@ def Sammine_ArrayType : Sammine_Type<"Array", "array"> {
 def Sammine_FnType : Sammine_Type<"Fn", "fn"> {
   let summary = "a function value, `(A) -> R`: a function and what it binds";
   let description = [{
-    `!sammine.fn<(i32) -> i64>`. Lowered to LLVM it is the AST codegen's
-    closure, the identified struct `sammine.closure` of the code to call and
-    an environment the code is passed first.
+    `!sammine.fn<(i32) -> i64>`. Lowered to LLVM it is a closure, the
+    identified struct `sammine.closure` of the code to call and an
+    environment the code is passed first.
   }];
   let parameters = (ins "::mlir::FunctionType":$signature);
   let assemblyFormat = "`<` $signature `>`";
@@ -90,9 +89,9 @@ def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
     `!sammine.enum<"Option<i64>", 8, (!sammine.tuple<i64>, !sammine.tuple<>)>`:
     variant k's payload is the k-th tuple's elements. Lowered to LLVM it is
     the identified struct `sammine.enum.<name>`, an i32 tag then the payload
-    bytes, the AST codegen's very type for it: payload fields sit at the
-    byte offsets layout:: gives, which the ops that read and write them
-    carry.
+    bytes, which declarations of functions taking or giving one use too:
+    payload fields sit at the byte offsets layout:: gives, which the ops
+    that read and write them carry.
   }];
   let parameters = (ins StringRefParameter<"the enum's name">:$name,
                         "int64_t":$payloadSize,

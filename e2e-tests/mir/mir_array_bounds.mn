@@ -1,4 +1,4 @@
-// RUN: (! %sammine_jit --mir --file %full 2>&1) | %check %full
+// RUN: (! %sammine_jit --file %full 2>&1) | %check %full
 // An index out of bounds, read in a function MIR lowered, is reported as
 // the AST codegen reports it, and the program exits.
 // CHECK: index 5 out of bounds for an array of length 3

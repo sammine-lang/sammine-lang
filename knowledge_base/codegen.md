@@ -1,29 +1,61 @@
 # Codegen — MLIR Emission & Lowering
 
 ## Architecture
-- Direct recursive dispatch (`emitExpr` → `dynamic_cast`), NOT visitor pattern
-- `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernel defs)
-- `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
-- Files: `MLIRGen.cpp` (main + kernel), `MLIRGenFunction.cpp` (functions/closures/calls), `MLIRGenExpr.cpp` (expressions), `MLIRGenBinaryOps.cpp/.h` (int/float arithmetic free functions), `MLIRLowering.cpp` (passes)
+- `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernel defs); `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
+- `MLIRGenImpl` builds the module around the code: types (`convertType`), a declaration of every function (`forwardDeclareFunc`, `buildFuncType`), C bindings (`emitExtern`), kernels (`MLIRGenKernel.cpp`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
+- Files: `MLIRGen.cpp` (generate, types, definitions), `MLIRGenFunction.cpp` (declarations, C bindings, linkage), `MLIRGenKernel.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR), `MLIRGenBinaryOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
+- `SourceLocator` maps AST byte offsets to MLIR locations
 
-## MIR (in progress, see `plans/mir.md`)
-- MIR is the default (`--mir`; `--no-mir` turns it off): before any body is emitted, `lowerThroughMIR` offers each function body (`functionBodies`, the same list `emitDefinition` emits) to `MIRLowering::lowerFunction`. It builds the function apart from the module and, only if the whole body lowers, puts it in place of the AST codegen's declaration, marked `sammine.mir`; otherwise the declaration stays and `emitFunction` gives it a body as before
-- Handled so far: functions over scalars (integers, floats, `bool`, `char`) and pointers to them, returning one or `()`; their literals, parameters, `let`, built-in arithmetic, `alloc`, `free`, reading and writing `*p`, statements, `return`, and direct calls to sammine and C functions (`sammine.call`, not yet partial application, function values, enum constructors or built-in instances). A C function is called by its C name (`std::printf` is `printf`, from `ASTProperties::symbol`); an argument passed through its `...` goes as it is, but an owned pointer is lent, as C only reads it. An owned pointer passed to a `ptr<T>` is lent: `lowerArgument` makes it `sammine.lend` of `sammine.deref` of the pointer. A body that runs off its end returns `()`, or its last value: GeneralSemanticsVisitor adds no implicit return to a function that writes `-> unit` (`returnsUnit()` means none written). Control flow is blocks: `lowerStatements` lowers a block's statements and stops once one returns (`terminated()`); `if` is `cf.cond_br` to a block per side and a merge block taking its value (none if both sides return); `&&`/`||` short-circuit through a merge block taking an i1. Comparisons and negation use `emitScalarComparison`/`emitNegation` in `MLIRGenBinaryOps`, shared with the AST codegen. Operators through a built-in instance go through `lowerOperator`, by the operands' sammine type: integers, chars, bools and integer-backed enums (`integerKind`) take integer ops, bitwise ones too; floats float ops; pointers compare their addresses (`sammine.address`, signed); arrays and enums with payloads take `==`/`!=` (`lowerEquality`: a loop over `sammine.element`, or tags then a branch on the tag to compare that variant's payload, never reading another variant's). Every switch MIR makes goes through `branchOn`, which makes one with no cases a plain branch (MLIR's translation crashes on it: `upstream/mlir-switch-no-cases-phi`). `x as T` and an operator through an instance: a built-in instance (no function exists) is `emitNumberConversion` or the operator itself (`lowerBuiltinInstance`), as an explicit call like `Add<i32>::Add(a, b)` is; one the program declares is a `sammine.call` to its method (`callMethod`). Reading `*p` is a `sammine.copy` of a value that owns nothing and a `sammine.move` of one that does (`smn::ownsMemory`). Float constants come from `emitFloatConstant` in `MLIRGenBinaryOps`, shared with the AST codegen
-- A MIR function has MIR types in its signature (`!sammine.ptr<i32, owned>` for `'ptr<i32>`). The AST codegen calls every sammine function through `emitSammineCall`, which bridges each argument and result whose type differs from the callee's with `unrealized_conversion_cast`
-- `sammine-mir-to-llvm` (`src/dialect/MIRToLLVM.cpp`), first in the lowering to LLVM, turns `!sammine.ptr` into `!llvm.ptr` in signatures, every block's arguments (`FuncLowering`; MLIR's own function pattern converts only the entry block, see `upstream/mlir-func-signature-conversion-blocks`), calls, returns and branches; reconciling then removes the casts. Ops that take or give no MIR type are left alone
-- `--emit mlir` starts the dump with `// MIR: N of M functions`. `e2e-tests` runs the suite with MIR, `e2e-tests-ast` without (lit `--param ast=1`, which passes `--no-mir`; a test passing `--mir` itself still gets MIR, as the last of the two wins)
-- `SourceLocator` maps AST byte offsets to MLIR locations for both paths
-- `sammine.call @f(...)` names its callee and carries MIR's types. When a caller is lowered its callee may still become either kind, so its verifier (`verifySymbolUses`) checks only counts against a callee without `sammine.mir` (`smn::kMirAttr`), and exact types against one with it. `sammine-mir-to-llvm` makes it a `func.call` with LLVM types, which match the callee's either way, or, to a C function declared as an `llvm.func` (variadic, or with structs), an `llvm.call` through `cabi::emitCall`, which promotes variadic arguments as C does. The verifier lets a variadic callee take more arguments than it declares
-- Structs and tuples are values: `!sammine.struct<"name", (fields)>` (lowered to the identified LLVM struct `sammine.struct.<name>`, the AST codegen's very type, so values cross between the paths unchanged) and `!sammine.tuple<...>` (a literal LLVM struct). `sammine.aggregate` builds one from its fields' values, in field order (a struct literal's values are lowered in the order written), `sammine.extract` reads a field; `let (a, b) = t` extracts each. A struct that reaches itself through a pointer has no MIR type yet; nor is a struct or tuple passed to or from C lowered (emitCCall does C's struct passing). Once locals are places, field access on one becomes `sammine.field` on a place
-- Bindings are values (`names_`), except one whose address the code takes: `AddressedBindings`, a visitor over the body, finds the variable at the root of `&x`, `&x.f`, `&a[i]` or of `x[i]` through an Indexer; `bind` gives such a binding a slot, `sammine.local` (a stack slot when lowered), and stores its value. Bindings are immutable and nothing writes through a view, so the slot keeps the value. `hasPlace`/`lowerPlace` (mirroring the AST codegen's `has_address`) name places: a slotted binding, `*p`, `p[i]`, and fields (`sammine.field`) or checked elements (`sammine.elem`) of a place; a field or element of a place is read from it, so only it is copied or moved. `&x` is `sammine.addr` of the place: a view that, unlike `sammine.lend`, may outlive a call (`let p = &x`). `x[i]` through an Indexer lends its method x's place, or a slot holding a temporary
-- Function values are `!sammine.fn<(A) -> R>`, lowered to the AST codegen's closure `sammine.closure` `{code, env}`. `sammine.closure @f(bound...)` is f with its first arguments bound: a function named as a value binds none (`__wrap_<f>`, null env, the same wrapper the AST codegen makes, reused if it exists); a partial application keeps what it binds in a stack slot of the function making it, read by a `__partial_N` wrapper. A view a partial application binds is `sammine.addr`, not `lend`: it lasts as the closure does (`lowerArgument`'s `ViewLasts`). `sammine.call_indirect` calls through a value, env first. `callableFromMIR` says what MIR can't call yet (an array to C, a sammine function's array result). A kernel's wrapper takes arrays by pointer on the CPU and as memrefs on the GPU (`kernel_abi::memrefOfPointer`, in `SammineCABI`, shared with the kernel codegen) and fills an array it returns in a buffer passed last, which its declaration marks `smn::kResultBufferAttr`: `sammine.call`'s lowering (`callKernel`) passes arrays through stack slots as each parameter's type says. The verifiers of `sammine.call` and `sammine.closure` read a C function's signature as a sammine call sees it (`sammineSignature`: an sret buffer is a result)
-- Arrays are values: `!sammine.array<N, T>` (lowered to `!llvm.array<N x T>`, the AST codegen's type), a literal a `sammine.aggregate` (all number constants: a constant global `.mir.const_arr.N` instead, as the AST codegen does), `len` a constant, `dim` a tuple of constant sizes; a range array `[a...b]` is a slot (`sammine.local`) filled by a loop through `sammine.elem`, then read. `a[i]` is checked by MIR code of its own (`checkBounds`: compare as i64, then a block calling `dprintf` and `exit` that ends in `sammine.unreachable`) before `sammine.element` reads it. Not yet: functions returning an array (sret), arrays to C or a kernel wrapper, writing `a[i]`, array `==`
-- Enums with payloads are values too: `!sammine.enum<"name", N, (payload tuples)>`, N the payload's bytes, lowered to the AST codegen's identified struct `sammine.enum.<name>` (`{i32 tag, [N x i8]}`). `sammine.variant` builds one, `sammine.tag` reads its tag, `sammine.payload` a payload field; both carry byte offsets from `layout::` (`TypeLayout`), the AST codegen's own rules, so values are the same bytes on either path. `case` is `cf.switch` on the tag to a block per arm (with no wildcard, other tags go to the last arm), joined like an `if` (`lowerArms`). `for i in a..b` (`lowerFor`) is the AST codegen's loop in MIR: `Range { a, b }` is a header block's argument, each turn calls `Iterator<Range<T>, T>::next` and branches on its tag; the Some block binds i and goes round with the next range. The Option type and `next`'s name come from `rangeIteration`, shared with `emitForExpr`. An integer-backed enum is its backing integer (a variant its discriminant, `==` an integer compare); a `case` on one, or on literals (integers, chars, bools), is `cf.switch` on the value (`lowerScalarCase`). A char is a signed integer, as in the AST codegen. Not yet: `==` of enums with payloads. Types print their element lists through `custom<TypeList>`, which allows an empty list (`!sammine.tuple<>`)
-- MIR ops so far: `sammine.string` (a string literal, a `!sammine.ptr<i8, view>` nothing owns; lowered to the address of a constant global `.mir.str.N`, one per distinct string in the module), `sammine.alloc`, `sammine.free`, `sammine.deref` (a pointer's `!sammine.place<T>`), `sammine.ptr_elem` (the place `p[i]`, in an unsafe function; a GEP over the pointee type), `sammine.lend` (a `!sammine.ptr<T, view>` of a place, which its verifier lets only `sammine.call` use, as a view lasts for the call), `sammine.copy`, `sammine.move`, `sammine.store`; `sammine-mir-to-llvm` turns them into `malloc` (size from the data layout, count widened to i64), `free`, the pointer itself (for both `deref` and `lend`), loads and stores, as the AST codegen emits them. Their builders take the result type explicitly
-- The dialect lives apart from codegen, in `include/dialect/` and `src/dialect/`: `SammineDialect.td` (the dialect), `SammineTypes.td` (MIR types: `!sammine.ptr<T, owned|view>` so far, its ownership an `Ownership` enum, so the assembly format is declarative), `SammineOps.td` (ops). Libraries: `SammineDialect` (types and ops; linking it brings the generated headers) and `SammineDialectTransforms` (`MIRToLLVM`, and `LowerSammineOps` for the GPU transfer ops). Codegen, which builds IR from the AST, and `sammine-opt` link them
-- `sammine-opt` (`tools/sammine-opt`) is `MlirOptMain` with the sammine, func, arith and cf dialects; lit runs `.mlir` tests with `%sammine_opt`, e.g. round trips and `-verify-diagnostics` (`e2e-tests/mir/dialect/`)
+## MIR (see `plans/mir.md`)
+`MIRLowering` lowers a type-checked, monomorphized body to MIR in the `sammine` dialect; `sammine-mir-to-llvm` (`src/dialect/MIRToLLVM.cpp`), first in the lowering to LLVM, turns it into LLVM dialect. A function MIR defines is marked `sammine.mir` (`smn::kMirAttr`) and has MIR types in its signature; a declaration (another module's function, a C binding, a kernel's wrapper) has LLVM types.
 
-## Type Mapping
+### Values and places
+- Bindings are the values they name (`names_`), except one whose address the code takes: `AddressedBindings`, a visitor over the body, finds the variable at the root of `&x`, `&x.f`, `&a[i]` or of `x[i]` through an Indexer; `bind` gives it a slot, `sammine.local`, holding its value. Bindings are immutable and nothing writes through a view, so the slot keeps it
+- Places (`!sammine.place<T>`): a slotted binding, `*p` (`sammine.deref`), `p[i]` in an unsafe function (`sammine.ptr_elem`), and fields (`sammine.field`) or checked elements (`sammine.elem`) of a place; `hasPlace`/`lowerPlace` name them. A place is read with `sammine.copy` (owns nothing) or `sammine.move` (owns memory, `smn::ownsMemory`), written with `sammine.store`. A field or element of a place is read from it, so only it is copied or moved
+- `&x` is `sammine.addr`, a view of a place for as long as it lives (`let p = &x`). An owned pointer passed to a `ptr<T>` is lent for the call: `sammine.lend` of its pointee, which only `sammine.call` may use; one a partial application binds lasts as the closure does, so it is `sammine.addr` (`lowerArgument`'s `ViewLasts`)
+
+### Types (MIR → LLVM)
+| sammine | MIR | LLVM |
+|---|---|---|
+| integers, floats, bool, char | `i32`/`i64`/`f32`/`f64`/`i1`/`i8` | same |
+| `'ptr<T>` / `ptr<T>` | `!sammine.ptr<T, owned/view>` | `!llvm.ptr` |
+| struct | `!sammine.struct<"name", (fields)>` | identified `sammine.struct.<name>` |
+| tuple | `!sammine.tuple<...>` | literal struct |
+| `[N]T` | `!sammine.array<N, T>` | `!llvm.array<N x T>` |
+| enum with payloads | `!sammine.enum<"name", N, (payload tuples)>` | identified `sammine.enum.<name>`, `{i32 tag, [N x i8]}` |
+| integer-backed enum | its backing integer | same |
+| function value | `!sammine.fn<(A) -> R>` | identified `sammine.closure`, `{code, env}` |
+
+Identified LLVM types are unique by name, so a struct's or enum's type is the one declarations (`convertType`) use. A struct or enum that reaches itself through a pointer has no MIR type. Element lists print through `custom<TypeList>`, which allows an empty one (`!sammine.tuple<>`).
+
+### Values
+- Literals: numbers are `arith.constant`; a string is `sammine.string`, a `!sammine.ptr<i8, view>` nothing owns, lowered to a constant global `.mir.str.N` (one per distinct string, `cabi::createString`)
+- Structs, tuples, arrays: `sammine.aggregate` builds one (a struct literal's values lowered in the order written), `sammine.extract` reads a field of a value; `let (a, b) = t` extracts each. An array of number constants is a constant global `.mir.const_arr.N`. `a[i]` of a value is checked first by MIR code (`checkBounds`: compare as i64, then a block calling `dprintf` and `exit` that ends in `sammine.unreachable`), then `sammine.element` reads it. `len` is a constant, `dim` a tuple of constant sizes; `[a...b]` fills a slot in a loop through `sammine.elem`
+- Enums: `sammine.variant` builds one, `sammine.tag` reads its tag, `sammine.payload` a payload field; both carry byte offsets from `layout::` (`TypeLayout`), so an enum is the same bytes in every function. An integer-backed enum's variant is its discriminant
+- Function values: `sammine.closure @f(bound...)` is f with its first arguments bound. A function named as a value binds none: `__wrap_<f>`, null env. A partial application keeps what it binds in a stack slot of the function making it, read by a `__partial_N` wrapper
+
+### Control flow
+- `lowerStatements` lowers a block's statements, stopping once one returns (`terminated()`). A body that runs off its end returns `()`, or its last value: GeneralSemanticsVisitor adds no implicit return to a function that writes `-> unit` (`returnsUnit()` means none written)
+- `if`: `cf.cond_br` to a block per side; `case` on an enum with payloads: `cf.switch` on its tag, each arm binding its payload; a `case` on an integer-backed enum or on literals: `cf.switch` on the value (`lowerScalarCase`). With no wildcard, other values go to the last arm. Arms join in a block taking the value (`lowerArms`); none if every arm returns. `&&`/`||` short-circuit through a block taking an i1. Every switch goes through `branchOn`, which makes one with no cases a plain branch (MLIR's translation crashes on it: `upstream/mlir-switch-no-cases-phi`)
+- `for i in a..b` (`lowerFor`): `Range { a, b }` is a header block's argument; each turn calls `Iterator<Range<T>, T>::next` and branches on its tag; Some binds i and goes round with the next range. The Option type and `next`'s name come from `rangeIteration`
+
+### Calls
+- `sammine.call @f(...)` to a sammine or C function by its symbol (`ASTProperties::symbol`: a C binding's is its C name). Its verifier (`verifySymbolUses`) checks exact types against a MIR callee and counts against a declaration, read as a sammine call sees it (`sammineSignature`: a C sret buffer, or a kernel wrapper's result buffer, is a result). An argument through a C `...` goes as it is, but an owned pointer is lent
+- Lowered: to a MIR callee, a `func.call`; to a C function declared as an `llvm.func`, `cabi::callC` (structs as C passes them, variadic promotions); to a kernel's wrapper, `callKernel` (arrays through stack slots, by pointer or memref as each parameter's type says, a returned array read from the result buffer)
+- `sammine.call_indirect` calls through a function value, env first. A method of an instance the program declares (an operator, `as` through Convert, `x[i]` through an Indexer, which lends x's place or a slot holding a temporary) is a `sammine.call` (`callMethod`)
+
+### Operators
+- Through a built-in instance, by the operands' sammine type (`lowerOperator`): integers, chars (signed), bools and integer-backed enums (`integerKind`) take integer ops, bitwise ones too; floats float ops; pointers compare their addresses (`sammine.address`, signed); arrays and enums with payloads take `==`/`!=` (`lowerEquality`: a loop over `sammine.element`, or tags, then a branch on the tag to compare that variant's payload). `x as T` through a built-in Convert is `emitNumberConversion`; an explicit call like `Add<i32>::Add(a, b)` goes through `lowerOperator` too. Comparison, negation and float constants come from `MLIRGenBinaryOps`
+
+### Memory
+- `sammine.alloc`/`sammine.free` lower to `malloc` (size from the data layout, count widened to i64) and `free`; a place is its pointer, a view lent or taken of it the same pointer; `sammine.local`, and what calls to C or kernels pass through memory, are stack slots at the top of the function (`entrySlot`)
+
+### Lowering to LLVM, the dialect, tools
+- `sammine-mir-to-llvm` converts every block's argument types itself (`FuncLowering`; MLIR's own function pattern converts only the entry block, see `upstream/mlir-func-signature-conversion-blocks`)
+- The dialect lives in `include/dialect/`, `src/dialect/`: `SammineDialect.td`, `SammineTypes.td`, `SammineOps.td`. Libraries: `SammineDialect` (types and ops; linking it brings the generated headers, on the `SYSTEM` include path) and `SammineDialectTransforms` (`MIRToLLVM`, and `LowerSammineOps` for the GPU transfer ops)
+- `sammine-opt` (`tools/sammine-opt`) is `MlirOptMain` with the sammine, func, arith and cf dialects; lit runs `.mlir` tests with `%sammine_opt` (`e2e-tests/mir/dialect/`). `--emit mlir` prints MIR
+
+## Declarations (`convertType`)
 | TypeKind | MLIR Type |
 |---|---|
 | I32/U32/Integer | i32 |
@@ -32,68 +64,37 @@
 | F32 | f32 |
 | Bool | i1 |
 | Char | i8 |
-| Unit | NoneType (0 results) |
+| Unit | no result |
 | String/Pointer | `!llvm.ptr` |
 | Function | `!llvm.struct<"sammine.closure", (ptr, ptr)>` |
-| Array | `LLVMArrayType` |
+| Array | `LLVMArrayType`, returned by value, as MIR returns it |
 | Struct | named struct in `structTypes` map |
 | Enum | `{ i32 tag, [N x i8] payload }` or integer backing type |
 | Tuple | `LLVMStructType::getLiteral(elementTypes)` |
-
-## Variable Model
-- All non-array vars: alloca + store
-- Arrays: alloca returns `!llvm.ptr`; `emitVariableExpr` returns pointer directly (no load)
-- Named constants: `.str.` (strings), `.const_arr.` (immutable all-literal arrays → globals)
-
-## Handler Dispatch Pattern
-Two chains use `optional`-return: non-null = handled, nullptr = "not my job", loop over `static constexpr Handler handlers[]`.
-
-- **`emitVarDef`**: TupleDestructure → Array → Scalar
-- **`emitBinaryExpr`**: TypeclassOp → IntArith → FloatArith → Comparison → EnumBitwise (a user's instance first: its type may have built-in operators too)
-- Assignment (`=`) and `&&`/`||` are handled before the chain: `emitShortCircuit` branches on the LHS and evaluates the RHS in its own block, so `i < n && xs[i] > 0` never reads `xs[n]`. The linear checker treats that RHS as a branch that may not run (consuming there is "consumed in some branches but not others")
 
 ## Forward Declarations (`generate()`)
 1. Register types: all StructDef/EnumDef → MLIR types. Structs are declared first and their fields filled in a second loop, so order never matters (`Box<Pt>` is instantiated at the front, before `Pt`)
 2. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods
 3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
+4. `lowerThroughMIR` replaces each function's declaration with its MIR definition
 
 ## C Functions
-- `emitExtern` declares a C binding under its C name (`std::printf` is `printf`). The symbol for any name is NameResolver's `ASTProperties::symbol`: the AST codegen (`mangleName`) and MIR name callees through it. A variadic one, or one taking or giving a struct, is an `llvm.func`, called with `llvm.call` by `emitCCall`; any other is a `func.func`
-- The C calling convention lives in `SammineCABI` (`include/cabi/`, `src/cabi/`), apart from codegen so MIR's lowering to LLVM can use it too: `registerType`/`registersFor` say how a struct travels (registers, or memory as sret/byval), `callC` calls C with sammine's values, a struct passed as C passes it (register type or byval copy) and a struct result through its register type or an sret buffer, given a way to make stack slots: the AST codegen's `emitCCall` and MIR's lowering of `sammine.call` (and of a C function's closure wrapper) both use it; `emitCall` makes an `llvm.call` to a C function with arguments in its declared types: it applies C's default promotions to an argument passed through `...` (f32 to f64, char sign-extended and bool zero-extended to i32), and copies the declaration's argument attributes (sret, byval, signext, zeroext) onto the call; `createString` makes the constant global holding a string as C reads it (its bytes and a NUL), for both the AST codegen's `getOrCreateGlobalString` and MIR's string literals
+- `emitExtern` declares a C binding under its C name (`std::printf` is `printf`). A variadic one, or one taking or giving a struct, is an `llvm.func`; any other is a `func.func`
+- The calling conventions live in `SammineCABI` (`include/cabi/`, `src/cabi/`): `registerType`/`registersFor` say how a struct travels (registers, or memory as sret/byval); `callC` calls C with sammine's values given a way to make stack slots; `emitCall` makes the `llvm.call`, promoting arguments through `...` (f32 to f64, char sign-extended and bool zero-extended to i32) and copying the declaration's argument attributes (sret, byval, signext, zeroext) onto the call; `createString` makes a C string's constant global; `kernel_abi::memrefOfPointer` makes a kernel's memref of an array's address
 
 ## Symbols
 - `emitFunction(ast, Linkage)`. `Global`: in a library every function and instance method, private ones too (its generic code compiled in another module may call them; privacy is a naming rule); in an executable only `main`. `Internal`: an executable's functions, and generic instantiations (`FuncDefAST::is_instantiation`) everywhere, so two modules can both instantiate `vec::push<i32>`. `AvailableExternally`: an imported instance's methods, copies to inline; MLIRLowering adds `inlinehint` (without it `Iterator<Range>::next` costs 245 against a threshold of 225)
 - Forward declarations start private: an imported instance method is never given a body, and MLIR rejects a public declaration
 - A function an IR test inspects must be in a library (no `main`), or the optimizer may inline or remove it
 
-## Closures & Partial Application
-- Fat pointer: `{ code_ptr, env_ptr }`
-- Three call paths: direct (zero overhead), partial (env struct for bound args), indirect (load + extract + call)
-- Wrapper `__wrap_<name>` generated when named function used as value
-- **Stack limitation**: closures cannot escape defining scope
-
-## Enum Codegen
-- Layout: `{ i32 tag, [N x i8] payload }` (unit-only: just `{ i32 }`)
-- Construction: alloca + GEP + store tag and payload
-- Pattern matching: cascading `cmpi` + `cf::CondBranchOp` + merge blocks
-
-## Case Expression Abstractions
-- `emitScalarCaseExpr`: shared for integer-backed enum and literal patterns; parameterized by `ArmToComparisonConst` lambda
-- `emitPayloadCaseExpr`: tag extraction + cascading dispatch + payload binding via byte-offset GEP
-- `emitArrayComparison`: loop-based element-by-element `==`/`!=` (header/body/exit blocks)
-
-## Global Const Arrays
-- Immutable arrays with all-literal elements → `llvm.mlir.global` with `.const_arr.` prefix
-- Initializer: PoisonOp + InsertValueOp per element
-
 ## Kernel Codegen (2-Module Architecture)
 - A kernel's scalar code, a map lambda's body and a reduce's identity, goes through MIR: `MIRLowering::lowerKernelScalar` lowers it where the kernel codegen's builder is, the lambda's parameter bound, and it must be plain `arith` ops in the one block a linalg region has (`lowerArithOnly`), else a located error. MLIRGenImpl always has a MIRLowering for this
 
 ### Invariants
 - Kernel module: only arith/math/tensor/linalg/func ops — NO llvm dialect
-- `in_kernel_lambda_body` flag MUST be true inside linalg body builders — prevents alloca/malloc/free
+- A linalg body holds only what `lowerKernelScalar` accepts: plain arith ops in one block
 - DPS: array-returning kernels get output as last param, never allocate internally
-- Kernel wrappers: `sammine.kernel_wrapper` attr → `emitCallExpr` passes arrays as `!llvm.ptr`
+- Kernel wrappers: `sammine.kernel_wrapper` attr; an array-returning one fills a buffer passed last, its argument marked `smn::kResultBufferAttr`. A call to one is `sammine.call`, lowered by `callKernel` (see MIR, Calls)
 
 ### Kernel Type Conversion (`convertTypeForKernel`)
 - `Array` → `RankedTensorType` (default) or `MemRefType` (post-bufferization)
@@ -102,9 +103,9 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 ### Emission
 - `emitKernelMapExpr`: `linalg::MapOp` with body builder; DPS output = last block arg
 - `emitKernelReduceExpr`: 0-d output via `tensor::EmptyOp` + `FillOp` + `linalg::ReduceOp`; extract scalar via `tensor::ExtractOp`
-- `emitKernelWrapper`: `buildMemrefFromPtr` per array input + sret; calls `__kernel_` with memref args
+- `emitKernelWrapper`: `kernel_abi::memrefOfPointer` per array input + the result buffer; calls `__kernel_` with memref args
 
-### `buildMemrefFromPtr`
+### `kernel_abi::memrefOfPointer` (`include/cabi/KernelABI.h`)
 Constructs `{ allocated_ptr, aligned_ptr, offset=0, sizes={N}, strides={1} }` from raw `!llvm.ptr`, cast to `memref<NxT>` via `unrealized_conversion_cast`.
 
 ### Bufferization Pipeline (kernel module only)
@@ -119,7 +120,7 @@ one-shot-bufferize (IdentityLayoutMap) → linalg-to-loops → buffer-hoisting �
 
 ### MLIR→LLVM Lowering
 ```
-scf-to-cf → arith-to-llvm → cf-to-llvm → finalize-memref-to-llvm → func-to-llvm → reconcile-unrealized-casts
+sammine-mir-to-llvm → scf-to-cf → arith-to-llvm → cf-to-llvm → finalize-memref-to-llvm → func-to-llvm → reconcile-unrealized-casts
 ```
 
 ### Post-Lowering Attributes
@@ -134,11 +135,10 @@ See [gpu_codegen.md](gpu_codegen.md) for the full GPU compilation story.
 ## Dialect Usage
 | Construct | Dialect |
 |---|---|
+| Function bodies | sammine (MIR), lowered to llvm |
 | Arithmetic, comparisons | arith |
 | Function defs/calls/return | func |
-| if/else, while, case/match | cf (ControlFlow) |
-| Bounds checks | scf (scf.if + exit) |
-| Closures, structs, enums, strings, pointers | llvm |
+| if/else, for, case, `&&`/`\|\|`, bounds checks | cf (ControlFlow) |
 | Kernel tensor ops, map, reduce | linalg, tensor |
 | GPU memory, kernel launch | gpu (alloc, memcpy, dealloc, launch_func) |
 | GPU device code | nvvm (thread_id, block_id intrinsics) |

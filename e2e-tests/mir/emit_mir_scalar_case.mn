@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // An integer-backed enum is its backing integer, a variant its discriminant.
 // A case on one, or on literals, is a cf.switch on the value. A char is an
 // integer, compared signed; bitwise operators are arith ops.

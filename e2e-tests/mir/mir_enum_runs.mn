@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Enums through MIR give the same answers: payload fields of mixed sizes at
 // the AST codegen's offsets, a variant with none, a wildcard arm, an enum
 // in a payload, a payload that owns memory, and a for loop the AST codegen

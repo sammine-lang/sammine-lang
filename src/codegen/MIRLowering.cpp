@@ -32,12 +32,6 @@ using namespace AST;
 
 namespace {
 
-// A function returning an array returns it through a pointer its caller
-// passes (sret), as the AST codegen and its callers agree; MIR doesn't yet.
-bool returnsArray(mlir::FunctionType type) {
-  return llvm::any_of(type.getResults(), llvm::IsaPred<smn::ArrayType>);
-}
-
 /// The bindings of a function body whose address its code takes: the
 /// variable at the root of `&x`, `&x.f` or `&a[i]`, or of `x[i]` through an
 /// Indexer, which lends x. By name, so a binding a later one shadows counts
@@ -131,7 +125,7 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
     auto name = et.get_name().mangled();
-    // An integer-backed enum is its backing integer, as in the AST codegen.
+    // An integer-backed enum is its backing integer.
     if (et.is_integer_backed()) {
       auto backing = et.get_backing_type();
       return builder_.getIntegerType(
@@ -159,11 +153,10 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
                               variants);
   }
   case TypeKind::Function: {
-    // A function value: a C function's `...` has no MIR type, and a
-    // function returning an array returns it through a pointer (sret).
+    // A function value; a C function's `...` has no MIR type.
     auto &fn = std::get<FunctionType>(type.type_data);
     auto signature = mirFunctionType(fn);
-    if (fn.is_var_arg() || !signature || returnsArray(*signature))
+    if (fn.is_var_arg() || !signature)
       return std::nullopt;
     return smn::FnType::get(builder_.getContext(), *signature);
   }
@@ -215,10 +208,7 @@ MIRLowering::mirSignature(FuncDefAST *ast) const {
   auto type = ast->Prototype->get_type();
   if (type.type_kind != TypeKind::Function)
     return std::nullopt;
-  auto signature = mirFunctionType(std::get<FunctionType>(type.type_data));
-  if (!signature || returnsArray(*signature))
-    return std::nullopt;
-  return signature;
+  return mirFunctionType(std::get<FunctionType>(type.type_data));
 }
 
 // The function is built on its own, outside the module, and only put in
@@ -248,7 +238,7 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
 
   // GeneralSemanticsVisitor makes a body's implicit return explicit, but
   // not in a function that writes `-> unit`: one that runs off its end
-  // returns (), or its last value, as the AST codegen has it.
+  // returns (), or its last value.
   auto value = lowerStatements(ast->Block.get());
   if (mlir::failed(value))
     return false;
@@ -525,8 +515,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
       mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
-  if (!callableFromMIR(callee, *type))
-    return mlir::failure();
   if (cp->is_partial)
     return lowerPartialApplication(call, name, *type);
 
@@ -544,21 +532,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   auto op = smn::CallOp::create(builder_, loc(call), type->getResults(), name,
                                 args);
   return op.getNumResults() ? op.getResult(0) : mlir::Value();
-}
-
-// Whether MIR can call `callee`, of MIR signature `type`, yet: not an
-// array passed to C, nor one a sammine function returns (sret). C's struct
-// passing is cabi::callC's, a kernel's wrapper's arrays the lowering of
-// sammine.call's.
-bool MIRLowering::callableFromMIR(mlir::FunctionOpInterface callee,
-                                  mlir::FunctionType type) const {
-  if (callee->hasAttr("sammine.kernel_wrapper"))
-    return true;
-  bool passesArray =
-      llvm::any_of(type.getInputs(), llvm::IsaPred<smn::ArrayType>);
-  return !(mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
-           passesArray) &&
-         !returnsArray(type);
 }
 
 // `f(a)`, f a binding holding a function value: a call through it.
@@ -788,7 +761,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   return lowerArms(location, *resultType, arms);
 }
 
-// `for i in a..b { body }`, as the AST codegen does it: Range { a, b } goes
+// `for i in a..b { body }`: Range { a, b } goes
 // round a loop, each turn calling Iterator<Range<T>, T>::next on it. Some
 // gives the next range and i, for the body, then the loop goes round with
 // that range; None leaves the loop.
@@ -878,7 +851,7 @@ MIRLowering::lowerScalarCase(CaseExprAST *caseExpr) {
   if (!flagType)
     return mlir::failure();
 
-  // The value each arm matches, as the AST codegen reads its pattern.
+  // The value each arm matches, as its pattern says it.
   using LK = CasePattern::LiteralKind;
   auto armValue = [&](const CasePattern &pattern) -> std::optional<int64_t> {
     if (intEnum)
@@ -964,7 +937,7 @@ void MIRLowering::branchOn(mlir::Location location, mlir::Value flag,
 }
 
 // `Option<i64>::Some(x)`, or a variant with no payload, `None`: its payload
-// fields at the offsets layout:: gives them, as the AST codegen puts them.
+// fields at the offsets layout:: gives them.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerVariant(mlir::Location location, const Type &type,
                           size_t index, llvm::ArrayRef<ExprAST *> payload) {
@@ -1090,10 +1063,8 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerFunctionValue(VariableExprAST *var) {
   auto type = mirType(var->get_type());
   auto name = props_.symbol(var->variableName);
-  auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
-  if (!type || !mlir::isa<smn::FnType>(*type) || !callee ||
-      !callableFromMIR(callee,
-                       mlir::cast<smn::FnType>(*type).getSignature()))
+  if (!type || !mlir::isa<smn::FnType>(*type) ||
+      !module_.lookupSymbol<mlir::FunctionOpInterface>(name))
     return mlir::failure();
   return smn::ClosureOp::create(builder_, loc(var), *type, name,
                                 mlir::ValueRange{})
@@ -1170,8 +1141,8 @@ MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
   return lowerAggregate(loc(array), *type, elementTypes, exprs);
 }
 
-// `[a...b]`, an array of a, a + 1, ...: filled in a slot by a loop, as the
-// AST codegen does, then read whole.
+// `[a...b]`, an array of a, a + 1, ...: filled in a slot by a loop, then
+// read whole.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerRangeArray(RangeExprAST *range) {
   auto type = mirType(range->get_type());
@@ -1220,7 +1191,7 @@ MIRLowering::lowerRangeArray(RangeExprAST *range) {
 }
 
 // `dim(a)`: the sizes of a nested array's dimensions, a tuple of i32
-// constants, from its type alone, as the AST codegen has it.
+// constants, from its type alone.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
   auto type = mirType(dim->get_type());
   if (!type)
@@ -1237,8 +1208,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
       .getResult();
 }
 
-// `a[i]` of an array: i is checked first, as the AST codegen checks it, and
-// one out of bounds reported on stderr before the program exits.
+// `a[i]` of an array: i is checked first, and one out of bounds reported on
+// stderr before the program exits.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerArrayIndex(IndexExprAST *index) {
   auto array = lowerExpr(index->array_expr.get());
@@ -1259,8 +1230,8 @@ MIRLowering::lowerArrayIndex(IndexExprAST *index) {
 
 // Whether `offset` is within an array of `size` elements, compared as i64 so
 // that a wide index can't wrap into range. Out of it, the index and the
-// size go to stderr through dprintf, then exit(1), as in the AST codegen;
-// in it, lowering goes on in a block of its own.
+// size go to stderr through dprintf, then exit(1); in it, lowering goes on
+// in a block of its own.
 mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
                                              mlir::Value offset,
                                              int64_t size) {
@@ -1359,9 +1330,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlaceRead(ExprAST *expr) {
   return read(loc(expr), *place);
 }
 
-// Whether `expr` names a place, as the AST codegen's has_address has it: a
-// binding in a slot, what a pointer points at, or a field or array element
-// of a place, or an element past a pointer. Lowers nothing.
+// Whether `expr` names a place: a binding in a slot, what a pointer points
+// at, a field or array element of a place, or an element past a pointer.
+// Lowers nothing.
 bool MIRLowering::hasPlace(ExprAST *expr) const {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr)) {
     auto it = names_.find(var->variableName.mangled());
@@ -1443,7 +1414,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAddrOf(AddrOfExprAST *addr) {
 }
 
 // `x[i]` through an Indexer instance: its method is lent x's place, or a
-// slot holding x's value when x names none, as the AST codegen does.
+// slot holding x's value when x names none.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerIndexerCall(IndexExprAST *index,
                               const sammine_util::QualifiedName &method) {
@@ -1599,7 +1570,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
 }
 
 // `lhs op rhs`, operands of `type`, through the instance the compiler
-// provides, as the AST codegen does it. On integers, chars, bools, and an
+// provides. On integers, chars, bools, and an
 // integer-backed enum's backing integer, and on floats, the operator itself;
 // pointers compare their addresses, as signed integers; arrays and enums
 // with payloads take == and != (lowerEquality).

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Lent pointers read the memory their owner holds, through callees that
 // went through MIR and ones that didn't, and the owner frees it after.
 // CHECK: -7 -1 12 7

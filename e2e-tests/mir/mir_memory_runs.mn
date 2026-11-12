@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // A value made, changed, handed through a pointer to a pointer and freed by
 // functions that went through MIR, read in one that didn't.
 // CHECK: 42

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Elements written and read through a pointer in MIR functions, read back
 // from main.
 // CHECK: 0 10 20 30 2.5

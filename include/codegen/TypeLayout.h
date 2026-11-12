@@ -7,9 +7,9 @@
 
 //! \file TypeLayout.h
 //! \brief How many bytes a value of a sammine type takes, as enums lay out
-//! their payloads: each field at the next multiple of its own size. Both the
-//! AST codegen and MIR lay enums out by it, so an enum value is the same
-//! bytes on either path.
+//! their payloads: each field at the next multiple of its own size. The
+//! module's enum types are sized by it and MIR lays payloads out by it, so
+//! an enum is the same bytes in every function and declaration.
 
 namespace sammine_lang::layout {
 

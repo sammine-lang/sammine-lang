@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // A struct is !sammine.struct with its name and its fields' types, built by
 // sammine.aggregate in field order whatever order the literal names them in,
 // and read by sammine.extract. A tuple is !sammine.tuple; `let (a, b) = t`

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Calls from MIR to MIR, from MIR to functions emitted from the AST and
 // back, with scalars and owned pointers, give the same answers.
 // CHECK: 25 10 3 5 -95 9

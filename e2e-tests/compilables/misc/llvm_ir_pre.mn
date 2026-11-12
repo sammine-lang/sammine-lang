@@ -1,6 +1,7 @@
-// RUN: %sammine --no-mir --file %full %O --emit llvm 2>&1 | %check %full
-// The unoptimized IR the AST codegen emits, with a stack slot for the let:
-// through MIR, which names a let's value, this main would have none.
+// RUN: %sammine --file %full %O --emit llvm 2>&1 | %check %full
+// The IR before LLVM optimizes it: the runtime's declarations, the
+// prelude's instances, copies to inline (definitions.so defines them), and
+// main, whose let names its value, so no stack slot holds it.
 // CHECK:      ; ModuleID = 'LLVMDialectModule'
 // CHECK-NEXT: source_filename = "LLVMDialectModule"
 // CHECK-NEXT: target datalayout = "{{.*}}"
@@ -9,16 +10,11 @@
 // CHECK:      declare void @exit(i32)
 // CHECK:      define available_externally i64 @"Sized<i32>::Sized"()
 // CHECK:      define i32 @main(){{.*}}{
-// CHECK-NEXT:   %1 = alloca i32, i64 1, align 4
-// CHECK-NEXT:   store i32 42, ptr %1, align 4
-// CHECK-NEXT:   %2 = load i32, ptr %1, align 4
-// CHECK-NEXT:   ret i32 %2
+// CHECK-NEXT:   ret i32 42
 // CHECK-NEXT: }
 // CHECK:      !llvm.module.flags = !{!0}
 // CHECK:      !0 = !{i32 2, !"Debug Info Version", i32 3}
 
-// Pre-optimization IR should contain unoptimized patterns like alloca. The
-// prelude's instances are copies to inline: definitions.so defines them.
 
 let main() -> i32 {
   let x: i32 = 42;

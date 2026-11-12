@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // String literals from MIR, with escapes, the same one twice, and one handed
 // to a function as a ptr<char>.
 // CHECK: "quoted"	tab

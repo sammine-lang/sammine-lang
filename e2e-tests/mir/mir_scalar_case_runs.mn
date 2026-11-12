@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Integer-backed enums, literal cases, chars and bitwise operators through
 // MIR give the same answers.
 // CHECK: 10 20 30 1

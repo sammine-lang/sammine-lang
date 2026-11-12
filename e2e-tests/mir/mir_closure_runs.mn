@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Function values through MIR: a function passed by name, partial
 // applications binding a value and an owned pointer's view, a function value
 // kept in a binding, the stdlib's folds, and a C function as a value.

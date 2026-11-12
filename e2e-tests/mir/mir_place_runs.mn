@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Bindings with their address taken, through MIR: &x of a let and of a
 // parameter, &x.f, &a[i], a case arm's binding, the same view twice, and
 // x[i] through Indexer on a binding, a field, a temporary and a Vec.

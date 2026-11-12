@@ -1,4 +1,4 @@
-// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // Pointers compare their addresses (sammine.address). Arrays compare element
 // by element in a loop, stopping at the first that differs. Enums with
 // payloads compare tags, then branch on the tag to compare that variant's

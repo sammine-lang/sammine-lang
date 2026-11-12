@@ -14,8 +14,9 @@
 #include "SammineTypes.h.inc"
 
 namespace sammine_lang::smn {
-/// Marks a function whose body is MIR, as opposed to one the AST codegen
-/// emitted. Its signature has MIR's types.
+/// Marks a function whose body is MIR, as opposed to one only declared (of
+/// another module, a C binding, a kernel's wrapper). Its signature has MIR's
+/// types; a declaration's, LLVM's.
 constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 
 /// Marks the argument a call passes a buffer for its callee's result in: a

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Arrays through MIR: literals, constant or not, indexed and measured, in
 // a struct, passed to and from functions the AST codegen emitted.
 // CHECK: 60 3 7 8

@@ -1,0 +1,2 @@
+// A library whose function returns an array, for import_array_return.mn.
+export let triple(x: i64) -> [3]i64 { [x, x * 2i64, x * 3i64] }

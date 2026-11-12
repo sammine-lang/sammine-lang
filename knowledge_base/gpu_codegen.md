@@ -60,14 +60,14 @@ internal function. On the GPU path, the wrapper additionally:
 
 **The refactor we had to do.** The initial approach put `gpu.alloc`/`gpu.memcpy`
 directly in the existing wrapper, which mixed LLVM dialect ops (from
-`buildMemrefFromPtr`) with GPU dialect ops. This broke `gpu-to-llvm` — that pass
+`buildMemrefFromPtr`, now `kernel_abi::memrefOfPointer`) with GPU dialect ops. This broke `gpu-to-llvm` — that pass
 does a single `applyPartialConversion` and can't handle pre-existing LLVM ops
 alongside unconverted GPU ops in the same function.
 
 The fix: the GPU wrapper takes `memref<NxT>` args instead of `!llvm.ptr`. The
 wrapper body is pure `func`/`memref`/`gpu` dialect — no LLVM ops at all. The
 conversion from `!llvm.ptr` to memref happens at the **call site** (in `main()` or
-wherever the kernel is called), using `buildMemrefFromPtr`. This keeps the LLVM ops
+wherever the kernel is called), using `kernel_abi::memrefOfPointer`, in `sammine.call`'s lowering to LLVM (`callKernel`). This keeps the LLVM ops
 in the CPU-side code where they belong, and the GPU wrapper is clean for `gpu-to-llvm`.
 
 Key files:

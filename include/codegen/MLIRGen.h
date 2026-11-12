@@ -25,12 +25,10 @@ struct MLIRGenResult {
   /// Separate module for kernel functions (tensor/linalg).
   /// Null if the program has no kernel definitions.
   mlir::OwningOpRef<mlir::ModuleOp> kernelModule;
-  /// Functions given a body, and how many of those went through MIR.
-  size_t functionCount = 0;
-  size_t mirFunctionCount = 0;
 };
 
-/// Emit MLIR for the given type-checked AST. Returns a CPU module and
+/// Emit MLIR for the given type-checked AST: each function's body through
+/// MIR, kernels through the kernel codegen. Returns a CPU module and
 /// (optionally) a kernel module, or an empty result on failure.
 /// gpuTarget: "" for CPU, "cuda" for NVIDIA, "amd" for AMD GPU.
 MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
@@ -38,6 +36,6 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &fileName,
                       const std::string &sourceText,
                       const AST::ASTProperties &props,
-                      GPUMode gpu_mode, bool use_mir = false);
+                      GPUMode gpu_mode);
 
 } // namespace sammine_lang

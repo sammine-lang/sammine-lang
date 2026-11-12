@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // if branches to a block for each side; a side that doesn't return goes on
 // to the block after, which takes the if's value. && and || read their
 // right side only when they must. Comparisons are arith.cmpi/cmpf, unsigned

@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // The same answers through MIR for conversions, a Convert and an operator
 // instance the program declares, and a built-in instance called by name.
 // CHECK: 4000000000 -3 2.75 255

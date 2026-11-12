@@ -18,8 +18,8 @@
 
 //! \file MIRLowering.h
 //! \brief Lowers a type-checked function's body to MIR (see
-//! knowledge_base/plans/mir.md). MIR grows one construct at a time: a body
-//! using anything not handled yet is left to the AST codegen.
+//! knowledge_base/plans/mir.md), and a kernel's scalar code. Every function
+//! body goes through it.
 
 namespace sammine_lang {
 
@@ -30,9 +30,8 @@ public:
       : builder_(builder), props_(props), locator_(locator) {}
 
   /// Lowers `ast` to a new function with its MIR signature and body, marked
-  /// `smn::kMirAttr`, which replaces `decl`, the AST codegen's declaration of
-  /// it. Returns false, leaving `decl` untouched, if `ast` uses something MIR
-  /// can't lower yet.
+  /// `smn::kMirAttr`, which replaces `decl`, its declaration. Returns false,
+  /// leaving `decl` untouched, if `ast` uses something MIR can't lower.
   bool lowerFunction(AST::FuncDefAST *ast, mlir::func::FuncOp decl);
 
   /// A kernel's scalar code where the builder is: the body of a map's lambda
@@ -64,8 +63,6 @@ private:
   bool hasPlace(AST::ExprAST *expr) const;
   std::optional<size_t> fieldIndex(AST::FieldAccessExprAST *access) const;
   mlir::FailureOr<mlir::Value> lowerAddrOf(AST::AddrOfExprAST *addr);
-  bool callableFromMIR(mlir::FunctionOpInterface callee,
-                       mlir::FunctionType type) const;
   mlir::FailureOr<mlir::Value> lowerIndirectCall(AST::CallExprAST *call);
   mlir::FailureOr<mlir::Value>
   lowerPartialApplication(AST::CallExprAST *call, llvm::StringRef name,

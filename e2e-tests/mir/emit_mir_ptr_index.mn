@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // p[i] of a pointer, in an unsafe function, is the place sammine.ptr_elem:
 // read with a copy, written with a store, as *p is.
 // CHECK-LABEL: func.func private @fill(

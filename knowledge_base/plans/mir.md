@@ -1,8 +1,9 @@
 # Plan: a mid-level IR (MIR) as an MLIR dialect
 
-Status: in progress. MIR is the default: each function body goes through it
-where it can, through the AST codegen otherwise (`--no-mir`: the AST codegen
-only). Slices 1-8 are done, most of 9.
+Status: MIR is the only path to codegen for function bodies, and for
+kernels' scalar code; the AST codegen for them is deleted. The migration
+below is done. What remains is the ownership check on MIR (below), then the
+rest of the cleanup.
 
 ## Why
 
@@ -226,9 +227,9 @@ suite passes after every commit.
 - The conversion builds signatures and layouts with the same code the AST
   codegen uses (`buildFuncType`, `convertType`, name mangling, `CABI`), so
   both sides agree, until the old path is gone.
-- MIR is on by default; `--no-mir` turns it off. Lit runs the whole suite
-  both ways (`e2e-tests`, and `e2e-tests-ast`, `--param ast=1`). `--emit
-  mlir` prints how many functions went through MIR, so progress shows.
+- MIR was turned on by `--mir`, then by default with `--no-mir` to turn it
+  off, lit running the suite both ways, until no function fell back; then
+  the fallback, the flag and the AST codegen went.
 
 ### Slices
 
@@ -279,10 +280,13 @@ come next, then the constructs, each picked by what blocks the most code:
 Once the fallback is rare and reliable, `--mir` becomes the default; the AST
 path still covers what MIR doesn't. Done once MIR took 3446 of the 3580
 functions outside the MIR tests, every test passing both ways: the standard
-library is compiled through it too. What still falls back: closures and
-function values, `&x` and `x[i]` through `Indexer` (which need locals as
-places), functions returning arrays (sret), writing `a[i]`, `==` on arrays
-and enums with payloads.
+library is compiled through it too. Then the rest went through MIR:
+function values and partial application (`sammine.closure`,
+`sammine.call_indirect`), bindings whose address is taken (a slot,
+`sammine.local`, only for those; `&x` is `sammine.addr`), every built-in
+operator, structs to and from C (`cabi::callC`), kernels' calls and scalar
+code, and arrays returned by value, as no AST caller is left to expect
+sret. Then the fallback went: a function MIR can't lower is an error.
 
 ### The ownership check, the same way
 
@@ -299,9 +303,11 @@ and enums with payloads.
 
 ### Cleanup
 
-Delete AST codegen (`MLIRGen*.cpp` except kernels, ~3,400 lines), the flow
-parts of `LinearTypeChecker` (~1,400 lines), the side tables MIR replaces, and
-the implicit-return rewrite.
+Done: the AST codegen for function bodies (`MLIRGenExpr.cpp` and the
+statement, call and closure code of `MLIRGen.cpp` and
+`MLIRGenFunction.cpp`, ~2,500 lines). Left: the flow parts of
+`LinearTypeChecker` (~1,400 lines), once the ownership check on MIR takes
+over, the side tables MIR replaces, and the implicit-return rewrite.
 
 ### Review checkpoints
 
@@ -335,7 +341,7 @@ indexing, automatic drops.
 3. Consuming an outer value inside a loop is reported as a use after move on
    the next iteration, so consuming and then leaving the loop is accepted.
 4. MIR is printed with `--emit mlir` (its functions are marked
-   `sammine.mir`, under a `// MIR: N of M functions` line). `sammine-opt`
+   `sammine.mir`). `sammine-opt`
    parses and prints MIR and runs passes on it, for small hand-written tests;
    it came with the first MIR type.
 6. Migration by vertical slices with a per-function fallback (above).

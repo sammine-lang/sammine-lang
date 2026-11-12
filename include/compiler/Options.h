@@ -37,9 +37,6 @@ public:
   bool jit;
   std::vector<std::string> jit_args;
   EmitKind emit = EmitKind::None;
-  /// Lower function bodies through MIR where it handles them, the rest
-  /// through the AST codegen. Off (--no-mir), the AST codegen does them all.
-  bool mir = true;
   std::string diagnostics = "none";
   TimingMode time_val;
   std::filesystem::path output_dir;

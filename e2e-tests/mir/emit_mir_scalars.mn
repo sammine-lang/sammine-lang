@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // bool, char, f32 and f64 go through MIR as i1, i8, f32 and f64, with their
 // literals and float arithmetic.
 // CHECK-LABEL: func.func private @area(

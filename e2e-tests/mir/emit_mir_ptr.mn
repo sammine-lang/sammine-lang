@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // A function over pointers goes through MIR with !sammine.ptr in its
 // signature: 'ptr<T> is owned, ptr<T> a view. `&x` makes x's binding live in
 // a slot (sammine.local), and is a view of it (sammine.addr), the same one

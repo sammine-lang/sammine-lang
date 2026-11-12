@@ -1,0 +1,12 @@
+// RUN: %sammine --file %dir/Inputs/triples.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// A function in another module returning an array returns it by value, and
+// the importer, which declares it, takes it that way.
+// CHECK: 5 10 15
+import triples;
+import std;
+
+let main() -> i32 {
+  let t = triples::triple(5i64);
+  std::printf("%lld %lld %lld\n", t[0], t[1], t[2]);
+  0
+}

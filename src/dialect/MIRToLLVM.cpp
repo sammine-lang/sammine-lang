@@ -16,7 +16,7 @@ namespace sammine_lang {
 
 namespace {
 
-/// A function value as the AST codegen has it: the code to call, which takes
+/// A function value: the code to call, which takes
 /// the environment first, and the environment.
 mlir::LLVM::LLVMStructType closureType(mlir::MLIRContext *ctx) {
   auto type = mlir::LLVM::LLVMStructType::getIdentified(ctx, "sammine.closure");
@@ -28,8 +28,9 @@ mlir::LLVM::LLVMStructType closureType(mlir::MLIRContext *ctx) {
 }
 
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
-/// !llvm.ptr; a struct is the identified LLVM struct the AST codegen makes for
-/// it, `sammine.struct.<name>`, and a tuple a literal one. Any other type is
+/// !llvm.ptr; a struct is the identified LLVM struct `sammine.struct.<name>`,
+/// which declarations of functions taking or giving one use too, and a
+/// tuple a literal one. Any other type is
 /// left as it is.
 class MIRTypeConverter : public mlir::TypeConverter {
 public:
@@ -42,8 +43,8 @@ public:
       return mlir::LLVM::LLVMPointerType::get(type.getContext());
     });
     addConversion([this](smn::StructType type) -> std::optional<mlir::Type> {
-      // Identified by name, so the same type as the AST codegen's, whose
-      // fields it may have set already.
+      // Identified by name, so the same type as declarations use, whose
+      // fields may be set already.
       auto llvmType = mlir::LLVM::LLVMStructType::getIdentified(
           type.getContext(), ("sammine.struct." + type.getName()).str());
       if (llvmType.isInitialized())
@@ -109,8 +110,8 @@ void declareCFunction(mlir::ModuleOp module, mlir::OpBuilder &builder,
   mlir::LLVM::LLVMFuncOp::create(builder, module.getLoc(), name, type);
 }
 
-/// A stack slot for one `type`, at the top of the function `op` is in, as the
-/// AST codegen makes them, so LLVM's mem2reg can remove it.
+/// A stack slot for one `type`, at the top of the function `op` is in, where
+/// LLVM's mem2reg can remove it.
 mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
                       mlir::Operation *op, mlir::Type type) {
   mlir::OpBuilder::InsertionGuard guard(rewriter);
@@ -125,8 +126,7 @@ mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
       type, one);
 }
 
-// alloc<T>(n): malloc(sizeof(T) * n), n widened to i64 as the AST codegen
-// does.
+// alloc<T>(n): malloc(sizeof(T) * n), n widened to i64.
 struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
@@ -386,8 +386,7 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   }
 };
 
-/// The constant array `op` builds, if every element is a number constant,
-/// as the AST codegen's tryBuildDenseAttr takes them.
+/// The constant array `op` builds, if every element is a number constant.
 std::optional<mlir::DenseElementsAttr> constantArray(smn::AggregateOp op,
                                                      mlir::Type type) {
   auto array = mlir::dyn_cast<mlir::LLVM::LLVMArrayType>(type);
@@ -408,8 +407,7 @@ std::optional<mlir::DenseElementsAttr> constantArray(smn::AggregateOp op,
 }
 
 // A struct, tuple or array is built field by field into an LLVM aggregate.
-// An array of number constants is a constant global instead, as the AST
-// codegen makes it, loaded whole.
+// An array of number constants is a constant global instead, loaded whole.
 struct AggregateLowering : public mlir::OpConversionPattern<smn::AggregateOp> {
   AggregateLowering(const mlir::TypeConverter &converter,
                     mlir::MLIRContext *context, unsigned &constArrays)
@@ -463,7 +461,7 @@ struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
 };
 
 
-// A slot at the top of the function, as the AST codegen makes them.
+// A slot at the top of the function.
 struct LocalLowering : public mlir::OpConversionPattern<smn::LocalOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
@@ -557,7 +555,7 @@ struct PayloadLowering : public mlir::OpConversionPattern<smn::PayloadOp> {
 };
 
 // An element of an array value at an index only known when it runs: through
-// a stack slot, as the AST codegen does.
+// a stack slot.
 struct ElementLowering : public mlir::OpConversionPattern<smn::ElementOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
@@ -605,7 +603,7 @@ struct UnreachableLowering
 // A function value: the code is a wrapper taking the environment first,
 // then the arguments not bound, which calls the callee with the bound ones
 // before them. A function's own value binds nothing and shares one wrapper,
-// __wrap_<f>, with a null environment, as the AST codegen makes it; a
+// __wrap_<f>, with a null environment; a
 // partial application's environment holds what it binds, in a stack slot
 // of the function that makes it, read by a wrapper of its own.
 struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {

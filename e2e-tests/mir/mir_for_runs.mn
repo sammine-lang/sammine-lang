@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // for loops through MIR: over i32, i64 and u32, nested, and one left by a
 // return from inside.
 // CHECK: 45 4950 6 9

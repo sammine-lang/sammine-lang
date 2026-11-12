@@ -1,4 +1,4 @@
-// RUN: %sammine --mir --file %full --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // A binding whose address the code takes lives in a slot, sammine.local; any
 // other is the value it names. &x.f and &a[i] are views of places within it
 // (sammine.field, sammine.elem, the index checked first). x[i] through an

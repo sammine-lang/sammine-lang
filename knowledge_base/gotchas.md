@@ -8,8 +8,8 @@
 - **Generic templates skipped**: BiTypeChecker, LinearTypeChecker, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `convertType()` aborts on it
 - **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
-- **`in_kernel_lambda_body`**: must be true inside linalg body builders — prevents alloca/malloc/free emission
-- **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `buildMemrefFromPtr` output
+- **Kernel lambdas**: a map lambda's body and a reduce's identity go through `MIRLowering::lowerKernelScalar`, which accepts only plain arith ops in one block, what a linalg region holds
+- **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `kernel_abi::memrefOfPointer` output
 - **Closures are stack-allocated**: cannot escape defining scope
 - **`synthesize()` runs BEFORE `visit()`** for `CallExprAST` — detection logic must go in `synthesize`
 
@@ -19,8 +19,8 @@
 3. Add `Type::` factory method + `to_string()` case
 4. Register in `enter_new_scope()` if named
 5. Add `convertType()` case in `MLIRGen.cpp`
-6. Add `getTypeSize()` case if needed
-7. Add `isFloatType()`/`isIntegerType()` if applicable
+6. Add a `layout::typeSize()` case if it can be an enum payload
+7. Add a `MIRLowering::mirType()` case, with a MIR type and its conversion to LLVM if it needs one
 
 ## New AST Node Checklist
 1. Forward declare in `AstDecl.h`
@@ -30,7 +30,7 @@
 5. Add default `visit()` in `Ast.cpp`
 6. Add parser in `Parser.h`/`Parser.cpp`, wire into `ParsePrimaryExpr()` or `ParseDefinition()`
 7. Update 4 visitors: AstPrinter, BiTypeChecker, ScopeGenerator, GeneralSemantics
-8. Add `emitXxxExpr()` in `MLIRGenExpr.cpp` + dispatch in `emitExpr()`
+8. Add `lowerXxx()` in `MIRLowering.cpp` + dispatch in `lowerExpr()`
 9. If `ExprAST`: Monomorphizer must clone it — forgetting one causes `abort("Unknown ExprAST subclass")`
 
 ## New Operator Checklist

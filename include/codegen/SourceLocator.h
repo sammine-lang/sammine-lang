@@ -12,7 +12,8 @@
 
 //! \file SourceLocator.h
 //! \brief Maps an AST node's byte offsets to an MLIR file:line:col location.
-//! Shared by the AST codegen and the MIR lowering, so both locate code alike.
+//! Shared by the module's codegen and the MIR lowering, so both locate code
+//! alike.
 
 namespace sammine_lang {
 

@@ -202,9 +202,6 @@ MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
         mlir::OpBuilder::InsertionGuard builderGuard(builder);
         builder.setInsertionPointToStart(b.getInsertionBlock());
 
-        bool savedKernelCtx = in_kernel_lambda_body;
-        in_kernel_lambda_body = true;
-
         auto opTok = reduceExpr->op_tok->tok_type;
         mlir::Value result =
             isFloatType(elemSamType)
@@ -213,8 +210,6 @@ MLIRGenImpl::emitKernelReduceExpr(AST::KernelReduceExprAST *reduceExpr,
                                  isUnsignedIntegerType(elemSamType));
         if (!result)
           imm_error("Unsupported reduce operator");
-
-        in_kernel_lambda_body = savedKernelCtx;
 
         mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{result});
       });

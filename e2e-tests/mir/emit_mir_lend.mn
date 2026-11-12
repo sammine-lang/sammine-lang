@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // An owned pointer passed to a ptr<T> is lent: sammine.lend of the place it
 // points at gives the callee a view, and the caller keeps the pointer. The
 // callee may go through MIR (look) or not (sign), and may be an instance's

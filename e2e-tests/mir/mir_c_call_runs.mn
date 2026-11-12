@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // C functions called from MIR: printf through its `...`, with a char, a
 // bool and an f32 promoted as C expects, and an owned string lent to it;
 // abs, which C declares with fixed arguments.

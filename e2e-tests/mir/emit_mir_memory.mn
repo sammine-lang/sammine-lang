@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// RUN: %sammine --file %full --emit mlir | %check %full
 // alloc, *p = v, reading *p, and free go through MIR. Reading a value that
 // owns nothing copies it; reading an owned pointer out of a place moves it.
 // A function returning () returns nothing.

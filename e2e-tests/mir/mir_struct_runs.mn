@@ -1,4 +1,4 @@
-// RUN: %sammine_jit --mir --file %full | %check %full
+// RUN: %sammine_jit --file %full | %check %full
 // Structs and tuples through MIR give the same answers, passed between MIR
 // functions and ones the AST codegen emitted: one owns memory, one is a
 // generic struct's instance.
