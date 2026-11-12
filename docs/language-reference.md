@@ -819,6 +819,10 @@ std::printf("%d\n", a[5]);
 // Error: Array index out of bounds: index 5 on array of size 3
 ```
 
+Any other index is checked when the program runs. Out of bounds, the program
+prints `index 7 out of bounds for an array of length 3` to stderr and exits
+with status 1.
+
 ---
 
 ## 12. Pointers and Memory
@@ -1145,7 +1149,7 @@ let main() -> i32 {
 | `vec::new<T>(cap)` | `(i64) -> Vec<T>` | Create a new Vec with given capacity |
 | `vec::push<T>(v, val)` | `(Vec<T>, T) -> Vec<T>` | Append an element, auto-grows if full |
 | `vec::delete<T>(v)` | `(Vec<T>) -> unit` | Free the underlying memory |
-| `v[i]` | `Indexer<Vec<T>, T>` | Element `i`, for an element type that owns nothing. Not bounds-checked yet |
+| `v[i]` | `Indexer<Vec<T>, T>` | Element `i`, for an element type that owns nothing. An `i` outside `0..v.length` prints `index 2 out of bounds for a Vec of length 2` to stderr and exits with status 1 |
 
 ### Vec\<T\> Structure
 

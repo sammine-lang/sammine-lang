@@ -29,6 +29,7 @@ static constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
 static constexpr llvm::StringLiteral kMallocFunc = "malloc";
 static constexpr llvm::StringLiteral kFreeFunc = "free";
 static constexpr llvm::StringLiteral kExitFunc = "exit";
+static constexpr llvm::StringLiteral kDprintfFunc = "dprintf";
 
 /// Implementation class for MLIR generation from a sammine AST.
 /// Declared in a header so method definitions can be split across

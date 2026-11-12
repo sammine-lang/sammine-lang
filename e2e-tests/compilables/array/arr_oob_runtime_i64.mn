@@ -1,0 +1,12 @@
+// RUN: (! %sammine_jit --file %full 2>&1) | %check %full
+// An i64 index is compared whole: 2^32 would wrap to 0 if cut to i32.
+// CHECK: index 4294967296 out of bounds for an array of length 3
+// CHECK-NOT: unreachable
+import std;
+
+let main() -> i32 {
+  let a = [1, 2, 3];
+  let i = 4294967296i64;
+  std::printf("unreachable %d\n", a[i]);
+  return 0;
+}

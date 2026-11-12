@@ -1228,25 +1228,24 @@ mlir::Value MLIRGenImpl::emitEnumConstructor(AST::CallExprAST *ast) {
 
 void MLIRGenImpl::emitBoundsCheck(mlir::Value idx, size_t arrSize,
                                   mlir::Location location) {
+  // Compared as i64: an index truncated to i32 could wrap into range.
   auto i32Ty = builder.getI32Type();
-
-  // Cast index to i32 for comparison
-  auto idxI32 = mlir::arith::IndexCastOp::create(builder, location, i32Ty, idx);
-
+  auto i64Ty = builder.getI64Type();
+  auto idx64 = mlir::arith::IndexCastOp::create(builder, location, i64Ty, idx);
   auto sizeConst = mlir::arith::ConstantIntOp::create(
-      builder, location, i32Ty, static_cast<int64_t>(arrSize));
-  auto zero = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 0);
+      builder, location, i64Ty, static_cast<int64_t>(arrSize));
+  auto zero = mlir::arith::ConstantIntOp::create(builder, location, i64Ty, 0);
 
   // idx >= size
   auto oobHigh = mlir::arith::CmpIOp::create(
-      builder, location, mlir::arith::CmpIPredicate::sge, idxI32, sizeConst);
+      builder, location, mlir::arith::CmpIPredicate::sge, idx64, sizeConst);
   // idx < 0
   auto oobLow = mlir::arith::CmpIOp::create(
-      builder, location, mlir::arith::CmpIPredicate::slt, idxI32, zero);
+      builder, location, mlir::arith::CmpIPredicate::slt, idx64, zero);
   // oob = oobHigh || oobLow
   auto oob = mlir::arith::OrIOp::create(builder, location, oobHigh, oobLow);
 
-  // scf.if (oob) { printf + exit(1) }
+  // scf.if (oob) { dprintf(2, ...) + exit(1) }
   auto ifOp = mlir::scf::IfOp::create(builder, location,
                                       /*resultTypes=*/mlir::TypeRange{}, oob,
                                       /*withElseRegion=*/false);
@@ -1256,7 +1255,15 @@ void MLIRGenImpl::emitBoundsCheck(mlir::Value idx, size_t arrSize,
   auto &thenBlock = ifOp.getThenRegion().front();
   builder.setInsertionPoint(&thenBlock, thenBlock.begin());
 
-  // exit(1) — uses func.call since exit is declared as func.func
+  // Report to stderr (file descriptor 2), then exit(1).
+  auto message = getOrCreateGlobalString(
+      ".bounds_msg",
+      "index %lld out of bounds for an array of length %lld\n", location);
+  auto stderrFd = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 2);
+  auto dprintf = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(kDprintfFunc);
+  mlir::LLVM::CallOp::create(
+      builder, location, dprintf,
+      mlir::ValueRange{stderrFd, message, idx64, sizeConst});
   auto one = mlir::arith::ConstantIntOp::create(builder, location, i32Ty, 1);
   mlir::func::CallOp::create(builder, location, kExitFunc, mlir::TypeRange{},
                              mlir::ValueRange{one});

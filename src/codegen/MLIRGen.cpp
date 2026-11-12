@@ -257,6 +257,13 @@ void MLIRGenImpl::declareRuntimeFunctions() {
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(voidTy, {ptrTy});
     mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, kFreeFunc, fnTy);
   }
+  // @dprintf(i32, !llvm.ptr, ...) -> i32  [LLVM dialect — used by the bounds
+  // check to report to stderr's file descriptor]
+  {
+    auto fnTy = mlir::LLVM::LLVMFunctionType::get(i32Ty, {i32Ty, ptrTy},
+                                                  /*isVarArg=*/true);
+    mlir::LLVM::LLVMFuncOp::create(builder, unknownLoc, kDprintfFunc, fnTy);
+  }
   // @exit(i32)  [func dialect — used by bounds check via func.call]
   {
     auto funcType = builder.getFunctionType({i32Ty}, {});

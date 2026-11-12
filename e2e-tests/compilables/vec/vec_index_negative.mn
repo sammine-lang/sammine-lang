@@ -1,0 +1,12 @@
+// RUN: (! %sammine_jit --file %full 2>&1) | %check %full
+// CHECK: index -1 out of bounds for a Vec of length 1
+// CHECK-NOT: unreachable
+import std;
+import vec;
+
+let main() -> i32 {
+  let v = vec::push<i32>(vec::new<i32>(1), 10);
+  std::printf("unreachable %d\n", v[-1i64]);
+  vec::delete<i32>(v);
+  return 0;
+}
