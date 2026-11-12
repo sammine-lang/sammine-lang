@@ -355,13 +355,12 @@ mlir::Value MLIRGenImpl::emitBinaryTypeclassOp(AST::BinaryExprAST *ast,
     return nullptr;
 
   auto opName = bp->resolved_op_method->mangled();
-  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(opName);
-  if (!funcOp)
+  if (!theModule.lookupSymbol<mlir::func::FuncOp>(opName))
     return nullptr;
 
-  return mlir::func::CallOp::create(builder, location, funcOp,
-                                    mlir::ValueRange{lhs, rhs})
-      .getResult(0);
+  return emitSammineCall(opName, {lhs, rhs}, {convertType(ast->get_type())},
+                         location)
+      .front();
 }
 
 mlir::Value MLIRGenImpl::emitBinaryExpr(AST::BinaryExprAST *ast) {
@@ -578,11 +577,8 @@ mlir::Value MLIRGenImpl::emitForExpr(AST::ForExprAST *ast) {
   // --- Call Iterator<Range<T>, T>::next(iter) ---
   std::string nextFn = "Iterator<" + rangeType.to_string() + ", " +
                        ast->start->get_type().to_string() + ">::next";
-  llvm::SmallVector<mlir::Type, 1> resultTypes{optionMlirTy};
-  auto callOp = mlir::func::CallOp::create(
-      builder, location, llvm::StringRef(nextFn), resultTypes,
-      mlir::ValueRange{iterArg});
-  auto resultVal = callOp.getResult(0);
+  auto resultVal =
+      emitSammineCall(nextFn, {iterArg}, {optionMlirTy}, location).front();
 
   // --- Extract tag (discriminant) from Option result ---
   auto resultAlloca = emitAllocaOne(optionMlirTy, location);
@@ -878,13 +874,9 @@ mlir::Value MLIRGenImpl::emitIndexerCall(
   if (!coll || !idx)
     return nullptr;
   coll = ensurePointer(coll, location);
-  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(method.mangled());
-  if (!funcOp)
-    imm_error(fmt::format("no function for '{}'", method.mangled()),
-              ast->get_location());
-  return mlir::func::CallOp::create(builder, location, funcOp,
-                                    mlir::ValueRange{coll, idx})
-      .getResult(0);
+  return emitSammineCall(method.mangled(), {coll, idx},
+                         {convertType(ast->get_type())}, location)
+      .front();
 }
 
 mlir::Value MLIRGenImpl::emitIndexExpr(AST::IndexExprAST *ast) {
@@ -1090,9 +1082,9 @@ mlir::Value MLIRGenImpl::emitCastExpr(AST::CastExprAST *ast) {
   if (!funcOp || funcOp.getNumResults() != 1)
     imm_error(fmt::format("can't call '{}' for 'as'", callee),
               ast->get_location());
-  return mlir::func::CallOp::create(builder, location, funcOp,
-                                    mlir::ValueRange{value})
-      .getResult(0);
+  return emitSammineCall(callee, {value}, {convertType(ast->get_type())},
+                         location)
+      .front();
 }
 
 mlir::Value MLIRGenImpl::emitFreeExpr(AST::FreeExprAST *ast) {

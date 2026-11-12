@@ -31,6 +31,43 @@ void MLIRGenImpl::forwardDeclareFunc(AST::PrototypeAST *proto) {
   }
 }
 
+// ===--- Calls ---===
+
+// `value` as `type`: itself if it has that type, else through a cast that
+// lowering removes once both sides are LLVM types.
+static mlir::Value bridge(mlir::OpBuilder &builder, mlir::Location location,
+                          mlir::Value value, mlir::Type type) {
+  if (value.getType() == type)
+    return value;
+  return mlir::UnrealizedConversionCastOp::create(builder, location, type,
+                                                  value)
+      .getResult(0);
+}
+
+llvm::SmallVector<mlir::Value, 1>
+MLIRGenImpl::emitSammineCall(llvm::StringRef callee, mlir::ValueRange args,
+                             mlir::TypeRange resultTypes,
+                             mlir::Location location) {
+  auto funcOp = theModule.lookupSymbol<mlir::func::FuncOp>(callee);
+  if (!funcOp)
+    imm_error(fmt::format("no function '{}' to call", callee.str()));
+  auto fnType = funcOp.getFunctionType();
+  if (fnType.getNumInputs() != args.size() ||
+      fnType.getNumResults() != resultTypes.size())
+    imm_error(fmt::format("call to '{}' doesn't match its signature",
+                          callee.str()));
+
+  llvm::SmallVector<mlir::Value, 4> operands;
+  for (auto [arg, param] : llvm::zip(args, fnType.getInputs()))
+    operands.push_back(bridge(builder, location, arg, param));
+  auto call = mlir::func::CallOp::create(builder, location, funcOp, operands);
+
+  llvm::SmallVector<mlir::Value, 1> results;
+  for (auto [result, want] : llvm::zip(call.getResults(), resultTypes))
+    results.push_back(bridge(builder, location, result, want));
+  return results;
+}
+
 // ===--- Closure helpers ---===
 
 mlir::Value MLIRGenImpl::buildClosure(mlir::Value codePtr, mlir::Value envPtr,
@@ -102,15 +139,11 @@ void MLIRGenImpl::emitFuncCallAndLLVMReturn(llvm::StringRef callee,
                                         : mlir::ValueRange{});
     return;
   }
-  if (retType.type_kind == TypeKind::Unit) {
-    mlir::func::CallOp::create(builder, location, callee, mlir::TypeRange{},
-                               args);
-    mlir::LLVM::ReturnOp::create(builder, location, mlir::ValueRange{});
-  } else {
-    auto callOp = mlir::func::CallOp::create(
-        builder, location, callee, mlir::TypeRange{convertType(retType)}, args);
-    mlir::LLVM::ReturnOp::create(builder, location, callOp.getResults());
-  }
+  llvm::SmallVector<mlir::Type, 1> resultTypes;
+  if (retType.type_kind != TypeKind::Unit)
+    resultTypes.push_back(convertType(retType));
+  auto results = emitSammineCall(callee, args, resultTypes, location);
+  mlir::LLVM::ReturnOp::create(builder, location, results);
 }
 
 // ===--- Function emission ---===
@@ -621,8 +654,7 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
       operands.push_back(localBuf);
     }
 
-    mlir::func::CallOp::create(builder, location, llvm::StringRef(callee),
-                               mlir::TypeRange{}, operands);
+    emitSammineCall(callee, operands, {}, location);
     return localBuf;
   }
 
@@ -634,11 +666,8 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
   if (auto llvmFunc = theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee))
     return emitCCall(llvmFunc, operands, ast->get_type(), location);
 
-  auto callOp = mlir::func::CallOp::create(
-      builder, location, llvm::StringRef(callee), resultTypes, operands);
-  if (callOp.getNumResults() > 0)
-    return callOp.getResult(0);
-  return nullptr;
+  auto results = emitSammineCall(callee, operands, resultTypes, location);
+  return results.empty() ? nullptr : results.front();
 }
 
 mlir::Value MLIRGenImpl::emitBuiltinInstanceCall(AST::CallExprAST *ast,

@@ -239,6 +239,15 @@ public:
                                       const MonomorphizedKey &key);
   mlir::Value emitIndirectCall(AST::CallExprAST *ast,
                                llvm::ArrayRef<mlir::Value> operands);
+  /// Calls the sammine function `callee` with `args`, giving results of
+  /// `resultTypes`. A function lowered through MIR takes and returns MIR
+  /// types where this path has LLVM ones; each argument or result whose type
+  /// differs from the callee's is bridged with an unrealized_conversion_cast,
+  /// which lowering removes.
+  llvm::SmallVector<mlir::Value, 1> emitSammineCall(llvm::StringRef callee,
+                                                    mlir::ValueRange args,
+                                                    mlir::TypeRange resultTypes,
+                                                    mlir::Location location);
   void emitFuncCallAndLLVMReturn(llvm::StringRef callee, const Type &retType,
                                  mlir::ValueRange args, mlir::Location loc);
   mlir::Value emitReturnStmt(AST::ReturnStmtAST *ast);
