@@ -1,4 +1,4 @@
-#include "codegen/CABI.h"
+#include "cabi/CABI.h"
 
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
 #include "mlir/IR/BuiltinTypes.h"
@@ -90,6 +90,46 @@ Registers registersFor(mlir::Type type) {
     regs.integer = 1;
   }
   return regs;
+}
+
+namespace {
+
+// `value` as C passes it through `...`. sammine has no short, so only these
+// are promoted.
+mlir::Value promoteVariadic(mlir::OpBuilder &builder, mlir::Location loc,
+                            mlir::Value value) {
+  auto type = value.getType();
+  if (type.isF32())
+    return mlir::LLVM::FPExtOp::create(builder, loc, builder.getF64Type(),
+                                       value);
+  if (type.isInteger(8))
+    return mlir::LLVM::SExtOp::create(builder, loc, builder.getI32Type(),
+                                      value);
+  if (type.isInteger(1))
+    return mlir::LLVM::ZExtOp::create(builder, loc, builder.getI32Type(),
+                                      value);
+  return value;
+}
+
+} // namespace
+
+mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
+                            mlir::LLVM::LLVMFuncOp callee,
+                            llvm::SmallVector<mlir::Value, 4> args) {
+  auto fnTy = callee.getFunctionType();
+  if (fnTy.isVarArg())
+    for (unsigned i = fnTy.getNumParams(); i < args.size(); i++)
+      args[i] = promoteVariadic(builder, loc, args[i]);
+  auto call = mlir::LLVM::CallOp::create(builder, loc, callee, args);
+  // Without sret and byval on the call too, LLVM's optimizer drops the
+  // stores that fill a byval copy.
+  if (auto declArgAttrs = callee.getArgAttrsAttr()) {
+    llvm::SmallVector<mlir::Attribute> callArgAttrs(declArgAttrs.begin(),
+                                                    declArgAttrs.end());
+    callArgAttrs.resize(args.size(), builder.getDictionaryAttr({}));
+    call.setArgAttrsAttr(builder.getArrayAttr(callArgAttrs));
+  }
+  return call;
 }
 
 } // namespace sammine_lang::cabi

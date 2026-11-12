@@ -1,10 +1,13 @@
 #pragma once
 
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/Types.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 
 //! \file CABI.h
-//! \brief How the C calling convention (x86-64 System V) moves structs.
+//! \brief How the C calling convention (x86-64 System V) moves structs, and
+//! how a call to C is made.
 //!
 //! LLVM leaves this to the frontend. A struct over 16 bytes goes through
 //! memory. A smaller one is split into 8-byte chunks, each classified as
@@ -32,5 +35,16 @@ struct Registers {
 //! type from registerType. A struct only goes in registers if all of them
 //! are free; otherwise C passes it on the stack.
 Registers registersFor(mlir::Type type);
+
+//! A call to the C function `callee` with `args`, already in the types its
+//! declaration takes (a struct in its register type or as a byval pointer,
+//! an sret buffer first). An argument passed through `...` is promoted as C
+//! does by default: a float to a double, a char (signed) and a bool
+//! (unsigned) to an int. The call carries the declaration's argument
+//! attributes (sret, byval, signext, zeroext), which LLVM reads from the
+//! call.
+mlir::LLVM::CallOp emitCall(mlir::OpBuilder &builder, mlir::Location loc,
+                            mlir::LLVM::LLVMFuncOp callee,
+                            llvm::SmallVector<mlir::Value, 4> args);
 
 } // namespace sammine_lang::cabi

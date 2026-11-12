@@ -5,7 +5,6 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGen.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRLowering.cpp
-  ${CMAKE_CURRENT_LIST_DIR}/CABI.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenExpr.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenBinaryOps.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenKernel.cpp
@@ -18,7 +17,7 @@ target_include_directories(MLIRBackend SYSTEM PRIVATE
   ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS}
 )
 target_link_libraries(MLIRBackend PRIVATE
-  project_options SammineDialect SammineDialectTransforms
+  project_options SammineDialect SammineDialectTransforms SammineCABI
   MLIRIR MLIRParser MLIRSupport MLIRPass
   MLIRArithDialect MLIRFuncDialect MLIRSCFDialect
   MLIRArithToLLVM MLIRFuncToLLVM
@@ -56,4 +55,4 @@ target_link_libraries(MLIRBackend PRIVATE
 add_library(_codegen)
 target_include_directories(_codegen PRIVATE ${INCLUDE_PROJECT_DIR})
 target_include_directories(_codegen SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS} ${MLIR_INCLUDE_DIRS})
-target_link_libraries(_codegen SammineJIT MLIRBackend SammineDialect SammineDialectTransforms LLVMSupport ${llvm_libs} ${llvm_targets})
+target_link_libraries(_codegen SammineJIT MLIRBackend SammineDialect SammineDialectTransforms SammineCABI LLVMSupport ${llvm_libs} ${llvm_targets})

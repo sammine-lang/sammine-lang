@@ -1,5 +1,5 @@
 #include "codegen/MLIRGenImpl.h"
-#include "codegen/CABI.h"
+#include "cabi/CABI.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "dialect/SammineDialect.h"
 #include "typecheck/BuiltinInstances.h"
@@ -583,35 +583,7 @@ mlir::Value MLIRGenImpl::emitCCall(mlir::LLVM::LLVMFuncOp llvmFunc,
                       .getResult();
   }
 
-  // C's default argument promotions for variadic args: float to double,
-  // and char (signed) and bool (unsigned) to int.
-  if (fnTy.isVarArg()) {
-    unsigned fixedCount = fnTy.getNumParams();
-    for (unsigned i = fixedCount; i < operands.size(); i++) {
-      auto type = operands[i].getType();
-      if (type.isF32())
-        operands[i] = mlir::LLVM::FPExtOp::create(
-            builder, location, builder.getF64Type(), operands[i]);
-      else if (type.isInteger(8))
-        operands[i] = mlir::LLVM::SExtOp::create(
-            builder, location, builder.getI32Type(), operands[i]);
-      else if (type.isInteger(1))
-        operands[i] = mlir::LLVM::ZExtOp::create(
-            builder, location, builder.getI32Type(), operands[i]);
-    }
-  }
-  // The declaration's types, which differ from sammine's for a struct.
-  auto llvmCallOp =
-      mlir::LLVM::CallOp::create(builder, location, llvmFunc, operands);
-  // The call needs the declaration's sret and byval too: LLVM's optimizer
-  // reads them from the call, and without them drops the stores that fill
-  // a byval copy.
-  if (auto declArgAttrs = llvmFunc.getArgAttrsAttr()) {
-    llvm::SmallVector<mlir::Attribute> callArgAttrs(declArgAttrs.begin(),
-                                                    declArgAttrs.end());
-    callArgAttrs.resize(operands.size(), builder.getDictionaryAttr({}));
-    llvmCallOp.setArgAttrsAttr(builder.getArrayAttr(callArgAttrs));
-  }
+  auto llvmCallOp = cabi::emitCall(builder, location, llvmFunc, operands);
   if (!resultBuf && llvmCallOp.getNumResults() == 0)
     return nullptr;
   auto semTy = convertType(semRetType);

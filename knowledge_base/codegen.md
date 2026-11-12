@@ -52,6 +52,10 @@ Two chains use `optional`-return: non-null = handled, nullptr = "not my job", lo
 2. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods
 3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
 
+## C Functions
+- `emitExtern` declares a C binding under its C name (`std::printf` is `printf`, mapped in `c_symbols`). A variadic one, or one taking or giving a struct, is an `llvm.func`, called with `llvm.call` by `emitCCall`; any other is a `func.func`
+- The C calling convention lives in `SammineCABI` (`include/cabi/`, `src/cabi/`), apart from codegen so MIR's lowering to LLVM can use it too: `registerType`/`registersFor` say how a struct travels (registers, or memory as sret/byval), and `emitCall` makes an `llvm.call` to a C function with arguments in its declared types: it applies C's default promotions to an argument passed through `...` (f32 to f64, char sign-extended and bool zero-extended to i32), and copies the declaration's argument attributes (sret, byval, signext, zeroext) onto the call
+
 ## Symbols
 - `emitFunction(ast, Linkage)`. `Global`: in a library every function and instance method, private ones too (its generic code compiled in another module may call them; privacy is a naming rule); in an executable only `main`. `Internal`: an executable's functions, and generic instantiations (`FuncDefAST::is_instantiation`) everywhere, so two modules can both instantiate `vec::push<i32>`. `AvailableExternally`: an imported instance's methods, copies to inline; MLIRLowering adds `inlinehint` (without it `Iterator<Range>::next` costs 245 against a threshold of 225)
 - Forward declarations start private: an imported instance method is never given a body, and MLIR rejects a public declaration
