@@ -1110,8 +1110,11 @@ Type BiTypeCheckerVisitor::synthesize(IfExprAST *ast) {
   // Both branches must have compatible types (structural only — ignore
   // qualifiers)
   if (then_type != else_type) {
-    if (auto common = common_type(then_type, else_type)) {
+    if (auto common = common_type(else_type, then_type)) {
+      // A branch not already of the common type flows into it.
       for (auto *block : {ast->thenBlockAST.get(), ast->elseBlockAST.get()}) {
+        if (block->get_type() == *common)
+          continue;
         resolve_literal_type(block->Statements.back().get(), *common);
         if (!common->is_open())
           block->set_type(*common);
