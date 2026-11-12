@@ -3,7 +3,60 @@
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 
+#include <unordered_map>
+
 namespace sammine_lang {
+
+// Each comparison's predicate for signed and unsigned integers and for
+// floats.
+struct CmpPredicates {
+  mlir::arith::CmpIPredicate signed_int;
+  mlir::arith::CmpIPredicate unsigned_int;
+  mlir::arith::CmpFPredicate flt;
+};
+
+static const CmpPredicates *lookupCmpPredicate(TokenType tok) {
+  static const std::unordered_map<TokenType, CmpPredicates> table = {
+      {TokEQUAL,
+       {mlir::arith::CmpIPredicate::eq, mlir::arith::CmpIPredicate::eq,
+        mlir::arith::CmpFPredicate::OEQ}},
+      {TokNOTEqual,
+       {mlir::arith::CmpIPredicate::ne, mlir::arith::CmpIPredicate::ne,
+        mlir::arith::CmpFPredicate::ONE}},
+      {TokLESS,
+       {mlir::arith::CmpIPredicate::slt, mlir::arith::CmpIPredicate::ult,
+        mlir::arith::CmpFPredicate::OLT}},
+      {TokLessEqual,
+       {mlir::arith::CmpIPredicate::sle, mlir::arith::CmpIPredicate::ule,
+        mlir::arith::CmpFPredicate::OLE}},
+      {TokGREATER,
+       {mlir::arith::CmpIPredicate::sgt, mlir::arith::CmpIPredicate::ugt,
+        mlir::arith::CmpFPredicate::OGT}},
+      {TokGreaterEqual,
+       {mlir::arith::CmpIPredicate::sge, mlir::arith::CmpIPredicate::uge,
+        mlir::arith::CmpFPredicate::OGE}},
+  };
+  auto it = table.find(tok);
+  return it != table.end() ? &it->second : nullptr;
+}
+
+bool isComparisonOp(TokenType op) { return lookupCmpPredicate(op) != nullptr; }
+
+mlir::Value emitScalarComparison(mlir::OpBuilder &builder,
+                                 mlir::Location location, mlir::Value lhs,
+                                 mlir::Value rhs, TokenType op, bool is_float,
+                                 bool is_unsigned) {
+  auto *cmp = lookupCmpPredicate(op);
+  if (!cmp)
+    return nullptr;
+  if (is_float)
+    return mlir::arith::CmpFOp::create(builder, location, cmp->flt, lhs, rhs)
+        .getResult();
+  return mlir::arith::CmpIOp::create(
+             builder, location,
+             is_unsigned ? cmp->unsigned_int : cmp->signed_int, lhs, rhs)
+      .getResult();
+}
 
 mlir::Value emitFloatConstant(mlir::OpBuilder &builder, mlir::Location location,
                               double value, mlir::FloatType type) {

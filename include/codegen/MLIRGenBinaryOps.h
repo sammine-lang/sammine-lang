@@ -12,6 +12,16 @@ mlir::Value emitIntArithOp(mlir::OpBuilder &builder, mlir::Location location,
                            mlir::Value lhs, mlir::Value rhs, TokenType op,
                            bool is_unsigned);
 
+/// Whether `op` is a comparison: ==, !=, <, <=, >, >=.
+bool isComparisonOp(TokenType op);
+
+/// Compare two integers, bools or floats with `op` (==, !=, <, <=, >, >=),
+/// giving an i1. Returns nullptr if `op` is not a comparison.
+mlir::Value emitScalarComparison(mlir::OpBuilder &builder,
+                                 mlir::Location location, mlir::Value lhs,
+                                 mlir::Value rhs, TokenType op, bool is_float,
+                                 bool is_unsigned);
+
 /// A float constant of `type` (f32 or f64). An f32 is rounded to the nearest
 /// single-precision value.
 mlir::Value emitFloatConstant(mlir::OpBuilder &builder, mlir::Location location,
