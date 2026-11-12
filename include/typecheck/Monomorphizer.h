@@ -36,11 +36,15 @@ public:
   StructDefAST *instantiate_struct(StructDefAST *generic,
                                    const MonomorphizedKey &key,
                                    const TypeBindings &bindings);
+  // Instances: callers instantiate each key once.
+  TypeClassInstanceAST *instantiate_instance(TypeClassInstanceAST *generic,
+                                             const TypeBindings &bindings);
 
   // --- Output (accessed by Compiler.cpp after type-checking) ---
   std::vector<std::unique_ptr<FuncDefAST>> monomorphized_defs;
   std::vector<std::unique_ptr<EnumDefAST>> monomorphized_enum_defs;
   std::vector<std::unique_ptr<StructDefAST>> monomorphized_struct_defs;
+  std::vector<std::unique_ptr<TypeClassInstanceAST>> monomorphized_instances;
 
 private:
   // Dedup set (functions only — enum/struct dedup via get_typename_type

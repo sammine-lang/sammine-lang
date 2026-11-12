@@ -134,19 +134,95 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
 // Two instances of one generic type unify through their type arguments, as
 // Box<T> with Box<i64> binds T to i64. nullopt when they aren't instances of
 // one generic type.
+static bool unify_impl(const Type &pattern, const Type &concrete,
+                       TypeBindings &bindings, bool both_sides);
+
 static std::optional<bool> unify_instances(const MonomorphizedKey *pattern,
                                            const MonomorphizedKey *concrete,
-                                           TypeBindings &bindings) {
+                                           TypeBindings &bindings,
+                                           bool both_sides) {
   if (!pattern || !concrete || pattern->name != concrete->name ||
       pattern->type_args.size() != concrete->type_args.size())
     return std::nullopt;
   for (size_t i = 0; i < pattern->type_args.size(); i++)
-    if (!unify(pattern->type_args[i], concrete->type_args[i], bindings))
+    if (!unify_impl(pattern->type_args[i], concrete->type_args[i], bindings,
+                    both_sides))
       return false;
   return true;
 }
 
+// Follows `type` through the bindings while it is a bound type parameter.
+static Type walk(Type type, const TypeBindings &bindings) {
+  while (type.type_kind == TypeKind::TypeParam) {
+    auto it = bindings.find(std::get<std::string>(type.type_data));
+    if (it == bindings.end())
+      break;
+    type = it->second;
+  }
+  return type;
+}
+
+// Whether `param` occurs in `type` once every bound parameter in it is
+// replaced by what it is bound to.
+static bool occurs(const std::string &param, const Type &type,
+                   const TypeBindings &bindings) {
+  auto t = walk(type, bindings);
+  if (t.type_kind == TypeKind::TypeParam)
+    return std::get<std::string>(t.type_data) == param;
+  bool found = false;
+  t.forEachInnerType([&](const Type &inner) {
+    if (!found && occurs(param, inner, bindings))
+      found = true;
+  });
+  return found;
+}
+
+// When either side is a type parameter, binds it to the other side.
+// nullopt when neither is one.
+static std::optional<bool> unify_params(const Type &a, const Type &b,
+                                        TypeBindings &bindings) {
+  auto bind = [&](const Type &param, const Type &to) {
+    auto name = std::get<std::string>(param.type_data);
+    if (occurs(name, to, bindings))
+      return false;
+    bindings[name] = to;
+    return true;
+  };
+  bool a_param = a.type_kind == TypeKind::TypeParam;
+  bool b_param = b.type_kind == TypeKind::TypeParam;
+  if (a_param && b_param &&
+      std::get<std::string>(a.type_data) == std::get<std::string>(b.type_data))
+    return true;
+  if (a_param)
+    return bind(a, b);
+  if (b_param)
+    return bind(b, a);
+  return std::nullopt;
+}
+
 bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
+  return unify_impl(pattern, concrete, bindings, /*both_sides=*/false);
+}
+
+bool unifiable(std::span<const Type> a, std::span<const Type> b) {
+  if (a.size() != b.size())
+    return false;
+  TypeBindings bindings;
+  for (size_t i = 0; i < a.size(); i++)
+    if (!unify_impl(a[i], b[i], bindings, /*both_sides=*/true))
+      return false;
+  return true;
+}
+
+// One-sided, only `pattern` holds parameters to bind. Both-sided, either
+// may, and a parameter is followed through what it is already bound to.
+static bool unify_impl(const Type &pattern_in, const Type &concrete_in,
+                       TypeBindings &bindings, bool both_sides) {
+  auto pattern = both_sides ? walk(pattern_in, bindings) : pattern_in;
+  auto concrete = both_sides ? walk(concrete_in, bindings) : concrete_in;
+  if (both_sides)
+    if (auto unified = unify_params(pattern, concrete, bindings))
+      return *unified;
   // An open type argument says nothing, so it fits any pattern and binds
   // nothing: or_else(None, 5i64) learns T from 5i64.
   if (concrete.type_kind == TypeKind::Hole)
@@ -171,14 +247,14 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
   case TypeKind::Pointer: {
     auto pp = std::get<PointerType>(pattern.type_data).get_pointee();
     auto cp = std::get<PointerType>(concrete.type_data).get_pointee();
-    return unify(pp, cp, bindings);
+    return unify_impl(pp, cp, bindings, both_sides);
   }
   case TypeKind::Array: {
     auto &pa = std::get<ArrayType>(pattern.type_data);
     auto &ca = std::get<ArrayType>(concrete.type_data);
     if (pa.get_size() != ca.get_size())
       return false;
-    return unify(pa.get_element(), ca.get_element(), bindings);
+    return unify_impl(pa.get_element(), ca.get_element(), bindings, both_sides);
   }
   case TypeKind::Function: {
     auto &pf = std::get<FunctionType>(pattern.type_data);
@@ -188,9 +264,9 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
     if (pp.size() != cp.size())
       return false;
     for (size_t i = 0; i < pp.size(); i++)
-      if (!unify(pp[i], cp[i], bindings))
+      if (!unify_impl(pp[i], cp[i], bindings, both_sides))
         return false;
-    return unify(pf.get_return_type(), cf.get_return_type(), bindings);
+    return unify_impl(pf.get_return_type(), cf.get_return_type(), bindings, both_sides);
   }
   case TypeKind::Tuple: {
     auto &pt = std::get<TupleType>(pattern.type_data);
@@ -198,7 +274,7 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
     if (pt.size() != ct.size())
       return false;
     for (size_t i = 0; i < pt.size(); i++)
-      if (!unify(pt.get_element(i), ct.get_element(i), bindings))
+      if (!unify_impl(pt.get_element(i), ct.get_element(i), bindings, both_sides))
         return false;
     return true;
   }
@@ -206,7 +282,8 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
     auto &ps = std::get<StructType>(pattern.type_data);
     auto &cs = std::get<StructType>(concrete.type_data);
     if (auto unified = unify_instances(ps.get_instance_of(),
-                                       cs.get_instance_of(), bindings))
+                                       cs.get_instance_of(), bindings,
+                                       both_sides))
       return *unified;
     if (ps.get_name().mangled() != cs.get_name().mangled())
       return false;
@@ -215,7 +292,7 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
     if (pft.size() != cft.size())
       return false;
     for (size_t i = 0; i < pft.size(); i++)
-      if (!unify(pft[i], cft[i], bindings))
+      if (!unify_impl(pft[i], cft[i], bindings, both_sides))
         return false;
     return true;
   }
@@ -223,7 +300,8 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
     auto &pe = std::get<EnumType>(pattern.type_data);
     auto &ce = std::get<EnumType>(concrete.type_data);
     if (auto unified = unify_instances(pe.get_instance_of(),
-                                       ce.get_instance_of(), bindings))
+                                       ce.get_instance_of(), bindings,
+                                       both_sides))
       return *unified;
     if (pe.get_name().mangled() != ce.get_name().mangled())
       return false;
@@ -237,7 +315,7 @@ bool unify(const Type &pattern, const Type &concrete, TypeBindings &bindings) {
       if (pvs[i].payload_types.size() != cvs[i].payload_types.size())
         return false;
       for (size_t j = 0; j < pvs[i].payload_types.size(); j++)
-        if (!unify(pvs[i].payload_types[j], cvs[i].payload_types[j], bindings))
+        if (!unify_impl(pvs[i].payload_types[j], cvs[i].payload_types[j], bindings, both_sides))
           return false;
     }
     return true;

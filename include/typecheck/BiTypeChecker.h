@@ -207,9 +207,31 @@ public:
   // Two-pass typeclass registration (called before full type checking)
   void register_typeclass_decl(TypeClassDeclAST *ast);
   void register_typeclass_instance(TypeClassInstanceAST *ast);
+  /// The types an instance is written for, with a generic instance's
+  /// parameters as type parameters; nullopt if one doesn't resolve.
+  std::optional<std::vector<Type>>
+  resolve_instance_types(TypeClassInstanceAST *ast);
+  /// Reports and returns true if an instance for `types` would overlap one
+  /// already registered for the class, so that a key could match both.
+  bool overlaps_registered_instance(TypeClassInstanceAST *ast,
+                                    const std::vector<Type> &types);
+  /// Record the concrete instance `ast` as `key`, naming its methods for it.
+  void add_instance(TypeClassInstanceAST *ast, const MonomorphizedKey &key);
   /// True if `key` is an instance the code being checked can use: built in,
-  /// written in source, or imported (if private, only by its module's code).
+  /// written in source, copied from a generic one, or imported (if private,
+  /// only by its module's code).
   bool has_instance(const MonomorphizedKey &key);
+  /// A generic instance and the types it is written for: Indexer<Vec<T>, T>.
+  struct GenericInstance {
+    TypeClassInstanceAST *ast;
+    std::vector<Type> types;
+  };
+  /// Generic instances, by typeclass name.
+  std::unordered_map<std::string, std::vector<GenericInstance>>
+      generic_instances;
+  /// Copy, register and type-check the generic instance whose types match
+  /// `key`. False if none does.
+  bool instantiate_generic_instance(const MonomorphizedKey &key);
   /// Instances imported but not exported → their module.
   std::unordered_map<MonomorphizedKey, std::string, MonomorphizedKeyHash>
       private_instances;

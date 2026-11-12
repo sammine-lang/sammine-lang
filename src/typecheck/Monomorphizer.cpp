@@ -48,6 +48,32 @@ StructDefAST *Monomorphizer::instantiate_struct(StructDefAST *generic,
   return ptr;
 }
 
+TypeClassInstanceAST *
+Monomorphizer::instantiate_instance(TypeClassInstanceAST *generic,
+                                    const TypeBindings &bindings) {
+  bindings_ = &bindings;
+  std::vector<std::unique_ptr<TypeExprAST>> type_exprs;
+  for (auto &type_expr : generic->concrete_type_exprs)
+    type_exprs.push_back(clone_type_expr(type_expr.get()));
+  bindings_ = nullptr;
+
+  std::vector<std::unique_ptr<FuncDefAST>> methods;
+  for (auto &method : generic->methods)
+    methods.push_back(
+        clone_func(method.get(), method->Prototype->functionName, bindings));
+
+  auto cloned = std::make_unique<TypeClassInstanceAST>(
+      nullptr, generic->class_name, std::move(type_exprs), std::move(methods));
+  cloned->set_location(generic->get_location());
+  cloned->defining_module = generic->defining_module;
+  cloned->is_exported = generic->is_exported;
+  cloned->is_instantiation = true;
+  // type_params left empty — this is a concrete instantiation
+  auto *ptr = cloned.get();
+  monomorphized_instances.push_back(std::move(cloned));
+  return ptr;
+}
+
 // --- Clone internals ---
 
 std::string Monomorphizer::resolve_type_name(const std::string &name) const {

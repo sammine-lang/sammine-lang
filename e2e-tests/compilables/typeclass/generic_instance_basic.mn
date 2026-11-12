@@ -1,0 +1,19 @@
+// RUN: %sammine_jit --file %full | %check %full
+// One generic instance gives an instance for every Box: a copy is made for
+// each type it is used with.
+import std;
+
+struct Box<T> { v: T, };
+
+instance<T> Indexer<Box<T>, T> {
+  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+}
+
+let main() -> i32 {
+  let b = Box<i32> { v: 5 };
+  let c = Box<f64> { v: 2.5 };
+  // CHECK: 5 2.500000 5
+  std::printf("%d %f %d\n", Indexer<Box<i32>, i32>(b, 0i64),
+              Indexer<Box<f64>, f64>(c, 0i64), Indexer<Box<i32>, i32>(b, 1i64));
+  return 0;
+}

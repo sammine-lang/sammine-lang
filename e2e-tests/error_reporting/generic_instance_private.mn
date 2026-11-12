@@ -1,0 +1,10 @@
+// RUN: %sammine --file %dir/../compilables/typeclass/Inputs/boxes.mn %O && (! %sammine --file %full %O -I %dir/../compilables/typeclass/Inputs 2>&1) | %check %full
+// A private generic instance is its module's alone.
+// CHECK: Equal<boxes::Box<i64>> is private to module 'boxes'
+import boxes;
+
+let main() -> i32 {
+  let b = boxes::Box<i64> { v: 9i64 };
+  let same = b == b;
+  return 0;
+}

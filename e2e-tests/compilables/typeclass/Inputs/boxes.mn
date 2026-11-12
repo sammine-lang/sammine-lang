@@ -1,0 +1,14 @@
+export struct Box<T> { v: T, };
+
+// Exported: importers get a copy for the types they use.
+export instance<T> Indexer<Box<T>, T> {
+  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+}
+
+// Not exported: only this module's code may use it, including its generic
+// functions compiled in an importer.
+instance<T> Equal<Box<T>> {
+  let Equal(x: Box<T>, y: Box<T>) -> bool { x.v == y.v }
+}
+
+export let same<T>(x: Box<T>, y: Box<T>) -> bool { x == y }

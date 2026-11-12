@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// A generic instance may have several parameters, and a concrete instance of
+// the same typeclass may sit beside it when no key matches both.
+import std;
+
+struct Two<A, B> { a: A, b: B, };
+
+typeclass Second<T, E> {
+  Second(x: T) -> E;
+}
+
+instance<A, B> Second<Two<A, B>, B> {
+  let Second(x: Two<A, B>) -> B { x.b }
+}
+
+instance Second<i32, i32> {
+  let Second(x: i32) -> i32 { x * 2 }
+}
+
+let main() -> i32 {
+  let t = Two<i32, f64> { a: 1, b: 4.5 };
+  // CHECK: 4.500000 6
+  std::printf("%f %d\n", Second<Two<i32, f64>, f64>(t), Second<i32, i32>(3));
+  return 0;
+}

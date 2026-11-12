@@ -1640,6 +1640,10 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
 
 auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   EXPECT(kw, TokInstance);
+  // A generic instance names its parameters first: instance<T> Name<...>.
+  auto [type_params, tp_error] = parseTypeParams(kw->get_location());
+  if (tp_error)
+    return {nullptr, FAILED};
 
   REQUIRE(name_tok, TokID, "Expected type class name after 'instance'",
           kw->get_location());
@@ -1670,9 +1674,10 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
       });
   REQUIRE(_rc, TokRightCurly, "Expected '}' to close instance",
           kw->get_location());
-  return {std::make_unique<TypeClassInstanceAST>(
-              kw, name_tok->lexeme, std::move(type_exprs), std::move(methods)),
-          SUCCESS};
+  auto instance = std::make_unique<TypeClassInstanceAST>(
+      kw, name_tok->lexeme, std::move(type_exprs), std::move(methods));
+  instance->type_params = std::move(type_params);
+  return {std::move(instance), SUCCESS};
 }
 
 auto Parser::ParseKernelDef() -> p<DefinitionAST> {

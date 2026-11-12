@@ -1,0 +1,16 @@
+// RUN: %sammine --file %dir/Inputs/boxes.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// An imported generic instance is copied here for the types used here, and a
+// private one still works through its module's generic function.
+import std;
+import boxes;
+
+let bit(x: bool) -> i32 { if x { 1 } else { 0 } }
+
+let main() -> i32 {
+  let b = boxes::Box<i64> { v: 9i64 };
+  // CHECK: 9 1 0
+  std::printf("%lld %d %d\n", Indexer<boxes::Box<i64>, i64>(b, 0i64),
+              bit(boxes::same(b, b)),
+              bit(boxes::same(b, boxes::Box<i64> { v: 1i64 })));
+  return 0;
+}

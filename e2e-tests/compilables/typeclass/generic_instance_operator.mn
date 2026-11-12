@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --file %full | %check %full
+// An operator finds a generic instance like a call does, and the copy's own
+// operators find the built-in instances for its type.
+import std;
+
+struct Pair<T> { a: T, b: T, };
+
+instance<T> Add<Pair<T>> {
+  let Add(x: Pair<T>, y: Pair<T>) -> Pair<T> {
+    Pair<T> { a: x.a + y.a, b: x.b + y.b }
+  }
+}
+
+instance<T> Equal<Pair<T>> {
+  let Equal(x: Pair<T>, y: Pair<T>) -> bool { x.a == y.a && x.b == y.b }
+}
+
+let bit(x: bool) -> i32 { if x { 1 } else { 0 } }
+
+let main() -> i32 {
+  let p = Pair<i64> { a: 1i64, b: 2i64 } + Pair<i64> { a: 10i64, b: 20i64 };
+  let q = Pair<f64> { a: 0.5, b: 1.5 } + Pair<f64> { a: 0.5, b: 0.5 };
+  // CHECK: 11 22 1.000000 2.000000
+  std::printf("%lld %lld %f %f\n", p.a, p.b, q.a, q.b);
+  // CHECK-NEXT: 1 0
+  std::printf("%d %d\n", bit(p == p), bit(p == Pair<i64> { a: 0i64, b: 22i64 }));
+  return 0;
+}

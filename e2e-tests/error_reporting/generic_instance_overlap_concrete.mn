@@ -1,0 +1,31 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// A concrete instance that a generic one also covers is an overlap, whichever
+// comes first.
+// CHECK: generic_instance_overlap_concrete.mn:15:0
+// CHECK: This instance overlaps instance<T> Indexer<Box<T>, T>
+// CHECK: generic_instance_overlap_concrete.mn:27:0
+// CHECK: This instance overlaps instance Peek<Box<f64>, f64>
+
+struct Box<T> { v: T, };
+
+instance<T> Indexer<Box<T>, T> {
+  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+}
+
+instance Indexer<Box<i32>, i32> {
+  let Indexer(b: Box<i32>, i: i64) -> i32 { 0 }
+}
+
+typeclass Peek<T, E> {
+  Peek(x: T) -> E;
+}
+
+instance Peek<Box<f64>, f64> {
+  let Peek(b: Box<f64>) -> f64 { 0.0 }
+}
+
+instance<T> Peek<Box<T>, T> {
+  let Peek(b: Box<T>) -> T { b.v }
+}
+
+let main() -> i32 { return 0; }

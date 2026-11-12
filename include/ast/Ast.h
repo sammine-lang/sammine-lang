@@ -1001,13 +1001,20 @@ public:
 };
 
 /// Typeclass instance: `instance Name<ConcreteType> { method implementations
-/// }`.
+/// }`, or a generic one, `instance<T> Name<Vec<T>> { ... }`, copied for each
+/// set of types it is used with.
 class TypeClassInstanceAST : public DefinitionAST {
 public:
   std::string class_name;
   /// An instance imported from another module: its methods are only declared
   /// here, and their bodies are compiled in that module.
   bool is_declaration = false;
+  /// The parameters of a generic instance, `T` in `instance<T>`.
+  std::vector<std::string> type_params;
+  /// A copy of a generic instance for concrete types, compiled in each module
+  /// that uses it.
+  bool is_instantiation = false;
+  bool is_generic() const { return !type_params.empty(); }
   std::vector<std::unique_ptr<TypeExprAST>> concrete_type_exprs;
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(

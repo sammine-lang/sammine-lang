@@ -132,13 +132,13 @@ void ScopeGeneratorVisitor::visit(CaseExprAST *ast) {
 // aren't registered: they are reached through the typeclass.
 void ScopeGeneratorVisitor::visit(TypeClassInstanceAST *ast) {
   push_ast_context();
-  enter_definition(*ast, {});
+  enter_definition(*ast, ast->type_params);
   for (auto &type : ast->concrete_type_exprs)
     resolve_type(type.get());
   pop_ast_context();
   for (auto &method : ast->methods) {
     ScopeGuard scope(*this);
-    enter_definition(*ast, {});
+    enter_definition(*ast, ast->type_params);
     for (auto &param : method->Prototype->parameterVectors) {
       register_name(param->name, param->get_location());
       resolve_type(param->type_expr.get());

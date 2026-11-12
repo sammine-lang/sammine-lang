@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// CHECK: Type parameter 'T' of the instance is not used in Indexer<...>
+
+struct Bag { n: i32, };
+
+instance<T> Indexer<Bag, i32> {
+  let Indexer(b: Bag, i: i64) -> i32 { b.n }
+}
+
+let main() -> i32 { return 0; }

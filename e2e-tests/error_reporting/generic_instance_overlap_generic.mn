@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// Box<i32>, i32 matches both, though neither instance covers the other.
+// CHECK: This instance overlaps instance<T> Indexer<Box<T>, T>: both would apply to some types, so which one runs would be ambiguous
+
+struct Box<T> { v: T, };
+
+instance<T> Indexer<Box<T>, T> {
+  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+}
+
+instance<U> Indexer<U, i32> {
+  let Indexer(u: U, i: i64) -> i32 { 0 }
+}
+
+let main() -> i32 { return 0; }

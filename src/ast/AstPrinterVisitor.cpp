@@ -1,6 +1,7 @@
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "ast/AstBase.h"
+#include "fmt/ranges.h"
 #include "fmt/base.h"
 #include "fmt/format.h"
 #include <string_view>
@@ -484,8 +485,11 @@ void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
                  ? ast->concrete_type_exprs[i]->to_string()
                  : "?";
   }
-  add_to_rep(
-      fmt::format("{}instance: {}<{}>\n", tabs(), ast->class_name, types));
+  auto params = ast->is_generic()
+                    ? fmt::format("<{}>", fmt::join(ast->type_params, ", "))
+                    : std::string();
+  add_to_rep(fmt::format("{}instance{}: {}<{}>\n", tabs(), params,
+                         ast->class_name, types));
   for (auto &method : ast->methods)
     safeguard_visit(method.get(), "!!nullptr!! FuncDefAST\n");
   generic_postprint();

@@ -242,6 +242,13 @@ void Compiler::typecheck() {
                                      std::move(*it));
   }
 
+  // Inject copies of generic instances at the front.
+  for (auto it = vs.monomorphizer.monomorphized_instances.rbegin();
+       it != vs.monomorphizer.monomorphized_instances.rend(); ++it) {
+    programAST->DefinitionVec.insert(programAST->DefinitionVec.begin(),
+                                     std::move(*it));
+  }
+
   // Inject monomorphized generic function definitions at the front.
   // Order doesn't matter — codegen forward-declares all functions first.
   for (auto it = vs.monomorphizer.monomorphized_defs.rbegin();

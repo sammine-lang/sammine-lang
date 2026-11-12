@@ -1,0 +1,18 @@
+// RUN: %sammine_jit --file %full | %check %full
+// A generic function names a generic instance through its own parameter; each
+// copy of the function asks for the instance at its types.
+import std;
+
+struct Box<T> { v: T, };
+
+instance<T> Indexer<Box<T>, T> {
+  let Indexer(b: Box<T>, i: i64) -> T { b.v }
+}
+
+let first<T>(b: Box<T>) -> T { Indexer<Box<T>, T>(b, 0i64) }
+
+let main() -> i32 {
+  // CHECK: 7 c
+  std::printf("%d %c\n", first(Box<i32> { v: 7 }), first(Box<char> { v: 'c' }));
+  return 0;
+}

@@ -71,6 +71,7 @@
 
 ## Typeclasses
 - `TypeClassInfo`: name, type_param, methods. Instances keyed by `MonomorphizedKey`
+- Generic instances (`instance<T> Indexer<Vec<T>, T>`): `register_typeclass_instance` resolves their types with the parameters as `TypeParam`s and keeps them in `generic_instances` by class, not in `type_class_instances`. `has_instance(key)` falls back to `instantiate_generic_instance`, which unifies each pattern with the key, copies the instance (`Monomorphizer::instantiate_instance`, marked `is_instantiation`), registers it under the key and type-checks its methods. Keys with open or literal types are never instantiated. Copies are injected into the program like generic function copies and emitted with internal linkage; the generic instance itself is skipped by pre-registration, `visit`, the linear checker and codegen. Overlap (`overlaps_registered_instance`) is two-sided unification (`unifiable`) with this instance's parameters renamed apart; built-in instances are not checked and win for their types
 - Mangling: `MonomorphizedKey::to_typeclass_name(method)` → `Add<i32>::add`
 - Dispatch supports both `sizeof<i32>()` (unqualified) and `Add<i32>::add(x,y)` (qualified)
 - Both set `resolved_name` + `is_typeclass_call` on `CallProps`

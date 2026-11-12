@@ -110,8 +110,9 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
         forwardDeclareFunc(fd->Prototype.get());
     } else if (auto *tci =
                    llvm::dyn_cast<AST::TypeClassInstanceAST>(def.get())) {
-      for (auto &method : tci->methods)
-        forwardDeclareFunc(method->Prototype.get());
+      if (!tci->is_generic())
+        for (auto &method : tci->methods)
+          forwardDeclareFunc(method->Prototype.get());
     } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
       emitExtern(ext);
     } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
@@ -407,10 +408,14 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *tci = llvm::dyn_cast<AST::TypeClassInstanceAST>(def)) {
     // Emit each instance method as a regular function. An imported instance's
-    // are copies of its module's, there to inline.
+    // are copies of its module's, there to inline. A generic instance is
+    // emitted through its copies, each private to the module that made it.
+    if (tci->is_generic())
+      return;
     auto linkage = tci->is_declaration ? Linkage::AvailableExternally
-                   : moduleName.empty() ? Linkage::Internal
-                                        : Linkage::Global;
+                   : moduleName.empty() || tci->is_instantiation
+                       ? Linkage::Internal
+                       : Linkage::Global;
     for (auto &method : tci->methods)
       emitFunction(method.get(), linkage);
   } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {

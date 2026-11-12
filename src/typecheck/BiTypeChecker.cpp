@@ -96,9 +96,11 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
       if (!ext->Prototype->is_generic())
         pre_register_function(ext->Prototype.get());
     } else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
-      for (auto &method : tci->methods)
-        if (!method->Prototype->is_generic())
-          pre_register_function(method->Prototype.get());
+      // A generic instance's methods are registered with each copy.
+      if (!tci->is_generic())
+        for (auto &method : tci->methods)
+          if (!method->Prototype->is_generic())
+            pre_register_function(method->Prototype.get());
     } else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get())) {
       if (!kd->Prototype->is_generic())
         pre_register_function(kd->Prototype.get());
@@ -753,16 +755,66 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   type_class_defs[ast->class_name] = ast;
 }
 
-void BiTypeCheckerVisitor::register_typeclass_instance(
-    TypeClassInstanceAST *ast) {
-  auto &tcip = props_.type_class_instance(ast->id());
-
+std::optional<std::vector<Type>>
+BiTypeCheckerVisitor::resolve_instance_types(TypeClassInstanceAST *ast) {
+  // A generic instance's parameters are only visible in its own types.
+  ScopeGuard scope(*this);
+  for (auto &tp : ast->type_params)
+    typename_to_type.registerNameT(tp, Type::TypeParam(tp));
+  std::vector<Type> types;
   for (auto &type_expr : ast->concrete_type_exprs) {
     auto resolved = resolve_type_expr(type_expr.get());
     if (resolved.is_poisoned())
-      return;
-    tcip.concrete_types.push_back(resolved);
+      return std::nullopt;
+    types.push_back(resolved);
   }
+  return types;
+}
+
+// Two instances overlap when some key matches both, so which one a call runs
+// would be a choice. Like Rust, that is an error rather than a rule.
+bool BiTypeCheckerVisitor::overlaps_registered_instance(
+    TypeClassInstanceAST *ast, const std::vector<Type> &types) {
+  // Rename this instance's parameters apart from the other one's: T and T
+  // are unrelated in instance<T> A<T> and instance<T> B<T>.
+  TypeBindings apart;
+  for (auto &tp : ast->type_params)
+    apart[tp] = Type::TypeParam(tp + "'");
+  std::vector<Type> renamed;
+  for (auto &type : types)
+    renamed.push_back(substitute(type, apart));
+
+  auto report = [&](const std::string &other) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("This instance overlaps {}: both would apply to some "
+                    "types, so which one runs would be ambiguous",
+                    other));
+    return true;
+  };
+  if (auto it = generic_instances.find(ast->class_name);
+      it != generic_instances.end())
+    for (auto &other : it->second)
+      if (unifiable(renamed, other.types))
+        return report(fmt::format(
+            "instance<{}> {}<{}>", fmt::join(other.ast->type_params, ", "),
+            ast->class_name,
+            MonomorphizedKey{ast->class_name, other.types}.type_args_string()));
+  if (!ast->is_generic())
+    return false;
+  for (auto &key : type_class_instances)
+    if (key.name == ast->class_name && unifiable(renamed, key.type_args))
+      return report(
+          fmt::format("instance {}<{}>", key.name, key.type_args_string()));
+  return false;
+}
+
+void BiTypeCheckerVisitor::register_typeclass_instance(
+    TypeClassInstanceAST *ast) {
+  auto types = resolve_instance_types(ast);
+  if (!types)
+    return;
+  props_.type_class_instance(ast->id()).concrete_types = *types;
 
   auto it = type_class_defs.find(ast->class_name);
   if (it == type_class_defs.end()) {
@@ -772,38 +824,99 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   }
 
   auto *tc = it->second;
-  if (tcip.concrete_types.size() != tc->type_params.size()) {
+  if (types->size() != tc->type_params.size()) {
     this->add_error(
         ast->get_location(),
         fmt::format("Type class '{}' expects {} type argument(s), got {}",
-                    ast->class_name, tc->type_params.size(),
-                    tcip.concrete_types.size()));
+                    ast->class_name, tc->type_params.size(), types->size()));
     return;
   }
 
-  MonomorphizedKey tc_key{ast->class_name, tcip.concrete_types};
+  // Every parameter must be decided by the types, or a key wouldn't say
+  // what the instance's copy is for.
+  for (auto &tp : ast->type_params)
+    if (std::ranges::none_of(*types, [&](const Type &type) {
+          return contains_type_param(type, tp);
+        })) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("Type parameter '{}' of the instance is not used in "
+                      "{}<...>",
+                      tp, ast->class_name));
+      return;
+    }
 
-  if (is_builtin_instance(tc_key)) {
+  MonomorphizedKey tc_key{ast->class_name, *types};
+
+  if (!ast->is_generic() && is_builtin_instance(tc_key)) {
     this->add_error(ast->get_location(),
                     fmt::format("{}<{}> is built in and can't be redefined",
                                 ast->class_name, tc_key.type_args_string()));
     return;
   }
-  if (type_class_instances.contains(tc_key)) {
+  if (!ast->is_generic() && type_class_instances.contains(tc_key)) {
     this->add_error(ast->get_location(),
                     fmt::format("Duplicate instance of {}<{}>", ast->class_name,
                                 tc_key.type_args_string()));
     return;
   }
+  if (overlaps_registered_instance(ast, *types))
+    return;
 
+  if (ast->is_generic()) {
+    generic_instances[ast->class_name].push_back({ast, *types});
+    return;
+  }
+  add_instance(ast, tc_key);
+}
+
+void BiTypeCheckerVisitor::add_instance(TypeClassInstanceAST *ast,
+                                        const MonomorphizedKey &key) {
   for (auto &method : ast->methods) {
     std::string original_name = method->Prototype->functionName.get_name();
-    method->Prototype->functionName = tc_key.to_typeclass_name(original_name);
+    method->Prototype->functionName = key.to_typeclass_name(original_name);
   }
 
-  type_class_instances.insert(tc_key);
+  type_class_instances.insert(key);
   if (!ast->is_exported && ast->is_declaration)
-    private_instances[tc_key] = ast->defining_module;
+    private_instances[key] = ast->defining_module;
+}
+
+bool BiTypeCheckerVisitor::instantiate_generic_instance(
+    const MonomorphizedKey &key) {
+  auto it = generic_instances.find(key.name);
+  if (it == generic_instances.end())
+    return false;
+  // A copy is only made for types known in full: an untyped literal's or
+  // None's are decided by their context first.
+  if (std::ranges::any_of(key.type_args, [](const Type &type) {
+        return type.is_polymorphic() || type.is_poisoned();
+      }))
+    return false;
+  // Registration rejected overlaps, so at most one generic instance matches.
+  for (auto &generic : it->second) {
+    TypeBindings bindings;
+    bool matches = generic.types.size() == key.type_args.size();
+    for (size_t i = 0; matches && i < generic.types.size(); i++)
+      matches = unify(generic.types[i], key.type_args[i], bindings);
+    if (!matches)
+      continue;
+
+    auto *instance = monomorphizer.instantiate_instance(generic.ast, bindings);
+    add_instance(instance, key);
+    // The copy is compiled here, but a private generic instance stays its
+    // module's: only that module's code may use it.
+    if (!generic.ast->is_exported && generic.ast->is_declaration)
+      private_instances[key] = generic.ast->defining_module;
+
+    TopLevelScopeGuard scope(*this);
+    for (auto &method : instance->methods)
+      pre_register_function(method->Prototype.get());
+    for (auto &method : instance->methods)
+      method->accept_vis(this);
+    return true;
+  }
+  return false;
 }
 
 // An instance is chosen by type, not by a name NameResolver could check, so
@@ -812,7 +925,8 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
 bool BiTypeCheckerVisitor::has_instance(const MonomorphizedKey &key) {
   if (is_builtin_instance(key))
     return true;
-  if (!type_class_instances.contains(key))
+  if (!type_class_instances.contains(key) &&
+      !instantiate_generic_instance(key))
     return false;
   auto it = private_instances.find(key);
   auto *fn = ctx().enclosing_function;
@@ -865,6 +979,9 @@ void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {
 
 void BiTypeCheckerVisitor::visit(TypeClassInstanceAST *ast) {
   // Registration already done in first pass — just type-check method bodies.
+  // A generic instance's are checked in each copy, as a generic function's.
+  if (ast->is_generic())
+    return;
   for (auto &method : ast->methods)
     method->accept_vis(this);
 }

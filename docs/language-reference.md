@@ -644,6 +644,35 @@ mysize<i32>()                 // unqualified with type arg
 MySize<i32>::mysize()         // qualified: ClassName<Type>::method()
 ```
 
+### Generic Instances
+
+An instance can be written once for every type of a shape. Its type
+parameters come right after `instance`:
+
+```sammine
+struct Pair<T> { a: T, b: T, };
+
+instance<T> Add<Pair<T>> {
+  let Add(x: Pair<T>, y: Pair<T>) -> Pair<T> {
+    Pair<T> { a: x.a + y.a, b: x.b + y.b }
+  }
+}
+
+let p = Pair<i64> { a: 1i64, b: 2i64 } + Pair<i64> { a: 10i64, b: 20i64 };
+```
+
+Like a generic function, the instance is copied for each set of types it is
+used with, here `Add<Pair<i64>>`. Every parameter must appear in the
+instance's types.
+
+Two instances may not overlap: if some types would match both, which one
+runs would be ambiguous, so it is an error. That holds for two generic
+instances (`instance<T> Indexer<Box<T>, T>` and `instance<U> Indexer<U, i32>`
+both match `Indexer<Box<i32>, i32>`) and for a generic and a concrete one
+(`instance Indexer<Box<i32>, i32>` beside the first). The built-in instances
+for numbers, `char` and pointers are the exception: they are always used for
+those types.
+
 ### Multi-Parameter Typeclasses
 
 ```sammine

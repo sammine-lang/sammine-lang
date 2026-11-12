@@ -400,7 +400,7 @@ void LinearTypeChecker::check_program(ProgramAST *ast) {
         check_placement(ed->get_type(), /*ptr_allowed_here=*/false, ed->get_location(),
                         "an enum payload");
     } else if (auto *inst = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
-      if (!inst->is_declaration)
+      if (!inst->is_declaration && !inst->is_generic())
         for (auto &method : inst->methods)
           check_func(method.get());
     }
