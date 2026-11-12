@@ -16,7 +16,9 @@ namespace sammine_lang {
 namespace {
 
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
-/// !llvm.ptr. Any other type is left as it is.
+/// !llvm.ptr; a struct is the identified LLVM struct the AST codegen makes for
+/// it, `sammine.struct.<name>`, and a tuple a literal one. Any other type is
+/// left as it is.
 class MIRTypeConverter : public mlir::TypeConverter {
 public:
   MIRTypeConverter() {
@@ -26,6 +28,26 @@ public:
     });
     addConversion([](smn::PlaceType type) -> mlir::Type {
       return mlir::LLVM::LLVMPointerType::get(type.getContext());
+    });
+    addConversion([this](smn::StructType type) -> std::optional<mlir::Type> {
+      // Identified by name, so the same type as the AST codegen's, whose
+      // fields it may have set already.
+      auto llvmType = mlir::LLVM::LLVMStructType::getIdentified(
+          type.getContext(), ("sammine.struct." + type.getName()).str());
+      if (llvmType.isInitialized())
+        return llvmType;
+      llvm::SmallVector<mlir::Type> fields;
+      if (mlir::failed(convertTypes(type.getFields(), fields)) ||
+          mlir::failed(llvmType.setBody(fields, /*isPacked=*/false)))
+        return std::nullopt;
+      return llvmType;
+    });
+    addConversion([this](smn::TupleType type) -> std::optional<mlir::Type> {
+      llvm::SmallVector<mlir::Type> elements;
+      if (mlir::failed(convertTypes(type.getElements(), elements)))
+        return std::nullopt;
+      return mlir::LLVM::LLVMStructType::getLiteral(type.getContext(),
+                                                    elements);
     });
     // Where a converted value meets one that isn't converted yet.
     auto cast = [](mlir::OpBuilder &builder, mlir::Type type,
@@ -194,6 +216,37 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   }
 };
 
+// A struct or tuple is built field by field into an LLVM struct.
+struct AggregateLowering : public mlir::OpConversionPattern<smn::AggregateOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::AggregateOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto type = getTypeConverter()->convertType(op.getType());
+    if (!type)
+      return mlir::failure();
+    mlir::Value result =
+        mlir::LLVM::PoisonOp::create(rewriter, op.getLoc(), type);
+    for (auto [i, field] : llvm::enumerate(adaptor.getFields()))
+      result = mlir::LLVM::InsertValueOp::create(
+          rewriter, op.getLoc(), result, field,
+          llvm::ArrayRef<int64_t>{static_cast<int64_t>(i)});
+    rewriter.replaceOp(op, result);
+    return mlir::success();
+  }
+};
+
+struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::ExtractOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<mlir::LLVM::ExtractValueOp>(
+        op, adaptor.getAggregate(), llvm::ArrayRef<int64_t>{static_cast<int64_t>(op.getIndex())});
+    return mlir::success();
+  }
+};
+
 // A string literal is the address of a constant global holding it, one per
 // distinct string in the module.
 struct StringLowering : public mlir::OpConversionPattern<smn::StringOp> {
@@ -243,7 +296,8 @@ struct MIRToLLVMPass
                  SameAddressLowering<smn::DerefOp>,
                  SameAddressLowering<smn::LendOp>,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-                 StoreLowering, CallLowering>(converter, &context);
+                 StoreLowering, CallLowering, AggregateLowering,
+                 ExtractLowering>(converter, &context);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
     patterns.add<StringLowering>(converter, &context, strings);
 
@@ -256,7 +310,7 @@ struct MIRToLLVMPass
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
-                        smn::StringOp>();
+                        smn::StringOp, smn::AggregateOp, smn::ExtractOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

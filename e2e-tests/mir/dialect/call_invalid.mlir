@@ -24,7 +24,7 @@ func.func private @owned(%p: !sammine.ptr<i32, owned>) attributes {sammine.mir} 
 
 // A callee through MIR takes exactly MIR's types: a view isn't an owner.
 func.func @wrong_type(%p: !sammine.ptr<i32, view>) {
-  // expected-error @+1 {{'sammine.call' op types don't match those of 'owned': '(!sammine.ptr<i32, owned>) -> ()'}}
+  // expected-error @+1 {{'sammine.call' op types don't match those of 'owned': '(!sammine.ptr<i32, owned>) -> ()', it passes '(!sammine.ptr<i32, view>) -> ()'}}
   sammine.call @owned(%p) : (!sammine.ptr<i32, view>) -> ()
   return
 }

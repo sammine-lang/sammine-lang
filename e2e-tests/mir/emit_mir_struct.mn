@@ -1,0 +1,35 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// A struct is !sammine.struct with its name and its fields' types, built by
+// sammine.aggregate in field order whatever order the literal names them in,
+// and read by sammine.extract. A tuple is !sammine.tuple; `let (a, b) = t`
+// reads each element. A generic struct is named as its instance, Box<i32>,
+// in a call to a generic function too.
+// CHECK-LABEL: func.func private @swap(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: %0 = sammine.extract %arg0[0]
+// CHECK-NEXT: %1 = sammine.extract %arg0[1]
+// CHECK-NEXT: sammine.aggregate(%1, %0) : (i32, i32) -> !sammine.struct<"Point", (i32, i32)>
+// CHECK-LABEL: func.func private @norm1(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.extract %arg0[0] : !sammine.struct<"Point", (i32, i32)> -> i32
+// CHECK-LABEL: func.func private @split(
+// CHECK-SAME: -> !sammine.tuple<i32, i32>
+// CHECK-LABEL: func.func private @sum_split(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.extract %{{[0-9]+}}[0] : !sammine.tuple<i32, i32> -> i32
+// CHECK-NEXT: sammine.extract %{{[0-9]+}}[1] : !sammine.tuple<i32, i32> -> i32
+// CHECK-LABEL: func.func private @boxed(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.call @"wrap<i32>"(%arg0) : (i32) -> !sammine.struct<"Box<i32>", (i32)>
+
+struct Point { x: i32, y: i32 };
+struct Box<T> { value: T };
+
+let swap(p: Point) -> Point { Point { y: p.x, x: p.y } }
+let norm1(p: Point) -> i32 { p.x + p.y }
+let split(n: i32) -> (i32, i32) { (n / 2, n - n / 2) }
+let sum_split(n: i32) -> i32 { let (a, b) = split(n); a + b }
+let wrap<T>(v: T) -> Box<T> { Box<T> { value: v } }
+let boxed(v: i32) -> i32 { wrap<i32>(v).value }
+
+let main() -> i32 { 0 }

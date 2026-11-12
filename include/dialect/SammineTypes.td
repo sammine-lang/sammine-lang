@@ -44,6 +44,25 @@ def Sammine_PlaceType : Sammine_Type<"Place", "place"> {
   let assemblyFormat = "`<` $valueType `>`";
 }
 
+def Sammine_StructType : Sammine_Type<"Struct", "struct"> {
+  let summary = "a struct: its name and the types of its fields, in order";
+  let description = [{
+    `!sammine.struct<"Point", (i32, i32)>`. The name is the struct's, as
+    NameResolver gives it (`shapes::Point`, `Range<i32>`): lowered to LLVM
+    it is the identified struct `sammine.struct.<name>`, the very type the
+    AST codegen makes for it.
+  }];
+  let parameters = (ins StringRefParameter<"the struct's name">:$name,
+                        ArrayRefParameter<"::mlir::Type", "field types">:$fields);
+  let assemblyFormat = "`<` $name `,` `(` $fields `)` `>`";
+}
+
+def Sammine_TupleType : Sammine_Type<"Tuple", "tuple"> {
+  let summary = "a tuple of the types of its elements, in order";
+  let parameters = (ins ArrayRefParameter<"::mlir::Type", "element types">:$elements);
+  let assemblyFormat = "`<` $elements `>`";
+}
+
 def Sammine_OwnedPtr : Type<
     And<[Sammine_PtrType.predicate,
          CPred<"::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">]>,

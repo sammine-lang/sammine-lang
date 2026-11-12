@@ -30,10 +30,50 @@ void SammineDialect::initialize() {
       >();
 }
 
+/// The types of the fields of a struct or tuple, or nullopt for any other
+/// type.
+static std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {
+  if (auto st = mlir::dyn_cast<StructType>(type))
+    return st.getFields();
+  if (auto tuple = mlir::dyn_cast<TupleType>(type))
+    return tuple.getElements();
+  return std::nullopt;
+}
+
 bool ownsMemory(mlir::Type type) {
   if (auto ptr = mlir::dyn_cast<PtrType>(type))
     return ptr.isOwned();
+  if (auto fields = fieldTypes(type))
+    return llvm::any_of(*fields, ownsMemory);
   return false;
+}
+
+mlir::LogicalResult AggregateOp::verify() {
+  auto fields = fieldTypes(getResult().getType());
+  if (!fields)
+    return emitOpError("builds a struct or tuple, not ")
+           << getResult().getType();
+  if (!llvm::equal(*fields, getFields().getTypes()))
+    return emitOpError("takes the types of the fields of ")
+           << getResult().getType();
+  return mlir::success();
+}
+
+mlir::LogicalResult ExtractOp::verify() {
+  auto fields = fieldTypes(getAggregate().getType());
+  if (!fields)
+    return emitOpError("reads a field of a struct or tuple, not ")
+           << getAggregate().getType();
+  auto index = getIndex();
+  if (index >= fields->size())
+    return emitOpError("reads field ")
+           << index << " of " << getAggregate().getType() << ", which has "
+           << fields->size();
+  if ((*fields)[index] != getResult().getType())
+    return emitOpError("gives field ")
+           << index << " as " << getResult().getType() << ", but it is "
+           << (*fields)[index];
+  return mlir::success();
 }
 
 mlir::LogicalResult CopyOp::verify() {
@@ -86,7 +126,9 @@ CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   if (!llvm::equal(params, getArgs().getTypes()) ||
       !llvm::equal(results, getResults().getTypes()))
     return emitOpError("types don't match those of '")
-           << getCallee() << "': " << callee.getFunctionType();
+           << getCallee() << "': " << callee.getFunctionType() << ", it passes "
+           << mlir::FunctionType::get(getContext(), getArgs().getTypes(),
+                                      getResults().getTypes());
   return mlir::success();
 }
 

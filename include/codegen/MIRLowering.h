@@ -10,6 +10,7 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringSet.h"
 
 #include <optional>
 
@@ -47,6 +48,9 @@ private:
   }
   /// The MIR type of a sammine type MIR handles so far, or nullopt.
   std::optional<mlir::Type> mirType(const Type &type) const;
+  /// As above, inside the structs named in `enclosing`.
+  std::optional<mlir::Type> mirType(const Type &type,
+                                    llvm::StringSet<> &enclosing) const;
   /// A function type in MIR types, if MIR has a type for each part. A C
   /// function's `...` has none: this is what it declares.
   std::optional<mlir::FunctionType>
@@ -67,6 +71,16 @@ private:
   mlir::FailureOr<mlir::Value> lowerVariadicArgument(AST::ExprAST *arg);
   /// A view of what the owned pointer `owner` points at, for a call.
   mlir::Value lend(mlir::Value owner, mlir::Location loc);
+  mlir::FailureOr<mlir::Value>
+  lowerAggregate(mlir::Location location, mlir::Type type,
+                 llvm::ArrayRef<mlir::Type> fieldTypes,
+                 llvm::ArrayRef<std::pair<size_t, AST::ExprAST *>> exprs);
+  mlir::FailureOr<mlir::Value>
+  lowerStructLiteral(AST::StructLiteralExprAST *lit);
+  mlir::FailureOr<mlir::Value>
+  lowerTupleLiteral(AST::TupleLiteralExprAST *tuple);
+  mlir::FailureOr<mlir::Value>
+  lowerFieldAccess(AST::FieldAccessExprAST *access);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

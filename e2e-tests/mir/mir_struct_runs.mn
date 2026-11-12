@@ -1,0 +1,32 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Structs and tuples through MIR give the same answers, passed between MIR
+// functions and ones the AST codegen emitted: one owns memory, one is a
+// generic struct's instance.
+// CHECK: 2 1 3
+// CHECK-NEXT: 7 4 3
+// CHECK-NEXT: 42
+// CHECK-NEXT: 9
+import std;
+
+struct Point { x: i32, y: i32 };
+struct Owner { id: i32, data: 'ptr<i32> };
+struct Box<T> { value: T };
+
+let swap(p: Point) -> Point { Point { y: p.x, x: p.y } }
+let norm1(p: Point) -> i32 { p.x + p.y }
+let split(n: i32) -> (i32, i32) { (n / 2 + n % 2, n / 2) }
+let make(id: i32, v: i32) -> Owner { let p = alloc<i32>(1); *p = v; Owner { id: id, data: p } }
+let release(o: Owner) -> i32 { let v = *o.data; free(o.data); v }
+let wrap<T>(v: T) -> Box<T> { Box<T> { value: v } }
+let boxed(v: i32) -> i32 { wrap<i32>(v).value }
+let shown(p: Point) -> i32 { if p.x > 0 { p.x } else { p.y } }
+
+let main() -> i32 {
+  let q = swap(Point { x: 1, y: 2 });
+  std::printf("%d %d %d\n", q.x, q.y, norm1(q));
+  let (a, b) = split(7);
+  std::printf("%d %d %d\n", a + b, a, b);
+  std::printf("%d\n", release(make(1, 42)));
+  std::printf("%d\n", boxed(9) * shown(Point { x: 0, y: 1 }));
+  0
+}

@@ -88,6 +88,29 @@ def StringOp : Sammine_Op<"string", [Pure]> {
   let assemblyFormat = "$value attr-dict `:` type($result)";
 }
 
+def AggregateOp : Sammine_Op<"aggregate", [Pure]> {
+  let summary = "a struct or tuple of the values of its fields, in order";
+  let description = [{
+    `Point { x: a, y: b }` or `(a, b)`. A field that owns memory is moved
+    in: the aggregate owns it now.
+  }];
+  let arguments = (ins Variadic<AnyType>:$fields);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "`(` $fields `)` attr-dict `:` functional-type($fields, $result)";
+  let hasVerifier = 1;
+}
+
+def ExtractOp : Sammine_Op<"extract", [Pure]> {
+  let summary = "field `index` of a struct or tuple value, `p.x` or `t.0`";
+  let description = [{
+    A field that owns memory is moved out of the aggregate.
+  }];
+  let arguments = (ins AnyType:$aggregate, I64Attr:$index);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "$aggregate `[` $index `]` attr-dict `:` type($aggregate) `->` type($result)";
+  let hasVerifier = 1;
+}
+
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,
     TypesMatchWith<"the result is what the place holds",
                    "place", "result", ValueOfPlace>]> {

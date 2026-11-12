@@ -5,12 +5,15 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/Interfaces/FunctionInterfaces.h"
+#include "llvm/ADT/StringSet.h"
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
-//! floats, bool, char) and pointers to them, returning one or `()`; their
+//! floats, bool, char), pointers, structs and tuples of them, returning one or
+//! `()`; struct and tuple literals, fields, `let (a, b) = t`; their
 //! literals, strings among them, parameters, `let`, arithmetic, calls to
 //! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
 //! `free`, `*p` read and written, negation, comparisons, `if`, `&&` and `||`,
@@ -21,6 +24,12 @@ namespace sammine_lang {
 using namespace AST;
 
 std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
+  llvm::StringSet<> enclosing;
+  return mirType(type, enclosing);
+}
+
+std::optional<mlir::Type>
+MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
   switch (type.type_kind) {
   case TypeKind::I32_t:
   case TypeKind::U32_t:
@@ -40,13 +49,40 @@ std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
     return builder_.getI8Type();
   case TypeKind::Pointer: {
     // 'ptr<T> owns what it points at; ptr<T> is a view of it.
-    auto pointee = mirType(std::get<PointerType>(type.type_data).get_pointee());
+    auto pointee =
+        mirType(std::get<PointerType>(type.type_data).get_pointee(), enclosing);
     if (!pointee)
       return std::nullopt;
     return smn::PtrType::get(builder_.getContext(), *pointee,
                              type.linearity == Linearity::Linear
                                  ? smn::Ownership::Owned
                                  : smn::Ownership::View);
+  }
+  case TypeKind::Struct: {
+    auto &st = std::get<StructType>(type.type_data);
+    auto name = st.get_name().mangled();
+    // A struct that reaches itself, through a pointer, has no MIR type yet.
+    if (!enclosing.insert(name).second)
+      return std::nullopt;
+    llvm::SmallVector<mlir::Type> fields;
+    for (auto &field : st.get_field_types()) {
+      auto fieldType = mirType(field, enclosing);
+      if (!fieldType)
+        return std::nullopt;
+      fields.push_back(*fieldType);
+    }
+    enclosing.erase(name);
+    return smn::StructType::get(builder_.getContext(), name, fields);
+  }
+  case TypeKind::Tuple: {
+    llvm::SmallVector<mlir::Type> elements;
+    for (auto &element : std::get<TupleType>(type.type_data).get_element_types()) {
+      auto elementType = mirType(element, enclosing);
+      if (!elementType)
+        return std::nullopt;
+      elements.push_back(*elementType);
+    }
+    return smn::TupleType::get(builder_.getContext(), elements);
   }
   default:
     return std::nullopt;
@@ -146,14 +182,27 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
 }
 
 // A `let` of a value MIR has a type for names that value: the right side is
-// lowered first, so `let x = x + 1` reads the x it shadows.
+// lowered first, so `let x = x + 1` reads the x it shadows. `let (a, b) = t`
+// names each element of t.
 mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
-  if (def->is_tuple_destructure || !mirType(def->get_type()))
+  // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.
+  if (!def->is_tuple_destructure && !mirType(def->get_type()))
     return mlir::failure();
   auto value = lowerExpr(def->Expression.get());
-  if (mlir::failed(value))
+  if (mlir::failed(value) || !*value)
     return mlir::failure();
-  names_[def->TypedVar->name] = *value;
+  if (!def->is_tuple_destructure) {
+    names_[def->TypedVar->name] = *value;
+    return mlir::success();
+  }
+  auto tuple = mlir::dyn_cast<smn::TupleType>(value->getType());
+  if (!tuple || tuple.getElements().size() != def->destructure_vars.size())
+    return mlir::failure();
+  for (auto [i, var] : llvm::enumerate(def->destructure_vars))
+    names_[var->name] =
+        smn::ExtractOp::create(builder_, loc(def), tuple.getElements()[i],
+                               *value, i)
+            .getResult();
   return mlir::success();
 }
 
@@ -210,6 +259,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerDerefRead(deref);
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
+  if (auto *lit = llvm::dyn_cast<StructLiteralExprAST>(expr))
+    return lowerStructLiteral(lit);
+  if (auto *tuple = llvm::dyn_cast<TupleLiteralExprAST>(expr))
+    return lowerTupleLiteral(tuple);
+  if (auto *access = llvm::dyn_cast<FieldAccessExprAST>(expr))
+    return lowerFieldAccess(access);
   if (llvm::isa<UnitExprAST>(expr))
     return mlir::Value();
   return mlir::failure();
@@ -226,11 +281,21 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   auto name =
       props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
   // Nor a call through a function value, which names no function.
-  if (!module_.lookupSymbol<mlir::FunctionOpInterface>(name))
+  auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
+  if (!callee)
     return mlir::failure();
   auto type =
       mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
+    return mlir::failure();
+  // Nor a struct or tuple passed to or from C, which C moves in registers or
+  // memory as cabi decides, in emitCCall.
+  auto isAggregate = [](mlir::Type t) {
+    return mlir::isa<smn::StructType, smn::TupleType>(t);
+  };
+  if (mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
+      (llvm::any_of(type->getInputs(), isAggregate) ||
+       llvm::any_of(type->getResults(), isAggregate)))
     return mlir::failure();
 
   // The arguments for the declared parameters, then any passed through a C
@@ -373,6 +438,74 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
   after->moveBefore(region, region->end());
   builder_.setInsertionPointToStart(after);
   return after->getArgument(0);
+}
+
+// The values of `exprs`, in order, as the fields of an aggregate of `type`.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerAggregate(mlir::Location location, mlir::Type type,
+                            llvm::ArrayRef<mlir::Type> fieldTypes,
+                            llvm::ArrayRef<std::pair<size_t, ExprAST *>> exprs) {
+  llvm::SmallVector<mlir::Value> fields(fieldTypes.size());
+  for (auto [index, expr] : exprs) {
+    auto value = lowerExpr(expr);
+    if (mlir::failed(value) || !*value || value->getType() != fieldTypes[index])
+      return mlir::failure();
+    fields[index] = *value;
+  }
+  if (llvm::is_contained(fields, mlir::Value()))
+    return mlir::failure();
+  return smn::AggregateOp::create(builder_, location, type, fields).getResult();
+}
+
+// `Point { y: b, x: a }`: the fields' values in the order written, each put
+// at its field's place.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerStructLiteral(StructLiteralExprAST *lit) {
+  auto type = mirType(lit->get_type());
+  if (!type)
+    return mlir::failure();
+  auto st = std::get<StructType>(lit->get_type().type_data);
+  llvm::SmallVector<std::pair<size_t, ExprAST *>> exprs;
+  for (auto [name, value] : llvm::zip(lit->field_names, lit->field_values)) {
+    auto index = st.get_field_index(name);
+    if (!index)
+      return mlir::failure();
+    exprs.push_back({*index, value.get()});
+  }
+  return lowerAggregate(loc(lit), *type,
+                        mlir::cast<smn::StructType>(*type).getFields(), exprs);
+}
+
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerTupleLiteral(TupleLiteralExprAST *tuple) {
+  auto type = mirType(tuple->get_type());
+  if (!type)
+    return mlir::failure();
+  llvm::SmallVector<std::pair<size_t, ExprAST *>> exprs;
+  for (auto [i, element] : llvm::enumerate(tuple->elements))
+    exprs.push_back({i, element.get()});
+  return lowerAggregate(loc(tuple), *type,
+                        mlir::cast<smn::TupleType>(*type).getElements(), exprs);
+}
+
+// `p.x`, or `t.0` of a tuple.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerFieldAccess(FieldAccessExprAST *access) {
+  auto objectType = access->object_expr->get_type();
+  std::optional<size_t> index;
+  if (objectType.type_kind == TypeKind::Tuple)
+    index = std::stoul(access->field_name);
+  else if (objectType.type_kind == TypeKind::Struct)
+    index = std::get<StructType>(objectType.type_data)
+                .get_field_index(access->field_name);
+  auto type = mirType(access->get_type());
+  if (!index || !type)
+    return mlir::failure();
+  auto object = lowerExpr(access->object_expr.get());
+  if (mlir::failed(object) || !*object)
+    return mlir::failure();
+  return smn::ExtractOp::create(builder_, loc(access), *type, *object, *index)
+      .getResult();
 }
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
