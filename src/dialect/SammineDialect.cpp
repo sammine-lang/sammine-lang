@@ -28,4 +28,24 @@ void SammineDialect::initialize() {
       >();
 }
 
+bool ownsMemory(mlir::Type type) {
+  if (auto ptr = mlir::dyn_cast<PtrType>(type))
+    return ptr.isOwned();
+  return false;
+}
+
+mlir::LogicalResult CopyOp::verify() {
+  if (ownsMemory(getResult().getType()))
+    return emitOpError("can't copy a value that owns memory; use "
+                       "sammine.move");
+  return mlir::success();
+}
+
+mlir::LogicalResult MoveOp::verify() {
+  if (!ownsMemory(getResult().getType()))
+    return emitOpError("moves only a value that owns memory; use "
+                       "sammine.copy");
+  return mlir::success();
+}
+
 } // namespace sammine_lang::smn

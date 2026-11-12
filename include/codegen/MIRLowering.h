@@ -52,7 +52,13 @@ private:
   mlir::LogicalResult lowerBlock(AST::BlockAST *block);
   mlir::LogicalResult lowerVarDef(AST::VarDefAST *def);
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
+  /// The value of `expr`, or a null value for an expression of type `()`.
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
+  mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
+  mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
+  mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);
+  mlir::FailureOr<mlir::Value> lowerDerefRead(AST::DerefExprAST *deref);
+  mlir::FailureOr<mlir::Value> lowerAssign(AST::BinaryExprAST *assign);
   mlir::FailureOr<mlir::Value> lowerNumber(AST::NumberExprAST *num);
   mlir::FailureOr<mlir::Value> lowerBool(AST::BoolExprAST *b);
   mlir::FailureOr<mlir::Value> lowerChar(AST::CharExprAST *c);

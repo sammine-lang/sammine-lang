@@ -1,0 +1,41 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// alloc, *p = v, reading *p, and free go through MIR. Reading a value that
+// owns nothing copies it; reading an owned pointer out of a place moves it.
+// A function returning () returns nothing.
+// CHECK-LABEL: func.func private @make(
+// CHECK-SAME: -> !sammine.ptr<i32, owned>
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.alloc %{{.*}} : i32 -> !sammine.ptr<i32, owned>
+// CHECK-NEXT: sammine.deref
+// CHECK-NEXT: sammine.store %arg0
+// CHECK-LABEL: func.func private @bump(
+// CHECK: sammine.copy
+// CHECK: arith.addi
+// CHECK: sammine.store
+// CHECK-LABEL: func.func private @release(%arg0: !sammine.ptr<i32, owned>{{.*}}) attributes
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.free %arg0 : !sammine.ptr<i32, owned>
+// CHECK-NEXT: return
+// CHECK-LABEL: func.func private @roundtrip(
+// CHECK: sammine.alloc %{{.*}} : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+// CHECK: sammine.store %arg0
+// CHECK: sammine.move %{{.*}} : <!sammine.ptr<i32, owned>>
+// CHECK: sammine.free
+
+let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
+let bump(p: 'ptr<i32>) -> 'ptr<i32> { *p = *p + 1; p }
+let release(p: 'ptr<i32>) { free(p); }
+let roundtrip(p: 'ptr<i32>) -> 'ptr<i32> {
+  let pp = alloc<'ptr<i32>>(1);
+  *pp = p;
+  let q = *pp;
+  free(pp);
+  q
+}
+
+let main() -> i32 {
+  let p = roundtrip(bump(make(41)));
+  let v = *p;
+  release(p);
+  v - 42
+}

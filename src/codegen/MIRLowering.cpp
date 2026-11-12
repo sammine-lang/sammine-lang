@@ -8,8 +8,9 @@
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
-//! floats, bool, char) and pointers to them, their literals, parameters,
-//! `let`, arithmetic and return.
+//! floats, bool, char) and pointers to them, returning one or `()`; their
+//! literals, parameters, `let`, arithmetic, `alloc`, `free`, `*p` read and
+//! written, statements and return.
 
 namespace sammine_lang {
 
@@ -61,6 +62,9 @@ MIRLowering::mirSignature(FuncDefAST *ast) const {
     inputs.push_back(*type);
   }
   auto fn = std::get<FunctionType>(proto->get_type().type_data);
+  // A function returning () returns nothing.
+  if (fn.get_return_type().type_kind == TypeKind::Unit)
+    return builder_.getFunctionType(inputs, {});
   auto result = mirType(fn.get_return_type());
   if (!result)
     return std::nullopt;
@@ -98,15 +102,18 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   return true;
 }
 
-// For now a body is `let`s, then its return:
-// `{ let b = a * 2; b + 1 }` or `{ let b = a * 2; return b + 1; }`.
+// For now a body is `let`s and statements, then its return:
+// `{ let b = a * 2; free(p); b + 1 }`. A statement's value, if any, is dropped.
 mlir::LogicalResult MIRLowering::lowerBlock(BlockAST *block) {
   if (block->Statements.empty())
     return mlir::failure();
   for (auto &stmt : llvm::drop_end(block->Statements)) {
-    auto *def = llvm::dyn_cast<VarDefAST>(stmt.get());
-    if (!def || mlir::failed(lowerVarDef(def)))
+    if (auto *def = llvm::dyn_cast<VarDefAST>(stmt.get())) {
+      if (mlir::failed(lowerVarDef(def)))
+        return mlir::failure();
+    } else if (mlir::failed(lowerExpr(stmt.get()))) {
       return mlir::failure();
+    }
   }
   auto *ret = llvm::dyn_cast<ReturnStmtAST>(block->Statements.back().get());
   if (!ret)
@@ -132,7 +139,10 @@ mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
   auto value = lowerExpr(ret->return_expr.get());
   if (mlir::failed(value))
     return mlir::failure();
-  mlir::func::ReturnOp::create(builder_, loc(ret), mlir::ValueRange{*value});
+  // Returning () returns nothing.
+  mlir::func::ReturnOp::create(builder_, loc(ret),
+                               *value ? mlir::ValueRange{*value}
+                                      : mlir::ValueRange{});
   return mlir::success();
 }
 
@@ -146,8 +156,76 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
     return lowerVariable(var);
   if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr))
-    return lowerBinary(bin);
+    return bin->Op->is_assign() ? lowerAssign(bin) : lowerBinary(bin);
+  if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr))
+    return lowerAlloc(alloc);
+  if (auto *free = llvm::dyn_cast<FreeExprAST>(expr))
+    return lowerFree(free);
+  if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr))
+    return lowerDerefRead(deref);
+  if (llvm::isa<UnitExprAST>(expr))
+    return mlir::Value();
   return mlir::failure();
+}
+
+// alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
+  auto type = mirType(alloc->get_type());
+  auto count = lowerExpr(alloc->operand.get());
+  if (!type || mlir::failed(count) || !*count)
+    return mlir::failure();
+  return smn::AllocOp::create(builder_, loc(alloc), *type, *count).getResult();
+}
+
+mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
+  auto ptr = lowerExpr(free->operand.get());
+  if (mlir::failed(ptr) || !*ptr)
+    return mlir::failure();
+  smn::FreeOp::create(builder_, loc(free), *ptr);
+  return mlir::Value();
+}
+
+// The place `*p` is, for `p` a pointer MIR has a type for.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
+  if (!mirType(deref->operand->get_type()))
+    return mlir::failure();
+  auto ptr = lowerExpr(deref->operand.get());
+  if (mlir::failed(ptr) || !*ptr)
+    return mlir::failure();
+  auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
+  return smn::DerefOp::create(builder_, loc(deref),
+                              smn::PlaceType::get(builder_.getContext(), pointee),
+                              *ptr)
+      .getResult();
+}
+
+// Reading `*p` copies a value that owns nothing, and moves one that does out
+// of the place.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefRead(DerefExprAST *deref) {
+  auto place = lowerDerefPlace(deref);
+  if (mlir::failed(place))
+    return mlir::failure();
+  auto valueType = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
+  if (smn::ownsMemory(valueType))
+    return smn::MoveOp::create(builder_, loc(deref), valueType, *place)
+        .getResult();
+  return smn::CopyOp::create(builder_, loc(deref), valueType, *place)
+      .getResult();
+}
+
+// `*p = v`. Writing anywhere else, a field or an element, isn't lowered yet.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerAssign(BinaryExprAST *assign) {
+  auto *target = llvm::dyn_cast<DerefExprAST>(assign->LHS.get());
+  if (!target)
+    return mlir::failure();
+  auto value = lowerExpr(assign->RHS.get());
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  auto place = lowerDerefPlace(target);
+  if (mlir::failed(place))
+    return mlir::failure();
+  smn::StoreOp::create(builder_, loc(assign), *value, *place);
+  return mlir::Value();
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {

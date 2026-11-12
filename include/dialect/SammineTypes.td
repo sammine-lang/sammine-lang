@@ -33,4 +33,20 @@ def Sammine_PtrType : Sammine_Type<"Ptr", "ptr"> {
   }];
 }
 
+def Sammine_PlaceType : Sammine_Type<"Place", "place"> {
+  let summary = "where a value lives";
+  let description = [{
+    `!sammine.place<i32>` is memory holding an i32, such as what a pointer
+    points at. A place is never a value of its own: each use of it says what
+    it does to ownership, `sammine.copy`, `sammine.move` or `sammine.store`.
+  }];
+  let parameters = (ins "::mlir::Type":$valueType);
+  let assemblyFormat = "`<` $valueType `>`";
+}
+
+def Sammine_OwnedPtr : Type<
+    And<[Sammine_PtrType.predicate,
+         CPred<"::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">]>,
+    "owned pointer">;
+
 #endif // SAMMINE_TYPES_TD
