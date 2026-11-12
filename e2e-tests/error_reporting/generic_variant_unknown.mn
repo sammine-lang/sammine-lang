@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: generic_variant_unknown.mn:6:24
+// CHECK: Type 'Option' has no variant 'Bogus'
+
+let main() -> i32 {
+  let g = Option::Bogus(1);
+  0
+}

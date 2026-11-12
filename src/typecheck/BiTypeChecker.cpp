@@ -186,11 +186,6 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
     return;
   }
 
-  // Pre-resolve type annotation to trigger generic enum instantiation
-  // (ensures variant_constructors is populated for unqualified constructors)
-  if (ast->TypedVar->type_expr != nullptr)
-    resolve_type_expr(ast->TypedVar->type_expr.get());
-
   // Normal case
   ast->Expression->accept_vis(this);
   ast->accept_synthesis(this);
@@ -436,18 +431,13 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   }
 
   // Register variant constructors with qualified keys (enum_name::variant_name)
-  // so lookups match the fully-qualified names produced by scope generator
+  // so lookups match the fully-qualified names produced by scope generator.
+  // A generic enum's Option::Some names no one instance: enum_of_variant
+  // infers which.
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
     auto qualified_key = ast->enum_name.with_appended({vi.name, ""}).mangled();
     variant_constructors[qualified_key] = {enum_type, i};
-
-    // For generic enum instantiations (e.g., Option<i32>), also register with
-    // the template base name (Option::Some) so scope-gen-rewritten names match
-    auto base_key =
-        ast->enum_name.strip_type_args().with_appended({vi.name, ""}).mangled();
-    if (base_key != qualified_key)
-      variant_constructors[base_key] = {enum_type, i};
   }
 }
 
@@ -521,13 +511,93 @@ void BiTypeCheckerVisitor::register_alias_variants(TypeAliasDefAST *ast) {
       auto qualified_key =
           ast->alias_name.with_appended({vi.name, ""}).mangled();
       variant_constructors[qualified_key] = {resolved, i};
-
-      auto base_key =
-          ast->alias_name.strip_type_args().with_appended({vi.name, ""}).mangled();
-      if (base_key != qualified_key)
-        variant_constructors[base_key] = {resolved, i};
     }
   }
+}
+
+const std::vector<std::string> *BiTypeCheckerVisitor::generic_type_params(
+    const sammine_util::QualifiedName &base) const {
+  if (auto *def = monomorphizer.generic_enums.find(base.mangled()))
+    return &def->type_params;
+  if (auto *def = monomorphizer.generic_structs.find(base.mangled()))
+    return &def->type_params;
+  return nullptr;
+}
+
+Type BiTypeCheckerVisitor::generic_type_instance(
+    const sammine_util::QualifiedName &base, std::vector<Type> type_args) {
+  auto *enum_def = monomorphizer.generic_enums.find(base.mangled());
+  auto *struct_def =
+      enum_def ? nullptr : monomorphizer.generic_structs.find(base.mangled());
+  if (!enum_def && !struct_def)
+    return Type::Poisoned();
+  auto &type_params = enum_def ? enum_def->type_params : struct_def->type_params;
+
+  TypeBindings bindings;
+  bool has_unresolved_type_param = false;
+  for (size_t i = 0; i < type_args.size(); i++) {
+    if (type_args[i].containsTypeParam())
+      has_unresolved_type_param = true;
+    bindings[type_params[i]] = type_args[i];
+  }
+  MonomorphizedKey key{base.mangled(), std::move(type_args)};
+  auto mangled = key.to_generic_name(base).mangled();
+
+  // An argument that is still a type parameter, as Vec<T> inside a generic
+  // signature, can't be instantiated yet: a placeholder with the type
+  // parameter in its fields stands in, and substitute() replaces it once
+  // concrete bindings are known.
+  if (has_unresolved_type_param) {
+    if (auto existing = get_typename_type(mangled))
+      return *existing;
+
+    auto instance_of = std::make_shared<const MonomorphizedKey>(key);
+    Type placeholder = Type::Poisoned();
+    {
+      // The generic's own parameters, as its fields name them.
+      decltype(typename_to_type)::Guard scope(typename_to_type);
+      for (auto &[pname, ptype] : bindings)
+        typename_to_type.registerNameT(pname, ptype);
+
+      auto name = sammine_util::QualifiedName::from_parts({mangled});
+      if (struct_def) {
+        std::vector<std::string> fnames;
+        std::vector<Type> ftypes;
+        for (auto &member : struct_def->struct_members) {
+          fnames.push_back(member->name);
+          ftypes.push_back(member->type_expr
+                               ? resolve_type_expr(member->type_expr.get())
+                               : Type::Poisoned());
+        }
+        placeholder = Type::Struct(name, std::move(fnames), std::move(ftypes),
+                                   std::move(instance_of));
+      } else {
+        std::vector<EnumType::VariantInfo> variant_infos;
+        for (auto &v : enum_def->variants) {
+          std::vector<Type> payload;
+          for (auto &pt : v.payload_types)
+            payload.push_back(resolve_type_expr(pt.get()));
+          variant_infos.push_back(
+              {v.name, std::move(payload), v.discriminant_value});
+        }
+        placeholder = Type::Enum(name, std::move(variant_infos), false,
+                                 TypeKind::I32_t, std::move(instance_of));
+      }
+    }
+    typename_to_type.registerNameT(mangled, placeholder);
+    return placeholder;
+  }
+
+  // An instance is registered at the root scope once instantiated.
+  if (auto existing = get_typename_type(mangled))
+    return *existing;
+  if (enum_def)
+    monomorphizer.instantiate_enum(enum_def, key, bindings)->accept_vis(this);
+  else
+    monomorphizer.instantiate_struct(struct_def, key, bindings)
+        ->accept_vis(this);
+  auto result = get_typename_type(mangled);
+  return result.has_value() ? *result : Type::Poisoned();
 }
 
 void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {

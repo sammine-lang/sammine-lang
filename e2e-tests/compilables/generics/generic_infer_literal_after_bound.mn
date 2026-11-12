@@ -1,0 +1,13 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 3 2.500000
+
+import std;
+
+// Once T is bound by 5i64, the literal 3 is checked against it and takes
+// its type, rather than defaulting to i32.
+let pick<T>(a: T, b: T) -> T { b }
+
+let main() -> i32 {
+  std::printf("%ld %f\n", pick(5i64, 3), pick(1.5, 2.5));
+  0
+}

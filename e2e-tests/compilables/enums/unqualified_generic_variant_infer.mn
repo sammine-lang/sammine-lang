@@ -1,0 +1,36 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      3 2.500000
+// CHECK-NEXT: 7 1.500000
+// CHECK-NEXT: 8 9 4
+
+import std;
+
+// An unqualified constructor of a generic enum is the instance its payload
+// says, whichever instances were made before it.
+type Maybe<T> = Just(T) | Nothing;
+
+let or_zero(m: Maybe<i64>) -> i64 {
+  case m { Just(x) => x, Nothing => 0i64, }
+}
+
+let wrap<T>(x: T) -> Option<T> { Some(x) }
+
+let main() -> i32 {
+  let f = Option<f64>::None;
+  let b = Maybe<f64>::Nothing;
+  let s = Some(3i64);
+  let j = Just(2.5);
+  case s { Some(v) => std::printf("%ld ", v), None => 0, };
+  case j { Just(v) => std::printf("%f\n", v), Nothing => 0, };
+  // Unsuffixed literals take their default types, i32 and f64.
+  let k = Some(7);
+  let x: Option<i32> = k;
+  let l = Some(1.5);
+  case x { Some(v) => std::printf("%d ", v), None => 0, };
+  case l { Some(v) => std::printf("%f\n", v), None => 0, };
+  // In a generic body, and as an argument.
+  case wrap(8i64) { Some(v) => std::printf("%ld ", v), None => 0, };
+  std::printf("%ld %ld\n", or_zero(Just(9i64)),
+              or_zero(Maybe<i64>::Just(4i64)));
+  0
+}

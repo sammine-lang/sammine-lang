@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: unqualified_variant_not_inferred.mn:8:10
+// CHECK: Type parameter 'T' of 'Option' could not be inferred for 'Option::None'; give it explicitly, as in Option<...>::None
+
+// Nothing says which Option this is, though Option<f64> exists.
+let main() -> i32 {
+  let f = Option<f64>::None;
+  let g = None;
+  0
+}

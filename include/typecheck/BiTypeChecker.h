@@ -221,10 +221,42 @@ public:
   // Monomorphize and type-check the generic function a call resolved to.
   void instantiate_generic_callee(CallExprAST *ast);
 
+  /// The type parameters of the generic struct or enum `base`, or null if
+  /// it names neither.
+  const std::vector<std::string> *
+  generic_type_params(const sammine_util::QualifiedName &base) const;
+  /// The generic struct or enum `base` applied to `type_args`: its instance,
+  /// monomorphized on first use, or a placeholder while an argument is still
+  /// a type parameter, as Vec<T> in a generic signature.
+  Type generic_type_instance(const sammine_util::QualifiedName &base,
+                             std::vector<Type> type_args);
+
+  /// Binds the type parameters `params` by unifying each of `args` with its
+  /// parameter in `patterns`, on top of `bindings`. A parameter whose type
+  /// is already decided is left for check_call_argument, so a literal takes
+  /// that type. Returns the index of the first argument that is poisoned or
+  /// doesn't match, for the caller to report.
+  std::optional<size_t>
+  infer_type_args(std::span<const std::unique_ptr<ExprAST>> args,
+                  std::span<const Type> patterns,
+                  const std::vector<std::string> &params,
+                  TypeBindings &bindings);
+
   // Call resolvers: nullopt means the call is not of this kind.
+
+  /// The enum `variant` (Color::Red, Option<i32>::None, Option::Some)
+  /// belongs to, or nullopt if it names no enum's variant. Poisoned once an
+  /// error is reported, at `site`. A generic enum without type arguments is
+  /// instantiated with those inferred from `payload`.
   std::optional<Type>
   enum_of_variant(const sammine_util::QualifiedName &variant,
-                  const std::vector<std::unique_ptr<TypeExprAST>> &type_args);
+                  const std::vector<std::unique_ptr<TypeExprAST>> &type_args,
+                  const ExprAST *site,
+                  std::span<const std::unique_ptr<ExprAST>> payload = {});
+  Type infer_enum_instance(EnumDefAST *def,
+                           const sammine_util::QualifiedName &variant,
+                           const ExprAST *site,
+                           std::span<const std::unique_ptr<ExprAST>> payload);
   std::optional<ResolvedCall> resolve_enum_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);
@@ -396,120 +428,30 @@ public:
     }
 
     if (auto *gen = llvm::dyn_cast<GenericTypeExprAST>(type_expr)) {
-      auto base_mangled = gen->base_name.mangled();
-
-      // Determine if this is a generic enum or generic struct
-      auto *enum_def = monomorphizer.generic_enums.find(base_mangled);
-      auto *struct_def = monomorphizer.generic_structs.find(base_mangled);
-      bool is_enum = (enum_def != nullptr);
-      bool is_struct = (struct_def != nullptr);
-
-      if (!is_enum && !is_struct) {
+      auto *type_params = generic_type_params(gen->base_name);
+      if (!type_params) {
         this->add_error(type_expr->location,
                         fmt::format("'{}' is not a generic type",
                                     gen->base_name.mangled()));
         return Type::Poisoned();
       }
-
-      size_t expected_params = is_enum ? enum_def->type_params.size()
-                                       : struct_def->type_params.size();
-      const auto &param_names =
-          is_enum ? enum_def->type_params : struct_def->type_params;
-
-      if (gen->type_args.size() != expected_params) {
+      if (gen->type_args.size() != type_params->size()) {
         this->add_error(
             type_expr->location,
             fmt::format("Generic type '{}' expects {} type argument(s), got {}",
-                        gen->base_name.mangled(), expected_params,
+                        gen->base_name.mangled(), type_params->size(),
                         gen->type_args.size()));
         return Type::Poisoned();
       }
 
-      // Resolve type arguments
-      TypeBindings bindings;
-      std::vector<Type> resolved_type_args;
-      bool has_unresolved_type_param = false;
-      for (size_t i = 0; i < gen->type_args.size(); i++) {
-        auto resolved = resolve_type_expr(gen->type_args[i].get());
+      std::vector<Type> type_args;
+      for (auto &arg : gen->type_args) {
+        auto resolved = resolve_type_expr(arg.get());
         if (resolved.is_poisoned())
           return Type::Poisoned();
-        if (resolved.containsTypeParam())
-          has_unresolved_type_param = true;
-        bindings[param_names[i]] = resolved;
-        resolved_type_args.push_back(resolved);
+        type_args.push_back(std::move(resolved));
       }
-      MonomorphizedKey key{gen->base_name.mangled(), resolved_type_args};
-      auto mono = key.to_generic_name(gen->base_name);
-      auto mangled = mono.mangled();
-
-      // If type args contain unresolved type params (e.g. Vec<T> inside
-      // a generic function prototype), we can't instantiate yet — build a
-      // placeholder StructType with TypeParam fields so substitute() can
-      // replace them when concrete bindings are known.
-      if (has_unresolved_type_param) {
-        auto existing = this->get_typename_type(mangled);
-        if (existing.has_value())
-          return existing.value();
-
-        for (auto &[pname, ptype] : bindings)
-          typename_to_type.registerNameT(pname, ptype);
-
-        if (is_struct) {
-          auto *sdef = struct_def;
-          std::vector<std::string> fnames;
-          std::vector<Type> ftypes;
-          for (auto &member : sdef->struct_members) {
-            fnames.push_back(member->name);
-            ftypes.push_back(member->type_expr
-                                 ? resolve_type_expr(member->type_expr.get())
-                                 : Type::Poisoned());
-          }
-          auto placeholder =
-              Type::Struct(sammine_util::QualifiedName::from_parts({mangled}),
-                           std::move(fnames), std::move(ftypes),
-                           std::make_shared<const MonomorphizedKey>(key));
-          typename_to_type.registerNameT(mangled, placeholder);
-          return placeholder;
-        }
-
-        if (is_enum) {
-          auto *edef = enum_def;
-          std::vector<EnumType::VariantInfo> variant_infos;
-          for (auto &v : edef->variants) {
-            std::vector<Type> payload;
-            for (auto &pt : v.payload_types)
-              payload.push_back(resolve_type_expr(pt.get()));
-            variant_infos.push_back(
-                {v.name, std::move(payload), v.discriminant_value});
-          }
-          auto placeholder = Type::Enum(
-              sammine_util::QualifiedName::from_parts({mangled}),
-              std::move(variant_infos), false, TypeKind::I32_t,
-              std::make_shared<const MonomorphizedKey>(key));
-          typename_to_type.registerNameT(mangled, placeholder);
-          return placeholder;
-        }
-
-        return Type::Poisoned();
-      }
-
-      // Check if already instantiated (registered at root scope)
-      {
-        auto existing = this->get_typename_type(mangled);
-        if (existing.has_value())
-          return existing.value();
-      }
-
-      // Not yet instantiated — clone + type-check
-      if (is_enum)
-        monomorphizer.instantiate_enum(enum_def, key, bindings)
-            ->accept_vis(this);
-      else
-        monomorphizer.instantiate_struct(struct_def, key, bindings)
-            ->accept_vis(this);
-
-      auto result = this->get_typename_type(mangled);
-      return result.has_value() ? result.value() : Type::Poisoned();
+      return generic_type_instance(gen->base_name, std::move(type_args));
     }
 
     return Type::NonExistent();

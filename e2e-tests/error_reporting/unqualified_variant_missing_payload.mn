@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: unqualified_variant_missing_payload.mn:8:10
+// CHECK: Enum variant 'Maybe::Just' expects 1 arguments, got 0
+
+type Maybe<T> = Just(T) | Nothing;
+
+let main() -> i32 {
+  let g = Just;
+  0
+}

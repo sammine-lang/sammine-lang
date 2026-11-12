@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: unqualified_variant_payload_mismatch.mn:9:21
+// CHECK: Argument 2 to 'Twin::Both': expected i64, got float literal
+
+type Twin<T> = Both(T, T) | Neither;
+
+// The first payload decides T, so the second must be an i64.
+let main() -> i32 {
+  let g = Both(1i64, 2.5);
+  0
+}

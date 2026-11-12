@@ -338,47 +338,136 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   return ast->get_type();
 }
 
-// The enum `variant` (Color::Red, Option<i32>::None) belongs to, or nullopt
-// if it names no enum's variant. A generic enum is instantiated with
-// `type_args`.
+std::optional<size_t> BiTypeCheckerVisitor::infer_type_args(
+    std::span<const std::unique_ptr<ExprAST>> args,
+    std::span<const Type> patterns, const std::vector<std::string> &params,
+    TypeBindings &bindings) {
+  for (size_t i = 0; i < args.size() && i < patterns.size(); i++) {
+    auto arg_type = args[i]->get_type();
+    if (arg_type.is_poisoned())
+      return i;
+    bool decided = std::ranges::none_of(params, [&](const std::string &tp) {
+      return !bindings.contains(tp) && contains_type_param(patterns[i], tp);
+    });
+    if (decided)
+      continue;
+    // Default polymorphic literals before generic unification
+    arg_type = default_polymorphic_type(arg_type);
+    resolve_literal_type(args[i].get(), arg_type);
+    if (!unify(patterns[i], arg_type, bindings))
+      return i;
+  }
+  return std::nullopt;
+}
+
 std::optional<Type> BiTypeCheckerVisitor::enum_of_variant(
     const sammine_util::QualifiedName &variant,
-    const std::vector<std::unique_ptr<TypeExprAST>> &type_args) {
+    const std::vector<std::unique_ptr<TypeExprAST>> &type_args,
+    const ExprAST *site, std::span<const std::unique_ptr<ExprAST>> payload) {
   if (!variant.is_qualified())
     return std::nullopt;
 
-  auto enum_type_opt = get_typename_type(variant.get_qualifier());
+  // A concrete enum, or an instance named in full: Color, Option<i32>.
+  auto enum_type = get_typename_type(variant.get_qualifier());
 
-  // If not found and we have explicit type args, try generic enum
-  // instantiation
-  if (!enum_type_opt && !type_args.empty()) {
-    auto base_name = variant.strip_type_args().get_qualifier();
-    auto *generic_def = monomorphizer.generic_enums.find(base_name);
-    if (generic_def && type_args.size() == generic_def->type_params.size()) {
-      auto resolved =
-          resolve_explicit_type_args(type_args, generic_def->type_params);
-      if (resolved) {
-        auto &[bindings, args] = *resolved;
-        MonomorphizedKey key{generic_def->enum_name.mangled(), args};
-        monomorphizer.instantiate_enum(generic_def, key, bindings)
-            ->accept_vis(this);
-        enum_type_opt = get_typename_type(
-            key.to_generic_name(generic_def->enum_name).mangled());
-      }
+  if (!enum_type) {
+    auto *generic_def = monomorphizer.generic_enums.find(
+        variant.strip_type_args().get_qualifier());
+    if (generic_def && type_args.empty())
+      enum_type = infer_enum_instance(generic_def, variant, site, payload);
+    else if (generic_def &&
+             type_args.size() == generic_def->type_params.size()) {
+      if (auto resolved =
+              resolve_explicit_type_args(type_args, generic_def->type_params))
+        enum_type =
+            generic_type_instance(generic_def->enum_name, resolved->second);
     }
   }
 
-  // Enum variant without explicit type args — use fully-qualified mangled
-  // name (e.g., Some(42) rewritten to Option::Some by scope generator)
-  if (!enum_type_opt) {
+  // A variant of an alias, as IntOption::Some.
+  if (!enum_type) {
     auto vc_it = variant_constructors.find(variant.mangled());
     if (vc_it != variant_constructors.end())
-      enum_type_opt = vc_it->second.first;
+      enum_type = vc_it->second.first;
   }
 
-  if (!enum_type_opt || enum_type_opt->type_kind != TypeKind::Enum)
+  if (!enum_type || (!enum_type->is_poisoned() &&
+                     enum_type->type_kind != TypeKind::Enum))
     return std::nullopt;
-  return enum_type_opt;
+  return enum_type;
+}
+
+// Option::Some(3i64) is Option<i64>::Some: the instance of `def` whose type
+// arguments come from the payload, as a generic call's come from its
+// arguments. Poisoned once an error is reported, at `site`.
+Type BiTypeCheckerVisitor::infer_enum_instance(
+    EnumDefAST *def, const sammine_util::QualifiedName &variant,
+    const ExprAST *site, std::span<const std::unique_ptr<ExprAST>> payload) {
+  auto variant_name = variant.get_name();
+  auto variant_def =
+      std::ranges::find(def->variants, variant_name, &EnumVariantDef::name);
+  if (variant_def == def->variants.end()) {
+    add_error(site->get_location(),
+              fmt::format("Type '{}' has no variant '{}'",
+                          def->enum_name.mangled(), variant_name));
+    return Type::Poisoned();
+  }
+
+  // The payload as the generic declares it: Some(T).
+  std::vector<Type> patterns;
+  {
+    decltype(typename_to_type)::Guard scope(typename_to_type);
+    for (auto &tp : def->type_params)
+      typename_to_type.registerNameT(tp, Type::TypeParam(tp));
+    for (auto &pt : variant_def->payload_types) {
+      auto pattern = resolve_type_expr(pt.get());
+      if (pattern.is_poisoned())
+        return pattern;
+      patterns.push_back(std::move(pattern));
+    }
+  }
+
+  TypeBindings bindings;
+
+  auto written = variant.mangled();
+  if (auto bad = infer_type_args(payload, patterns, def->type_params,
+                                 bindings)) {
+    auto *arg = payload[*bad].get();
+    if (arg->get_type().is_poisoned())
+      return Type::Poisoned();
+    add_error(arg->get_location(),
+              fmt::format("Type mismatch in argument {} of '{}': expected {}, "
+                          "got {}",
+                          *bad + 1, written,
+                          substitute(patterns[*bad], bindings).to_string(),
+                          default_polymorphic_type(arg->get_type())
+                              .to_string()));
+    return Type::Poisoned();
+  }
+
+  for (auto &tp : def->type_params) {
+    if (bindings.contains(tp))
+      continue;
+    // Without its payload, the payload can't have said.
+    if (payload.size() != patterns.size())
+      add_error(site->get_location(),
+                fmt::format("Enum variant '{}' expects {} arguments, got {}",
+                            written, patterns.size(), payload.size()));
+    else
+      add_error(site->get_location(),
+                fmt::format("Type parameter '{}' of '{}' could not be "
+                            "inferred for '{}'; give it explicitly, as in "
+                            "{}<...>::{}",
+                            tp, def->enum_name.mangled(), written,
+                            def->enum_name.mangled(), variant_name));
+    return Type::Poisoned();
+  }
+
+  return generic_type_instance(
+      def->enum_name,
+      MonomorphizedKey::from_bindings(def->enum_name.mangled(),
+                                      def->type_params, bindings)
+          .type_args);
 }
 
 std::optional<ResolvedCall>
@@ -388,10 +477,12 @@ BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
   // qualified form (e.g. Option::Some(42)) via variant_to_enum. The type
   // checker does NOT resolve unqualified enum variant names — that is the scope
   // generator's responsibility.
-  auto enum_type_opt =
-      enum_of_variant(ast->functionName, ast->explicit_type_args);
+  auto enum_type_opt = enum_of_variant(
+      ast->functionName, ast->explicit_type_args, ast, ast->arguments);
   if (!enum_type_opt)
     return std::nullopt;
+  if (enum_type_opt->is_poisoned())
+    return ResolvedCall::failure();
 
   auto &et = std::get<EnumType>(enum_type_opt->type_data);
   auto variant_idx = et.get_variant_index(ast->functionName.get_name());
@@ -550,28 +641,26 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
     bindings = std::move(resolved_args->first);
   } else {
     // Infer type arguments from call arguments
-    for (size_t i = 0; i < ast->arguments.size(); i++) {
+    if (auto bad = infer_type_args(ast->arguments, params, type_params,
+                                   bindings)) {
+      auto i = *bad;
       auto arg_type = ast->arguments[i]->get_type();
       if (arg_type.is_poisoned())
         return ResolvedCall::failure();
-      // Default polymorphic literals before generic unification
-      arg_type = default_polymorphic_type(arg_type);
-      resolve_literal_type(ast->arguments[i].get(), arg_type);
-      if (!unify(params[i], arg_type, bindings)) {
-        auto call_name = format_generic_call_name(
-            ast->written_name, type_params, bindings);
-        auto expected = substitute(params[i], bindings);
-        this->add_error(ast->arguments[i]->get_location(),
-                        fmt::format("Type mismatch in argument {} of '{}': "
-                                    "expected {}, got {}",
-                                    i + 1, call_name, expected.to_string(),
-                                    arg_type.to_string()));
-        auto mono_sig = substitute(generic_type, bindings);
-        this->add_diagnostics(ast->arguments[i]->get_location(),
-                              fmt::format("note: '{}' has signature: {}",
-                                          call_name, mono_sig.to_string()));
-        return ResolvedCall::failure();
-      }
+      auto call_name =
+          format_generic_call_name(ast->written_name, type_params, bindings);
+      auto expected = substitute(params[i], bindings);
+      this->add_error(ast->arguments[i]->get_location(),
+                      fmt::format("Type mismatch in argument {} of '{}': "
+                                  "expected {}, got {}",
+                                  i + 1, call_name, expected.to_string(),
+                                  default_polymorphic_type(arg_type)
+                                      .to_string()));
+      auto mono_sig = substitute(generic_type, bindings);
+      this->add_diagnostics(ast->arguments[i]->get_location(),
+                            fmt::format("note: '{}' has signature: {}",
+                                        call_name, mono_sig.to_string()));
+      return ResolvedCall::failure();
     }
 
     // Check all type params resolved. A partial application infers them
@@ -906,8 +995,10 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
       return ast->set_type(Type::Poisoned());
     }
     ast->set_type(*ty);
-  } else if (auto enum_type =
-                 enum_of_variant(ast->variableName, ast->explicit_type_args)) {
+  } else if (auto enum_type = enum_of_variant(ast->variableName,
+                                              ast->explicit_type_args, ast)) {
+    if (enum_type->is_poisoned())
+      return ast->set_type(Type::Poisoned());
     // An enum variant, e.g. Color::Red or Option<i32>::None. The scope
     // generator has qualified an unqualified one like Red.
     auto &et = std::get<EnumType>(enum_type->type_data);

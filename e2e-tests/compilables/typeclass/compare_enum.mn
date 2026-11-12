@@ -22,7 +22,7 @@ let main() -> i32 {
   std::printf("%d %d %d\n", Pick::A(7i64) == Pick::A(7i64),
               Pick::A(7i64) == Pick::A(8i64), Pick::A(7i64) == Pick::B(7i64));
   let some: Option<i32> = Some(3);
-  let none: Option<i32> = None;
+  let none: Option<i32> = Option<i32>::None;
   std::printf("%d %d %d\n", some == Option<i32>::Some(3), some == none,
               none == some);
   std::printf("%d %d\n", Level::Low == Level::Low, Level::Low == Level::High);
