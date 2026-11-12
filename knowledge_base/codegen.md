@@ -6,6 +6,12 @@
 - `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
 - Files: `MLIRGen.cpp` (main + kernel), `MLIRGenFunction.cpp` (functions/closures/calls), `MLIRGenExpr.cpp` (expressions), `MLIRGenBinaryOps.cpp/.h` (int/float arithmetic free functions), `MLIRLowering.cpp` (passes)
 
+## MIR (in progress, see `plans/mir.md`)
+- `--mir`: `emitFunction` first asks `MIRLowering::lowerBody` to build the body; if the body uses anything MIR doesn't handle yet, it leaves the function bodiless and the AST codegen emits it as before. A MIR function is marked `sammine.mir`
+- Handled so far: functions whose parameters and result are integers, integer literals, parameters, built-in integer arithmetic, `return`. Same signature as `buildFuncType` gives, so no casts are needed yet
+- `--mir --emit mlir` starts the dump with `// MIR: N of M functions`. `e2e-tests-mir` runs the whole suite with `--mir` (lit `--param mir=1`, feature `mir`)
+- `SourceLocator` maps AST byte offsets to MLIR locations for both paths
+
 ## Type Mapping
 | TypeKind | MLIR Type |
 |---|---|

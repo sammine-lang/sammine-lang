@@ -227,7 +227,7 @@ suite passes after every commit.
 
 ### Slices
 
-1. The dialect, `--mir`, `--emit-mir`, the fallback, and the first slice:
+1. The dialect, `--mir`, the fallback, and the first slice:
    functions with `i32`/`i64` parameters, arithmetic and `return`.
    `let f(a: i32) -> i32 { a + 1 }` compiles through MIR.
 2. `let` and locals.
@@ -293,7 +293,8 @@ indexing, automatic drops.
 2. Each sammine type kind gets a full MLIR type, so MIR is parsable.
 3. Consuming an outer value inside a loop is reported as a use after move on
    the next iteration, so consuming and then leaving the loop is accepted.
-4. The first slice prints MIR with `--emit-mir`; a `sammine-opt` tool that
+4. MIR is printed with `--mir --emit mlir` (its functions are marked
+   `sammine.mir`, under a `// MIR: N of M functions` line); a `sammine-opt` tool that
    parses MIR and runs one pass comes with the ownership check, for small
    hand-written tests.
 6. Migration by vertical slices with a per-function fallback (above).

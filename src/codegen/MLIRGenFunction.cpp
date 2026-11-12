@@ -150,6 +150,12 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, Linkage linkage) {
                             ? mlir::LLVM::Linkage::Internal
                             : mlir::LLVM::Linkage::AvailableExternally));
 
+  ++functionCount;
+  if (mirLowering && mirLowering->lowerBody(ast, funcOp)) {
+    ++mirFunctionCount;
+    return;
+  }
+
   // Create entry block with arguments
   auto &entryBlock = *funcOp.addEntryBlock();
 

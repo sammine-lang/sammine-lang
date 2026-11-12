@@ -403,7 +403,7 @@ void Compiler::codegen_mlir() {
 
   auto mlirResult =
       mlirGen(mlirCtx, programAST.get(), moduleName, options_.file_arg,
-              options_.str_arg, props_, options_.gpu);
+              options_.str_arg, props_, options_.gpu, options_.mir);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
@@ -412,6 +412,10 @@ void Compiler::codegen_mlir() {
   }
 
   if (options_.emit == EmitKind::Mlir) {
+    // With --mir, how far MIR got: its functions are marked sammine.mir.
+    if (options_.mir)
+      llvm::outs() << "// MIR: " << mlirResult.mirFunctionCount << " of "
+                   << mlirResult.functionCount << " functions\n";
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
     if (mlirResult.kernelModule) {

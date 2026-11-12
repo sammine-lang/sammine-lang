@@ -37,6 +37,8 @@ public:
   bool jit;
   std::vector<std::string> jit_args;
   EmitKind emit = EmitKind::None;
+  /// Lower function bodies through MIR where it handles them.
+  bool mir = false;
   std::string diagnostics = "none";
   TimingMode time_val;
   std::filesystem::path output_dir;

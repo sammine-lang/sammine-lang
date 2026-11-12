@@ -1,0 +1,16 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// The same answers through MIR, and calls between MIR functions and ones
+// emitted from the AST (main, local) both ways.
+// CHECK: 42 6 1333333333 9
+import std;
+
+let inc(a: i32) -> i32 { a + 1 }
+let mix(a: i64, b: i64) -> i64 { return (a * b - 3i64) / 2i64 % 7i64; }
+let udiv(a: u32, b: u32) -> u32 { a / b }
+let local(a: i32) -> i32 { let b = inc(a) - 1; b }
+
+let main() -> i32 {
+  std::printf("%d %lld %u %d\n", inc(41), mix(5i64, 6i64),
+              udiv(4000000000u32, 3u32), local(9));
+  0
+}

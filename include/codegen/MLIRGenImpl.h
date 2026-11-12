@@ -2,6 +2,8 @@
 
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
+#include "codegen/MIRLowering.h"
+#include "codegen/SourceLocator.h"
 #include "compiler/Compiler.h"
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
@@ -38,12 +40,13 @@ class MLIRGenImpl {
 public:
   MLIRGenImpl(mlir::MLIRContext &context, const std::string &moduleName_,
               const std::string &fileName_, const std::string &sourceText,
-              const AST::ASTProperties &props,
-              GPUMode gpu_mode)
-      : builder(&context), moduleName(moduleName_), fileName(fileName_),
-        diagnosticData(sammine_util::Reporter::get_diagnostic_data(sourceText)),
-        reporter(fileName_, sourceText, 3), gpu_mode_(gpu_mode),
-        props_(props) {}
+              const AST::ASTProperties &props, GPUMode gpu_mode, bool use_mir)
+      : builder(&context), moduleName(moduleName_),
+        locator(fileName_, sourceText), reporter(fileName_, sourceText, 3),
+        gpu_mode_(gpu_mode), props_(props) {
+    if (use_mir)
+      mirLowering = std::make_unique<MIRLowering>(builder, props_, locator);
+  }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
 
@@ -58,9 +61,14 @@ public:
   /// Each C binding's name in source (std::printf) → its symbol, its C name
   /// (printf). Calls and function values use the symbol.
   std::unordered_map<std::string, std::string> c_symbols;
-  std::string fileName;
-  sammine_util::Reporter::DiagnosticData diagnosticData;
+  SourceLocator locator;
   sammine_util::Reporter reporter;
+  /// Set with --mir: each function's body is lowered through MIR when it can
+  /// be, and emitted from the AST otherwise.
+  std::unique_ptr<MIRLowering> mirLowering;
+  /// Functions given a body, and how many of those went through MIR.
+  size_t functionCount = 0;
+  size_t mirFunctionCount = 0;
 
   GPUMode gpu_mode_;
 

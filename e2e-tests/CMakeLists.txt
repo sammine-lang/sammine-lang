@@ -11,6 +11,17 @@ add_custom_target(e2e-tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+# The same suite, compiled through MIR where it handles the code.
+add_custom_target(e2e-tests-mir
+    COMMAND lit --succinct -j ${LIT_WORKERS} ${CMAKE_SOURCE_DIR}/e2e-tests --verbose
+        --param bin_dir=${CMAKE_BINARY_DIR}/bin
+        --param build_dir=${CMAKE_CURRENT_BINARY_DIR}/mir
+        --param cc=${CMAKE_C_COMPILER}
+        --param mir=1
+    DEPENDS tests sammine SammineCheck stdlib
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
 # Clean stale lit Output directories (compiled .o, .exe, .so artifacts)
 add_custom_target(clean-tests
     COMMAND ${CMAKE_COMMAND} -E echo "Removing lit Output directories..."

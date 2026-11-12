@@ -8,11 +8,19 @@ bin_dir = lit_config.params.get('bin_dir', os.path.abspath("../bin"))
 build_dir = lit_config.params.get('build_dir', os.getcwd())
 
 sammine_exe = os.path.join(bin_dir, "sammine")
+# --param mir=1 compiles every test through MIR where it handles the code
+# (see knowledge_base/plans/mir.md). A test that can't run that way says
+# `UNSUPPORTED: mir`.
+if lit_config.params.get('mir'):
+    sammine_exe += ' --mir'
 sammine_check = os.path.join(bin_dir, "SammineCheck")
 # C compiler for tests that link C code, e.g. to check the C calling convention.
 c_compiler = lit_config.params.get('cc', shutil.which('cc') or 'cc')
 
 config.name = "Sammine Lang end-to-end testsuite"
+
+if lit_config.params.get('mir'):
+    config.available_features.add("mir")
 
 # Feature detection: CUDA available if ptxas is on PATH
 if shutil.which("ptxas"):

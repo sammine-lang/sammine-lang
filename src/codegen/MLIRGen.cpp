@@ -210,30 +210,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
 // ===--- Location helpers ---===
 
 mlir::Location MLIRGenImpl::loc(AST::AstBase *ast) {
-  if (!ast)
-    return builder.getUnknownLoc();
-
-  auto srcLoc = ast->get_location();
-  if (srcLoc.source_start <= 0 && srcLoc.source_end <= 0)
-    return builder.getUnknownLoc();
-
-  if (diagnosticData.empty())
-    return builder.getUnknownLoc();
-
-  // Binary search: find the line containing source_start
-  auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
-  auto it = std::ranges::upper_bound(
-      diagnosticData, std::make_pair(srcLoc.source_start, std::string_view("")),
-      cmp);
-  int64_t lineIdx =
-      std::max(int64_t(it - diagnosticData.begin()), int64_t(1)) - 1;
-  int64_t col =
-      srcLoc.source_start - diagnosticData[static_cast<size_t>(lineIdx)].first;
-
-  // FileLineColLoc uses 1-based line and 0-based column
-  return mlir::FileLineColLoc::get(builder.getContext(), fileName,
-                                   static_cast<unsigned>(lineIdx + 1),
-                                   static_cast<unsigned>(col));
+  return locator.loc(builder, ast);
 }
 
 // ===--- Runtime function declarations ---===
@@ -993,12 +970,14 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
                       const std::string &fileName,
                       const std::string &sourceText,
                       const AST::ASTProperties &props,
-                      GPUMode gpu_mode) {
-  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpu_mode);
+                      GPUMode gpu_mode, bool use_mir) {
+  MLIRGenImpl impl(context, moduleName, fileName, sourceText, props, gpu_mode,
+                   use_mir);
   auto cpuModule = impl.generate(program);
   if (!cpuModule)
     return {};
-  return {cpuModule, impl.kernelModule};
+  return {cpuModule, impl.kernelModule, impl.functionCount,
+          impl.mirFunctionCount};
 }
 
 } // namespace sammine_lang
