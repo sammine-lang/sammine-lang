@@ -1,5 +1,6 @@
 #include "codegen/MLIRGenImpl.h"
 #include "cabi/CABI.h"
+#include "cabi/KernelABI.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "dialect/SammineDialect.h"
 #include "typecheck/BuiltinInstances.h"
@@ -577,7 +578,8 @@ MLIRGenImpl::emitDirectCall(AST::CallExprAST *ast, const std::string &callee,
       auto arrSize = static_cast<int64_t>(arrType.get_size());
       auto elemMLIRType = convertTypeForKernel(arrType.get_element());
       auto sretMemref =
-          buildMemrefFromPtr(localBuf, arrSize, elemMLIRType, location);
+          kernel_abi::memrefOfPointer(builder, location, localBuf, arrSize,
+                                      elemMLIRType);
       operands.push_back(sretMemref);
     } else {
       operands.push_back(localBuf);
@@ -664,7 +666,8 @@ mlir::Value MLIRGenImpl::emitCallExpr(AST::CallExprAST *ast) {
           auto arrType = std::get<ArrayType>(argType.type_data);
           auto arrSize = static_cast<int64_t>(arrType.get_size());
           auto elemMLIRType = convertTypeForKernel(arrType.get_element());
-          val = buildMemrefFromPtr(val, arrSize, elemMLIRType, location);
+          val = kernel_abi::memrefOfPointer(builder, location, val, arrSize,
+                                            elemMLIRType);
         }
         operands.push_back(val);
       }

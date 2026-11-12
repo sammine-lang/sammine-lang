@@ -370,8 +370,6 @@ public:
   // --- Helpers (MLIRGen.cpp) ---
   /// Build a memref descriptor (LLVM struct) wrapping a raw pointer.
   /// Returns a memref<sizexelemType> via unrealized_conversion_cast.
-  mlir::Value buildMemrefFromPtr(mlir::Value ptr, int64_t size,
-                                 mlir::Type elemType, mlir::Location loc);
   mlir::Value emitAllocaOne(mlir::Type elemType, mlir::Location loc);
   /// If val is not !llvm.ptr, spill to a temp alloca and return the pointer.
   mlir::Value ensurePointer(mlir::Value val, mlir::Location loc);

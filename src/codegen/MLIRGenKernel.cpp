@@ -12,6 +12,7 @@
 //   buildKernelFuncType        ← called from generate() + emitKernelDef + emitKernelWrapper
 //   convertTypeForKernel       ← leaf, used by all type builders
 
+#include "cabi/KernelABI.h"
 #include "codegen/MLIRGenBinaryOps.h"
 #include "codegen/MLIRGenImpl.h"
 #include "dialect/SammineDialect.h"
@@ -264,7 +265,8 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
         auto arrSize = static_cast<int64_t>(arrType.get_size());
         auto elemMLIRType = convertTypeForKernel(arrType.get_element());
         auto hostMemref =
-            buildMemrefFromPtr(blockArg, arrSize, elemMLIRType, location);
+            kernel_abi::memrefOfPointer(builder, location, blockArg, arrSize,
+                                        elemMLIRType);
         kernelArgs.push_back(hostMemref);
       }
     } else {
@@ -286,7 +288,8 @@ void MLIRGenImpl::emitKernelWrapper(AST::KernelDefAST *kd,
       auto arrSize = static_cast<int64_t>(retArrType.get_size());
       auto elemMLIRType = convertTypeForKernel(retArrType.get_element());
       kernelArgs.push_back(
-          buildMemrefFromPtr(sretArg, arrSize, elemMLIRType, location));
+          kernel_abi::memrefOfPointer(builder, location, sretArg, arrSize,
+                                      elemMLIRType));
     }
   }
 

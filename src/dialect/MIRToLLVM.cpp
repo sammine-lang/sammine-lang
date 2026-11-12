@@ -1,5 +1,6 @@
 #include "dialect/MIRToLLVM.h"
 #include "cabi/CABI.h"
+#include "cabi/KernelABI.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -301,9 +302,61 @@ struct FuncLowering : public mlir::OpConversionPattern<mlir::func::FuncOp> {
 
 // By now the callee has its final signature in LLVM types, whichever way it
 // was emitted, and MIR's call takes and gives the same ones once converted. A
-// C function declared as an llvm.func is called as C calls it.
+// C function declared as an llvm.func is called as C calls it, a kernel's
+// wrapper as the kernel codegen made it.
 struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   using OpConversionPattern::OpConversionPattern;
+
+  // A kernel's wrapper takes an array by pointer on the CPU and as a memref
+  // on the GPU, as its parameter's type says: the array goes through a stack
+  // slot. An array it returns, it fills in a buffer passed last.
+  static mlir::LogicalResult callKernel(smn::CallOp op,
+                                        mlir::FunctionOpInterface callee,
+                                        mlir::ValueRange args,
+                                        llvm::ArrayRef<mlir::Type> results,
+                                        mlir::ConversionPatternRewriter &rewriter) {
+    auto loc = op.getLoc();
+    auto params = callee.getArgumentTypes();
+    // A slot holding an array, as `param`: its address, or a memref of it.
+    auto passArray = [&](mlir::Value slot, mlir::Type param) -> mlir::Value {
+      if (auto memref = mlir::dyn_cast<mlir::MemRefType>(param))
+        return kernel_abi::memrefOfPointer(rewriter, loc, slot,
+                                           memref.getDimSize(0),
+                                           memref.getElementType());
+      return slot;
+    };
+    llvm::SmallVector<mlir::Value, 4> operands;
+    for (auto [arg, param] : llvm::zip(args, params)) {
+      auto array = mlir::dyn_cast<mlir::LLVM::LLVMArrayType>(arg.getType());
+      if (!array || arg.getType() == param) {
+        operands.push_back(arg);
+        continue;
+      }
+      auto slot = entrySlot(rewriter, op, array);
+      mlir::LLVM::StoreOp::create(rewriter, loc, arg, slot);
+      operands.push_back(passArray(slot, param));
+    }
+    mlir::Value buffer;
+    bool returnsInBuffer =
+        !params.empty() &&
+        callee.getArgAttr(static_cast<unsigned>(params.size() - 1),
+                          smn::kResultBufferAttr);
+    if (returnsInBuffer) {
+      auto array = mlir::dyn_cast<mlir::LLVM::LLVMArrayType>(results.front());
+      if (!array)
+        return mlir::failure();
+      buffer = entrySlot(rewriter, op, array);
+      operands.push_back(passArray(buffer, params.back()));
+    }
+    auto call = mlir::func::CallOp::create(rewriter, loc, op.getCalleeAttr(),
+                                           callee.getResultTypes(), operands);
+    if (returnsInBuffer)
+      rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, results.front(),
+                                                      buffer);
+    else
+      rewriter.replaceOp(op, call.getResults());
+    return mlir::success();
+  }
   mlir::LogicalResult
   matchAndRewrite(smn::CallOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
@@ -311,6 +364,10 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
     if (mlir::failed(
             getTypeConverter()->convertTypes(op.getResultTypes(), results)))
       return mlir::failure();
+    auto callee = mlir::SymbolTable::lookupNearestSymbolFrom<
+        mlir::FunctionOpInterface>(op, op.getCalleeAttr());
+    if (callee && callee->hasAttr("sammine.kernel_wrapper"))
+      return callKernel(op, callee, adaptor.getArgs(), results, rewriter);
     if (auto cFunc = mlir::SymbolTable::lookupNearestSymbolFrom<
             mlir::LLVM::LLVMFuncOp>(op, op.getCalleeAttr())) {
       auto value = cabi::callC(

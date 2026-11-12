@@ -491,15 +491,18 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
 }
 
 // Whether MIR can call `callee`, of MIR signature `type`, yet: not an
-// array passed to or from C, nor to a kernel's wrapper, which takes it by
-// pointer, nor returned (sret). C's struct passing is cabi::callC's.
+// array passed to C, nor one a sammine function returns (sret). C's struct
+// passing is cabi::callC's, a kernel's wrapper's arrays the lowering of
+// sammine.call's.
 bool MIRLowering::callableFromMIR(mlir::FunctionOpInterface callee,
                                   mlir::FunctionType type) const {
+  if (callee->hasAttr("sammine.kernel_wrapper"))
+    return true;
   bool passesArray =
       llvm::any_of(type.getInputs(), llvm::IsaPred<smn::ArrayType>);
-  bool toC = mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) ||
-             callee->hasAttr("sammine.kernel_wrapper");
-  return !(toC && passesArray) && !returnsArray(type);
+  return !(mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
+           passesArray) &&
+         !returnsArray(type);
 }
 
 // `f(a)`, f a binding holding a function value: a call through it.

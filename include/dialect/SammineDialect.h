@@ -18,6 +18,10 @@ namespace sammine_lang::smn {
 /// emitted. Its signature has MIR's types.
 constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 
+/// Marks the argument a call passes a buffer for its callee's result in: a
+/// kernel's wrapper fills one it is passed last with an array it returns.
+constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
+
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);

@@ -213,12 +213,17 @@ mlir::LogicalResult LendOp::verify() {
 
 /// What a sammine call passes `callee` and gets back: its parameters, and
 /// how many results. A C function returning a struct through memory takes
-/// the buffer first (sret) and gives back nothing; the call gives back what
-/// it fills.
+/// the buffer first (sret), a kernel's wrapper returning an array last
+/// (kResultBufferAttr), and gives back nothing: the call gives back what it
+/// fills.
 static std::pair<llvm::ArrayRef<mlir::Type>, size_t>
 sammineSignature(mlir::FunctionOpInterface callee) {
   auto params = callee.getArgumentTypes();
   size_t results = callee.getResultTypes().size();
+  if (!params.empty() &&
+      callee.getArgAttr(static_cast<unsigned>(params.size() - 1),
+                        kResultBufferAttr))
+    return {params.drop_back(), 1};
   if (auto cFunc = mlir::dyn_cast<mlir::LLVM::LLVMFuncOp>(*callee);
       cFunc && cFunc.getNumArguments() > 0 &&
       cFunc.getArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName()))
