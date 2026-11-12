@@ -585,12 +585,15 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   props_.call(ast->id()).is_typeclass_call = true;
   if (is_builtin_instance(tc_key))
     props_.call(ast->id()).builtin_instance = tc_key;
+  // The instance's signature, as for any other call: the linear checker reads
+  // it to tell a lent argument from a moved one.
+  auto instance_type = substitute(method_proto->get_type(), tc_bindings);
+  props_.call(ast->id()).callee_func_type = instance_type;
 
   auto [expected, result] = resolve_generic_signature(
       method_proto, params, func_type.get_return_type(), tc_bindings);
   return ResolvedCall{resolved_name.mangled(), std::move(expected),
-                      std::move(result),
-                      substitute(method_proto->get_type(), tc_bindings), false};
+                      std::move(result), std::move(instance_type), false};
 }
 
 std::optional<ResolvedCall>

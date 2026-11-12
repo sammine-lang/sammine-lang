@@ -1,0 +1,22 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// A typeclass method taking 'ptr<T> takes the pointer: main can't use it
+// after.
+// CHECK: break_linear_instance_call_moves.mn
+// CHECK: 'b' was passed to function here
+// CHECK: Cannot use linear variable 'b' — it was already passed to function previously
+
+typeclass Take<T> {
+  Take(p: 'ptr<T>) -> T;
+}
+
+instance Take<i32> {
+  let Take(p: 'ptr<i32>) -> i32 { let v = *p; free(p); v }
+}
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  *b = 7;
+  let x = Take<i32>::Take(b);
+  free(b);
+  x
+}

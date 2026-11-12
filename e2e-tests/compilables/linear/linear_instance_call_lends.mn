@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7 7
+
+// A typeclass method taking ptr<T> borrows an owned pointer, as any function
+// does: main lends b twice and still frees it.
+
+import std;
+
+typeclass Look<T> {
+  Look(p: ptr<T>) -> T;
+}
+
+instance Look<i32> {
+  let Look(p: ptr<i32>) -> i32 { *p }
+}
+
+let main() -> i32 {
+  let b = alloc<i32>(1);
+  *b = 7;
+  let x = Look<i32>::Look(b);
+  let y = Look<i32>::Look(b);
+  std::printf("%d %d\n", x, y);
+  free(b);
+  0
+}
