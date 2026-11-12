@@ -1532,6 +1532,9 @@ mlir::Value MLIRGenImpl::emitScalarCaseExpr(AST::CaseExprAST *ast,
     auto &arm = ast->arms[i];
     builder.setInsertionPointToStart(armBlocks[i]);
 
+    // An arm's bindings name its payload for its body alone; they mustn't
+    // replace a variable of the same name outside the case.
+    decltype(symbolTable)::Guard scope(symbolTable);
     if (armPreamble)
       armPreamble(arm, location);
 

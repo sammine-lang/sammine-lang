@@ -1,0 +1,18 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 2 10 10 9
+
+import std;
+
+// An arm's binding names its payload in that arm only: the v outside the
+// case, and an owning p, are untouched by an arm binding the same name.
+let main() -> i32 {
+  let v = 10i64;
+  let s = case Option<i64>::Some(2i64) { Some(v) => v, None => v, };
+  let o = case Option<i64>::None { Some(x) => x, None => v, };
+  let p = alloc<i64>(1i64);
+  p[0] = 9i64;
+  let r = case Option<i64>::Some(3i64) { Some(p) => p, None => 0i64, };
+  std::printf("%ld %ld %ld %ld\n", s, o, v, p[0]);
+  free(p);
+  0
+}
