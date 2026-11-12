@@ -21,9 +21,13 @@ public:
 
   //! Every name this visitor meets is resolved here, in the module whose
   //! code it is: ctx().module.
-  NameResolver resolver{scope_stack, variant_to_enum, *this};
+  NameResolver resolver;
 
-  ScopeGeneratorVisitor() { scope_stack.push_context(); }
+  //! The symbols NameResolver decides go in `props`.
+  explicit ScopeGeneratorVisitor(ASTProperties &props)
+      : resolver(scope_stack, variant_to_enum, *this, props) {
+    scope_stack.push_context();
+  }
 
   //! Names in `def` are written in its module, with `type_params` in scope.
   void enter_definition(const DefinitionAST &def,

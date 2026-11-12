@@ -34,9 +34,10 @@ void NameResolver::use_program(ProgramAST &program) {
     else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
       name(kd->Prototype->functionName);
     else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
-      // A module's own C binding is named as C names it: that is its symbol.
-      if (!(ext->is_c_function && module == program.module))
-        name(ext->Prototype->functionName);
+      auto &fn = ext->Prototype->functionName;
+      name(fn);
+      if (ext->is_c_function)
+        props.set_symbol(fn, fn.get_name());
     } else if (auto *sd = llvm::dyn_cast<StructDefAST>(def.get()))
       name(sd->struct_name);
     else if (auto *ed = llvm::dyn_cast<EnumDefAST>(def.get()))

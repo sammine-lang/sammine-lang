@@ -186,10 +186,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   if (cp->is_enum_constructor || cp->builtin_instance || cp->is_partial)
     return mlir::failure();
   auto name =
-      (cp->resolved_name ? *cp->resolved_name : call->functionName).mangled();
-  // A C function is declared under its C name: std::printf is printf.
-  if (auto it = cSymbols_.find(name); it != cSymbols_.end())
-    name = it->second;
+      props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
   // Nor a call through a function value, which names no function.
   if (!module_.lookupSymbol<mlir::FunctionOpInterface>(name))
     return mlir::failure();

@@ -12,8 +12,6 @@
 #include "llvm/ADT/StringMap.h"
 
 #include <optional>
-#include <string>
-#include <unordered_map>
 
 //! \file MIRLowering.h
 //! \brief Lowers a type-checked function's body to MIR (see
@@ -24,13 +22,9 @@ namespace sammine_lang {
 
 class MIRLowering {
 public:
-  /// `cSymbols` maps each C binding's name in source to its symbol, its C
-  /// name (std::printf to printf).
   MIRLowering(mlir::OpBuilder &builder, const AST::ASTProperties &props,
-              const SourceLocator &locator,
-              const std::unordered_map<std::string, std::string> &cSymbols)
-      : builder_(builder), props_(props), locator_(locator),
-        cSymbols_(cSymbols) {}
+              const SourceLocator &locator)
+      : builder_(builder), props_(props), locator_(locator) {}
 
   /// Lowers `ast` to a new function with its MIR signature and body, marked
   /// `smn::kMirAttr`, which replaces `decl`, the AST codegen's declaration of
@@ -42,7 +36,6 @@ private:
   mlir::OpBuilder &builder_;
   const AST::ASTProperties &props_;
   const SourceLocator &locator_;
-  const std::unordered_map<std::string, std::string> &cSymbols_;
   /// The module the function being lowered goes in, where its callees are.
   mlir::ModuleOp module_;
   /// What each name in the current function stands for: its parameters and

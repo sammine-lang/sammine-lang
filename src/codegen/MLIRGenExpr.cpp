@@ -154,9 +154,7 @@ mlir::Value MLIRGenImpl::emitVariableExpr(AST::VariableExprAST *ast) {
       return theModule.lookupSymbol<mlir::func::FuncOp>(name) ||
              theModule.lookupSymbol<mlir::LLVM::LLVMFuncOp>(name);
     };
-    auto funcName = ast->variableName.mangled();
-    if (auto it = c_symbols.find(funcName); it != c_symbols.end())
-      funcName = it->second;
+    auto funcName = mangleName(ast->variableName);
     if (isFunction(funcName)) {
       auto ft = std::get<FunctionType>(ast->get_type().type_data);
       auto wrapperName = getOrCreateClosureWrapper(funcName, ft);

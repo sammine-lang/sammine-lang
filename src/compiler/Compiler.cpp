@@ -187,7 +187,7 @@ void Compiler::semantics() {
       fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
                  "Start scope checking stage...\n");
     });
-    auto vs = sammine_lang::AST::ScopeGeneratorVisitor();
+    auto vs = sammine_lang::AST::ScopeGeneratorVisitor(props_);
 
     programAST->accept_vis(&vs);
     reporter.report(vs);

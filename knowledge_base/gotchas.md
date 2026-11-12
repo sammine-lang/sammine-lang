@@ -7,7 +7,7 @@
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
 - **Generic templates skipped**: BiTypeChecker, LinearTypeChecker, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `convertType()` aborts on it
-- **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare, a module's own C bindings keep their C name), references are rewritten to those names. The parser keeps names as written; nothing after scope generation renames anything
+- **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
 - **`in_kernel_lambda_body`**: must be true inside linalg body builders — prevents alloca/malloc/free emission
 - **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `buildMemrefFromPtr` output
 - **Closures are stack-allocated**: cannot escape defining scope
@@ -62,7 +62,7 @@
 
 ## Codegen Gotchas
 - `if` lowers to `cf` blocks, not `scf.if`, so a `return` inside a branch is a plain `func.return` in its block
-- A C binding's symbol is its C name in every module (`std::printf` is `@printf`): `emitExtern` records it in `c_symbols`, and calls and function values look it up there
+- A C binding's name and symbol differ: it is named after its module like any definition (`std::printf`, `io::printf`, `str::strlen`), as the same C function is bound in many modules, each with its own types, but its symbol is its C name (`@printf`). NameResolver records the symbol in `ASTProperties::set_symbol`; codegen (`mangleName`) and MIR's calls read `ASTProperties::symbol`
 - Kernel wrappers get `noinline` to preserve LICM (LLVM can hoist calls when ptr args are loop-invariant)
 - `GreenInterner` is NOT movable (pmr limitation) — always `make_unique`
 - CST and AST diverge where parser desugars (pipe, `**` double deref, implicit returns)

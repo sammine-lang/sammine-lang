@@ -47,7 +47,7 @@
 - Instance methods: signatures and bodies are resolved in the instance's module; their names aren't registered (reached through the typeclass). Case patterns: a variant named through its enum is resolved (`resolve_variant`)
 
 ### Name resolution (`NameResolver`, semantics/NameResolver.h)
-- The one place names are decided. `use_program` first names every definition (`qualify(name, defining_module)`: `M::name`; an executable's bare; a module's own C binding keeps its C name), then each reference is resolved below
+- The one place names are decided. `use_program` first names every definition (`qualify(name, defining_module)`: `M::name`; an executable's bare) and gives each C binding its symbol, its C name, in `ASTProperties::set_symbol`; then each reference is resolved below. ScopeGeneratorVisitor takes the ASTProperties to pass to it
 - Every name position calls the resolver with `ctx()`: type exprs (`resolve_type`: params, lets, returns, alloc, cast, explicit type args, struct/enum members, aliases), struct literals (`resolve_type_name`), callees and variables (`resolve_value`). Adding a name position = one call, no logic
 - Resolved in the module whose code it is: its own definition first (`own_definition`: `M::X` when M was imported), so an imported generic body finds its module's names and an importer's same-named definition can't capture them
 - Values: locals → own module → variants (own module's enums first; `Red(1)` → `Color::Red(1)`) → as written. `X::N` with X not an import (unresolved) resolves X as a type: `Shape::Line` → `M::Shape::Line`

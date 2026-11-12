@@ -46,7 +46,7 @@ public:
         gpu_mode_(gpu_mode), props_(props) {
     if (use_mir)
       mirLowering =
-          std::make_unique<MIRLowering>(builder, props_, locator, c_symbols);
+          std::make_unique<MIRLowering>(builder, props_, locator);
   }
 
   mlir::ModuleOp generate(AST::ProgramAST *program);
@@ -61,9 +61,6 @@ public:
   mlir::ModuleOp kernelModule;
   mlir::OpBuilder builder;
   std::string moduleName;
-  /// Each C binding's name in source (std::printf) → its symbol, its C name
-  /// (printf). Calls and function values use the symbol.
-  std::unordered_map<std::string, std::string> c_symbols;
   SourceLocator locator;
   sammine_util::Reporter reporter;
   /// Set with --mir: each function's body is lowered through MIR when it can
@@ -183,6 +180,7 @@ public:
   /// GPU: deallocate a device memref.
   void gpuDealloc(mlir::Value deviceMemref, mlir::Location loc);
   mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
+  /// The symbol `qn` is defined and called as, as NameResolver decided it.
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 
   // --- Expression dispatcher + block/vardef (MLIRGen.cpp) ---

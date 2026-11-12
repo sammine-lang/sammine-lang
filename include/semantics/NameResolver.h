@@ -1,5 +1,6 @@
 #pragma once
 #include "ast/ASTContext.h"
+#include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "ast/AstBase.h"
 #include "util/QualifiedName.h"
@@ -17,7 +18,10 @@ namespace sammine_lang::AST {
 //! The one place names are decided. It names every definition after its
 //! module (shapes::Point), and resolves every name written in code to the
 //! definition it means, rewriting it to that definition's name. Later stages
-//! only read names. A name is resolved in the module whose code it is
+//! only read names. It also decides the symbol each definition is linked as,
+//! in ASTProperties: its name, but a C binding's is its C name, as a C
+//! function is bound in many modules (std::printf, io::printf), each with
+//! the types it gives it, and C knows it as one (printf). A name is resolved in the module whose code it is
 //! (`where.module`), and that module's own definition comes first: code
 //! imported from module M finds M's definitions, which are named M::X in the
 //! importer, and an importer's same-named definition can't capture them.
@@ -31,11 +35,13 @@ public:
       std::map<std::string, std::vector<sammine_util::QualifiedName>>;
 
   NameResolver(Scopes &scopes, const VariantEnums &variant_to_enum,
-               sammine_util::Reportee &reportee)
-      : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee) {}
+               sammine_util::Reportee &reportee, ASTProperties &props)
+      : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee),
+        props(props) {}
 
-  //! Name every definition of `program`, and take its modules' import
-  //! aliases, before any name is registered or resolved.
+  //! Name every definition of `program` and give each C binding its symbol,
+  //! and take its modules' import aliases, before any name is registered or
+  //! resolved.
   void use_program(ProgramAST &program);
 
   //! The prelude, stdlib/definitions.mn: every other module imports it
@@ -70,6 +76,7 @@ private:
   Scopes &scopes;
   const VariantEnums &variant_to_enum;
   sammine_util::Reportee &reportee;
+  ASTProperties &props;
   std::map<std::string, ImportAliases> module_aliases;
   //! Each top-level definition's module, and whether it exports it.
   struct Owner {
