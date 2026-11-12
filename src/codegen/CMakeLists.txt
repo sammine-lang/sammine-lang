@@ -5,6 +5,11 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGen.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenFunction.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRLowering.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringAggregates.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringCalls.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringControlFlow.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringOperators.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringPlaces.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRTypes.cpp
   ${CMAKE_CURRENT_LIST_DIR}/TypeLayout.cpp
   ${CMAKE_CURRENT_LIST_DIR}/RangeIteration.cpp

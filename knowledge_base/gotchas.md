@@ -20,7 +20,7 @@
 4. Register in `enter_new_scope()` if named
 5. Add `convertType()` case in `MLIRGen.cpp`
 6. Add a `layout::typeSize()` case if it can be an enum payload
-7. Add a `MIRLowering::mirType()` case, with a MIR type and its conversion to LLVM if it needs one
+7. Add a `MIRTypes::mirType()` case, with a MIR type and its conversion to LLVM if it needs one
 
 ## New AST Node Checklist
 1. Forward declare in `AstDecl.h`
@@ -30,7 +30,7 @@
 5. Add default `visit()` in `Ast.cpp`
 6. Add parser in `Parser.h`/`Parser.cpp`, wire into `ParsePrimaryExpr()` or `ParseDefinition()`
 7. Update 4 visitors: AstPrinter, BiTypeChecker, ScopeGenerator, GeneralSemantics
-8. Add `lowerXxx()` in `MIRLowering.cpp` + dispatch in `lowerExpr()`
+8. Add `lowerXxx()` in the `MIRLowering*.cpp` of its concern + dispatch in `lowerExpr()` (`MIRLowering.cpp`)
 9. If `ExprAST`: Monomorphizer must clone it — forgetting one causes `abort("Unknown ExprAST subclass")`
 
 ## New Operator Checklist

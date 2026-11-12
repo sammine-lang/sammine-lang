@@ -54,8 +54,8 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `include/semantics/` | `ScopeGeneratorVisitor.h`, `GeneralSemanticsVisitor.h` | Visitor declarations. |
 | `src/typecheck/` | `BiTypeChecker.cpp`, `BiTypeCheckerSynthesize.cpp`, `LinearTypeChecker.cpp`, `Monomorphizer.cpp`, `Types.cpp` | Type checking, synthesis, linear checking, generic instantiation, type utilities. |
 | `include/typecheck/` | `BiTypeChecker.h`, `LinearTypeChecker.h`, `Monomorphizer.h`, `Types.h` | Type system definitions, checker/monomorphizer declarations. |
-| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`, `MIRLowering.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR, MLIR-to-LLVM-IR lowering, JIT infrastructure. |
-| `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MIRLowering.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
+| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`, `MIRLowering*.cpp`, `MIRTypes.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR (split by concern: calls, control flow, aggregates, places, operators), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
+| `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MIRLowering.h`, `MIRTypes.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
 | `src/dialect/`, `include/dialect/` | `SammineOps.td`, `SammineTypes.td`, `MIRToLLVM.cpp` | The `sammine` dialect, MIR's types and ops, and its lowering to the LLVM dialect. |
 | `src/cabi/`, `include/cabi/` | `CABI.cpp`, `KernelABI.cpp` | Calling conventions: how C takes structs and variadic arguments, how a kernel's wrapper takes arrays. |
 | `src/compiler/` | `Compiler.cpp` | Pipeline orchestration (the `Compiler` class is defined and implemented entirely in this file). |
@@ -350,7 +350,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
    - `Types.cpp` (`compatible_to_from`, `structurally_compatible`, `TypeMapOrdering::populate`)
    - `BiTypeCheckerSynthesize.cpp` (type resolution)
    - `MLIRGen.cpp` (`convertType`) and `TypeLayout.cpp` (`layout::typeSize`)
-   - `MIRLowering.cpp` (`mirType`, and lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
+   - `MIRTypes.cpp` (`mirType`) and the `MIRLowering*.cpp` files (lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
    - `LinearTypeChecker.cpp` (if the type can be linear)
 6. Add parsing support in `Parser.cpp` if the type has new syntax.
 7. Add e2e tests in `e2e-tests/compilables/types/`.
