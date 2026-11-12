@@ -71,6 +71,7 @@ private:
   mlir::FailureOr<mlir::Value> lowerDerefRead(AST::DerefExprAST *deref);
   mlir::FailureOr<mlir::Value> lowerAssign(AST::BinaryExprAST *assign);
   mlir::FailureOr<mlir::Value> lowerNumber(AST::NumberExprAST *num);
+  mlir::FailureOr<mlir::Value> lowerString(AST::StringExprAST *str);
   mlir::FailureOr<mlir::Value> lowerBool(AST::BoolExprAST *b);
   mlir::FailureOr<mlir::Value> lowerChar(AST::CharExprAST *c);
   mlir::FailureOr<mlir::Value> lowerVariable(AST::VariableExprAST *var);

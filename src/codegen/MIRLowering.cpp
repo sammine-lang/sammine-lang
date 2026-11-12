@@ -10,9 +10,9 @@
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
 //! floats, bool, char) and pointers to them, returning one or `()`; their
-//! literals, parameters, `let`, arithmetic, calls to sammine and C
-//! functions, lending an owned pointer to a ptr<T>, `alloc`, `free`, `*p`
-//! read and written, statements and return.
+//! literals, strings among them, parameters, `let`, arithmetic, calls to
+//! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
+//! `free`, `*p` read and written, statements and return.
 
 namespace sammine_lang {
 
@@ -172,6 +172,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerFree(free);
   if (auto *deref = llvm::dyn_cast<DerefExprAST>(expr))
     return lowerDerefRead(deref);
+  if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
+    return lowerString(str);
   if (llvm::isa<UnitExprAST>(expr))
     return mlir::Value();
   return mlir::failure();
@@ -322,6 +324,14 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
   return mlir::arith::ConstantIntOp::create(
              builder_, loc(num), *type,
              sammine_util::literal_int_bits(num->number))
+      .getResult();
+}
+
+mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
+  auto type = mirType(str->get_type());
+  if (!type)
+    return mlir::failure();
+  return smn::StringOp::create(builder_, loc(str), *type, str->string_content)
       .getResult();
 }
 

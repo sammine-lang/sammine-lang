@@ -234,7 +234,9 @@ arithmetic and `return`; (2) `let` of those; (3) the other scalars, `bool`,
 `alloc`, `free`, `*p`, and lending an owned pointer to a `ptr<T>`
 (`sammine.lend` of the place it points at); (5) calls to sammine and C
 functions, variadic ones too (`sammine.call`; the lowering to LLVM calls C
-through `cabi::emitCall`, as the AST codegen does).
+through `cabi::emitCall`, as the AST codegen does); string literals
+(`sammine.string`), which most functions that print were waiting for: they
+took MIR from 1771 to 1862 functions of 3711.
 
 A call is `sammine.call`, not `func.call`: when a caller is lowered, its
 callee may not have been offered to MIR yet, so its signature (MIR's types

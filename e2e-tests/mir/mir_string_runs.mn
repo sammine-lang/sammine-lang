@@ -1,0 +1,21 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// String literals from MIR, with escapes, the same one twice, and one handed
+// to a function as a ptr<char>.
+// CHECK: "quoted"	tab
+// CHECK-NEXT: 100% twice
+// CHECK-NEXT: 100% twice
+// CHECK-NEXT: [from main]
+import std;
+
+let show(s: ptr<char>) { std::printf("[%s]\n", s); }
+let twice() {
+  std::printf("100%% twice\n");
+  std::printf("100%% twice\n");
+}
+
+let main() -> i32 {
+  std::printf("\"quoted\"\ttab\n");
+  twice();
+  show("from main");
+  0
+}

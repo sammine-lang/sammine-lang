@@ -1,0 +1,12 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// A string literal is sammine.string, a view of char: here the format
+// printf reads, its escapes kept.
+// CHECK-LABEL: func.func private @greet(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: %0 = sammine.string "hello, %d\0A" : !sammine.ptr<i8, view>
+// CHECK-NEXT: %1 = sammine.call @printf(%0, %arg0) : (!sammine.ptr<i8, view>, i32) -> i32
+import std;
+
+let greet(n: i32) { std::printf("hello, %d\n", n); }
+
+let main() -> i32 { greet(1); 0 }

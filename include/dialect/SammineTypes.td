@@ -49,4 +49,11 @@ def Sammine_OwnedPtr : Type<
          CPred<"::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">]>,
     "owned pointer">;
 
+def Sammine_CharView : Type<
+    And<[Sammine_PtrType.predicate,
+         CPred<"!::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">,
+         CPred<"::llvm::cast<::sammine_lang::smn::PtrType>($_self).getPointee()"
+               ".isInteger(8)">]>,
+    "view of char">;
+
 #endif // SAMMINE_TYPES_TD

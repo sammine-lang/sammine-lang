@@ -77,6 +77,17 @@ def LendOp : Sammine_Op<"lend", [Pure,
   let hasVerifier = 1;
 }
 
+def StringOp : Sammine_Op<"string", [Pure]> {
+  let summary = "a string literal, `\"hi\"`";
+  let description = [{
+    A view of the string's characters, followed by a NUL as C reads them, in
+    memory that lives as long as the program. Nothing owns it.
+  }];
+  let arguments = (ins StrAttr:$value);
+  let results = (outs Sammine_CharView:$result);
+  let assemblyFormat = "$value attr-dict `:` type($result)";
+}
+
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,
     TypesMatchWith<"the result is what the place holds",
                    "place", "result", ValueOfPlace>]> {

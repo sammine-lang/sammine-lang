@@ -166,6 +166,30 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   }
 };
 
+// A string literal is the address of a constant global holding it, one per
+// distinct string in the module.
+struct StringLowering : public mlir::OpConversionPattern<smn::StringOp> {
+  StringLowering(const mlir::TypeConverter &converter,
+                 mlir::MLIRContext *context,
+                 llvm::StringMap<mlir::LLVM::GlobalOp> &globals)
+      : OpConversionPattern(converter, context), globals(globals) {}
+
+  mlir::LogicalResult
+  matchAndRewrite(smn::StringOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto &global = globals[op.getValue()];
+    if (!global)
+      global = cabi::createString(
+          rewriter, op->getParentOfType<mlir::ModuleOp>(), op.getLoc(),
+          (".mir.str." + llvm::Twine(globals.size() - 1)).str(), op.getValue());
+    rewriter.replaceOpWithNewOp<mlir::LLVM::AddressOfOp>(op, global);
+    return mlir::success();
+  }
+
+private:
+  llvm::StringMap<mlir::LLVM::GlobalOp> &globals;
+};
+
 struct MIRToLLVMPass
     : public mlir::PassWrapper<MIRToLLVMPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
@@ -194,6 +218,8 @@ struct MIRToLLVMPass
                  SameAddressLowering<smn::LendOp>,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering>(converter, &context);
+    llvm::StringMap<mlir::LLVM::GlobalOp> strings;
+    patterns.add<StringLowering>(converter, &context, strings);
 
     mlir::ConversionTarget target(context);
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
@@ -203,7 +229,8 @@ struct MIRToLLVMPass
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
-                        smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp>();
+                        smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
+                        smn::StringOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

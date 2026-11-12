@@ -12,8 +12,9 @@ namespace sammine_lang {
 
 /// `sammine-mir-to-llvm`: !sammine.ptr and !sammine.place become !llvm.ptr in
 /// function signatures, calls, returns and branches, MIR's memory ops
-/// become what the AST codegen emits for them: malloc, free, load, store, and
-/// sammine.call becomes func.call. The
+/// become what the AST codegen emits for them: malloc, free, load, store,
+/// sammine.call becomes func.call, or llvm.call to C, and a string literal the
+/// address of a constant global. The
 /// casts the AST codegen put at calls into MIR then cast !llvm.ptr to itself,
 /// and reconciling removes them.
 std::unique_ptr<mlir::Pass> createMIRToLLVMPass();
