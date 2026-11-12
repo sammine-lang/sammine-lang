@@ -7,7 +7,7 @@ add_custom_target(e2e-tests
         --param bin_dir=${CMAKE_BINARY_DIR}/bin
         --param build_dir=${CMAKE_CURRENT_BINARY_DIR}
         --param cc=${CMAKE_C_COMPILER}
-    DEPENDS tests sammine SammineCheck stdlib
+    DEPENDS tests sammine sammine-opt SammineCheck stdlib
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -18,7 +18,7 @@ add_custom_target(e2e-tests-mir
         --param build_dir=${CMAKE_CURRENT_BINARY_DIR}/mir
         --param cc=${CMAKE_C_COMPILER}
         --param mir=1
-    DEPENDS tests sammine SammineCheck stdlib
+    DEPENDS tests sammine sammine-opt SammineCheck stdlib
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 

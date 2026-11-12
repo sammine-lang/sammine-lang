@@ -11,6 +11,8 @@
 - Handled so far: functions whose parameters and result are scalars (integers, floats, `bool`, `char`), their literals, parameters, `let`, built-in arithmetic, `return`. Same signature as `buildFuncType` gives, so no casts are needed yet. Float constants come from `emitFloatConstant` in `MLIRGenBinaryOps`, shared with the AST codegen
 - `--mir --emit mlir` starts the dump with `// MIR: N of M functions`. `e2e-tests-mir` runs the whole suite with `--mir` (lit `--param mir=1`, feature `mir`)
 - `SourceLocator` maps AST byte offsets to MLIR locations for both paths
+- Dialect: `SammineDialect.td` (the dialect), `SammineTypes.td` (MIR types: `!sammine.ptr<T, owned|view>` so far, its ownership an `Ownership` enum, so the assembly format is declarative), `SammineOps.td` (ops). Built as its own `SammineDialect` library, linked by the backend and by `sammine-opt`
+- `sammine-opt` (`tools/sammine-opt`) is `MlirOptMain` with the sammine, func, arith and cf dialects; lit runs `.mlir` tests with `%sammine_opt`, e.g. round trips and `-verify-diagnostics` (`e2e-tests/mir/dialect/`)
 
 ## Type Mapping
 | TypeKind | MLIR Type |

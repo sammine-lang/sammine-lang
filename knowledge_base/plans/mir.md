@@ -253,8 +253,9 @@ path still covers what MIR doesn't.
 
 ### The ownership check, the same way
 
-- `sammine-opt` (parses MIR, runs one pass) comes with the first slice that
-  the check covers, for small hand-written tests.
+- `sammine-opt` (parses MIR, runs passes, prints it) came with the first MIR
+  type, `!sammine.ptr`, whose round trip and errors it tests; the check's
+  passes are tested through it on small hand-written inputs.
 - The MIR check runs only on functions that went through MIR, next to
   `LinearTypeChecker`, which stays in charge. Disagreements on the suite are
   printed (60 test files check linear diagnostics today).
@@ -301,9 +302,9 @@ indexing, automatic drops.
 3. Consuming an outer value inside a loop is reported as a use after move on
    the next iteration, so consuming and then leaving the loop is accepted.
 4. MIR is printed with `--mir --emit mlir` (its functions are marked
-   `sammine.mir`, under a `// MIR: N of M functions` line); a `sammine-opt` tool that
-   parses MIR and runs one pass comes with the ownership check, for small
-   hand-written tests.
+   `sammine.mir`, under a `// MIR: N of M functions` line). `sammine-opt`
+   parses and prints MIR and runs passes on it, for small hand-written tests;
+   it came with the first MIR type.
 6. Migration by vertical slices with a per-function fallback (above).
 5. The ownership check uses MLIR's dataflow framework (above).
 

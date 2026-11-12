@@ -6,5 +6,10 @@
 
 #include "SammineDialect.h.inc"
 
+#include "SammineEnums.h.inc"
+
+#define GET_TYPEDEF_CLASSES
+#include "SammineTypes.h.inc"
+
 #define GET_OP_CLASSES
 #include "SammineOps.h.inc"

@@ -1,10 +1,6 @@
-include "mlir/IR/OpBase.td"
+include "codegen/SammineDialect.td"
+include "codegen/SammineTypes.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-
-def Sammine_Dialect : Dialect {
-  let name = "sammine";
-  let cppNamespace = "::sammine_lang::smn";
-}
 
 class Sammine_Op<string mnemonic, list<Trait> traits = []>
     : Op<Sammine_Dialect, mnemonic, traits>;

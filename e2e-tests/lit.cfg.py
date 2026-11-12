@@ -14,6 +14,7 @@ sammine_exe = os.path.join(bin_dir, "sammine")
 if lit_config.params.get('mir'):
     sammine_exe += ' --mir'
 sammine_check = os.path.join(bin_dir, "SammineCheck")
+sammine_opt = os.path.join(bin_dir, "sammine-opt")
 # C compiler for tests that link C code, e.g. to check the C calling convention.
 c_compiler = lit_config.params.get('cc', shutil.which('cc') or 'cc')
 
@@ -34,6 +35,7 @@ config.test_exec_root = build_dir
 # Per-test output directory to avoid parallel races.
 # lit's %t is a unique temp path per test; we use %t.d as a directory.
 # ShTest preamble_commands run before every RUN line, ensuring the dir exists.
+config.substitutions.append(('%sammine_opt', sammine_opt))
 config.substitutions.append(('%sammine_jit', sammine_exe + ' --jit'))
 config.substitutions.append(('%sammine', sammine_exe))
 config.substitutions.append(('%check', sammine_check))
@@ -46,5 +48,5 @@ config.substitutions.append(('%I', '-I %t.d'))
 config.substitutions.append(('%T', '%t.d'))
 config.test_format = lit.formats.ShTest(execute_external=True,
                                         preamble_commands=['mkdir -p %t.d'])
-config.suffixes = ['.c', '.mn']
+config.suffixes = ['.c', '.mn', '.mlir']
 config.excludes = ['Inputs']
