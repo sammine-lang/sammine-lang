@@ -213,6 +213,9 @@ public:
   /// Instances imported but not exported → their module.
   std::unordered_map<MonomorphizedKey, std::string, MonomorphizedKeyHash>
       private_instances;
+  /// How to declare the instance `key` of a typeclass, its methods taken from
+  /// the typeclass: instance Less<P> { let Less(a: P, b: P) -> bool { ... } }.
+  std::string instance_template(const MonomorphizedKey &key) const;
   /// The error for the missing instance `key`: that it is private, if it is,
   /// or else `otherwise`.
   std::string missing_instance(const MonomorphizedKey &key,

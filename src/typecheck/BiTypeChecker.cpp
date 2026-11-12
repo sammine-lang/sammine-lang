@@ -1,6 +1,7 @@
 #include "typecheck/BiTypeChecker.h"
 #include "ast/Ast.h"
 #include "typecheck/BuiltinInstances.h"
+#include "typecheck/UniSubst.h"
 #include "fmt/format.h"
 #include "fmt/ranges.h"
 #include "util/Utilities.h"
@@ -823,6 +824,34 @@ BiTypeCheckerVisitor::missing_instance(const MonomorphizedKey &key,
     return otherwise;
   return fmt::format("{}<{}> is private to module '{}'", key.name,
                      key.type_args_string(), it->second);
+}
+
+std::string
+BiTypeCheckerVisitor::instance_template(const MonomorphizedKey &key) const {
+  std::vector<std::string> methods;
+  if (auto it = type_class_defs.find(key.name); it != type_class_defs.end()) {
+    auto *tc = it->second;
+    TypeBindings bindings;
+    for (size_t i = 0; i < tc->type_params.size() && i < key.type_args.size();
+         i++)
+      bindings[tc->type_params[i]] = key.type_args[i];
+    for (auto &proto : tc->methods) {
+      auto fn = std::get<FunctionType>(
+          substitute(proto->get_type(), bindings).type_data);
+      std::vector<std::string> params;
+      for (size_t i = 0; i < proto->parameterVectors.size(); i++)
+        params.push_back(fmt::format("{}: {}", proto->parameterVectors[i]->name,
+                                     fn.get_params_types()[i].to_string()));
+      methods.push_back(fmt::format("let {}({}) -> {} {{ ... }}",
+                                    proto->functionName.mangled(),
+                                    fmt::join(params, ", "),
+                                    fn.get_return_type().to_string()));
+    }
+  }
+  auto body = methods.empty() ? std::string("...")
+                              : fmt::format("{}", fmt::join(methods, " "));
+  return fmt::format("instance {}<{}> {{ {} }}", key.name,
+                     key.type_args_string(), body);
 }
 
 void BiTypeCheckerVisitor::visit(TypeClassDeclAST *ast) {

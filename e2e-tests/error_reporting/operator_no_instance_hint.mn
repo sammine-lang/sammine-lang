@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: operator_no_instance_hint.mn:13:12
+// CHECK: No instance of Less<Point> — cannot use '<' on this type; declare one: instance Less<Point> { let Less(a: Point, b: Point) -> bool { ... } }
+// CHECK: No instance of GreaterEqual<Point> — cannot use '>=' on this type; declare one: instance GreaterEqual<Point> { let GreaterEqual(a: Point, b: Point) -> bool { ... } }
+
+// Numbers, char and str::String can be ordered; any other type declares
+// how, and the error says what to declare.
+struct Point { x: i64, };
+
+let main() -> i32 {
+  let p = Point { x: 1i64 };
+  let q = Point { x: 2i64 };
+  let a = p < q;
+  let b = p >= q;
+  0
+}

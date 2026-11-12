@@ -1,0 +1,27 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 1 0 3
+
+import std;
+
+// The instances the operator errors suggest, written out, make the
+// operators work.
+struct Point { x: i64, };
+type Color = Red | Blue;
+
+instance Less<Point> { let Less(a: Point, b: Point) -> bool { a.x < b.x } }
+instance GreaterEqual<Color> {
+  let GreaterEqual(a: Color, b: Color) -> bool {
+    case a { Blue => true, Red => b == Color::Red, }
+  }
+}
+instance Add<Point> {
+  let Add(a: Point, b: Point) -> Point { Point { x: a.x + b.x } }
+}
+
+let main() -> i32 {
+  let p = Point { x: 1i64 };
+  let q = Point { x: 2i64 };
+  let r = p + q;
+  std::printf("%d %d %ld\n", p < q, Color::Red >= Color::Blue, r.x);
+  0
+}

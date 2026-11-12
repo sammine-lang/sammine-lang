@@ -929,12 +929,15 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   if (auto class_name = class_of_operator(ast->Op->tok_type)) {
     MonomorphizedKey tc_key{std::string(*class_name), {lhs_type}};
     if (!has_instance(tc_key)) {
+      // Only numbers, char and the types with a declared instance, as
+      // str::String, have one: any other type declares its own.
       add_error(ast->Op->get_location(),
                 missing_instance(
                     tc_key, fmt::format("No instance of {}<{}> — cannot use "
-                                        "'{}' on this type",
+                                        "'{}' on this type; declare one: {}",
                                         *class_name, lhs_type.to_string(),
-                                        ast->Op->lexeme)));
+                                        ast->Op->lexeme,
+                                        instance_template(tc_key))));
       return ast->set_type(Type::Poisoned());
     }
     // A built-in instance is an instruction; any other is called.
