@@ -99,13 +99,15 @@ struct FreeLowering : public mlir::OpConversionPattern<smn::FreeOp> {
   }
 };
 
-// A place is where its pointer points: *p is p itself.
-struct DerefLowering : public mlir::OpConversionPattern<smn::DerefOp> {
-  using OpConversionPattern::OpConversionPattern;
+// A place is where its pointer points, so *p is p itself, and a view lent of
+// a place is its address, the same pointer again.
+template <typename AddressOp>
+struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
+  using mlir::OpConversionPattern<AddressOp>::OpConversionPattern;
   mlir::LogicalResult
-  matchAndRewrite(smn::DerefOp op, OpAdaptor adaptor,
+  matchAndRewrite(AddressOp op, typename AddressOp::Adaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOp(op, adaptor.getPtr());
+    rewriter.replaceOp(op, adaptor.getOperands().front());
     return mlir::success();
   }
 };
@@ -178,7 +180,9 @@ struct MIRToLLVMPass
     mlir::populateCallOpTypeConversionPattern(patterns, converter);
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
-    patterns.add<AllocLowering, FreeLowering, DerefLowering,
+    patterns.add<AllocLowering, FreeLowering,
+                 SameAddressLowering<smn::DerefOp>,
+                 SameAddressLowering<smn::LendOp>,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
                  StoreLowering, CallLowering>(converter, &context);
 
@@ -189,8 +193,8 @@ struct MIRToLLVMPass
                  converter.isLegal(&func.getBody());
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
-    target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::CopyOp,
-                        smn::MoveOp, smn::StoreOp, smn::CallOp>();
+    target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::LendOp,
+                        smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

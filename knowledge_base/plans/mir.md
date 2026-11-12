@@ -181,7 +181,8 @@ they are blocks with no edge to the join.
 
 Checks that are not about flow stay where they are or become MIR verifier
 rules: where a view `ptr<T>` may appear (`check_placement`), closures capturing
-views, lending and moving the same value in one call.
+views, lending and moving the same value in one call. Already one: a lend's
+view is used only by `sammine.call`, as it lasts for the call.
 
 ## Migration: one construct at a time, end to end
 
@@ -230,8 +231,9 @@ suite passes after every commit.
 Done: (1) `--mir`, the fallback, and functions over `i32`/`i64` with
 arithmetic and `return`; (2) `let` of those; (3) the other scalars, `bool`,
 `char`, `f32`, `f64`, with their literals and float arithmetic; (4) pointers,
-`alloc`, `free`, `*p`, but not lending; (5) calls between sammine functions
-(`sammine.call`), but not C calls.
+`alloc`, `free`, `*p`, and lending an owned pointer to a `ptr<T>`
+(`sammine.lend` of the place it points at); (5) calls between sammine
+functions (`sammine.call`), but not C calls.
 
 A call is `sammine.call`, not `func.call`: when a caller is lowered, its
 callee may not have been offered to MIR yet, so its signature (MIR's types

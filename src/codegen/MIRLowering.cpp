@@ -10,7 +10,8 @@
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
 //! floats, bool, char) and pointers to them, returning one or `()`; their
 //! literals, parameters, `let`, arithmetic, calls to other sammine
-//! functions, `alloc`, `free`, `*p` read and written, statements and return.
+//! functions, lending an owned pointer to a ptr<T>, `alloc`, `free`, `*p`
+//! read and written, statements and return.
 
 namespace sammine_lang {
 
@@ -198,16 +199,35 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
 
   llvm::SmallVector<mlir::Value, 4> args;
   for (auto [arg, param] : llvm::zip(call->arguments, type->getInputs())) {
-    auto value = lowerExpr(arg.get());
-    // An argument of another type is an owned pointer lent to a ptr<T>,
-    // which isn't lowered yet.
-    if (mlir::failed(value) || !*value || value->getType() != param)
+    auto value = lowerArgument(arg.get(), param);
+    if (mlir::failed(value))
       return mlir::failure();
     args.push_back(*value);
   }
   auto op = smn::CallOp::create(builder_, loc(call), type->getResults(), name,
                                 args);
   return op.getNumResults() ? op.getResult(0) : mlir::Value();
+}
+
+// An argument for a parameter of type `param`. An owned pointer passed to a
+// ptr<T> is lent: the callee gets a view of what it points at, and the caller
+// keeps it.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
+                                                        mlir::Type param) {
+  auto value = lowerExpr(arg);
+  if (mlir::failed(value) || !*value)
+    return mlir::failure();
+  if (value->getType() == param)
+    return *value;
+  auto ptr = mlir::dyn_cast<smn::PtrType>(value->getType());
+  if (!ptr || !ptr.isOwned() ||
+      param != smn::PtrType::get(builder_.getContext(), ptr.getPointee(),
+                                 smn::Ownership::View))
+    return mlir::failure();
+  auto place = smn::DerefOp::create(
+      builder_, loc(arg),
+      smn::PlaceType::get(builder_.getContext(), ptr.getPointee()), *value);
+  return smn::LendOp::create(builder_, loc(arg), param, place).getResult();
 }
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.

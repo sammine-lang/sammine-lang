@@ -1,0 +1,59 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// An owned pointer passed to a ptr<T> is lent: sammine.lend of the place it
+// points at gives the callee a view, and the caller keeps the pointer. The
+// callee may go through MIR (look) or not (sign), and may be an instance's
+// method; the pointee may itself own memory.
+// CHECK-LABEL: func.func private @peek(%arg0: !sammine.ptr<i32, owned>
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: %0 = sammine.deref %arg0 : <i32, owned>
+// CHECK-NEXT: %1 = sammine.lend %0 : <i32>
+// CHECK-NEXT: %2 = sammine.call @look(%1) : (!sammine.ptr<i32, view>) -> i32
+// CHECK-NEXT: %3 = sammine.deref %arg0 : <i32, owned>
+// CHECK-NEXT: %4 = sammine.lend %3 : <i32>
+// CHECK-NEXT: %5 = sammine.call @sign(%4) : (!sammine.ptr<i32, view>) -> i32
+// CHECK-LABEL: func.func private @both(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.lend
+// CHECK: sammine.lend
+// CHECK: sammine.call @add_views(%{{[0-9]+}}, %{{[0-9]+}}) : (!sammine.ptr<i32, view>, !sammine.ptr<i32, view>) -> i32
+// CHECK-LABEL: func.func private @inner(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.lend %{{[0-9]+}} : <!sammine.ptr<i32, owned>>
+// CHECK-NEXT: sammine.call @look_inner(%{{[0-9]+}}) : (!sammine.ptr<!sammine.ptr<i32, owned>, view>) -> i32
+// CHECK-LABEL: func.func private @by_method(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.lend
+// CHECK-NEXT: sammine.call @"Look<i32>::Look"(
+
+typeclass Look<T> {
+  Look(p: ptr<T>) -> T;
+}
+
+instance Look<i32> {
+  let Look(p: ptr<i32>) -> i32 { *p }
+}
+
+let look(p: ptr<i32>) -> i32 { *p }
+let sign(p: ptr<i32>) -> i32 { if *p < 0 { -1 } else { 1 } }
+let peek(p: 'ptr<i32>) -> 'ptr<i32> {
+  let v = look(p) * sign(p);
+  p
+}
+let add_views(a: ptr<i32>, b: ptr<i32>) -> i32 { *a + *b }
+let both(a: 'ptr<i32>, b: 'ptr<i32>) -> i32 {
+  let s = add_views(a, b);
+  free(a);
+  free(b);
+  s
+}
+let look_inner(pp: ptr<'ptr<i32>>) -> i32 { 3 }
+let inner(pp: 'ptr<'ptr<i32>>) -> 'ptr<'ptr<i32>> {
+  let v = look_inner(pp);
+  pp
+}
+let by_method(p: 'ptr<i32>) -> 'ptr<i32> {
+  let v = Look<i32>::Look(p);
+  p
+}
+
+let main() -> i32 { 0 }

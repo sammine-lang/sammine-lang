@@ -59,6 +59,8 @@ private:
   /// The value of `expr`, or a null value for an expression of type `()`.
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
   mlir::FailureOr<mlir::Value> lowerCall(AST::CallExprAST *call);
+  mlir::FailureOr<mlir::Value> lowerArgument(AST::ExprAST *arg,
+                                             mlir::Type param);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

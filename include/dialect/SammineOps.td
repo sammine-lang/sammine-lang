@@ -30,6 +30,10 @@ defvar PlaceOfPointee = [{::sammine_lang::smn::PlaceType::get($_self.getContext(
 // The type of the value a place of type $_self holds.
 defvar ValueOfPlace =
     [{::llvm::cast<::sammine_lang::smn::PlaceType>($_self).getValueType()}];
+// A view of what a place of type $_self holds.
+defvar ViewOfPlace = [{::sammine_lang::smn::PtrType::get($_self.getContext(),
+    ::llvm::cast<::sammine_lang::smn::PlaceType>($_self).getValueType(),
+    ::sammine_lang::smn::Ownership::View)}];
 
 def AllocOp : Sammine_Op<"alloc", [MemoryEffects<[MemAlloc]>]> {
   let summary = "room on the heap for `count` values, owned by the result";
@@ -55,6 +59,22 @@ def DerefOp : Sammine_Op<"deref", [Pure,
   let arguments = (ins Sammine_PtrType:$ptr);
   let results = (outs Sammine_PlaceType:$place);
   let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
+}
+
+def LendOp : Sammine_Op<"lend", [Pure,
+    TypesMatchWith<"the result is a view of what the place holds",
+                   "place", "result", ViewOfPlace>]> {
+  let summary = "a view of a place, for the length of a call";
+  let description = [{
+    What passing an owned `'ptr<T>` to a `ptr<T>` parameter does to `*p`:
+    the callee looks at the place through the view, and the place keeps its
+    value and its owner. The view lasts as long as the call, so it is only
+    passed to `sammine.call`.
+  }];
+  let arguments = (ins Sammine_PlaceType:$place);
+  let results = (outs Sammine_PtrType:$result);
+  let assemblyFormat = "$place attr-dict `:` type($place)";
+  let hasVerifier = 1;
 }
 
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,

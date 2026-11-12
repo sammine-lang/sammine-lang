@@ -1,0 +1,37 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Lent pointers read the memory their owner holds, through callees that
+// went through MIR and ones that didn't, and the owner frees it after.
+// CHECK: -7 -1 12 7
+import std;
+
+typeclass Look<T> {
+  Look(p: ptr<T>) -> T;
+}
+
+instance Look<i32> {
+  let Look(p: ptr<i32>) -> i32 { *p }
+}
+
+let look(p: ptr<i32>) -> i32 { *p }
+let sign(p: ptr<i32>) -> i32 { if *p < 0 { -1 } else { 1 } }
+let add_views(a: ptr<i32>, b: ptr<i32>) -> i32 { *a + *b }
+let both(a: 'ptr<i32>, b: 'ptr<i32>) -> i32 {
+  let s = add_views(a, b);
+  free(a);
+  free(b);
+  s
+}
+let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
+let via_method(p: 'ptr<i32>) -> i32 {
+  let v = Look<i32>::Look(p);
+  free(p);
+  v
+}
+
+let main() -> i32 {
+  let p = make(-7);
+  std::printf("%d %d %d %d\n", look(p), sign(p), both(make(5), make(7)),
+              via_method(make(7)));
+  free(p);
+  0
+}

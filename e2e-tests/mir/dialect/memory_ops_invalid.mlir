@@ -23,3 +23,23 @@ func.func @free_view(%p: !sammine.ptr<i32, view>) {
   sammine.free %p : !sammine.ptr<i32, view>
   return
 }
+
+// -----
+
+// A lent place is only viewed: the result can't own it.
+func.func @lend_owned(%p: !sammine.ptr<i32, owned>) {
+  %place = sammine.deref %p : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{'sammine.lend' op failed to verify that the result is a view of what the place holds}}
+  %v = "sammine.lend"(%place) : (!sammine.place<i32>) -> !sammine.ptr<i32, owned>
+  return
+}
+
+// -----
+
+// A view lasts as long as the call it is passed to: it can't outlive it.
+func.func @lend_returned(%p: !sammine.ptr<i32, owned>) -> !sammine.ptr<i32, view> {
+  %place = sammine.deref %p : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{'sammine.lend' op is a view for the length of a call, so only sammine.call can use it, not func.return}}
+  %v = sammine.lend %place : !sammine.place<i32>
+  return %v : !sammine.ptr<i32, view>
+}

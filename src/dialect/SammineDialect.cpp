@@ -49,6 +49,15 @@ mlir::LogicalResult MoveOp::verify() {
   return mlir::success();
 }
 
+mlir::LogicalResult LendOp::verify() {
+  for (auto *user : getResult().getUsers())
+    if (!mlir::isa<CallOp>(user))
+      return emitOpError("is a view for the length of a call, so only "
+                         "sammine.call can use it, not ")
+             << user->getName();
+  return mlir::success();
+}
+
 mlir::LogicalResult
 CallOp::verifySymbolUses(mlir::SymbolTableCollection &symbolTable) {
   auto callee = symbolTable.lookupNearestSymbolFrom<mlir::FunctionOpInterface>(

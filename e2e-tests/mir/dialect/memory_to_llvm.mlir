@@ -1,6 +1,7 @@
 // RUN: %sammine_opt %s -sammine-mir-to-llvm | %check %s
 // MIR's memory ops become what the AST codegen emits: malloc of the size
-// times the count, widened to i64; free; a load or store at the pointer.
+// times the count, widened to i64; free; a load or store at the pointer. A
+// place and a view lent of it are both the pointer itself.
 
 // CHECK: llvm.func @free(!llvm.ptr)
 // CHECK: llvm.func @malloc(i64) -> !llvm.ptr
@@ -25,5 +26,16 @@ func.func @f(%n: i32, %pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) -> i32
   sammine.free %q : !sammine.ptr<i32, owned>
   sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   // CHECK-NOT: sammine.
+  return %v : i32
+}
+
+func.func private @look(%p: !sammine.ptr<i32, view>) -> i32
+
+// CHECK-LABEL: func.func @lend(%arg0: !llvm.ptr) -> i32
+// CHECK-NEXT: %0 = call @look(%arg0) : (!llvm.ptr) -> i32
+func.func @lend(%p: !sammine.ptr<i32, owned>) -> i32 {
+  %place = sammine.deref %p : !sammine.ptr<i32, owned>
+  %view = sammine.lend %place : !sammine.place<i32>
+  %v = sammine.call @look(%view) : (!sammine.ptr<i32, view>) -> i32
   return %v : i32
 }

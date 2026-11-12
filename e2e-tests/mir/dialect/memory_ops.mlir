@@ -21,3 +21,15 @@ func.func @f(%n: i64, %pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) -> i32
   sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return %v : i32
 }
+
+func.func private @look(%p: !sammine.ptr<!sammine.ptr<i32, owned>, view>)
+
+// CHECK-LABEL: func.func @lend(
+func.func @lend(%p: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) {
+  %place = sammine.deref %p : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  // CHECK: %1 = sammine.lend %0 : <!sammine.ptr<i32, owned>>
+  %view = sammine.lend %place : !sammine.place<!sammine.ptr<i32, owned>>
+  // CHECK-NEXT: sammine.call @look(%1)
+  sammine.call @look(%view) : (!sammine.ptr<!sammine.ptr<i32, owned>, view>) -> ()
+  return
+}
