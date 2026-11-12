@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// The leak is reported, not a disagreement between the branches: the
+// returning one never reaches the code after the if.
+// CHECK: Linear variable 'p' must be consumed before scope exit
+// CHECK-NOT: consumed in some branches
+
+let f(c: bool) -> i32 {
+  let p = alloc<i32>(1);
+  if c { return 1; } else { free(p); };
+  0
+}
+
+let main() -> i32 { f(false) }

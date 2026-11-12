@@ -17,8 +17,10 @@ void LinearTypeChecker::push_scope() { scope_stack.emplace_back(); }
 void LinearTypeChecker::pop_scope_and_check(sammine_util::Location loc) {
   if (scope_stack.empty())
     return;
-  for (auto &[name, info] : scope_stack.back())
-    report_leaks(info);
+  // Code that has returned was checked at its return.
+  if (!diverged_)
+    for (auto &[name, info] : scope_stack.back())
+      report_leaks(info);
   scope_stack.pop_back();
 }
 
@@ -414,6 +416,7 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
 
   check_prototype_placement(ast->Prototype.get());
   push_scope();
+  diverged_ = false;
 
   // Register linear parameters (including wrapper types with linear fields)
   for (auto &param : ast->Prototype->parameterVectors)
@@ -1047,7 +1050,19 @@ void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
 
 // ── check_return ────────────────────────────────────────────────────
 
+// A return hands its value to the caller and leaves every scope: whatever
+// else the function still owns then is leaked. Nothing after it runs.
 void LinearTypeChecker::check_return(ReturnStmtAST *ast) {
+  if (diverged_)
+    return;
+  check_returned_value(ast);
+  for (auto &scope : scope_stack)
+    for (auto &[name, info] : scope)
+      report_leaks(info);
+  diverged_ = true;
+}
+
+void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
   if (!ast->return_expr)
     return;
 
@@ -1155,33 +1170,42 @@ void LinearTypeChecker::check_if(IfExprAST *ast) {
   check_expr(ast->bool_expr.get(), Use::reads(ast->get_location(), "use"));
 
   auto before = snapshot();
+  // A branch that returns never reaches the code after the if, so it has no
+  // say in what is consumed there.
+  bool was_diverged = diverged_;
+  std::vector<LinearVarMap> branches;
+  bool all_diverge = true;
+  auto take_branch = [&](const LinearVarMap &state) {
+    if (!diverged_) {
+      branches.push_back(state);
+      all_diverge = false;
+    }
+    diverged_ = was_diverged;
+  };
 
-  // Then branch
   check_block(ast->thenBlockAST.get(), ast->get_type());
-  auto state_then = snapshot();
-
-  // Restore for else
+  take_branch(snapshot());
   restore(before);
 
-  LinearVarMap state_else;
   if (ast->elseBlockAST) {
     check_block(ast->elseBlockAST.get(), ast->get_type());
-    state_else = snapshot();
+    take_branch(snapshot());
   } else {
     // No else = "no change" branch
-    state_else = before;
+    take_branch(before);
   }
 
   // Restore before state, then apply consistency results
   restore(before);
-  std::vector<LinearVarMap> branches = {state_then, state_else};
   check_branch_consistency(before, branches, ast->get_location());
+  diverged_ = was_diverged || all_diverge;
 }
 
 // ── check_loop_body ─────────────────────────────────────────────────
 
 void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
   auto before = snapshot();
+  bool was_diverged = diverged_;
   loop_depth++;
 
   check_body();
@@ -1205,6 +1229,7 @@ void LinearTypeChecker::check_loop_body(std::function<void()> check_body) {
 
   // Restore state (loop might run 0 times, so outer state is unchanged)
   restore(before);
+  diverged_ = was_diverged;
 }
 
 // ── check_for ───────────────────────────────────────────────────────
@@ -1270,6 +1295,9 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
 
   auto before = snapshot();
   std::vector<LinearVarMap> arm_states;
+  // An arm that returns, like such an if branch, is left out.
+  bool was_diverged = diverged_;
+  bool all_diverge = true;
 
   for (auto &arm : ast->arms) {
     restore(before);
@@ -1280,11 +1308,16 @@ void LinearTypeChecker::check_case(CaseExprAST *ast) {
     if (arm.body)
       check_block(arm.body.get(), ast->get_type());
     pop_scope_and_check(arm.pattern.location);
-    arm_states.push_back(snapshot());
+    if (!diverged_) {
+      arm_states.push_back(snapshot());
+      all_diverge = false;
+    }
+    diverged_ = was_diverged;
   }
 
   restore(before);
   check_branch_consistency(before, arm_states, ast->get_location());
+  diverged_ = was_diverged || (all_diverge && !ast->arms.empty());
 }
 
 // ── Inner-linear tracking helpers ────────────────────────────────────

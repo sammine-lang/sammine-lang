@@ -1,0 +1,42 @@
+// RUN: %sammine_jit --file %full | %check %full
+// A branch that frees and returns doesn't count against the code after the
+// if, where the value is still owned; nor does a returning case arm.
+import std;
+
+type Choice = Keep | Drop;
+
+let early(c: bool) -> i32 {
+  let p = alloc<i32>(1);
+  if c { free(p); return 1; };
+  free(p);
+  2
+}
+
+let arm(c: Choice) -> i32 {
+  let p = alloc<i32>(1);
+  case c {
+    Drop => { free(p); return 3; },
+    Keep => 0,
+  };
+  free(p);
+  4
+}
+
+let give(c: bool) -> 'ptr<i32> {
+  let p = alloc<i32>(1);
+  *p = 5;
+  if c { return p; };
+  *p = 6;
+  p
+}
+
+let main() -> i32 {
+  let a = give(true);
+  let b = give(false);
+  // CHECK: 1 2 3 4 5 6
+  std::printf("%d %d %d %d %d %d\n", early(true), early(false), arm(Choice::Drop),
+              arm(Choice::Keep), *a, *b);
+  free(a);
+  free(b);
+  return 0;
+}

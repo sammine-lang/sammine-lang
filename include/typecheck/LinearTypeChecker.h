@@ -153,6 +153,9 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_call(CallExprAST *ast);
   void check_free(FreeExprAST *ast);
   void check_return(ReturnStmtAST *ast);
+  void check_returned_value(ReturnStmtAST *ast);
+  /// Set once the code being checked has returned: nothing after it runs.
+  bool diverged_ = false;
   void check_if(IfExprAST *ast);
   void check_for(ForExprAST *ast);
   void check_loop_body(std::function<void()> check_body);

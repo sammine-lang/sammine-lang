@@ -110,6 +110,10 @@
 ### Branch Consistency
 - All branches of if/case must agree — either all consume a linear var or none do
 - Must check children, not just top-level vars
+- A branch or arm that returns is left out (`diverged_`): it never reaches the code after the if/case. If all of them return, so does the if/case
+
+### Returns
+- `check_return` checks the returned value, then reports every owner still live in any scope (the same "must be consumed before scope exit" leak), and sets `diverged_`. Scope exits after it (`pop_scope_and_check`) report nothing, so the implicit return at a function's end reports leaks exactly once. A loop resets `diverged_`, since it may run zero times
 
 ### Loop Restriction
 - Outer linear vars cannot be consumed inside loops
