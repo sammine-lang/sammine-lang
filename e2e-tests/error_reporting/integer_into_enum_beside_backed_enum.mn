@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: integer_into_enum_beside_backed_enum.mn:11:17
+// CHECK: Type mismatch: expression has type numeric literal, but variable declared as Shape
+
+// Flags is backed by integers, so an integer literal can be a Flags. Shape
+// isn't, and is another type: the integer isn't a Shape.
+type Flags = Read(1) | Write(2);
+type Shape = Circle(i64) | Square;
+
+let main() -> i32 {
+  let s: Shape = 5;
+  0
+}

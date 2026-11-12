@@ -2,7 +2,6 @@
 #include "util/QualifiedName.h"
 #include "util/Utilities.h"
 #include <array>
-#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -299,8 +298,6 @@ struct Type {
   bool operator==(const Type &other) const;
 
   bool operator!=(const Type &other) const;
-  bool operator<(const Type &t) const;
-  bool operator>(const Type &t) const;
 
   std::string to_string() const {
     switch (type_kind) {
@@ -675,7 +672,7 @@ inline bool is_builtin_type_name(std::string_view name) {
 /// Used by the type checker to resolve polymorphic literals and validate
 /// assignments.
 struct TypeMapOrdering {
-  std::map<Type, Type> type_map;
+  std::unordered_map<Type, Type> type_map;
 
   /// Populate the type lattice with built-in subtype edges
   void populate();
@@ -683,8 +680,8 @@ struct TypeMapOrdering {
   std::vector<Type> visit_ancestor(const Type &t) const;
   /// The type a and b both have, as an if's branches do: the one the other
   /// flows into, as i64 for a numeric literal and an i64, or Option<i64>
-  /// for None and an Option<i64>. Qualifiers are ignored. nullopt if
-  /// neither flows into the other.
+  /// for None and an Option<i64>. Linearity must match: an owning 'ptr<T>
+  /// and a ptr<T> have none. nullopt if neither flows into the other.
   std::optional<Type> lowest_common_type(const Type &a, const Type &b) const;
 
   /// Full check: structure + qualifiers (use for assignments, args, returns)

@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: function_value_linearity.mn:11:16
+// CHECK: Argument 1 to 'apply': expected ('ptr<i64>) -> i64, got (ptr<i64>) -> i64
+
+// apply hands f an owning pointer for f to free. use_view only reads one,
+// so it can't be that f: the pointer would never be freed.
+let use_view(p: ptr<i64>) -> i64 { p[0] }
+let apply(f: ('ptr<i64>) -> i64, p: 'ptr<i64>) -> i64 { f(p) }
+
+let main() -> i32 {
+  let r = apply(use_view, alloc<i64>(1i64));
+  0
+}

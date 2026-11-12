@@ -1,0 +1,22 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: branch_linearity_mismatch.mn:10:29
+// CHECK: If branches have incompatible types: then has 'ptr<i64>, else has ptr<i64>
+// CHECK: Case arms have incompatible types: expected 'ptr<i64>, got ptr<i64>
+// CHECK: Array element 1: expected 'ptr<i64>, got ptr<i64>
+
+// An owning pointer and a view are different types, so the branches of an
+// if, the arms of a case and the elements of an array can't mix them.
+let in_if(p: 'ptr<i64>, x: ptr<i64>) -> i32 {
+  let q = if true { p } else { x };
+  0
+}
+let in_case(p: 'ptr<i64>, x: ptr<i64>) -> i32 {
+  let q = case Option<i64>::None { Some(v) => p, None => x, };
+  0
+}
+let in_array(p: 'ptr<i64>, x: ptr<i64>) -> i32 {
+  let a = [p, x];
+  0
+}
+
+let main() -> i32 { 0 }

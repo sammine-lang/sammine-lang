@@ -1,7 +1,7 @@
 #include "typecheck/Types.h"
 #include "util/Utilities.h"
 #include <algorithm>
-#include <set>
+#include <unordered_set>
 #include <span>
 //! \file Types.cpp
 //! \brief Implements the core Type system for Sammine
@@ -125,36 +125,28 @@ Type Type::Function(std::vector<Type> params, bool var_arg) {
   return Type{TypeKind::Function, FunctionType{params, var_arg}};
 }
 bool Type::operator!=(const Type &other) const { return !(operator==(other)); }
-bool Type::operator<(const Type &t) const {
-  if (type_kind != t.type_kind)
-    return static_cast<int>(type_kind) < static_cast<int>(t.type_kind);
-  if (type_kind == TypeKind::TypeParam || type_kind == TypeKind::String)
-    return std::get<std::string>(type_data) <
-           std::get<std::string>(t.type_data);
-  // Same TypeKind with no sub-ordering (scalars, compounds) — equal for
-  // ordering
-  return false;
-}
-bool Type::operator>(const Type &t) const { return t < *this; }
-// Compares fundamental type structure only (TypeKind + TypeData).
-// Qualifiers like mutability and linearity are intentionally ignored — use
-// compatible_to_from() for directional compatibility checks.
+// Identity: the same kind, linearity and data, so 'ptr<i64> is not
+// ptr<i64>. Struct and enum types are the same by name. For whether one
+// type flows into another, use compatible_to_from().
 bool Type::operator==(const Type &other) const {
-  if (this->type_kind != other.type_kind)
+  if (this->type_kind != other.type_kind || this->linearity != other.linearity)
     return false;
   if (this->type_kind == TypeKind::Function ||
       this->type_kind == TypeKind::Pointer ||
       this->type_kind == TypeKind::Array ||
       this->type_kind == TypeKind::Struct ||
       this->type_kind == TypeKind::Enum || this->type_kind == TypeKind::Tuple ||
-      this->type_kind == TypeKind::TypeParam)
+      this->type_kind == TypeKind::TypeParam ||
+      this->type_kind == TypeKind::String)
     return this->type_data == other.type_data;
 
   return true;
 }
 
+// Agrees with operator==: what it compares, and nothing else, is hashed.
 size_t std::hash<Type>::operator()(const Type &t) const {
   size_t h = std::hash<int>{}(static_cast<int>(t.type_kind));
+  hash_combine(h, std::hash<int>{}(static_cast<int>(t.linearity)));
   switch (t.type_kind) {
   // Scalars + pseudo-types: discriminant is sufficient
   case TypeKind::I32_t:
@@ -217,7 +209,7 @@ size_t std::hash<Type>::operator()(const Type &t) const {
 
 std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
   std::vector<Type> result{t};
-  std::set<Type> visited{t};
+  std::unordered_set<Type> visited{t};
   while (true) {
     auto it = type_map.find(result.back());
     if (it == type_map.end())
@@ -235,9 +227,9 @@ std::vector<Type> TypeMapOrdering::visit_ancestor(const Type &t) const {
 
 std::optional<Type> TypeMapOrdering::lowest_common_type(const Type &a,
                                                         const Type &b) const {
-  if (structurally_compatible(a, b))
+  if (compatible_to_from(a, b))
     return a;
-  if (structurally_compatible(b, a))
+  if (compatible_to_from(b, a))
     return b;
   return std::nullopt;
 }
@@ -398,7 +390,11 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
     return true;
   }
 
-  return to == from;
+  // The same type, but for its own linearity: qualifier_compatible() decides
+  // whether that flows, as an owning 'ptr<T> lent where ptr<T> is expected.
+  auto unqualified = to;
+  unqualified.linearity = from.linearity;
+  return unqualified == from;
 }
 
 // Full assignment compatibility: structural match + qualifier checks
