@@ -84,6 +84,7 @@ enum TokenType {
   TokTypeclass, // typeclass
   TokInstance,  // instance
   TokKernel,    // kernel
+  TokUnsafe,    // unsafe
   TokCase,      // case
   TokFatArrow,  // =>
   // TokID
@@ -180,6 +181,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokTypeclass, "typeclass"},
     {TokInstance, "instance"},
     {TokKernel, "kernel"},
+    {TokUnsafe, "unsafe"},
     {TokCase, "case"},
     {TokFatArrow, "=>"},
     {TokID, "identifier"},

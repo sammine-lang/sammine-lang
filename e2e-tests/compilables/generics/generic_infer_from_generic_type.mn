@@ -19,7 +19,7 @@ let or_else<T>(m: Maybe<T>, d: T) -> T {
   case m { Just(x) => x, Nothing => d, }
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let bb = Box<Box<i64>> { val: Box<i64> { val: 11i64 } };
   std::printf("%ld %ld %f\n", get(Box<i64> { val: 42i64 }), inner(bb),
               second(Pair<i64, f64> { a: 1i64, b: 2.5 }));

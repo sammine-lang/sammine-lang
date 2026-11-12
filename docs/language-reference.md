@@ -173,6 +173,9 @@ reuse printf(fmt: ptr<char>, ...) -> i32;       // varargs supported
 
 C never writes into sammine memory, because sammine values are immutable. A C function hands back what it produces as its result, including new pointers, and a `ptr<T>` parameter is one C only reads. The compiler cannot see what C does, so a declaration that says otherwise is a bug in the declaration. Passing an address through `...`, as in `sscanf(s, "%d", &v)`, is an error, since nothing declares how C uses it.
 
+Calling a `reuse` function is currently allowed anywhere. It will later need
+an unsafe function, like pointer indexing, once `printf` is reworked.
+
 Imported modules can re-export C bindings with `export reuse`:
 
 ```sammine
@@ -850,17 +853,46 @@ could outlive a `free`.
 
 ### Pointer Indexing
 
-Heap-allocated buffers can be indexed like arrays:
+Heap-allocated buffers can be indexed like arrays, but only inside a function
+declared `let unsafe`:
 
 ```sammine
-let p: 'ptr<i32> = alloc<i32>(3);
-p[0] = 10;
-p[1] = 20;
-p[2] = 42;
-std::printf("%d\n", p[0]);           // 10
-std::printf("%d\n", p[2]);           // 42
-free(p);
+let unsafe main() -> i32 {
+  let p: 'ptr<i32> = alloc<i32>(3);
+  p[0] = 10;
+  p[1] = 20;
+  p[2] = 42;
+  std::printf("%d\n", p[0]);         // 10
+  std::printf("%d\n", p[2]);         // 42
+  free(p);
+  return 0;
+}
 ```
+
+The compiler checks neither which element `p[i]` names nor whether it is in
+bounds, so the linearity of owned elements reached through `p[i]` is not
+checked either. `let unsafe` marks the functions where that is up to the
+author: when a program crashes, look at its unsafe functions first. This holds
+for every pointer, owned or a view, including string literals (`"hi"[0]`).
+Fixed arrays are bounds-checked and can be indexed anywhere.
+
+An unsafe function is called like any other function. Callers need no marker,
+so `vec::push` is unsafe inside but used from safe code:
+
+```sammine
+let unsafe put(p: 'ptr<i64>, i: i64, v: i64) -> 'ptr<i64> {
+  p[i] = v;
+  p
+}
+
+let main() -> i32 {
+  let p = put(alloc<i64>(1), 0i64, 7i64);
+  free(p);
+  return 0;
+}
+```
+
+`export let unsafe f(...)` exports an unsafe function.
 
 ### Ownership Transfer (Move)
 
@@ -1054,7 +1086,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 import std;
 import vec;
 
-let main() -> i32 {
+let unsafe main() -> i32 {               // unsafe: reads v3.data[i]
   let v0 = vec::new<i32>(4);             // create with initial capacity 4
   let v1 = vec::push<i32>(v0, 10);       // push returns new Vec
   let v2 = vec::push<i32>(v1, 20);

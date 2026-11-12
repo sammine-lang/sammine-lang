@@ -5,7 +5,7 @@ import std;
 
 // An arm's binding names its payload in that arm only: the v outside the
 // case, and an owning p, are untouched by an arm binding the same name.
-let main() -> i32 {
+let unsafe main() -> i32 {
   let v = 10i64;
   let s = case Option<i64>::Some(2i64) { Some(v) => v, None => v, };
   let o = case Option<i64>::None { Some(x) => x, None => v, };

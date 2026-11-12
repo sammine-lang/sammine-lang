@@ -283,6 +283,9 @@ public:
   std::vector<std::string>
       type_params;         // populated during parsing, not type checking
   bool is_var_arg = false; // true for C vararg externs (e.g. printf)
+  /// Declared `let unsafe`: the body may index pointers. Callers need no
+  /// marker.
+  bool is_unsafe = false;
   bool is_generic() const { return !type_params.empty(); }
 
   explicit PrototypeAST(

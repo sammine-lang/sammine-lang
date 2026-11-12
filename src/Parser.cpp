@@ -347,14 +347,18 @@ auto Parser::ParseReuseDef() -> p<DefinitionAST> {
 
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {
   EXPECT(fn, TokenType::TokLet);
+  bool is_unsafe = expect(TokenType::TokUnsafe) != nullptr;
   auto [prototype, proto_result] = ParsePrototype();
   if (proto_result != SUCCESS) {
     emit_if_uncommitted(proto_result,
-                        "Expected a function prototype after 'let'",
+                        is_unsafe ? "Expected a function prototype after "
+                                    "'let unsafe'"
+                                  : "Expected a function prototype after 'let'",
                         fn->get_location());
     (void)expect(TokenType::TokRightCurly, /*exhausts=*/true);
     return {nullptr, FAILED};
   }
+  prototype->is_unsafe = is_unsafe;
   auto [block, result] = ParseBlock();
   if (result != SUCCESS) {
     emit_if_uncommitted(result, "Expected a function body block",

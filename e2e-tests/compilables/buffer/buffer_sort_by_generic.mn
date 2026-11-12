@@ -10,7 +10,7 @@ let greater(a: f64, b: f64) -> bool { a > b }
 let less(a: f64, b: f64) -> bool { a < b }
 let gt_i64(a: i64, b: i64) -> bool { a > b }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let xs = alloc<f64>(4i64);
   xs[0] = 2.5;
   xs[1] = 0.5;

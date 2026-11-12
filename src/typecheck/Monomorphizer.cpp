@@ -134,6 +134,7 @@ Monomorphizer::clone_prototype(PrototypeAST *proto,
       new_name, proto->get_location(),
       clone_type_expr(proto->return_type_expr.get()), std::move(params));
   // type_params left empty — this is a concrete instantiation
+  result->is_unsafe = proto->is_unsafe;
   return result;
 }
 

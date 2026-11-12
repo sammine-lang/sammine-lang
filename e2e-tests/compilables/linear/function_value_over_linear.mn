@@ -6,7 +6,7 @@
 
 import std;
 
-let set(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
+let unsafe set(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
   p[0] = v;
   p
 }
@@ -16,7 +16,7 @@ let twice(step: ('ptr<i64>, i64) -> 'ptr<i64>, p: 'ptr<i64>) -> 'ptr<i64> {
   step(q, 42i64)
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p = twice(set, alloc<i64>(1));
   std::printf("%ld\n", p[0]);
   free(p);

@@ -862,6 +862,20 @@ static const ExprAST *write_root(const ExprAST *target) {
   return target;
 }
 
+void BiTypeCheckerVisitor::check_unsafe_allowed(sammine_util::Location loc,
+                                                std::string_view what) {
+  auto *fn = ctx().enclosing_function;
+  if (fn && fn->Prototype->is_unsafe)
+    return;
+  this->add_error(loc, fmt::format("{} is only allowed in an unsafe function",
+                                   what));
+  if (fn)
+    this->add_diagnostics(
+        fn->Prototype->get_location(),
+        fmt::format("declare it as 'let unsafe {}' to allow it",
+                    fn->Prototype->functionName.get_name()));
+}
+
 // Bindings are immutable, so an assignment must land in memory behind a
 // pointer. Reports the assignment otherwise, based on where it lands.
 bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
@@ -1417,8 +1431,10 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
     return ast->set_type(arr_data.get_element());
   }
 
-  // Pointer indexing: ptr<T>[i] -> T
+  // Pointer indexing: ptr<T>[i] -> T. Nothing checks which element `i` names
+  // or that it is in bounds, so only an unsafe function may do it.
   if (arr_type.type_kind == TypeKind::Pointer) {
+    check_unsafe_allowed(ast->get_location(), "indexing a pointer");
     auto &ptr_data = std::get<PointerType>(arr_type.type_data);
     return ast->set_type(ptr_data.get_pointee());
   }

@@ -10,7 +10,7 @@ import std;
 import range;
 import buffer;
 
-let is_abundant(sums: ptr<i64>, i: i64) -> bool { sums[i] > i }
+let unsafe is_abundant(sums: ptr<i64>, i: i64) -> bool { sums[i] > i }
 
 // Whether a and n - a are both abundant.
 let abundant_pair(sums: ptr<i64>, n: i64, a: i64) -> bool {
@@ -22,7 +22,7 @@ let unless_abundant_sum(sums: ptr<i64>, n: i64) -> i64 {
   if range::any(1, n / 2 + 1, abundant_pair(sums, n)) { 0 } else { n }
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let n = 28124i64;
   // sums[m] is the sum of m's proper divisors: each k divides 2k, 3k, ...
   let sums = buffer::filled(n, 0i64);

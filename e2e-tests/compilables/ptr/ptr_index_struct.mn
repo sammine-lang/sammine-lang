@@ -9,7 +9,7 @@ struct Point {
   y: i32,
 };
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p : 'ptr<Point> = alloc<Point>(2);
   p[0] = Point { x: 10, y: 11 };
   p[1] = Point { x: 20, y: 21 };

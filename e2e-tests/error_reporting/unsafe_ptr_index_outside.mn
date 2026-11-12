@@ -1,0 +1,17 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// Reading and writing through p[i] both need an unsafe function, for an owned
+// pointer and for a view alike.
+// CHECK: declare it as 'let unsafe read' to allow it
+// CHECK: indexing a pointer is only allowed in an unsafe function
+// CHECK: declare it as 'let unsafe main' to allow it
+// CHECK: indexing a pointer is only allowed in an unsafe function
+// CHECK-NOT: only allowed
+
+let read(p: ptr<i64>) -> i64 { p[0] }
+
+let main() -> i32 {
+  let p = alloc<i64>(1);
+  p[0] = 3i64;
+  free(p);
+  return 0;
+}

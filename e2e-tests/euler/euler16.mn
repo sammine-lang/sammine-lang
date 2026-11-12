@@ -12,7 +12,7 @@ let base() -> i64 { 1000000000i64 }
 let chunks() -> i32 { 40 }
 
 // Sets chunks i.. of `n` to zero.
-let clear(n: 'ptr<i64>, i: i32) -> 'ptr<i64> {
+let unsafe clear(n: 'ptr<i64>, i: i32) -> 'ptr<i64> {
   if i == chunks() { n } else {
     n[i] = 0i64;
     clear(n, i + 1)
@@ -20,7 +20,7 @@ let clear(n: 'ptr<i64>, i: i32) -> 'ptr<i64> {
 }
 
 // Doubles chunks i.. of `n`, adding `carry` into chunk i.
-let double(n: 'ptr<i64>, i: i32, carry: i64) -> 'ptr<i64> {
+let unsafe double(n: 'ptr<i64>, i: i32, carry: i64) -> 'ptr<i64> {
   if i == chunks() { n } else {
     let val = n[i] * 2i64 + carry;
     n[i] = val % base();
@@ -38,11 +38,11 @@ let digit_sum(x: i64) -> i64 {
 }
 
 // The digit sum of chunks i.. of `n`.
-let chunk_digit_sum(n: ptr<i64>, i: i32) -> i64 {
+let unsafe chunk_digit_sum(n: ptr<i64>, i: i32) -> i64 {
   if i == chunks() { 0i64 } else { digit_sum(n[i]) + chunk_digit_sum(n, i + 1) }
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let n = clear(alloc<i64>(chunks()), 0);
   n[0] = 1i64;
   let n = double_times(n, 1000);

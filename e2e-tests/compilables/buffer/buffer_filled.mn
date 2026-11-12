@@ -4,7 +4,7 @@
 import std;
 import buffer;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let xs = buffer::filled(3i64, 7i64);
   let ys = buffer::filled(2i64, 2.5);
   let none = buffer::filled(0i64, 1i64);

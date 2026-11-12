@@ -6,7 +6,7 @@ import std;
 struct Inner { a: [2]i32, t: (i32, i32), };
 struct Outer { n: i32, inner: Inner, };
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p = alloc<Outer>(2);
   p[1] = Outer { n: 0, inner: Inner { a: [0, 0], t: (0, 0) } };
   (*p).n = 1;

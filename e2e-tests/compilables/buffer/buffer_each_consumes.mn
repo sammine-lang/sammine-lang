@@ -13,7 +13,7 @@ let print_and_delete(s: str::String) -> unit {
   str::delete(s);
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let names = alloc<str::String>(3i64);
   names[0] = str::new("alpha");
   names[1] = str::new("beta");

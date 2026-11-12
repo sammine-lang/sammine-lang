@@ -117,7 +117,8 @@ std::string FuncDefAST::to_string() const {
   std::string result;
   if (is_exported)
     result += "export ";
-  result += "let " + Prototype->to_string() + " {\n";
+  result += Prototype->is_unsafe ? "let unsafe " : "let ";
+  result += Prototype->to_string() + " {\n";
   result += Block->to_string() + "\n}";
   return result;
 }

@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
+// CHECK: Expected a function prototype after 'let unsafe'
+
+let unsafe { }
+
+let main() -> i32 {
+  return 0;
+}

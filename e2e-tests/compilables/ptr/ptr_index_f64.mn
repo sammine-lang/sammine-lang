@@ -4,7 +4,7 @@
 
 import std;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p : 'ptr<f64> = alloc<f64>(2);
   p[0] = 3.14;
   p[1] = 2.72;

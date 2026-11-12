@@ -10,7 +10,7 @@
 import std;
 import c_small_args as c;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   // 0xC3, the first byte of "é": negative as a signed char.
   let s = "é";
   let x = s[0];

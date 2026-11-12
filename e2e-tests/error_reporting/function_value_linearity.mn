@@ -4,7 +4,7 @@
 
 // apply hands f an owning pointer for f to free. use_view only reads one,
 // so it can't be that f: the pointer would never be freed.
-let use_view(p: ptr<i64>) -> i64 { p[0] }
+let unsafe use_view(p: ptr<i64>) -> i64 { p[0] }
 let apply(f: ('ptr<i64>) -> i64, p: 'ptr<i64>) -> i64 { f(p) }
 
 let main() -> i32 {

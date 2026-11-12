@@ -108,6 +108,7 @@ std::optional<TokenType> keyword_token(std::string_view word) {
     {"in", TokIn},
     {"case", TokCase},
     {"kernel", TokKernel},
+    {"unsafe", TokUnsafe},
   };
   auto it = keywords.find(word);
   if (it == keywords.end())

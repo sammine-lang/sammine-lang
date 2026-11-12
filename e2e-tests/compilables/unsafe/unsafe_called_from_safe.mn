@@ -1,0 +1,24 @@
+// RUN: %sammine_jit --file %full | %check %full
+// An unsafe function is called like any other, from safe code, directly, as
+// a generic instance, and as a function value.
+import std;
+
+let unsafe put(p: 'ptr<i64>, i: i64, v: i64) -> 'ptr<i64> {
+  p[i] = v;
+  p
+}
+
+let unsafe get<T>(p: ptr<T>, i: i64) -> T { p[i] }
+
+let apply(f: ('ptr<i64>, i64, i64) -> 'ptr<i64>, p: 'ptr<i64>) -> 'ptr<i64> {
+  f(p, 1i64, 20i64)
+}
+
+let main() -> i32 {
+  let p = put(alloc<i64>(2), 0i64, 10i64);
+  let p = apply(put, p);
+  // CHECK: 10 20
+  std::printf("%lld %lld\n", get<i64>(p, 0i64), get(p, 1i64));
+  free(p);
+  return 0;
+}

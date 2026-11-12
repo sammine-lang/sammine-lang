@@ -4,7 +4,7 @@
 import std;
 import vec;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let v0 = vec::new<i32>(4);
   let v1 = vec::push<i32>(v0, 10);
   let v2 = vec::push<i32>(v1, 20);

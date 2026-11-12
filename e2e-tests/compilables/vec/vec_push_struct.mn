@@ -6,7 +6,7 @@ import vec;
 
 struct Point { x: i32, y: i32, };
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let v0 = vec::new<Point>(4);
   let v1 = vec::push<Point>(v0, Point { x: 1, y: 2 });
   let v2 = vec::push<Point>(v1, Point { x: 3, y: 4 });

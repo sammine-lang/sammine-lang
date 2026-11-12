@@ -10,7 +10,7 @@
 // A closure can be called any number of times, so it can't own a value:
 // each call would hand p on again, and two calls would free it twice.
 
-let set_to(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
+let unsafe set_to(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
   p[0] = v;
   p
 }

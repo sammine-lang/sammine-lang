@@ -8,7 +8,7 @@ import std;
 
 let pass<T>(x: T) -> T { x }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p = alloc<i64>(1);
   p[0] = 42i64;
   let q = pass<'ptr<i64>>(p);

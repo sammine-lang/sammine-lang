@@ -46,7 +46,7 @@
 
 ### Indexing
 - `arr[i]` → element type; static bounds checking for constant indices
-- `ptr<T>[i]` → `T`; no bounds checking
+- `ptr<T>[i]` → `T`; no bounds checking. Only allowed in a `let unsafe` function (`check_unsafe_allowed`, using `ctx().enclosing_function`); `PrototypeAST::is_unsafe` is copied to monomorphized instances. Calling an unsafe function needs no marker. Calling `reuse` is not yet restricted (TODO at `visit(ExternAST *)`, waiting on a printf rework)
 - `len(arr)` → `i32`; `dim(arr)` → tuple of `i32` per nesting level
 
 ### Enums

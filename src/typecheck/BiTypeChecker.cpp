@@ -206,6 +206,10 @@ void BiTypeCheckerVisitor::visit(VarDefAST *ast) {
   }
 }
 
+// TODO: calling a reuse function should be allowed only in an unsafe
+// function, like indexing a pointer (see check_unsafe_allowed): nothing checks
+// what the C code does. Nearly every program calls std::printf, so this waits
+// until printf is reworked.
 void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   ScopeGuard scope(*this);
   if (ast->Prototype->is_generic()) {

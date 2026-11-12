@@ -307,6 +307,8 @@ public:
 
   // Binary expression synthesis helper
   bool check_assign_target(BinaryExprAST *ast);
+  // Reports `what` unless the enclosing function is declared `let unsafe`.
+  void check_unsafe_allowed(sammine_util::Location loc, std::string_view what);
   bool check_addr_of_operand(AddrOfExprAST *ast);
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);

@@ -8,7 +8,7 @@ export let new<T>(cap: i64) -> Vec<T> {
   Vec<T> { data: alloc<T>(cap), length: 0i64, cap: cap }
 }
 
-let grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
+let unsafe grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
   let new_c = old_c * 2i64;
   let new_d = alloc<T>(new_c);
   for i in 0i64..l {
@@ -18,7 +18,7 @@ let grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
   new_d
 }
 
-export let push<T>(v: Vec<T>, val: T) -> Vec<T> {
+export let unsafe push<T>(v: Vec<T>, val: T) -> Vec<T> {
   if v.length == v.cap {
     let d2 = grow_buf<T>(v.data, v.length, v.cap);
     d2[v.length] = val;
