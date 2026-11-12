@@ -7,8 +7,8 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 
 //! \file MIRLoweringOperators.cpp
-//! \brief Arithmetic, negation, comparisons, equality and casts, the builtin ones
-//! and those through instances.
+//! \brief Arithmetic, negation, comparisons, equality and casts, the builtin
+//! ones and those through instances.
 
 namespace sammine_lang {
 
@@ -30,8 +30,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
                     cast->get_type());
 }
 
-mlir::FailureOr<mlir::Value>
-MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
   if (!neg->get_type().is_integer() && !neg->get_type().is_float())
     return mlir::failure();
   auto value = lowerValue(neg->operand.get());
@@ -79,17 +78,17 @@ MIRLowering::lowerOperator(mlir::Location location, TokenType op,
     if (!comparison)
       return mlir::failure();
     auto address = [&](mlir::Value ptr) -> mlir::Value {
-      return smn::AddressOp::create(builder_, location,
-                                    builder_.getI64Type(), ptr);
+      return smn::AddressOp::create(builder_, location, builder_.getI64Type(),
+                                    ptr);
     };
     result = emitScalarComparison(builder_, location, address(lhs),
                                   address(rhs), op, /*is_float=*/false,
                                   /*is_unsigned=*/false);
   } else if (auto integer = integerKind(type)) {
-    result = comparison ? emitScalarComparison(builder_, location, lhs, rhs, op,
-                                               /*is_float=*/false, *integer)
-                        : emitIntArithOp(builder_, location, lhs, rhs, op,
-                                         *integer);
+    result = comparison
+                 ? emitScalarComparison(builder_, location, lhs, rhs, op,
+                                        /*is_float=*/false, *integer)
+                 : emitIntArithOp(builder_, location, lhs, rhs, op, *integer);
   } else if (type.is_float()) {
     result = comparison ? emitScalarComparison(builder_, location, lhs, rhs, op,
                                                /*is_float=*/true,
@@ -99,8 +98,7 @@ MIRLowering::lowerOperator(mlir::Location location, TokenType op,
     auto equal = lowerEquality(location, lhs, rhs, type);
     if (mlir::failed(equal) || op == TokEQUAL)
       return equal;
-    auto one = intConstant(location,
-                                                  builder_.getI1Type(), 1);
+    auto one = intConstant(location, builder_.getI1Type(), 1);
     return mlir::arith::XOrIOp::create(builder_, location, *equal, one)
         .getResult();
   }
@@ -129,9 +127,10 @@ std::optional<bool> MIRLowering::integerKind(const Type &type) {
 // `lhs == rhs` of `type`, as an i1. Arrays compare element by element,
 // stopping at the first that differs; enums with payloads compare their
 // tags, then the payload of the variant they share.
-mlir::FailureOr<mlir::Value>
-MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
-                           mlir::Value rhs, const Type &type) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerEquality(mlir::Location location,
+                                                        mlir::Value lhs,
+                                                        mlir::Value rhs,
+                                                        const Type &type) {
   auto i1 = builder_.getI1Type();
   auto *region = builder_.getInsertionBlock()->getParent();
 
@@ -153,9 +152,9 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     auto more = mlir::arith::CmpIOp::create(
         builder_, location, mlir::arith::CmpIPredicate::slt, index,
         intConstant(location, i64, static_cast<int64_t>(array.get_size())));
-    mlir::cf::CondBranchOp::create(builder_, location, more, body,
-                                   mlir::ValueRange{}, after,
-                                   mlir::ValueRange{intConstant(location, i1, 1)});
+    mlir::cf::CondBranchOp::create(
+        builder_, location, more, body, mlir::ValueRange{}, after,
+        mlir::ValueRange{intConstant(location, i1, 1)});
     builder_.setInsertionPointToStart(body);
     auto element = mirArray.getElement();
     auto a = smn::ElementOp::create(builder_, location, element, lhs, index);
@@ -165,9 +164,9 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
       return mlir::failure();
     auto next = mlir::arith::AddIOp::create(builder_, location, index,
                                             intConstant(location, i64, 1));
-    mlir::cf::CondBranchOp::create(builder_, location, *same, header,
-                                   mlir::ValueRange{next}, after,
-                                   mlir::ValueRange{intConstant(location, i1, 0)});
+    mlir::cf::CondBranchOp::create(
+        builder_, location, *same, header, mlir::ValueRange{next}, after,
+        mlir::ValueRange{intConstant(location, i1, 0)});
     continueIn(after);
     return after->getArgument(0);
   }
@@ -186,9 +185,9 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
   auto *check = &region->emplaceBlock();
   auto *after = &region->emplaceBlock();
   after->addArgument(i1, location);
-  mlir::cf::CondBranchOp::create(builder_, location, sameTag, check,
-                                 mlir::ValueRange{}, after,
-                                 mlir::ValueRange{intConstant(location, i1, 0)});
+  mlir::cf::CondBranchOp::create(
+      builder_, location, sameTag, check, mlir::ValueRange{}, after,
+      mlir::ValueRange{intConstant(location, i1, 0)});
   // The same variant: with no payload, equal; else equal if its fields are.
   builder_.setInsertionPointToStart(check);
   auto equalTrue = intConstant(location, i1, 1);
@@ -208,7 +207,8 @@ MIRLowering::lowerEquality(mlir::Location location, mlir::Value lhs,
     mlir::Value all = intConstant(location, i1, 1);
     int64_t offset = 0;
     for (auto [i, field] : llvm::enumerate(fields)) {
-      auto at = static_cast<uint64_t>(layout::advancePayloadOffset(offset, field));
+      auto at =
+          static_cast<uint64_t>(layout::advancePayloadOffset(offset, field));
       auto a = smn::PayloadOp::create(builder_, location, mirFields[i], lhs,
                                       variant, i, at);
       auto b = smn::PayloadOp::create(builder_, location, mirFields[i], rhs,

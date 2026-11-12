@@ -3,8 +3,8 @@
 #include "typecheck/BuiltinInstances.h"
 
 //! \file MIRLoweringCalls.cpp
-//! \brief Calls to sammine and C functions, methods and function values, partial
-//! application, and the arguments they take: an owned pointer lent to a
+//! \brief Calls to sammine and C functions, methods and function values,
+//! partial application, and the arguments they take: an owned pointer lent to a
 //! `ptr<T>` parameter.
 
 namespace sammine_lang {
@@ -33,14 +33,14 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
     return lowerBuiltinInstance(loc(call), *cp->builtin_instance, args,
                                 call->get_type());
   }
-  auto name =
-      props_.symbol(cp->resolved_name ? *cp->resolved_name : call->functionName);
+  auto name = props_.symbol(cp->resolved_name ? *cp->resolved_name
+                                              : call->functionName);
   // A name no function has is a binding holding a function value.
   auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
   if (!callee)
     return lowerIndirectCall(call);
-  auto type =
-      types_.mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
+  auto type = types_.mirFunctionType(
+      std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
   if (cp->is_partial)
@@ -57,8 +57,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
       return mlir::failure();
     args.push_back(*value);
   }
-  auto op = smn::CallOp::create(builder_, loc(call), type->getResults(), name,
-                                args);
+  auto op =
+      smn::CallOp::create(builder_, loc(call), type->getResults(), name, args);
   return op.getNumResults() ? op.getResult(0) : mlir::Value();
 }
 
@@ -110,17 +110,15 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
 // ptr<T> is lent: the callee gets a view of what it points at, and the caller
 // keeps it. `view` says how long the view lasts: the call, or, for an
 // argument a partial application binds, as long as what it points at.
-mlir::FailureOr<mlir::Value> MIRLowering::lowerArgument(ExprAST *arg,
-                                                        mlir::Type param,
-                                                        ViewLasts view) {
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerArgument(ExprAST *arg, mlir::Type param, ViewLasts view) {
   auto value = lowerValue(arg);
   if (mlir::failed(value))
     return mlir::failure();
   if (value->getType() == param)
     return *value;
   auto ptr = mlir::dyn_cast<smn::PtrType>(value->getType());
-  if (!ptr || !ptr.isOwned() ||
-      param != viewOf(ptr.getPointee()))
+  if (!ptr || !ptr.isOwned() || param != viewOf(ptr.getPointee()))
     return mlir::failure();
   return lend(*value, loc(arg), view);
 }
@@ -140,8 +138,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
 mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc,
                               ViewLasts view) {
   auto pointee = mlir::cast<smn::PtrType>(owner.getType()).getPointee();
-  auto place = smn::DerefOp::create(builder_, loc,
-                                    placeOf(pointee), owner);
+  auto place = smn::DerefOp::create(builder_, loc, placeOf(pointee), owner);
   auto type = viewOf(pointee);
   if (view == ViewLasts::Place)
     return smn::AddrOp::create(builder_, loc, type, place).getResult();
@@ -210,11 +207,9 @@ MIRLowering::lowerIndexerCall(IndexExprAST *index,
     auto value = lowerValue(index->array_expr.get());
     if (mlir::failed(value))
       return mlir::failure();
-    place = smn::LocalOp::create(
-                builder_, location,
-                placeOf(value->getType()),
-                "")
-                .getResult();
+    place =
+        smn::LocalOp::create(builder_, location, placeOf(value->getType()), "")
+            .getResult();
     smn::StoreOp::create(builder_, location, *value, *place);
   }
   if (mlir::failed(place))
@@ -223,10 +218,7 @@ MIRLowering::lowerIndexerCall(IndexExprAST *index,
   if (mlir::failed(offset))
     return mlir::failure();
   auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
-  auto view = smn::LendOp::create(
-      builder_, location,
-      viewOf(holds),
-      *place);
+  auto view = smn::LendOp::create(builder_, location, viewOf(holds), *place);
   return callMethod(location, method, {view, *offset}, index->get_type());
 }
 

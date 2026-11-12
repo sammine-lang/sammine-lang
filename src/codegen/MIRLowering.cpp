@@ -43,8 +43,8 @@ private:
       if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(expr)) {
         expr = field->object_expr.get();
       } else if (auto *index = llvm::dyn_cast<IndexExprAST>(expr);
-                 index && index->array_expr->get_type().type_kind ==
-                              TypeKind::Array) {
+                 index &&
+                 index->array_expr->get_type().type_kind == TypeKind::Array) {
         expr = index->array_expr.get();
       } else {
         if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
@@ -232,9 +232,8 @@ void MIRLowering::bind(llvm::StringRef name, mlir::Value value,
     names_[name] = value;
     return;
   }
-  auto slot = smn::LocalOp::create(
-      builder_, location,
-      placeOf(value.getType()), name);
+  auto slot =
+      smn::LocalOp::create(builder_, location, placeOf(value.getType()), name);
   smn::StoreOp::create(builder_, location, value, slot);
   names_[name] = slot;
 }
@@ -357,7 +356,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNumber(NumberExprAST *num) {
     return emitFloatConstant(builder_, loc(num), std::stod(num->number),
                              floatType);
   return intConstant(loc(num), *type,
-             sammine_util::literal_int_bits(num->number));
+                     sammine_util::literal_int_bits(num->number));
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
@@ -369,14 +368,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerString(StringExprAST *str) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBool(BoolExprAST *b) {
-  return intConstant(loc(b),
-                                            builder_.getI1Type(), b->b ? 1 : 0);
+  return intConstant(loc(b), builder_.getI1Type(), b->b ? 1 : 0);
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
-  return intConstant(loc(c),
-                                            builder_.getI8Type(),
-                                            static_cast<uint8_t>(c->value));
+  return intConstant(loc(c), builder_.getI8Type(),
+                     static_cast<uint8_t>(c->value));
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {

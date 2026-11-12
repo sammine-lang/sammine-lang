@@ -59,8 +59,8 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     if (et.is_integer_backed()) {
       auto backing = et.get_backing_type();
       return mlir::IntegerType::get(
-          ctx_, backing == TypeKind::I64_t || backing == TypeKind::U64_t ? 64
-                                                                          : 32);
+          ctx_,
+          backing == TypeKind::I64_t || backing == TypeKind::U64_t ? 64 : 32);
     }
     llvm::SmallVector<mlir::Type> variants;
     int64_t payloadSize = 0;

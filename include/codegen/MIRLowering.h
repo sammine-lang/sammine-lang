@@ -7,8 +7,8 @@
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Builders.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/Interfaces/FunctionInterfaces.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringMap.h"
@@ -93,11 +93,10 @@ private:
   std::optional<size_t> fieldIndex(AST::FieldAccessExprAST *access) const;
   mlir::FailureOr<mlir::Value> lowerAddrOf(AST::AddrOfExprAST *addr);
   mlir::FailureOr<mlir::Value> lowerIndirectCall(AST::CallExprAST *call);
-  mlir::FailureOr<mlir::Value>
-  lowerPartialApplication(AST::CallExprAST *call, llvm::StringRef name,
-                          mlir::FunctionType type);
-  mlir::FailureOr<mlir::Value>
-  lowerFunctionValue(AST::VariableExprAST *var);
+  mlir::FailureOr<mlir::Value> lowerPartialApplication(AST::CallExprAST *call,
+                                                       llvm::StringRef name,
+                                                       mlir::FunctionType type);
+  mlir::FailureOr<mlir::Value> lowerFunctionValue(AST::VariableExprAST *var);
   mlir::FailureOr<mlir::Value>
   lowerIndexerCall(AST::IndexExprAST *index,
                    const sammine_util::QualifiedName &method);
@@ -127,9 +126,9 @@ private:
   /// (sammine.lend), or as long as what it points at (sammine.addr), as a
   /// view a partial application binds does.
   enum class ViewLasts { Call, Place };
-  mlir::FailureOr<mlir::Value>
-  lowerArgument(AST::ExprAST *arg, mlir::Type param,
-                ViewLasts view = ViewLasts::Call);
+  mlir::FailureOr<mlir::Value> lowerArgument(AST::ExprAST *arg,
+                                             mlir::Type param,
+                                             ViewLasts view = ViewLasts::Call);
   mlir::FailureOr<mlir::Value> lowerVariadicArgument(AST::ExprAST *arg);
   /// A view of what the owned pointer `owner` points at.
   mlir::Value lend(mlir::Value owner, mlir::Location loc, ViewLasts view);
@@ -146,9 +145,10 @@ private:
   mlir::FailureOr<mlir::Value>
   callMethod(mlir::Location location, const sammine_util::QualifiedName &method,
              mlir::ValueRange args, const Type &result);
-  mlir::FailureOr<mlir::Value>
-  lowerBuiltinInstance(mlir::Location location, const MonomorphizedKey &key,
-                       mlir::ValueRange args, const Type &result);
+  mlir::FailureOr<mlir::Value> lowerBuiltinInstance(mlir::Location location,
+                                                    const MonomorphizedKey &key,
+                                                    mlir::ValueRange args,
+                                                    const Type &result);
   mlir::FailureOr<mlir::Value> lowerCast(AST::CastExprAST *cast);
   mlir::FailureOr<mlir::Value>
   lowerArrayLiteral(AST::ArrayLiteralExprAST *array);

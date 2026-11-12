@@ -23,12 +23,12 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
     return mlir::failure();
   // A variant of an integer-backed enum is its discriminant.
   if (auto backing = mlir::dyn_cast<mlir::IntegerType>(*mir)) {
-    auto discriminant =
-        std::get<EnumType>(type.type_data).get_variant(index).discriminant_value;
+    auto discriminant = std::get<EnumType>(type.type_data)
+                            .get_variant(index)
+                            .discriminant_value;
     if (!discriminant || !payload.empty())
       return mlir::failure();
-    return intConstant(location, backing,
-                                              *discriminant);
+    return intConstant(location, backing, *discriminant);
   }
   auto enumType = mlir::cast<smn::EnumType>(*mir);
   auto &payloadTypes =
@@ -52,10 +52,10 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
 }
 
 // The values of `exprs`, in order, as the fields of an aggregate of `type`.
-mlir::FailureOr<mlir::Value>
-MIRLowering::lowerAggregate(mlir::Location location, mlir::Type type,
-                            llvm::ArrayRef<mlir::Type> fieldTypes,
-                            llvm::ArrayRef<std::pair<size_t, ExprAST *>> exprs) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerAggregate(
+    mlir::Location location, mlir::Type type,
+    llvm::ArrayRef<mlir::Type> fieldTypes,
+    llvm::ArrayRef<std::pair<size_t, ExprAST *>> exprs) {
   llvm::SmallVector<mlir::Value> fields(fieldTypes.size());
   for (auto [index, expr] : exprs) {
     auto value = lowerValue(expr);
@@ -135,8 +135,7 @@ MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
 
 // `[a...b]`, an array of a, a + 1, ...: filled in a slot by a loop, then
 // read whole.
-mlir::FailureOr<mlir::Value>
-MIRLowering::lowerRangeArray(RangeExprAST *range) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerRangeArray(RangeExprAST *range) {
   auto type = types_.mirType(range->get_type());
   if (!type)
     return mlir::failure();
@@ -148,26 +147,26 @@ MIRLowering::lowerRangeArray(RangeExprAST *range) {
   if (mlir::failed(start) || start->getType() != element)
     return mlir::failure();
   auto location = loc(range);
-  auto slot = smn::LocalOp::create(builder_, location,
-                                   placeOf(array), "");
+  auto slot = smn::LocalOp::create(builder_, location, placeOf(array), "");
 
   auto *region = builder_.getInsertionBlock()->getParent();
   auto *header = &region->emplaceBlock();
   header->addArgument(element, location);
   auto *body = &region->emplaceBlock();
   auto *after = &region->emplaceBlock();
-  mlir::cf::BranchOp::create(builder_, location, header,
-                             mlir::ValueRange{intConstant(location, element, 0)});
+  mlir::cf::BranchOp::create(
+      builder_, location, header,
+      mlir::ValueRange{intConstant(location, element, 0)});
   builder_.setInsertionPointToStart(header);
   auto index = header->getArgument(0);
-  auto more = mlir::arith::CmpIOp::create(builder_, location,
-                                          mlir::arith::CmpIPredicate::slt,
-                                          index, intConstant(location, element, array.getSize()));
+  auto more = mlir::arith::CmpIOp::create(
+      builder_, location, mlir::arith::CmpIPredicate::slt, index,
+      intConstant(location, element, array.getSize()));
   mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
   builder_.setInsertionPointToStart(body);
   auto value = mlir::arith::AddIOp::create(builder_, location, *start, index);
-  auto at = smn::ElemOp::create(builder_, location,
-                                placeOf(element), slot, index);
+  auto at =
+      smn::ElemOp::create(builder_, location, placeOf(element), slot, index);
   smn::StoreOp::create(builder_, location, value, at);
   auto next = mlir::arith::AddIOp::create(builder_, location, index,
                                           intConstant(location, element, 1));
@@ -197,17 +196,16 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDim(DimExprAST *dim) {
   for (Type current = dim->operand->get_type();
        current.type_kind == TypeKind::Array;
        current = std::get<ArrayType>(current.type_data).get_element())
-    sizes.push_back(intConstant(loc(dim), builder_.getI32Type(),
-        static_cast<int64_t>(
-            std::get<ArrayType>(current.type_data).get_size())));
-  return smn::AggregateOp::create(builder_, loc(dim), *type, sizes)
-      .getResult();
+    sizes.push_back(
+        intConstant(loc(dim), builder_.getI32Type(),
+                    static_cast<int64_t>(
+                        std::get<ArrayType>(current.type_data).get_size())));
+  return smn::AggregateOp::create(builder_, loc(dim), *type, sizes).getResult();
 }
 
 // `a[i]` of an array: i is checked first, and one out of bounds reported on
 // stderr before the program exits.
-mlir::FailureOr<mlir::Value>
-MIRLowering::lowerArrayIndex(IndexExprAST *index) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerArrayIndex(IndexExprAST *index) {
   auto array = lowerValue(index->array_expr.get());
   if (mlir::failed(array))
     return mlir::failure();
@@ -229,8 +227,7 @@ MIRLowering::lowerArrayIndex(IndexExprAST *index) {
 // size go to stderr through dprintf, then exit(1); in it, lowering goes on
 // in a block of its own.
 mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
-                                             mlir::Value offset,
-                                             int64_t size) {
+                                             mlir::Value offset, int64_t size) {
   if (!module_.lookupSymbol(kDprintfFunc) || !module_.lookupSymbol(kExitFunc))
     return mlir::failure();
   auto i32 = builder_.getI32Type();
@@ -238,8 +235,7 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
   mlir::Value wide = offset;
   if (offset.getType() != i64)
     wide = mlir::arith::ExtSIOp::create(builder_, location, i64, offset);
-  auto sizeValue = intConstant(location, i64,
-                                                      size);
+  auto sizeValue = intConstant(location, i64, size);
   auto zero = intConstant(location, i64, 0);
   auto high = mlir::arith::CmpIOp::create(
       builder_, location, mlir::arith::CmpIPredicate::sge, wide, sizeValue);
@@ -254,11 +250,9 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
 
   builder_.setInsertionPointToStart(fail);
   auto message = smn::StringOp::create(
-      builder_, location,
-      viewOf(builder_.getI8Type()),
+      builder_, location, viewOf(builder_.getI8Type()),
       "index %lld out of bounds for an array of length %lld\n");
-  auto stderrFd =
-      intConstant(location, i32, 2);
+  auto stderrFd = intConstant(location, i32, 2);
   smn::CallOp::create(builder_, location, mlir::TypeRange{i32}, kDprintfFunc,
                       mlir::ValueRange{stderrFd, message, wide, sizeValue});
   auto one = intConstant(location, i32, 1);

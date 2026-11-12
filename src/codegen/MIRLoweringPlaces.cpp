@@ -1,7 +1,8 @@
 #include "codegen/MIRLowering.h"
 
 //! \file MIRLoweringPlaces.cpp
-//! \brief Places and what reads and writes them: bindings whose address is taken,
+//! \brief Places and what reads and writes them: bindings whose address is
+//! taken,
 //! `*p`, `p[i]`, fields and elements; `alloc`, `free`, `&` and `=`.
 
 namespace sammine_lang {
@@ -33,9 +34,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
   if (mlir::failed(ptr))
     return mlir::failure();
   auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
-  return smn::DerefOp::create(builder_, loc(deref),
-                              placeOf(pointee),
-                              *ptr)
+  return smn::DerefOp::create(builder_, loc(deref), placeOf(pointee), *ptr)
       .getResult();
 }
 
@@ -88,9 +87,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
     auto type = types_.mirType(field->get_type());
     if (!index || !type)
       return mlir::failure();
-    return smn::FieldOp::create(
-               builder_, loc(field),
-               placeOf(*type), *base, *index)
+    return smn::FieldOp::create(builder_, loc(field), placeOf(*type), *base,
+                                *index)
         .getResult();
   }
   if (auto *index = llvm::dyn_cast<IndexExprAST>(target)) {
@@ -105,10 +103,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
     if (!array || mlir::failed(offset) ||
         mlir::failed(checkBounds(loc(index), *offset, array.getSize())))
       return mlir::failure();
-    return smn::ElemOp::create(
-               builder_, loc(index),
-               placeOf(array.getElement()),
-               *base, *offset)
+    return smn::ElemOp::create(builder_, loc(index),
+                               placeOf(array.getElement()), *base, *offset)
         .getResult();
   }
   return mlir::failure();
@@ -122,10 +118,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAddrOf(AddrOfExprAST *addr) {
   if (mlir::failed(place))
     return mlir::failure();
   auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
-  return smn::AddrOp::create(
-             builder_, loc(addr),
-             viewOf(holds),
-             *place)
+  return smn::AddrOp::create(builder_, loc(addr), viewOf(holds), *place)
       .getResult();
 }
 
@@ -142,9 +135,8 @@ MIRLowering::lowerPtrElemPlace(IndexExprAST *index) {
   if (mlir::failed(offset))
     return mlir::failure();
   auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
-  return smn::PtrElemOp::create(
-             builder_, loc(index),
-             placeOf(pointee), *ptr, *offset)
+  return smn::PtrElemOp::create(builder_, loc(index), placeOf(pointee), *ptr,
+                                *offset)
       .getResult();
 }
 

@@ -7,8 +7,8 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 
 //! \file MIRLoweringControlFlow.cpp
-//! \brief `if`, `case`, `for`, `&&` and `||`: the blocks they branch between and
-//! the value each arm leaves.
+//! \brief `if`, `case`, `for`, `&&` and `||`: the blocks they branch between
+//! and the value each arm leaves.
 
 namespace sammine_lang {
 
@@ -132,19 +132,20 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
     if (pattern.bindings.size() > payloadTypes.size())
       return mlir::failure();
     // Run by lowerArms, after this loop: it holds only what outlives it.
-    arms.push_back(Arm{block, arm.body.get(),
-                       [this, &pattern, &payloadTypes, mirPayload,
-                        scrutinee = *value, location] {
-      int64_t offset = 0;
-      for (auto [i, name] : llvm::enumerate(pattern.bindings)) {
-        auto at = layout::advancePayloadOffset(offset, payloadTypes[i]);
-        bind(name,
-             smn::PayloadOp::create(builder_, location, mirPayload[i],
-                                    scrutinee, pattern.variant_index, i,
-                                    static_cast<uint64_t>(at)),
-             location);
-      }
-    }});
+    arms.push_back(
+        Arm{block, arm.body.get(),
+            [this, &pattern, &payloadTypes, mirPayload, scrutinee = *value,
+             location] {
+              int64_t offset = 0;
+              for (auto [i, name] : llvm::enumerate(pattern.bindings)) {
+                auto at = layout::advancePayloadOffset(offset, payloadTypes[i]);
+                bind(name,
+                     smn::PayloadOp::create(builder_, location, mirPayload[i],
+                                            scrutinee, pattern.variant_index, i,
+                                            static_cast<uint64_t>(at)),
+                     location);
+              }
+            }});
   }
   if (!otherwise) {
     otherwise = dests.pop_back_val();
@@ -189,14 +190,13 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
                              mlir::ValueRange{range});
 
   builder_.setInsertionPointToStart(header);
-  auto option = smn::CallOp::create(builder_, location,
-                                    mlir::TypeRange{*optionType},
-                                    iteration.next, header->getArgument(0))
-                    .getResult(0);
-  auto tag = smn::TagOp::create(builder_, location, builder_.getI32Type(),
-                                option);
-  auto some = intConstant(location,
-                                                 builder_.getI32Type(), 0);
+  auto option =
+      smn::CallOp::create(builder_, location, mlir::TypeRange{*optionType},
+                          iteration.next, header->getArgument(0))
+          .getResult(0);
+  auto tag =
+      smn::TagOp::create(builder_, location, builder_.getI32Type(), option);
+  auto some = intConstant(location, builder_.getI32Type(), 0);
   auto isSome = mlir::arith::CmpIOp::create(
       builder_, location, mlir::arith::CmpIPredicate::eq, tag, some);
   auto *body = &region->emplaceBlock();
@@ -357,8 +357,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
   auto rhs = lowerValue(bin->RHS.get());
   if (mlir::failed(rhs) || terminated())
     return mlir::failure();
-  mlir::cf::BranchOp::create(builder_, location, after,
-                             mlir::ValueRange{*rhs});
+  mlir::cf::BranchOp::create(builder_, location, after, mlir::ValueRange{*rhs});
   continueIn(after);
   return after->getArgument(0);
 }

@@ -126,9 +126,8 @@ mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
   rewriter.setInsertionPointToStart(&entry);
   auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
                                                 rewriter.getI64Type(), 1);
-  return mlir::LLVM::AllocaOp::create(
-      rewriter, op->getLoc(), llvmPtr(op->getContext()),
-      type, one);
+  return mlir::LLVM::AllocaOp::create(rewriter, op->getLoc(),
+                                      llvmPtr(op->getContext()), type, one);
 }
 
 // alloc<T>(n): malloc(sizeof(T) * n), n widened to i64.
@@ -150,14 +149,15 @@ struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
     mlir::Value count = adaptor.getCount();
     if (count.getType() != i64Ty)
       count = mlir::arith::ExtSIOp::create(rewriter, loc, i64Ty, count);
-    auto sizeVal = mlir::arith::ConstantIntOp::create(rewriter, loc, i64Ty, size);
+    auto sizeVal =
+        mlir::arith::ConstantIntOp::create(rewriter, loc, i64Ty, size);
     auto bytes = mlir::arith::MulIOp::create(rewriter, loc, sizeVal, count);
 
     declareCFunction(op->getParentOfType<mlir::ModuleOp>(), rewriter, "malloc",
                      mlir::LLVM::LLVMFunctionType::get(ptrTy, {i64Ty}));
-    auto call = mlir::LLVM::CallOp::create(rewriter, loc,
-                                           mlir::TypeRange{ptrTy}, "malloc",
-                                           mlir::ValueRange{bytes});
+    auto call =
+        mlir::LLVM::CallOp::create(rewriter, loc, mlir::TypeRange{ptrTy},
+                                   "malloc", mlir::ValueRange{bytes});
     rewriter.replaceOp(op, call.getResult());
     return mlir::success();
   }
@@ -204,8 +204,8 @@ struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
     if (!element)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, llvmPtr(op.getContext()), element,
-        adaptor.getPtr(), llvm::ArrayRef<mlir::LLVM::GEPArg>{adaptor.getIndex()},
+        op, llvmPtr(op.getContext()), element, adaptor.getPtr(),
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     return mlir::success();
   }
@@ -222,10 +222,9 @@ struct FieldLowering : public mlir::OpConversionPattern<smn::FieldOp> {
     if (!base)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, llvmPtr(op.getContext()), base,
-        adaptor.getBase(),
-        llvm::ArrayRef<mlir::LLVM::GEPArg>{
-            0, static_cast<int32_t>(op.getIndex())},
+        op, llvmPtr(op.getContext()), base, adaptor.getBase(),
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0,
+                                           static_cast<int32_t>(op.getIndex())},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     return mlir::success();
   }
@@ -241,8 +240,7 @@ struct ElemLowering : public mlir::OpConversionPattern<smn::ElemOp> {
     if (!base)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, llvmPtr(op.getContext()), base,
-        adaptor.getBase(),
+        op, llvmPtr(op.getContext()), base, adaptor.getBase(),
         llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     return mlir::success();
@@ -290,16 +288,16 @@ struct FuncLowering : public mlir::OpConversionPattern<mlir::func::FuncOp> {
     auto &converter = *getTypeConverter();
     mlir::TypeConverter::SignatureConversion inputs(type.getNumInputs());
     llvm::SmallVector<mlir::Type, 1> results;
-    if (mlir::failed(converter.convertSignatureArgs(type.getInputs(), inputs)) ||
+    if (mlir::failed(
+            converter.convertSignatureArgs(type.getInputs(), inputs)) ||
         mlir::failed(converter.convertTypes(type.getResults(), results)))
       return mlir::failure();
-    if (!func.isExternal() &&
-        mlir::failed(rewriter.convertRegionTypes(&func.getBody(), converter,
-                                                 &inputs)))
+    if (!func.isExternal() && mlir::failed(rewriter.convertRegionTypes(
+                                  &func.getBody(), converter, &inputs)))
       return mlir::failure();
     rewriter.modifyOpInPlace(func, [&] {
-      func.setType(rewriter.getFunctionType(inputs.getConvertedTypes(),
-                                            results));
+      func.setType(
+          rewriter.getFunctionType(inputs.getConvertedTypes(), results));
     });
     return mlir::success();
   }
@@ -315,19 +313,17 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   // A kernel's wrapper takes an array by pointer on the CPU and as a memref
   // on the GPU, as its parameter's type says: the array goes through a stack
   // slot. An array it returns, it fills in a buffer passed last.
-  static mlir::LogicalResult callKernel(smn::CallOp op,
-                                        mlir::FunctionOpInterface callee,
-                                        mlir::ValueRange args,
-                                        llvm::ArrayRef<mlir::Type> results,
-                                        mlir::ConversionPatternRewriter &rewriter) {
+  static mlir::LogicalResult
+  callKernel(smn::CallOp op, mlir::FunctionOpInterface callee,
+             mlir::ValueRange args, llvm::ArrayRef<mlir::Type> results,
+             mlir::ConversionPatternRewriter &rewriter) {
     auto loc = op.getLoc();
     auto params = callee.getArgumentTypes();
     // A slot holding an array, as `param`: its address, or a memref of it.
     auto passArray = [&](mlir::Value slot, mlir::Type param) -> mlir::Value {
       if (auto memref = mlir::dyn_cast<mlir::MemRefType>(param))
-        return kernel_abi::memrefOfPointer(rewriter, loc, slot,
-                                           memref.getDimSize(0),
-                                           memref.getElementType());
+        return kernel_abi::memrefOfPointer(
+            rewriter, loc, slot, memref.getDimSize(0), memref.getElementType());
       return slot;
     };
     llvm::SmallVector<mlir::Value, 4> operands;
@@ -369,12 +365,14 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
     if (mlir::failed(
             getTypeConverter()->convertTypes(op.getResultTypes(), results)))
       return mlir::failure();
-    auto callee = mlir::SymbolTable::lookupNearestSymbolFrom<
-        mlir::FunctionOpInterface>(op, op.getCalleeAttr());
+    auto callee =
+        mlir::SymbolTable::lookupNearestSymbolFrom<mlir::FunctionOpInterface>(
+            op, op.getCalleeAttr());
     if (callee && callee->hasAttr("sammine.kernel_wrapper"))
       return callKernel(op, callee, adaptor.getArgs(), results, rewriter);
-    if (auto cFunc = mlir::SymbolTable::lookupNearestSymbolFrom<
-            mlir::LLVM::LLVMFuncOp>(op, op.getCalleeAttr())) {
+    if (auto cFunc =
+            mlir::SymbolTable::lookupNearestSymbolFrom<mlir::LLVM::LLVMFuncOp>(
+                op, op.getCalleeAttr())) {
       auto value = cabi::callC(
           rewriter, op.getLoc(), cFunc, llvm::to_vector<4>(adaptor.getArgs()),
           results.empty() ? mlir::Type() : results.front(),
@@ -385,8 +383,8 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
         rewriter.eraseOp(op);
       return mlir::success();
     }
-    rewriter.replaceOpWithNewOp<mlir::func::CallOp>(
-        op, op.getCalleeAttr(), results, adaptor.getArgs());
+    rewriter.replaceOpWithNewOp<mlir::func::CallOp>(op, op.getCalleeAttr(),
+                                                    results, adaptor.getArgs());
     return mlir::success();
   }
 };
@@ -406,8 +404,8 @@ std::optional<mlir::DenseElementsAttr> constantArray(smn::AggregateOp op,
     elements.push_back(constant.getValue());
   }
   return mlir::DenseElementsAttr::get(
-      mlir::RankedTensorType::get(
-          {static_cast<int64_t>(elements.size())}, array.getElementType()),
+      mlir::RankedTensorType::get({static_cast<int64_t>(elements.size())},
+                                  array.getElementType()),
       elements);
 }
 
@@ -435,8 +433,8 @@ struct AggregateLowering : public mlir::OpConversionPattern<smn::AggregateOp> {
             mlir::LLVM::Linkage::Internal,
             (".mir.const_arr." + llvm::Twine(constArrays++)).str(), *elements);
       }
-      auto address = mlir::LLVM::AddressOfOp::create(rewriter, op.getLoc(),
-                                                     global);
+      auto address =
+          mlir::LLVM::AddressOfOp::create(rewriter, op.getLoc(), global);
       rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, type, address);
       return mlir::success();
     }
@@ -460,11 +458,11 @@ struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
   matchAndRewrite(smn::ExtractOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     rewriter.replaceOpWithNewOp<mlir::LLVM::ExtractValueOp>(
-        op, adaptor.getAggregate(), llvm::ArrayRef<int64_t>{static_cast<int64_t>(op.getIndex())});
+        op, adaptor.getAggregate(),
+        llvm::ArrayRef<int64_t>{static_cast<int64_t>(op.getIndex())});
     return mlir::success();
   }
 };
-
 
 // A slot at the top of the function.
 struct LocalLowering : public mlir::OpConversionPattern<smn::LocalOp> {
@@ -486,10 +484,10 @@ mlir::Value payloadField(mlir::ConversionPatternRewriter &rewriter,
                          mlir::Location loc, mlir::Type enumType,
                          mlir::Value slot, int64_t offset) {
   auto ptrTy = llvmPtr(rewriter.getContext());
-  mlir::Value payload = mlir::LLVM::GEPOp::create(
-      rewriter, loc, ptrTy, enumType, slot,
-      llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
-      mlir::LLVM::GEPNoWrapFlags::inbounds);
+  mlir::Value payload =
+      mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, enumType, slot,
+                                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
+                                mlir::LLVM::GEPNoWrapFlags::inbounds);
   if (offset == 0)
     return payload;
   return mlir::LLVM::GEPOp::create(
@@ -510,15 +508,16 @@ struct VariantLowering : public mlir::OpConversionPattern<smn::VariantOp> {
     if (!enumType)
       return mlir::failure();
     auto slot = entrySlot(rewriter, op, enumType);
-    auto tag = mlir::arith::ConstantIntOp::create(
-        rewriter, loc, rewriter.getI32Type(),
-        static_cast<int64_t>(op.getIndex()));
+    auto tag =
+        mlir::arith::ConstantIntOp::create(rewriter, loc, rewriter.getI32Type(),
+                                           static_cast<int64_t>(op.getIndex()));
     auto tagPtr = mlir::LLVM::GEPOp::create(
-        rewriter, loc, llvmPtr(op.getContext()),
-        enumType, slot, llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
+        rewriter, loc, llvmPtr(op.getContext()), enumType, slot,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     mlir::LLVM::StoreOp::create(rewriter, loc, tag, tagPtr);
-    for (auto [field, offset] : llvm::zip(adaptor.getPayload(), op.getOffsets()))
+    for (auto [field, offset] :
+         llvm::zip(adaptor.getPayload(), op.getOffsets()))
       mlir::LLVM::StoreOp::create(
           rewriter, loc, field,
           payloadField(rewriter, loc, enumType, slot, offset));
@@ -574,8 +573,7 @@ struct ElementLowering : public mlir::OpConversionPattern<smn::ElementOp> {
     mlir::LLVM::StoreOp::create(rewriter, op.getLoc(), adaptor.getArray(),
                                 slot);
     auto at = mlir::LLVM::GEPOp::create(
-        rewriter, op.getLoc(), llvmPtr(op.getContext()),
-        arrayType, slot,
+        rewriter, op.getLoc(), llvmPtr(op.getContext()), arrayType, slot,
         llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, element, at);
@@ -625,10 +623,10 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
     auto ptrTy = llvmPtr(ctx);
     auto signature = op.getType().getSignature();
     llvm::SmallVector<mlir::Type> rest, results;
-    if (mlir::failed(getTypeConverter()->convertTypes(signature.getInputs(),
-                                                      rest)) ||
-        mlir::failed(getTypeConverter()->convertTypes(signature.getResults(),
-                                                      results)))
+    if (mlir::failed(
+            getTypeConverter()->convertTypes(signature.getInputs(), rest)) ||
+        mlir::failed(
+            getTypeConverter()->convertTypes(signature.getResults(), results)))
       return mlir::failure();
     llvm::SmallVector<mlir::Type> wrapperParams{ptrTy};
     wrapperParams.append(rest);
@@ -676,8 +674,8 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
                 mlir::LLVM::GEPNoWrapFlags::inbounds)));
       for (auto arg : entry->getArguments().drop_front())
         args.push_back(arg);
-      if (auto cFunc = module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(
-              op.getCallee())) {
+      if (auto cFunc =
+              module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(op.getCallee())) {
         // A slot for C's struct passing, at the top of the wrapper.
         auto slot = [&](mlir::Type type) -> mlir::Value {
           mlir::OpBuilder::InsertionGuard top(rewriter);
@@ -686,16 +684,15 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
               rewriter, loc, rewriter.getI64Type(), 1);
           return mlir::LLVM::AllocaOp::create(rewriter, loc, ptrTy, type, one);
         };
-        auto value = cabi::callC(rewriter, loc, cFunc, args,
-                                 results.empty() ? mlir::Type()
-                                                 : results.front(),
-                                 slot);
-        mlir::LLVM::ReturnOp::create(
-            rewriter, loc, value ? mlir::ValueRange{value} : mlir::ValueRange{});
+        auto value =
+            cabi::callC(rewriter, loc, cFunc, args,
+                        results.empty() ? mlir::Type() : results.front(), slot);
+        mlir::LLVM::ReturnOp::create(rewriter, loc,
+                                     value ? mlir::ValueRange{value}
+                                           : mlir::ValueRange{});
       } else {
-        auto call = mlir::func::CallOp::create(rewriter, loc,
-                                               op.getCalleeAttr(), results,
-                                               args);
+        auto call = mlir::func::CallOp::create(
+            rewriter, loc, op.getCalleeAttr(), results, args);
         mlir::LLVM::ReturnOp::create(rewriter, loc, call.getResults());
       }
     }
@@ -793,16 +790,15 @@ struct MIRToLLVMPass
     mlir::populateCallOpTypeConversionPattern(patterns, converter);
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
-    patterns.add<FuncLowering, AllocLowering, FreeLowering,
-                 SameAddressLowering<smn::DerefOp>,
-                 SameAddressLowering<smn::LendOp>,
-                 SameAddressLowering<smn::AddrOp>, PtrElemLowering,
-                 FieldLowering, ElemLowering,
-                 ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-                 StoreLowering, CallLowering, ExtractLowering, VariantLowering, TagLowering,
-                 PayloadLowering, ElementLowering, UnreachableLowering,
-                 LocalLowering, CallIndirectLowering, AddressLowering>(
-        converter, &context);
+    patterns.add<
+        FuncLowering, AllocLowering, FreeLowering,
+        SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
+        SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
+        ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
+        StoreLowering, CallLowering, ExtractLowering, VariantLowering,
+        TagLowering, PayloadLowering, ElementLowering, UnreachableLowering,
+        LocalLowering, CallIndirectLowering, AddressLowering>(converter,
+                                                              &context);
     unsigned partials = 0;
     patterns.add<ClosureLowering>(converter, &context, partials);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
