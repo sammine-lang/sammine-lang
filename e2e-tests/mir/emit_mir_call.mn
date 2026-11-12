@@ -1,0 +1,44 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// A call to a sammine function is sammine.call, in MIR's types, whether the
+// callee went through MIR (sq, a generic copy, release) or was emitted from
+// the AST (pos, fact, clamp): a callee's signature isn't final until every
+// body has been offered to MIR, so the call is checked against it later.
+// Lending an owned pointer to a ptr<T> isn't lowered yet: peek stays out.
+// CHECK-LABEL: func.func private @sum_sq(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: %0 = sammine.call @sq(%arg0) : (i64) -> i64
+// CHECK-NEXT: %1 = sammine.call @sq(%arg1) : (i64) -> i64
+// CHECK-LABEL: func.func private @twice(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.call @"id<i32>"(%arg0) : (i32) -> i32
+// CHECK-LABEL: func.func private @clamp_add(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.call @pos(%arg0) : (i32) -> i32
+// CHECK-LABEL: func.func private @set5(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.call @clamp(%arg0, %{{.*}}) : (!sammine.ptr<i32, owned>, i32) -> !sammine.ptr<i32, owned>
+// CHECK-LABEL: func.func private @down(
+// CHECK-SAME: sammine.mir
+// CHECK: sammine.call @fact(%arg0) : (i64) -> i64
+// CHECK-LABEL: func.func private @peek(%arg0: !llvm.ptr
+// CHECK-LABEL: func.func private @done(
+// CHECK-SAME: sammine.mir
+// CHECK-NEXT: sammine.call @release(%arg0) : (!sammine.ptr<i32, owned>) -> ()
+// CHECK-NEXT: return
+
+let sq(a: i64) -> i64 { a * a }
+let sum_sq(a: i64, b: i64) -> i64 { sq(a) + sq(b) }
+let id<T>(x: T) -> T { x }
+let twice(a: i32) -> i32 { id<i32>(a) * 2 }
+let pos(a: i32) -> i32 { if a > 0 { a } else { 0 } }
+let clamp_add(a: i32, b: i32) -> i32 { pos(a) + pos(b) }
+let clamp(p: 'ptr<i32>, v: i32) -> 'ptr<i32> { *p = if v > 0 { v } else { 0 }; p }
+let set5(p: 'ptr<i32>) -> 'ptr<i32> { clamp(p, 5) }
+let fact(n: i64) -> i64 { if n < 2i64 { 1i64 } else { n * fact(n - 1i64) } }
+let down(n: i64) -> i64 { sq(n) - fact(n) }
+let look(p: ptr<i32>) -> i32 { *p }
+let peek(p: 'ptr<i32>) -> 'ptr<i32> { let v = look(p); p }
+let release(p: 'ptr<i32>) { free(p); }
+let done(p: 'ptr<i32>) { release(p); }
+
+let main() -> i32 { 0 }

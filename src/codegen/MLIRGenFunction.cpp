@@ -1,6 +1,7 @@
 #include "codegen/MLIRGenImpl.h"
 #include "codegen/CABI.h"
 #include "codegen/MLIRGenBinaryOps.h"
+#include "dialect/SammineDialect.h"
 #include "typecheck/BuiltinInstances.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -182,7 +183,7 @@ void MLIRGenImpl::emitFunction(AST::FuncDefAST *ast, Linkage linkage) {
   // Its body came through MIR (lowerThroughMIR); only its linkage is set
   // here.
   ++functionCount;
-  if (funcOp->hasAttr(MIRLowering::kMirAttr))
+  if (funcOp->hasAttr(smn::kMirAttr))
     return;
 
   // Create entry block with arguments

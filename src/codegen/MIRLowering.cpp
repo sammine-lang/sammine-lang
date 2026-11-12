@@ -9,8 +9,8 @@
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
 //! floats, bool, char) and pointers to them, returning one or `()`; their
-//! literals, parameters, `let`, arithmetic, `alloc`, `free`, `*p` read and
-//! written, statements and return.
+//! literals, parameters, `let`, arithmetic, calls to other sammine
+//! functions, `alloc`, `free`, `*p` read and written, statements and return.
 
 namespace sammine_lang {
 
@@ -50,18 +50,16 @@ std::optional<mlir::Type> MIRLowering::mirType(const Type &type) const {
 }
 
 std::optional<mlir::FunctionType>
-MIRLowering::mirSignature(FuncDefAST *ast) const {
-  auto *proto = ast->Prototype.get();
-  if (proto->is_var_arg || proto->get_type().type_kind != TypeKind::Function)
+MIRLowering::mirFunctionType(const FunctionType &fn) const {
+  if (fn.is_var_arg())
     return std::nullopt;
   llvm::SmallVector<mlir::Type, 4> inputs;
-  for (auto &param : proto->parameterVectors) {
-    auto type = mirType(param->get_type());
+  for (auto &param : fn.get_params_types()) {
+    auto type = mirType(param);
     if (!type)
       return std::nullopt;
     inputs.push_back(*type);
   }
-  auto fn = std::get<FunctionType>(proto->get_type().type_data);
   // A function returning () returns nothing.
   if (fn.get_return_type().type_kind == TypeKind::Unit)
     return builder_.getFunctionType(inputs, {});
@@ -69,6 +67,14 @@ MIRLowering::mirSignature(FuncDefAST *ast) const {
   if (!result)
     return std::nullopt;
   return builder_.getFunctionType(inputs, {*result});
+}
+
+std::optional<mlir::FunctionType>
+MIRLowering::mirSignature(FuncDefAST *ast) const {
+  auto type = ast->Prototype->get_type();
+  if (type.type_kind != TypeKind::Function)
+    return std::nullopt;
+  return mirFunctionType(std::get<FunctionType>(type.type_data));
 }
 
 // The function is built on its own, outside the module, and only put in
@@ -87,6 +93,7 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   auto &entry = *func->addEntryBlock();
   builder_.setInsertionPointToStart(&entry);
 
+  module_ = decl->getParentOfType<mlir::ModuleOp>();
   names_.clear();
   for (auto [param, arg] :
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
@@ -95,7 +102,7 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   if (mlir::failed(lowerBlock(ast->Block.get())))
     return false;
 
-  (*func)->setAttr(kMirAttr, builder_.getUnitAttr());
+  (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
   decl->getBlock()->getOperations().insert(mlir::Block::iterator(decl),
                                            func.release());
   decl.erase();
@@ -157,6 +164,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerVariable(var);
   if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr))
     return bin->Op->is_assign() ? lowerAssign(bin) : lowerBinary(bin);
+  if (auto *call = llvm::dyn_cast<CallExprAST>(expr))
+    return lowerCall(call);
   if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr))
     return lowerAlloc(alloc);
   if (auto *free = llvm::dyn_cast<FreeExprAST>(expr))
@@ -166,6 +175,39 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (llvm::isa<UnitExprAST>(expr))
     return mlir::Value();
   return mlir::failure();
+}
+
+// `f(a, b)`, `f` a sammine function, a generic function's copy or an
+// instance's method, whether its body goes through MIR or not.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
+  // Not lowered yet: enum constructors, instances the compiler provides, and
+  // partial application.
+  auto *cp = props_.call(call->id());
+  if (cp->is_enum_constructor || cp->builtin_instance || cp->is_partial)
+    return mlir::failure();
+  // Nor a call through a function value or to a C function, which are not
+  // func.func symbols.
+  auto name =
+      (cp->resolved_name ? *cp->resolved_name : call->functionName).mangled();
+  if (!module_.lookupSymbol<mlir::func::FuncOp>(name))
+    return mlir::failure();
+  auto type =
+      mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
+  if (!type)
+    return mlir::failure();
+
+  llvm::SmallVector<mlir::Value, 4> args;
+  for (auto [arg, param] : llvm::zip(call->arguments, type->getInputs())) {
+    auto value = lowerExpr(arg.get());
+    // An argument of another type is an owned pointer lent to a ptr<T>,
+    // which isn't lowered yet.
+    if (mlir::failed(value) || !*value || value->getType() != param)
+      return mlir::failure();
+    args.push_back(*value);
+  }
+  auto op = smn::CallOp::create(builder_, loc(call), type->getResults(), name,
+                                args);
+  return op.getNumResults() ? op.getResult(0) : mlir::Value();
 }
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.

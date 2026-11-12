@@ -138,6 +138,23 @@ struct StoreLowering : public mlir::OpConversionPattern<smn::StoreOp> {
   }
 };
 
+// By now the callee has its final signature in LLVM types, whichever way it
+// was emitted, and MIR's call takes and gives the same ones once converted.
+struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::CallOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    llvm::SmallVector<mlir::Type, 1> results;
+    if (mlir::failed(
+            getTypeConverter()->convertTypes(op.getResultTypes(), results)))
+      return mlir::failure();
+    rewriter.replaceOpWithNewOp<mlir::func::CallOp>(
+        op, op.getCalleeAttr(), results, adaptor.getArgs());
+    return mlir::success();
+  }
+};
+
 struct MIRToLLVMPass
     : public mlir::PassWrapper<MIRToLLVMPass,
                                mlir::OperationPass<mlir::ModuleOp>> {
@@ -163,7 +180,7 @@ struct MIRToLLVMPass
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
     patterns.add<AllocLowering, FreeLowering, DerefLowering,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-                 StoreLowering>(converter, &context);
+                 StoreLowering, CallLowering>(converter, &context);
 
     mlir::ConversionTarget target(context);
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
@@ -173,7 +190,7 @@ struct MIRToLLVMPass
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
     target.addIllegalOp<smn::AllocOp, smn::FreeOp, smn::DerefOp, smn::CopyOp,
-                        smn::MoveOp, smn::StoreOp>();
+                        smn::MoveOp, smn::StoreOp, smn::CallOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

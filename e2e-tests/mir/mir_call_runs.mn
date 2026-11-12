@@ -1,0 +1,26 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Calls from MIR to MIR, from MIR to functions emitted from the AST and
+// back, with scalars and owned pointers, give the same answers.
+// CHECK: 25 10 3 5 -95 9
+import std;
+
+let sq(a: i64) -> i64 { a * a }
+let sum_sq(a: i64, b: i64) -> i64 { sq(a) + sq(b) }
+let id<T>(x: T) -> T { x }
+let twice(a: i32) -> i32 { id<i32>(a) * 2 }
+let pos(a: i32) -> i32 { if a > 0 { a } else { 0 } }
+let clamp_add(a: i32, b: i32) -> i32 { pos(a) + pos(b) }
+let clamp(p: 'ptr<i32>, v: i32) -> 'ptr<i32> { *p = if v > 0 { v } else { 0 }; p }
+let set5(p: 'ptr<i32>) -> 'ptr<i32> { clamp(p, 5) }
+let fact(n: i64) -> i64 { if n < 2i64 { 1i64 } else { n * fact(n - 1i64) } }
+let down(n: i64) -> i64 { sq(n) - fact(n) }
+let release(p: 'ptr<i32>) { free(p); }
+let done(p: 'ptr<i32>) { release(p); }
+
+let main() -> i32 {
+  let p = set5(alloc<i32>(1));
+  std::printf("%lld %d %d %d %lld %lld\n", sum_sq(3i64, 4i64), twice(5),
+              clamp_add(-2, 3), *p, down(5i64), sq(3i64));
+  done(p);
+  0
+}

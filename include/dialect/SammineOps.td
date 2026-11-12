@@ -1,5 +1,6 @@
 include "dialect/SammineDialect.td"
 include "dialect/SammineTypes.td"
+include "mlir/IR/SymbolInterfaces.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 class Sammine_Op<string mnemonic, list<Trait> traits = []>
@@ -91,3 +92,24 @@ def StoreOp : Sammine_Op<"store", [MemoryEffects<[MemWrite]>,
   let assemblyFormat = "$value `,` $place attr-dict `:` type($place)";
 }
 
+//===----------------------------------------------------------------------===//
+// MIR: calls.
+//===----------------------------------------------------------------------===//
+
+def CallOp : Sammine_Op<"call",
+    [DeclareOpInterfaceMethods<SymbolUserOpInterface>]> {
+  let summary = "call a function by name, `f(a, b)`";
+  let description = [{
+    The operands and results have the types MIR gives the call's sammine
+    types. While MIR and the AST codegen both make functions, the callee may
+    have been emitted from the AST, with LLVM types where MIR has its own
+    (`!llvm.ptr` for `!sammine.ptr`): then only the counts must match. A
+    callee that went through MIR (marked `sammine.mir`) must take and give
+    exactly these types. Lowering to LLVM makes both the same.
+  }];
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$args);
+  let results = (outs Variadic<AnyType>:$results);
+  let assemblyFormat = [{
+    $callee `(` $args `)` attr-dict `:` functional-type($args, results)
+  }];
+}

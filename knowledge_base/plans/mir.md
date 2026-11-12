@@ -229,7 +229,22 @@ suite passes after every commit.
 
 Done: (1) `--mir`, the fallback, and functions over `i32`/`i64` with
 arithmetic and `return`; (2) `let` of those; (3) the other scalars, `bool`,
-`char`, `f32`, `f64`, with their literals and float arithmetic.
+`char`, `f32`, `f64`, with their literals and float arithmetic; (4) pointers,
+`alloc`, `free`, `*p`, but not lending; (5) calls between sammine functions
+(`sammine.call`), but not C calls.
+
+A call is `sammine.call`, not `func.call`: when a caller is lowered, its
+callee may not have been offered to MIR yet, so its signature (MIR's types
+or the AST codegen's) isn't known. The op's verifier checks types only
+against a callee through MIR; lowering to LLVM makes it a `func.call`, whose
+types then agree with the callee's either way.
+
+Measured after (5), over the e2e tests (the first thing that stopped each
+body): `Range`, in the standard library's generic copies every program
+gets, far ahead (~1300); then calls to C functions (108), `if` (84), `Vec`
+(49), `String` (39), arrays, casts, `Option`, `for`, `case`, function
+values, structs. Calls alone moved only 19 functions: their callers mostly
+use something else MIR lacks.
 
 Measured after (2), what kept user functions out of MIR was mostly their
 types (pointers, views, floats, structs, `Vec`, `Option`, function values in

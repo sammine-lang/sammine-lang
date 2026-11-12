@@ -3,8 +3,10 @@
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "codegen/SourceLocator.h"
+#include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/Support/LogicalResult.h"
 #include "llvm/ADT/StringMap.h"
@@ -20,16 +22,13 @@ namespace sammine_lang {
 
 class MIRLowering {
 public:
-  /// Marks a function whose body was lowered through MIR.
-  static constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
-
   MIRLowering(mlir::OpBuilder &builder, const AST::ASTProperties &props,
               const SourceLocator &locator)
       : builder_(builder), props_(props), locator_(locator) {}
 
   /// Lowers `ast` to a new function with its MIR signature and body, marked
-  /// `kMirAttr`, which replaces `decl`, the AST codegen's declaration of it.
-  /// Returns false, leaving `decl` untouched, if `ast` uses something MIR
+  /// `smn::kMirAttr`, which replaces `decl`, the AST codegen's declaration of
+  /// it. Returns false, leaving `decl` untouched, if `ast` uses something MIR
   /// can't lower yet.
   bool lowerFunction(AST::FuncDefAST *ast, mlir::func::FuncOp decl);
 
@@ -37,6 +36,8 @@ private:
   mlir::OpBuilder &builder_;
   const AST::ASTProperties &props_;
   const SourceLocator &locator_;
+  /// The module the function being lowered goes in, where its callees are.
+  mlir::ModuleOp module_;
   /// What each name in the current function stands for: its parameters and
   /// `let`s so far. A later `let` of a name shadows the earlier one.
   llvm::StringMap<mlir::Value> names_;
@@ -46,6 +47,9 @@ private:
   }
   /// The MIR type of a sammine type MIR handles so far, or nullopt.
   std::optional<mlir::Type> mirType(const Type &type) const;
+  /// A function type in MIR types, if MIR has a type for each part.
+  std::optional<mlir::FunctionType>
+  mirFunctionType(const FunctionType &fn) const;
   /// `ast`'s signature in MIR types, if MIR has a type for each part.
   std::optional<mlir::FunctionType> mirSignature(AST::FuncDefAST *ast) const;
 
@@ -54,6 +58,7 @@ private:
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
   /// The value of `expr`, or a null value for an expression of type `()`.
   mlir::FailureOr<mlir::Value> lowerExpr(AST::ExprAST *expr);
+  mlir::FailureOr<mlir::Value> lowerCall(AST::CallExprAST *call);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);
