@@ -394,18 +394,8 @@ mlir::Value MLIRGenImpl::emitUnaryNegExpr(AST::UnaryNegExprAST *ast) {
 
   auto location = loc(ast);
   auto type = ast->get_type();
-
-  if (isIntegerType(type)) {
-    auto zero = mlir::arith::ConstantIntOp::create(
-        builder, location, 0,
-        mlir::cast<mlir::IntegerType>(convertType(type)).getWidth());
-    return mlir::arith::SubIOp::create(builder, location, zero, operand)
-        .getResult();
-  }
-
-  if (isFloatType(type)) {
-    return mlir::arith::NegFOp::create(builder, location, operand).getResult();
-  }
+  if (isIntegerType(type) || isFloatType(type))
+    return emitNegation(builder, location, operand);
 
   imm_error(
       fmt::format("unsupported unary negation on type '{}'", type.to_string()),

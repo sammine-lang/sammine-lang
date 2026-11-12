@@ -141,6 +141,34 @@ struct StoreLowering : public mlir::OpConversionPattern<smn::StoreOp> {
   }
 };
 
+// A function's signature and the arguments of every block in it: an if's
+// merge block takes MIR types too. MLIR's own pattern for function types
+// (populateFunctionOpInterfaceTypeConversionPattern) converts only the entry
+// block.
+struct FuncLowering : public mlir::OpConversionPattern<mlir::func::FuncOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(mlir::func::FuncOp func, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto type = func.getFunctionType();
+    auto &converter = *getTypeConverter();
+    mlir::TypeConverter::SignatureConversion inputs(type.getNumInputs());
+    llvm::SmallVector<mlir::Type, 1> results;
+    if (mlir::failed(converter.convertSignatureArgs(type.getInputs(), inputs)) ||
+        mlir::failed(converter.convertTypes(type.getResults(), results)))
+      return mlir::failure();
+    if (!func.isExternal() &&
+        mlir::failed(rewriter.convertRegionTypes(&func.getBody(), converter,
+                                                 &inputs)))
+      return mlir::failure();
+    rewriter.modifyOpInPlace(func, [&] {
+      func.setType(rewriter.getFunctionType(inputs.getConvertedTypes(),
+                                            results));
+    });
+    return mlir::success();
+  }
+};
+
 // By now the callee has its final signature in LLVM types, whichever way it
 // was emitted, and MIR's call takes and gives the same ones once converted. A
 // C function declared as an llvm.func is called as C calls it.
@@ -208,12 +236,10 @@ struct MIRToLLVMPass
     MIRTypeConverter converter;
 
     mlir::RewritePatternSet patterns(&context);
-    mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
-        patterns, converter);
     mlir::populateCallOpTypeConversionPattern(patterns, converter);
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);
     mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
-    patterns.add<AllocLowering, FreeLowering,
+    patterns.add<FuncLowering, AllocLowering, FreeLowering,
                  SameAddressLowering<smn::DerefOp>,
                  SameAddressLowering<smn::LendOp>,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,

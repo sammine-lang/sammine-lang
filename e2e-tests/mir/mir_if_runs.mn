@@ -1,0 +1,35 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// The same answers through MIR: an if's value, early returns, short
+// circuits that skip a call, unsigned and float comparisons, an owned
+// pointer chosen by an if.
+// CHECK: 5 0 -1 0 1
+// CHECK-NEXT: 1 0 1
+// CHECK-NEXT: 1 0
+// CHECK-NEXT: 2
+// CHECK-NEXT: never called: 0
+import std;
+
+let pick(a: i32) -> i32 { if a > 0 { a } else { 0 } }
+let sign(a: i32) -> i32 {
+  if a < 0 { return -1; };
+  if a == 0 { return 0; } else { return 1; }
+}
+let both(a: bool, b: i32) -> bool { (a && b > 1) || b == 0 }
+let below(a: u32, b: u32, x: f64) -> bool { a < b && x < 2.0 }
+let keep(p: 'ptr<i32>, q: 'ptr<i32>, first: bool) -> 'ptr<i32> {
+  if first { free(q); p } else { free(p); q }
+}
+let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
+let loud() -> bool { std::printf("called!\n"); true }
+let skips() -> i32 { if false && loud() { 1 } else { 0 } }
+
+let main() -> i32 {
+  std::printf("%d %d %d %d %d\n", pick(5), pick(-5), sign(-3), sign(0), sign(9));
+  std::printf("%d %d %d\n", both(true, 2), both(false, 2), both(false, 0));
+  std::printf("%d %d\n", below(1u32, 4000000000u32, 1.5), below(5u32, 4u32, 1.5));
+  let p = keep(make(1), make(2), false);
+  std::printf("%d\n", *p);
+  free(p);
+  std::printf("never called: %d\n", skips());
+  0
+}

@@ -4,6 +4,7 @@
 #include "util/Utilities.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/Interfaces/FunctionInterfaces.h"
 
@@ -12,7 +13,8 @@
 //! floats, bool, char) and pointers to them, returning one or `()`; their
 //! literals, strings among them, parameters, `let`, arithmetic, calls to
 //! sammine and C functions, lending an owned pointer to a ptr<T>, `alloc`,
-//! `free`, `*p` read and written, statements and return.
+//! `free`, `*p` read and written, negation, comparisons, `if`, `&&` and `||`,
+//! statements and return.
 
 namespace sammine_lang {
 
@@ -99,7 +101,9 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
     names_[param->name] = arg;
 
-  if (mlir::failed(lowerBlock(ast->Block.get())))
+  // The body ends by returning, its implicit return made explicit by
+  // GeneralSemanticsVisitor, on every path.
+  if (mlir::failed(lowerStatements(ast->Block.get())) || !terminated())
     return false;
 
   (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
@@ -109,23 +113,36 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   return true;
 }
 
-// For now a body is `let`s and statements, then its return:
-// `{ let b = a * 2; free(p); b + 1 }`. A statement's value, if any, is dropped.
-mlir::LogicalResult MIRLowering::lowerBlock(BlockAST *block) {
-  if (block->Statements.empty())
-    return mlir::failure();
-  for (auto &stmt : llvm::drop_end(block->Statements)) {
-    if (auto *def = llvm::dyn_cast<VarDefAST>(stmt.get())) {
-      if (mlir::failed(lowerVarDef(def)))
-        return mlir::failure();
-    } else if (mlir::failed(lowerExpr(stmt.get()))) {
+bool MIRLowering::terminated() const {
+  auto *block = builder_.getInsertionBlock();
+  return !block->empty() &&
+         block->back().hasTrait<mlir::OpTrait::IsTerminator>();
+}
+
+// A block's statements in order, its value the last one's. The names its
+// `let`s make end with it. Once one returns, the rest never run and aren't
+// lowered: the result is then a null value, and `terminated()` is true.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
+  auto outer = names_;
+  mlir::Value last;
+  for (auto &stmt : block->Statements) {
+    if (terminated())
+      break;
+    mlir::FailureOr<mlir::Value> value = mlir::Value();
+    if (auto *def = llvm::dyn_cast<VarDefAST>(stmt.get()))
+      value = mlir::failed(lowerVarDef(def)) ? mlir::FailureOr<mlir::Value>()
+                                             : mlir::Value();
+    else if (auto *ret = llvm::dyn_cast<ReturnStmtAST>(stmt.get()))
+      value = mlir::failed(lowerReturn(ret)) ? mlir::FailureOr<mlir::Value>()
+                                             : mlir::Value();
+    else
+      value = lowerExpr(stmt.get());
+    if (mlir::failed(value))
       return mlir::failure();
-    }
+    last = *value;
   }
-  auto *ret = llvm::dyn_cast<ReturnStmtAST>(block->Statements.back().get());
-  if (!ret)
-    return mlir::failure();
-  return lowerReturn(ret);
+  names_ = std::move(outer);
+  return last;
 }
 
 // A `let` of a value MIR has a type for names that value: the right side is
@@ -146,6 +163,10 @@ mlir::LogicalResult MIRLowering::lowerReturn(ReturnStmtAST *ret) {
   auto value = lowerExpr(ret->return_expr.get());
   if (mlir::failed(value))
     return mlir::failure();
+  // What it returns already returned on every path, as `return if c { return
+  // 1; } else { return 2; }`.
+  if (terminated())
+    return mlir::success();
   // Returning () returns nothing.
   mlir::func::ReturnOp::create(builder_, loc(ret),
                                *value ? mlir::ValueRange{*value}
@@ -162,8 +183,23 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerChar(c);
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
     return lowerVariable(var);
-  if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr))
-    return bin->Op->is_assign() ? lowerAssign(bin) : lowerBinary(bin);
+  if (auto *bin = llvm::dyn_cast<BinaryExprAST>(expr)) {
+    if (bin->Op->is_assign())
+      return lowerAssign(bin);
+    if (bin->Op->is_logical())
+      return lowerLogical(bin);
+    return lowerBinary(bin);
+  }
+  if (auto *ifExpr = llvm::dyn_cast<IfExprAST>(expr))
+    return lowerIf(ifExpr);
+  if (auto *neg = llvm::dyn_cast<UnaryNegExprAST>(expr)) {
+    if (!neg->get_type().is_integer() && !neg->get_type().is_float())
+      return mlir::failure();
+    auto value = lowerExpr(neg->operand.get());
+    if (mlir::failed(value) || !*value)
+      return mlir::failure();
+    return emitNegation(builder_, loc(neg), *value);
+  }
   if (auto *call = llvm::dyn_cast<CallExprAST>(expr))
     return lowerCall(call);
   if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr))
@@ -252,6 +288,91 @@ mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc) {
              builder_, loc,
              smn::PtrType::get(ctx, pointee, smn::Ownership::View), place)
       .getResult();
+}
+
+// `if c { a } else { b }`: c branches to a block for each side, and a side
+// that doesn't return goes on to the block after, which takes the if's
+// value. There is none if both sides return.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
+  auto cond = lowerExpr(ifExpr->bool_expr.get());
+  if (mlir::failed(cond) || !*cond)
+    return mlir::failure();
+  std::optional<mlir::Type> resultType;
+  auto type = ifExpr->get_type();
+  if (type.type_kind != TypeKind::Unit && type.type_kind != TypeKind::Never) {
+    resultType = mirType(type);
+    if (!*resultType)
+      return mlir::failure();
+  }
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *thenBlock = &region->emplaceBlock();
+  auto *elseBlock = &region->emplaceBlock();
+  auto *after = &region->emplaceBlock();
+  if (resultType)
+    after->addArgument(*resultType, loc(ifExpr));
+  mlir::cf::CondBranchOp::create(builder_, loc(ifExpr), *cond, thenBlock,
+                                 elseBlock);
+
+  bool reached = false;
+  for (auto [block, body] : {std::pair{thenBlock, ifExpr->thenBlockAST.get()},
+                             std::pair{elseBlock, ifExpr->elseBlockAST.get()}}) {
+    builder_.setInsertionPointToStart(block);
+    auto value = lowerStatements(body);
+    if (mlir::failed(value))
+      return mlir::failure();
+    if (terminated())
+      continue;
+    if (resultType && !*value)
+      return mlir::failure();
+    mlir::cf::BranchOp::create(builder_, loc(ifExpr), after,
+                               resultType ? mlir::ValueRange{*value}
+                                          : mlir::ValueRange{});
+    reached = true;
+  }
+  if (!reached) {
+    after->erase();
+    return mlir::Value();
+  }
+  // After the blocks the branches made.
+  after->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(after);
+  return resultType ? after->getArgument(0) : mlir::Value();
+}
+
+// `a && b` reads b only if a is true, `a || b` only if a is false; the other
+// way, the result is a.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
+  auto lhs = lowerExpr(bin->LHS.get());
+  if (mlir::failed(lhs) || !*lhs)
+    return mlir::failure();
+  bool isAnd = bin->Op->tok_type == TokAND;
+  auto location = loc(bin);
+  auto shortCut = mlir::arith::ConstantIntOp::create(
+      builder_, location, builder_.getI1Type(), isAnd ? 0 : 1);
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *rhsBlock = &region->emplaceBlock();
+  auto *after = &region->emplaceBlock();
+  after->addArgument(builder_.getI1Type(), location);
+  if (isAnd)
+    mlir::cf::CondBranchOp::create(builder_, location, *lhs, rhsBlock,
+                                   mlir::ValueRange{}, after,
+                                   mlir::ValueRange{shortCut});
+  else
+    mlir::cf::CondBranchOp::create(builder_, location, *lhs, after,
+                                   mlir::ValueRange{shortCut}, rhsBlock,
+                                   mlir::ValueRange{});
+
+  builder_.setInsertionPointToStart(rhsBlock);
+  auto rhs = lowerExpr(bin->RHS.get());
+  if (mlir::failed(rhs) || !*rhs || terminated())
+    return mlir::failure();
+  mlir::cf::BranchOp::create(builder_, location, after,
+                             mlir::ValueRange{*rhs});
+  after->moveBefore(region, region->end());
+  builder_.setInsertionPointToStart(after);
+  return after->getArgument(0);
 }
 
 // alloc<T>(n): an owned pointer to room for n values of T, none stored yet.
@@ -355,8 +476,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   return it->second;
 }
 
-// Integer or float arithmetic through a built-in instance; an instance the
-// program declares is a call, which MIR doesn't lower yet.
+// Integer or float arithmetic, or a comparison of integers, bools or floats,
+// through a built-in instance; an instance the program declares is a call,
+// which MIR doesn't lower yet.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   auto *bp = props_.binary(bin->id());
   if (bp && bp->resolved_op_method)
@@ -364,15 +486,21 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
   auto op = bin->Op->tok_type;
   bool arithmetic = op == TokADD || op == TokSUB || op == TokMUL ||
                     op == TokDIV || op == TokMOD;
-  auto type = bin->get_type();
-  if (!arithmetic || !(type.is_integer() || type.is_float()))
+  // A comparison's operands decide how it compares; its own type is bool.
+  auto type = bin->Op->is_comparison() ? bin->LHS->get_type() : bin->get_type();
+  bool scalar = type.is_integer() || type.is_float() ||
+                (bin->Op->is_comparison() && type.type_kind == TypeKind::Bool);
+  if (!(arithmetic || bin->Op->is_comparison()) || !scalar)
     return mlir::failure();
   auto lhs = lowerExpr(bin->LHS.get());
-  if (mlir::failed(lhs))
+  if (mlir::failed(lhs) || !*lhs)
     return mlir::failure();
   auto rhs = lowerExpr(bin->RHS.get());
-  if (mlir::failed(rhs))
+  if (mlir::failed(rhs) || !*rhs)
     return mlir::failure();
+  if (bin->Op->is_comparison())
+    return emitScalarComparison(builder_, loc(bin), *lhs, *rhs, op,
+                                type.is_float(), type.is_unsigned());
   if (type.is_float())
     return emitFloatArithOp(builder_, loc(bin), *lhs, *rhs, op);
   return emitIntArithOp(builder_, loc(bin), *lhs, *rhs, op,

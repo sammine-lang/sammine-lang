@@ -1,0 +1,38 @@
+// RUN: %sammine --file %full --mir --emit mlir | %check %full
+// if branches to a block for each side; a side that doesn't return goes on
+// to the block after, which takes the if's value. && and || read their
+// right side only when they must. Comparisons are arith.cmpi/cmpf, unsigned
+// ones unsigned.
+// CHECK-LABEL: func.func private @pick(
+// CHECK-SAME: sammine.mir
+// CHECK: %0 = arith.cmpi sgt, %arg0, %{{.*}} : i32
+// CHECK-NEXT: cf.cond_br %0, ^bb1, ^bb2
+// CHECK: bb3(%{{[0-9]+}}: i32{{.*}}):
+// CHECK-LABEL: func.func private @sign(
+// CHECK-SAME: sammine.mir
+// CHECK: arith.subi %c0_i32{{.*}}, %c1_i32
+// CHECK-NEXT: return
+// CHECK-LABEL: func.func private @both(
+// CHECK-SAME: sammine.mir
+// CHECK: cf.cond_br %arg0, ^bb1, ^bb2(%false : i1)
+// CHECK: bb2(%{{[0-9]+}}: i1{{.*}}):
+// CHECK: cf.cond_br %{{[0-9]+}}, ^bb4(%true : i1), ^bb3
+// CHECK-LABEL: func.func private @below(
+// CHECK: arith.cmpi ult
+// CHECK: arith.cmpf olt
+// CHECK-LABEL: func.func private @keep(
+// CHECK-SAME: sammine.mir
+// CHECK: bb3(%{{[0-9]+}}: !sammine.ptr<i32, owned>{{.*}}):
+
+let pick(a: i32) -> i32 { if a > 0 { a } else { 0 } }
+let sign(a: i32) -> i32 {
+  if a < 0 { return -1; };
+  if a == 0 { return 0; } else { return 1; }
+}
+let both(a: bool, b: i32) -> bool { (a && b > 1) || b == 0 }
+let below(a: u32, b: u32, x: f64) -> bool { a < b && x < 2.0 }
+let keep(p: 'ptr<i32>, q: 'ptr<i32>, first: bool) -> 'ptr<i32> {
+  if first { free(q); p } else { free(p); q }
+}
+
+let main() -> i32 { 0 }

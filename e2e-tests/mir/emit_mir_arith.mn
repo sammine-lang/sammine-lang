@@ -1,7 +1,7 @@
 // RUN: %sammine --file %full --mir --emit mlir | %check %full
 // Integer functions with arithmetic and return go through MIR, marked
 // sammine.mir. A body using anything MIR doesn't handle yet, as `other`'s
-// if, is left to the AST codegen.
+// struct, is left to the AST codegen.
 // CHECK: // MIR: {{[0-9]+}} of {{[0-9]+}} functions
 // CHECK-LABEL: func.func private @inc(
 // CHECK-SAME: sammine.mir
@@ -23,6 +23,7 @@
 let inc(a: i32) -> i32 { a + 1 }
 let mix(a: i64, b: i64) -> i64 { return (a * b - 3i64) / 2i64 % 7i64; }
 let udiv(a: u32, b: u32) -> u32 { a / b }
-let other(a: i32) -> i32 { if a > 0 { a } else { 0 } }
+struct P { x: i32 };
+let other(a: i32) -> i32 { let p = P { x: a }; p.x }
 
 let main() -> i32 { inc(1) + other(2) }

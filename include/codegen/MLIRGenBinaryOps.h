@@ -22,6 +22,11 @@ mlir::Value emitScalarComparison(mlir::OpBuilder &builder,
                                  mlir::Value rhs, TokenType op, bool is_float,
                                  bool is_unsigned);
 
+/// `-value`, of an integer (as 0 - value) or a float. Returns nullptr for
+/// any other type.
+mlir::Value emitNegation(mlir::OpBuilder &builder, mlir::Location location,
+                         mlir::Value value);
+
 /// A float constant of `type` (f32 or f64). An f32 is rounded to the nearest
 /// single-precision value.
 mlir::Value emitFloatConstant(mlir::OpBuilder &builder, mlir::Location location,

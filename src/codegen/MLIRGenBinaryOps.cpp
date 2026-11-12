@@ -40,6 +40,18 @@ static const CmpPredicates *lookupCmpPredicate(TokenType tok) {
   return it != table.end() ? &it->second : nullptr;
 }
 
+mlir::Value emitNegation(mlir::OpBuilder &builder, mlir::Location location,
+                         mlir::Value value) {
+  if (auto intType = mlir::dyn_cast<mlir::IntegerType>(value.getType())) {
+    auto zero = mlir::arith::ConstantIntOp::create(builder, location, intType, 0);
+    return mlir::arith::SubIOp::create(builder, location, zero, value)
+        .getResult();
+  }
+  if (mlir::isa<mlir::FloatType>(value.getType()))
+    return mlir::arith::NegFOp::create(builder, location, value).getResult();
+  return nullptr;
+}
+
 bool isComparisonOp(TokenType op) { return lookupCmpPredicate(op) != nullptr; }
 
 mlir::Value emitScalarComparison(mlir::OpBuilder &builder,

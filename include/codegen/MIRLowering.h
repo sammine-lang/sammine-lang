@@ -54,7 +54,9 @@ private:
   /// `ast`'s signature in MIR types, if MIR has a type for each part.
   std::optional<mlir::FunctionType> mirSignature(AST::FuncDefAST *ast) const;
 
-  mlir::LogicalResult lowerBlock(AST::BlockAST *block);
+  /// Whether the block being built has ended, as after a return.
+  bool terminated() const;
+  mlir::FailureOr<mlir::Value> lowerStatements(AST::BlockAST *block);
   mlir::LogicalResult lowerVarDef(AST::VarDefAST *def);
   mlir::LogicalResult lowerReturn(AST::ReturnStmtAST *ret);
   /// The value of `expr`, or a null value for an expression of type `()`.
@@ -76,6 +78,8 @@ private:
   mlir::FailureOr<mlir::Value> lowerChar(AST::CharExprAST *c);
   mlir::FailureOr<mlir::Value> lowerVariable(AST::VariableExprAST *var);
   mlir::FailureOr<mlir::Value> lowerBinary(AST::BinaryExprAST *bin);
+  mlir::FailureOr<mlir::Value> lowerLogical(AST::BinaryExprAST *bin);
+  mlir::FailureOr<mlir::Value> lowerIf(AST::IfExprAST *ifExpr);
 };
 
 } // namespace sammine_lang
