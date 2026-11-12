@@ -64,6 +64,16 @@ static std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {
   return std::nullopt;
 }
 
+/// An array's elements, as many as it holds.
+static std::optional<llvm::SmallVector<mlir::Type>>
+arrayElements(mlir::Type type) {
+  auto array = mlir::dyn_cast<ArrayType>(type);
+  if (!array)
+    return std::nullopt;
+  return llvm::SmallVector<mlir::Type>(static_cast<size_t>(array.getSize()),
+                                       array.getElement());
+}
+
 bool ownsMemory(mlir::Type type) {
   if (auto ptr = mlir::dyn_cast<PtrType>(type))
     return ptr.isOwned();
@@ -71,7 +81,16 @@ bool ownsMemory(mlir::Type type) {
     return llvm::any_of(*fields, ownsMemory);
   if (auto enumType = mlir::dyn_cast<EnumType>(type))
     return llvm::any_of(enumType.getVariants(), ownsMemory);
+  if (auto array = mlir::dyn_cast<ArrayType>(type))
+    return ownsMemory(array.getElement());
   return false;
+}
+
+mlir::LogicalResult ElementOp::verify() {
+  if (getArray().getType().getElement() != getResult().getType())
+    return emitOpError("gives an element of ")
+           << getArray().getType() << " as " << getResult().getType();
+  return mlir::success();
 }
 
 mlir::LogicalResult VariantOp::verify() {
@@ -109,9 +128,14 @@ mlir::LogicalResult PayloadOp::verify() {
 }
 
 mlir::LogicalResult AggregateOp::verify() {
+  if (auto elements = arrayElements(getResult().getType())) {
+    if (!llvm::equal(*elements, getFields().getTypes()))
+      return emitOpError("takes the elements of ") << getResult().getType();
+    return mlir::success();
+  }
   auto fields = fieldTypes(getResult().getType());
   if (!fields)
-    return emitOpError("builds a struct or tuple, not ")
+    return emitOpError("builds a struct, tuple or array, not ")
            << getResult().getType();
   if (!llvm::equal(*fields, getFields().getTypes()))
     return emitOpError("takes the types of the fields of ")

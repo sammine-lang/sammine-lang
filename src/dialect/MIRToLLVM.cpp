@@ -57,6 +57,13 @@ public:
       (void)llvmType.setBody(fields, /*isPacked=*/false);
       return llvmType;
     });
+    addConversion([this](smn::ArrayType type) -> std::optional<mlir::Type> {
+      auto element = convertType(type.getElement());
+      if (!element)
+        return std::nullopt;
+      return mlir::LLVM::LLVMArrayType::get(
+          element, static_cast<unsigned>(type.getSize()));
+    });
     addConversion([this](smn::TupleType type) -> std::optional<mlir::Type> {
       llvm::SmallVector<mlir::Type> elements;
       if (mlir::failed(convertTypes(type.getElements(), elements)))
@@ -249,15 +256,57 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
   }
 };
 
-// A struct or tuple is built field by field into an LLVM struct.
+/// The constant array `op` builds, if every element is a number constant,
+/// as the AST codegen's tryBuildDenseAttr takes them.
+std::optional<mlir::DenseElementsAttr> constantArray(smn::AggregateOp op,
+                                                     mlir::Type type) {
+  auto array = mlir::dyn_cast<mlir::LLVM::LLVMArrayType>(type);
+  if (!array ||
+      !mlir::isa<mlir::IntegerType, mlir::FloatType>(array.getElementType()))
+    return std::nullopt;
+  llvm::SmallVector<mlir::Attribute> elements;
+  for (auto field : op.getFields()) {
+    auto constant = field.getDefiningOp<mlir::arith::ConstantOp>();
+    if (!constant)
+      return std::nullopt;
+    elements.push_back(constant.getValue());
+  }
+  return mlir::DenseElementsAttr::get(
+      mlir::RankedTensorType::get(
+          {static_cast<int64_t>(elements.size())}, array.getElementType()),
+      elements);
+}
+
+// A struct, tuple or array is built field by field into an LLVM aggregate.
+// An array of number constants is a constant global instead, as the AST
+// codegen makes it, loaded whole.
 struct AggregateLowering : public mlir::OpConversionPattern<smn::AggregateOp> {
-  using OpConversionPattern::OpConversionPattern;
+  AggregateLowering(const mlir::TypeConverter &converter,
+                    mlir::MLIRContext *context, unsigned &constArrays)
+      : OpConversionPattern(converter, context), constArrays(constArrays) {}
+
   mlir::LogicalResult
   matchAndRewrite(smn::AggregateOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto type = getTypeConverter()->convertType(op.getType());
     if (!type)
       return mlir::failure();
+    if (auto elements = constantArray(op, type)) {
+      mlir::LLVM::GlobalOp global;
+      {
+        mlir::OpBuilder::InsertionGuard guard(rewriter);
+        rewriter.setInsertionPointToStart(
+            op->getParentOfType<mlir::ModuleOp>().getBody());
+        global = mlir::LLVM::GlobalOp::create(
+            rewriter, op.getLoc(), type, /*isConstant=*/true,
+            mlir::LLVM::Linkage::Internal,
+            (".mir.const_arr." + llvm::Twine(constArrays++)).str(), *elements);
+      }
+      auto address = mlir::LLVM::AddressOfOp::create(rewriter, op.getLoc(),
+                                                     global);
+      rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, type, address);
+      return mlir::success();
+    }
     mlir::Value result =
         mlir::LLVM::PoisonOp::create(rewriter, op.getLoc(), type);
     for (auto [i, field] : llvm::enumerate(adaptor.getFields()))
@@ -267,6 +316,9 @@ struct AggregateLowering : public mlir::OpConversionPattern<smn::AggregateOp> {
     rewriter.replaceOp(op, result);
     return mlir::success();
   }
+
+private:
+  unsigned &constArrays;
 };
 
 struct ExtractLowering : public mlir::OpConversionPattern<smn::ExtractOp> {
@@ -374,6 +426,41 @@ struct PayloadLowering : public mlir::OpConversionPattern<smn::PayloadOp> {
   }
 };
 
+// An element of an array value at an index only known when it runs: through
+// a stack slot, as the AST codegen does.
+struct ElementLowering : public mlir::OpConversionPattern<smn::ElementOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::ElementOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    auto arrayType = adaptor.getArray().getType();
+    auto element = getTypeConverter()->convertType(op.getType());
+    if (!element)
+      return mlir::failure();
+    auto slot = entrySlot(rewriter, op, arrayType);
+    mlir::LLVM::StoreOp::create(rewriter, op.getLoc(), adaptor.getArray(),
+                                slot);
+    auto at = mlir::LLVM::GEPOp::create(
+        rewriter, op.getLoc(), mlir::LLVM::LLVMPointerType::get(op.getContext()),
+        arrayType, slot,
+        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, adaptor.getIndex()},
+        mlir::LLVM::GEPNoWrapFlags::inbounds);
+    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, element, at);
+    return mlir::success();
+  }
+};
+
+struct UnreachableLowering
+    : public mlir::OpConversionPattern<smn::UnreachableOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::UnreachableOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<mlir::LLVM::UnreachableOp>(op);
+    return mlir::success();
+  }
+};
+
 // A string literal is the address of a constant global holding it, one per
 // distinct string in the module.
 struct StringLowering : public mlir::OpConversionPattern<smn::StringOp> {
@@ -423,11 +510,13 @@ struct MIRToLLVMPass
                  SameAddressLowering<smn::DerefOp>,
                  SameAddressLowering<smn::LendOp>, PtrElemLowering,
                  ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-                 StoreLowering, CallLowering, AggregateLowering,
-                 ExtractLowering, VariantLowering, TagLowering,
-                 PayloadLowering>(converter, &context);
+                 StoreLowering, CallLowering, ExtractLowering, VariantLowering, TagLowering,
+                 PayloadLowering, ElementLowering, UnreachableLowering>(
+        converter, &context);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
     patterns.add<StringLowering>(converter, &context, strings);
+    unsigned constArrays = 0;
+    patterns.add<AggregateLowering>(converter, &context, constArrays);
 
     mlir::ConversionTarget target(context);
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
@@ -440,7 +529,8 @@ struct MIRToLLVMPass
                         smn::PtrElemOp,
                         smn::CopyOp, smn::MoveOp, smn::StoreOp, smn::CallOp,
                         smn::StringOp, smn::AggregateOp, smn::ExtractOp,
-                        smn::VariantOp, smn::TagOp, smn::PayloadOp>();
+                        smn::VariantOp, smn::TagOp, smn::PayloadOp,
+                        smn::ElementOp, smn::UnreachableOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

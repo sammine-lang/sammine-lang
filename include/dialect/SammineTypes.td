@@ -63,6 +63,16 @@ def Sammine_TupleType : Sammine_Type<"Tuple", "tuple"> {
   let assemblyFormat = "`<` custom<TypeList>($elements) `>`";
 }
 
+def Sammine_ArrayType : Sammine_Type<"Array", "array"> {
+  let summary = "a fixed-size array, `[N]T`, a value";
+  let description = [{
+    `!sammine.array<4, i32>`. Lowered to LLVM it is `!llvm.array<4 x i32>`,
+    as the AST codegen has it.
+  }];
+  let parameters = (ins "int64_t":$size, "::mlir::Type":$element);
+  let assemblyFormat = "`<` $size `,` $element `>`";
+}
+
 def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
   let summary = "an enum: its name, its payload's size, and each variant's payload";
   let description = [{

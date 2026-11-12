@@ -1,0 +1,7 @@
+// RUN: (! %sammine_jit --mir --file %full 2>&1) | %check %full
+// An index out of bounds, read in a function MIR lowered, is reported as
+// the AST codegen reports it, and the program exits.
+// CHECK: index 5 out of bounds for an array of length 3
+let at(a: [3]i32, i: i32) -> i32 { a[i] }
+
+let main() -> i32 { at([1, 2, 3], 5) }

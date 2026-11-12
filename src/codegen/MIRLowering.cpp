@@ -1,5 +1,6 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/MLIRGenImpl.h"
 #include "codegen/RangeIteration.h"
 #include "codegen/TypeLayout.h"
 #include "typecheck/BuiltinInstances.h"
@@ -15,11 +16,12 @@
 
 //! \file MIRLowering.cpp
 //! \brief The constructs MIR handles so far: functions over scalars (integers,
-//! floats, bool, char), pointers, structs, tuples and enums with payloads;
+//! floats, bool, char), pointers, structs, tuples, arrays and enums;
 //! literals, strings among them, parameters, `let`, `let (a, b) = t`;
 //! arithmetic, negation, comparisons, casts, operators through instances;
 //! calls to sammine and C functions, lending an owned pointer to a ptr<T>;
-//! struct, tuple and enum values, fields, `case`; `alloc`, `free`, `*p` and
+//! struct, tuple, array and enum values, fields, checked `a[i]`, `len`,
+//! `case`; `alloc`, `free`, `*p` and
 //! `p[i]` read and written; `if`, `for`, `&&` and `||`, statements and
 //! return.
 
@@ -108,6 +110,15 @@ MIRLowering::mirType(const Type &type, llvm::StringSet<> &enclosing) const {
     return smn::EnumType::get(builder_.getContext(), name, payloadSize,
                               variants);
   }
+  case TypeKind::Array: {
+    auto &array = std::get<ArrayType>(type.type_data);
+    auto element = mirType(array.get_element(), enclosing);
+    if (!element)
+      return std::nullopt;
+    return smn::ArrayType::get(builder_.getContext(),
+                               static_cast<int64_t>(array.get_size()),
+                               *element);
+  }
   case TypeKind::Tuple: {
     llvm::SmallVector<mlir::Type> elements;
     for (auto &element : std::get<TupleType>(type.type_data).get_element_types()) {
@@ -141,12 +152,21 @@ MIRLowering::mirFunctionType(const FunctionType &fn) const {
   return builder_.getFunctionType(inputs, {*result});
 }
 
+// A function returning an array returns it through a pointer its caller
+// passes (sret), as the AST codegen and its callers agree; MIR doesn't yet.
+static bool returnsArray(mlir::FunctionType type) {
+  return llvm::any_of(type.getResults(), llvm::IsaPred<smn::ArrayType>);
+}
+
 std::optional<mlir::FunctionType>
 MIRLowering::mirSignature(FuncDefAST *ast) const {
   auto type = ast->Prototype->get_type();
   if (type.type_kind != TypeKind::Function)
     return std::nullopt;
-  return mirFunctionType(std::get<FunctionType>(type.type_data));
+  auto signature = mirFunctionType(std::get<FunctionType>(type.type_data));
+  if (!signature || returnsArray(*signature))
+    return std::nullopt;
+  return signature;
 }
 
 // The function is built on its own, outside the module, and only put in
@@ -298,9 +318,24 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (llvm::isa<DerefExprAST>(expr))
     return lowerPlaceRead(expr);
   if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
-    if (index->array_expr->get_type().type_kind != TypeKind::Pointer)
+    auto baseKind = index->array_expr->get_type().type_kind;
+    if (baseKind == TypeKind::Array)
+      return lowerArrayIndex(index);
+    if (baseKind != TypeKind::Pointer)
       return mlir::failure();
     return lowerPlaceRead(expr);
+  }
+  if (auto *array = llvm::dyn_cast<ArrayLiteralExprAST>(expr))
+    return lowerArrayLiteral(array);
+  if (auto *len = llvm::dyn_cast<LenExprAST>(expr)) {
+    auto operand = len->operand->get_type();
+    if (operand.type_kind != TypeKind::Array)
+      return mlir::failure();
+    return mlir::arith::ConstantIntOp::create(
+               builder_, loc(len), builder_.getI32Type(),
+               static_cast<int64_t>(
+                   std::get<ArrayType>(operand.type_data).get_size()))
+        .getResult();
   }
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
@@ -351,14 +386,20 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
       mirFunctionType(std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
     return mlir::failure();
-  // Nor a struct or tuple passed to or from C, which C moves in registers or
-  // memory as cabi decides, in emitCCall.
+  // Nor a struct, tuple or array passed to or from C, which C moves in
+  // registers or memory as cabi decides, in emitCCall; nor an array passed
+  // to a kernel's wrapper, which takes it by pointer, or returned (sret).
   auto isAggregate = [](mlir::Type t) {
-    return mlir::isa<smn::StructType, smn::TupleType>(t);
+    return mlir::isa<smn::StructType, smn::TupleType, smn::ArrayType>(t);
   };
-  if (mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
-      (llvm::any_of(type->getInputs(), isAggregate) ||
-       llvm::any_of(type->getResults(), isAggregate)))
+  bool passesAggregate = llvm::any_of(type->getInputs(), isAggregate) ||
+                         llvm::any_of(type->getResults(), isAggregate);
+  bool passesArray =
+      llvm::any_of(type->getInputs(), llvm::IsaPred<smn::ArrayType>);
+  if ((mlir::isa<mlir::LLVM::LLVMFuncOp>(callee.getOperation()) &&
+       passesAggregate) ||
+      (callee->hasAttr("sammine.kernel_wrapper") && passesArray) ||
+      returnsArray(*type))
     return mlir::failure();
 
   // The arguments for the declared parameters, then any passed through a C
@@ -896,6 +937,90 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
   if (!value)
     return mlir::failure();
   return value;
+}
+
+// `[a, b, c]`: its elements' values, in order.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
+  auto type = mirType(array->get_type());
+  if (!type)
+    return mlir::failure();
+  auto arrayType = mlir::cast<smn::ArrayType>(*type);
+  if (static_cast<size_t>(arrayType.getSize()) != array->elements.size())
+    return mlir::failure();
+  llvm::SmallVector<mlir::Type> elementTypes(array->elements.size(),
+                                             arrayType.getElement());
+  llvm::SmallVector<std::pair<size_t, ExprAST *>> exprs;
+  for (auto [i, element] : llvm::enumerate(array->elements))
+    exprs.push_back({i, element.get()});
+  return lowerAggregate(loc(array), *type, elementTypes, exprs);
+}
+
+// `a[i]` of an array: i is checked first, as the AST codegen checks it, and
+// one out of bounds reported on stderr before the program exits.
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerArrayIndex(IndexExprAST *index) {
+  auto array = lowerExpr(index->array_expr.get());
+  if (mlir::failed(array) || !*array)
+    return mlir::failure();
+  auto offset = lowerExpr(index->index_expr.get());
+  if (mlir::failed(offset) || !*offset)
+    return mlir::failure();
+  auto arrayType = mlir::dyn_cast<smn::ArrayType>(array->getType());
+  if (!arrayType || !mlir::isa<mlir::IntegerType>(offset->getType()))
+    return mlir::failure();
+  if (mlir::failed(checkBounds(loc(index), *offset, arrayType.getSize())))
+    return mlir::failure();
+  return smn::ElementOp::create(builder_, loc(index), arrayType.getElement(),
+                                *array, *offset)
+      .getResult();
+}
+
+// Whether `offset` is within an array of `size` elements, compared as i64 so
+// that a wide index can't wrap into range. Out of it, the index and the
+// size go to stderr through dprintf, then exit(1), as in the AST codegen;
+// in it, lowering goes on in a block of its own.
+mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
+                                             mlir::Value offset,
+                                             int64_t size) {
+  if (!module_.lookupSymbol(kDprintfFunc) || !module_.lookupSymbol(kExitFunc))
+    return mlir::failure();
+  auto i32 = builder_.getI32Type();
+  auto i64 = builder_.getI64Type();
+  mlir::Value wide = offset;
+  if (offset.getType() != i64)
+    wide = mlir::arith::ExtSIOp::create(builder_, location, i64, offset);
+  auto sizeValue = mlir::arith::ConstantIntOp::create(builder_, location, i64,
+                                                      size);
+  auto zero = mlir::arith::ConstantIntOp::create(builder_, location, i64, 0);
+  auto high = mlir::arith::CmpIOp::create(
+      builder_, location, mlir::arith::CmpIPredicate::sge, wide, sizeValue);
+  auto low = mlir::arith::CmpIOp::create(
+      builder_, location, mlir::arith::CmpIPredicate::slt, wide, zero);
+  auto outside = mlir::arith::OrIOp::create(builder_, location, high, low);
+
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *fail = &region->emplaceBlock();
+  auto *inside = &region->emplaceBlock();
+  mlir::cf::CondBranchOp::create(builder_, location, outside, fail, inside);
+
+  builder_.setInsertionPointToStart(fail);
+  auto message = smn::StringOp::create(
+      builder_, location,
+      smn::PtrType::get(builder_.getContext(), builder_.getI8Type(),
+                        smn::Ownership::View),
+      "index %lld out of bounds for an array of length %lld\n");
+  auto stderrFd =
+      mlir::arith::ConstantIntOp::create(builder_, location, i32, 2);
+  smn::CallOp::create(builder_, location, mlir::TypeRange{i32}, kDprintfFunc,
+                      mlir::ValueRange{stderrFd, message, wide, sizeValue});
+  auto one = mlir::arith::ConstantIntOp::create(builder_, location, i32, 1);
+  smn::CallOp::create(builder_, location, mlir::TypeRange{}, kExitFunc,
+                      mlir::ValueRange{one});
+  smn::UnreachableOp::create(builder_, location);
+
+  builder_.setInsertionPointToStart(inside);
+  return mlir::success();
 }
 
 // `x as T`, through the Convert<A, T> instance the type checker chose.

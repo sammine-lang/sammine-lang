@@ -1,0 +1,18 @@
+// RUN: %sammine_jit --mir --file %full | %check %full
+// Arrays through MIR: literals, constant or not, indexed and measured, in
+// a struct, passed to and from functions the AST codegen emitted.
+// CHECK: 60 3 7 8
+import std;
+
+struct Grid { cells: [4]i32, n: i32 };
+
+let sum3(arr: [3]i32) -> i32 { arr[0] + arr[1] + arr[2] }
+let size(arr: [3]i32) -> i32 { len(arr) }
+let corner(g: Grid) -> i32 { g.cells[g.n - 1] }
+let build(x: i32) -> Grid { Grid { cells: [x, x + 1, x + 2, x + 3], n: 2 } }
+
+let main() -> i32 {
+  let a: [3]i32 = [10, 20, 30];
+  std::printf("%d %d %d %d\n", sum3(a), size(a), corner(build(6)), corner(Grid { cells: [5, 8, 0, 0], n: 2 }));
+  0
+}

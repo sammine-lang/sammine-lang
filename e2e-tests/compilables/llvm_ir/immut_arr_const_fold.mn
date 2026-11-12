@@ -17,5 +17,5 @@ let main() -> i32 {
 
 // CHECK:      define noundef i32 @main() local_unnamed_addr
 // CHECK-NOT:  alloca
-// CHECK:      @printf(ptr nonnull {{.*}}@.str.0, i32 60)
+// CHECK:      @printf(ptr nonnull {{.*}}@{{(.mir)?}}.str.{{[0-9]+}}, i32 60)
 // CHECK:      ret i32 0

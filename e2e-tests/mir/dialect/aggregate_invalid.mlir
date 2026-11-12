@@ -9,7 +9,7 @@ func.func @wrong_field(%a: i64) {
 // -----
 
 func.func @not_aggregate(%a: i32) {
-  // expected-error @+1 {{'sammine.aggregate' op builds a struct or tuple, not 'i32'}}
+  // expected-error @+1 {{'sammine.aggregate' op builds a struct, tuple or array, not 'i32'}}
   %s = sammine.aggregate(%a) : (i32) -> i32
   return
 }

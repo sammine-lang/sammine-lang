@@ -102,10 +102,10 @@ def StringOp : Sammine_Op<"string", [Pure]> {
 }
 
 def AggregateOp : Sammine_Op<"aggregate", [Pure]> {
-  let summary = "a struct or tuple of the values of its fields, in order";
+  let summary = "a struct, tuple or array of the values of its fields, in order";
   let description = [{
-    `Point { x: a, y: b }` or `(a, b)`. A field that owns memory is moved
-    in: the aggregate owns it now.
+    `Point { x: a, y: b }`, `(a, b)` or `[a, b]`. A field that owns memory is
+    moved in: the aggregate owns it now.
   }];
   let arguments = (ins Variadic<AnyType>:$fields);
   let results = (outs AnyType:$result);
@@ -160,6 +160,23 @@ def PayloadOp : Sammine_Op<"payload", [Pure]> {
     $value `[` $variant `,` $field `]` `at` $offset attr-dict `:` type($value) `->` type($result)
   }];
   let hasVerifier = 1;
+}
+
+def ElementOp : Sammine_Op<"element", [Pure]> {
+  let summary = "element `index` of an array value, `a[i]`";
+  let description = [{
+    Nothing checks the index here: MIR checks it before, as code of its own,
+    and reports one out of bounds.
+  }];
+  let arguments = (ins Sammine_ArrayType:$array, AnySignlessInteger:$index);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "$array `[` $index `]` attr-dict `:` type($array) `,` type($index) `->` type($result)";
+  let hasVerifier = 1;
+}
+
+def UnreachableOp : Sammine_Op<"unreachable", [Terminator]> {
+  let summary = "a point the program never reaches, as after exit()";
+  let assemblyFormat = "attr-dict";
 }
 
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,

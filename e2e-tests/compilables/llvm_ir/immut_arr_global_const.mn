@@ -11,5 +11,6 @@ let main() -> i32 {
   return sum3(a);
 }
 
-// CHECK: @.const_arr.0 = internal constant [3 x i32] [i32 10, i32 20, i32 30]
+// The AST codegen names the global .const_arr.N, MIR .mir.const_arr.N.
+// CHECK: @{{(.mir)?}}.const_arr.0 = internal constant [3 x i32] [i32 10, i32 20, i32 30]
 // CHECK: define i32 @main()

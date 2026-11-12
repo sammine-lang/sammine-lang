@@ -7,9 +7,14 @@ export let sum3(arr: [3]i32) -> i32 {
   arr[0] + arr[1] + arr[2]
 }
 
+// An array passed by value is read in place: split into its elements, with
+// no stack slot.
 // CHECK:      define i32 @"arr_pass_extractvalue::sum3"([3 x i32] %0)
-// CHECK-NEXT:   %.fca.0.extract = extractvalue [3 x i32] %0, 0
-// CHECK-NEXT:   %.fca.1.extract = extractvalue [3 x i32] %0, 1
-// CHECK-NEXT:   %.fca.2.extract = extractvalue [3 x i32] %0, 2
+// CHECK-NOT:    alloca
+// CHECK:        extractvalue [3 x i32] %0, 0
+// CHECK-NOT:    alloca
+// CHECK:        extractvalue [3 x i32] %0, 1
+// CHECK-NOT:    alloca
+// CHECK:        extractvalue [3 x i32] %0, 2
 // CHECK:        add i32
 // CHECK:        ret i32

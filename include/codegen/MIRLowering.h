@@ -89,6 +89,11 @@ private:
   lowerBuiltinInstance(mlir::Location location, const MonomorphizedKey &key,
                        mlir::ValueRange args, const Type &result);
   mlir::FailureOr<mlir::Value> lowerCast(AST::CastExprAST *cast);
+  mlir::FailureOr<mlir::Value>
+  lowerArrayLiteral(AST::ArrayLiteralExprAST *array);
+  mlir::FailureOr<mlir::Value> lowerArrayIndex(AST::IndexExprAST *index);
+  mlir::LogicalResult checkBounds(mlir::Location location, mlir::Value offset,
+                                  int64_t size);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);
