@@ -67,12 +67,13 @@ mlir::Value placeRoot(mlir::Value place) {
   return place;
 }
 
-/// A function's name as the source writes it, from its symbol: without the
-/// `::` ahead of a program's own function (::helper), and without the type
-/// arguments a generic copy's carries.
-std::string writtenName(llvm::StringRef symbol) {
-  symbol.consume_front("::");
-  return symbol.substr(0, symbol.find('<')).str();
+/// The function `op` calls or closes over by `symbol`, as a message names
+/// it.
+std::string calleeName(mlir::Operation *op, llvm::StringRef symbol) {
+  auto function =
+      mlir::SymbolTable::lookupNearestSymbolFrom<mlir::FunctionOpInterface>(
+          op, mlir::StringAttr::get(op->getContext(), symbol));
+  return function ? smn::sourceName(function) : symbol.str();
 }
 
 /// Adds to `set` each of `items` it hasn't; true if it grew.
@@ -159,7 +160,7 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
     error(closure.getLoc(),
           "Cannot bind " + (name.empty() ? "a value" : "'" + name + "'") +
               " that owns memory into a partial application of '" +
-              writtenName(closure.getCallee()) +
+              calleeName(closure, closure.getCallee()) +
               "': the closure can be called more than once");
   }
 }
@@ -236,7 +237,7 @@ private:
   }
 
   static std::string what(smn::ClosureOp closure) {
-    return "a partial application of '" + writtenName(closure.getCallee()) + "' that " +
+    return "a partial application of '" + calleeName(closure, closure.getCallee()) + "' that " +
            (bindsView(closure) ? "captured a view (ptr<T>)"
                                : "can hold itself through what it binds, so "
                                  "keeps that in this call's frame");
@@ -343,9 +344,9 @@ private:
               !llvm::is_contained(callee->escapes, static_cast<unsigned>(i)))
             continue;
           leaves(taintOf(arg), call.getLoc(),
-                 "Cannot pass to '" + writtenName(call.getCallee()) + "'",
+                 "Cannot pass to '" + calleeName(call, call.getCallee()) + "'",
                  "once this function returns: '" +
-                     writtenName(call.getCallee()) + "' keeps it",
+                     calleeName(call, call.getCallee()) + "' keeps it",
                  summary.escapes);
         }
       } else if (auto indirect = mlir::dyn_cast<smn::CallIndirectOp>(op)) {

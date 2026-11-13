@@ -9,6 +9,6 @@ import shapes;
 import std;
 
 let main() -> i32 {
-  std::printf("%f\n", Area<shapes::Square>(shapes::Square { side: 3.0 }));
+  std::printf("%f\n", shapes::Area<shapes::Square>(shapes::Square { side: 3.0 }));
   return 0;
 }

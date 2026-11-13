@@ -24,7 +24,7 @@
 // CHECK-LABEL: func.func private @"::by_method"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.lend
-// CHECK-NEXT: sammine.call @"Look<i32>::Look"(
+// CHECK-NEXT: sammine.call @"::Look<i32>::Look"(
 
 typeclass Look<T> {
   Look(p: ptr<T>) -> T;

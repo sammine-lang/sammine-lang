@@ -210,10 +210,13 @@ public:
   virtual void visit(KernelDefAST *ast) override;
 
   // Type class data structures
-  std::unordered_map<std::string, TypeClassDeclAST *> type_class_defs;
+  /// Each typeclass, by its name.
+  NameMap<TypeClassDeclAST *> type_class_defs;
   std::unordered_set<MonomorphizedKey, MonomorphizedKeyHash>
       type_class_instances;
-  std::unordered_map<std::string, std::string> method_to_class;
+  /// The class of each method, by the name the method is called by: its
+  /// own beside its class's (m::show for m::Show's show).
+  NameMap<Name> method_to_class;
 
   // Enum variant constructors: variant_name → (enum_type, variant_index)
   NameMap<std::pair<Type, size_t>> variant_constructors;
@@ -263,14 +266,17 @@ public:
     std::vector<Type> types;
   };
   /// Generic instances, by typeclass name.
-  std::unordered_map<std::string, std::vector<GenericInstance>>
-      generic_instances;
+  NameMap<std::vector<GenericInstance>> generic_instances;
   /// Copy, register and type-check the generic instance whose types match
   /// `key`. False if none does.
   bool instantiate_generic_instance(const MonomorphizedKey &key);
   /// Instances imported but not exported → their module.
   std::unordered_map<MonomorphizedKey, std::string, MonomorphizedKeyHash>
       private_instances;
+  /// What `method` of the instance `key` is to call: a function, or built
+  /// in if the compiler provides the instance.
+  static Reference method_reference(const MonomorphizedKey &key,
+                                    const std::string &method);
   /// How to declare the instance `key` of a typeclass, its methods taken from
   /// the typeclass: instance Less<P> { let Less(a: P, b: P) -> bool { ... } }.
   std::string instance_template(const MonomorphizedKey &key) const;
@@ -380,7 +386,6 @@ public:
   bool check_assign_target(BinaryExprAST *ast);
   // x[i] for an x that is neither an array nor a pointer.
   static constexpr std::string_view kIndexerClass = "Indexer";
-  static constexpr std::string_view kDropClass = "Drop";
   /// Instantiates the generic Drop instance, if any, of each type a generic
   /// instantiated.
   void instantiate_drops();

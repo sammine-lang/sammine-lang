@@ -66,8 +66,22 @@ llvm::ArrayRef<mlir::Type> variantFields(EnumType en, uint64_t i);
 /// the invariants unsafe code keeps, it checks only elsewhere.
 constexpr llvm::StringLiteral kUnsafeAttr = "sammine.unsafe";
 
-/// The function that drops a value of `type`, its Drop instance's method
-/// (`Drop<T>::Drop`) in `module`, or null if it has none.
+/// On a function: its name as source writes it (`helper`, `vec::push`), for
+/// messages. Whoever declares the function says it; a symbol is only what
+/// the function is linked as, and nothing reads a name back out of one.
+constexpr llvm::StringLiteral kSourceNameAttr = "sammine.name";
+
+/// `function`'s name for a message: as source writes it if it says
+/// (kSourceNameAttr), else its symbol, as a C function's is.
+std::string sourceName(mlir::FunctionOpInterface function);
+
+/// On the function that drops a value of a type, its Drop instance's method:
+/// that type. Whoever declares the function says so; nothing finds it by
+/// what it is called.
+constexpr llvm::StringLiteral kDropsAttr = "sammine.drops";
+
+/// The function that drops a value of `type` in `module`, the one marked
+/// kDropsAttr for it, or null if it has none.
 mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type);
 
 /// Calls `fn(operand, arg)` for each value `branch` forwards to a successor,

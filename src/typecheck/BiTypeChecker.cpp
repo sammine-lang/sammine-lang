@@ -180,7 +180,7 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
   register_function(ast->functionName, ast->get_type());
-  if (ast->functionName.get_name() == "main") {
+  if (props_.is_entry_point(ast->functionName)) {
     auto fn_type = std::get<FunctionType>(ast->get_type().type_data);
     auto return_type = fn_type.get_return_type();
     if (return_type != Type::I32_t()) {
@@ -839,7 +839,8 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
 
     for (auto &proto : ast->methods) {
       proto->accept_synthesis(this);
-      method_to_class[proto->functionName.get_name()] = ast->class_name;
+      method_to_class[ast->class_name.sibling(
+          proto->functionName.get_name())] = ast->class_name;
     }
   }
 
@@ -889,13 +890,13 @@ bool BiTypeCheckerVisitor::overlaps_registered_instance(
       if (unifiable(renamed, other.types))
         return report(fmt::format(
             "instance<{}> {}<{}>", fmt::join(other.ast->type_params, ", "),
-            ast->class_name,
-            MonomorphizedKey::instance(ast->class_name, other.types)
+            ast->class_name.mangled(),
+            MonomorphizedKey{ast->class_name, other.types}
                 .type_args_string()));
   if (!ast->is_generic())
     return false;
   for (auto &key : type_class_instances)
-    if (key.class_name() == ast->class_name &&
+    if (key.name == ast->class_name &&
         unifiable(renamed, key.type_args))
       return report(fmt::format("instance {}<{}>", key.class_name(),
                                 key.type_args_string()));
@@ -910,7 +911,8 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   auto it = type_class_defs.find(ast->class_name);
   if (it == type_class_defs.end()) {
     this->add_error(ast->get_location(),
-                    fmt::format("Unknown type class '{}'", ast->class_name));
+                    fmt::format("Unknown type class '{}'",
+                                ast->class_name.mangled()));
     return;
   }
 
@@ -919,7 +921,8 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     this->add_error(
         ast->get_location(),
         fmt::format("Type class '{}' expects {} type argument(s), got {}",
-                    ast->class_name, tc->type_params.size(), types->size()));
+                    ast->class_name.mangled(), tc->type_params.size(),
+                    types->size()));
     return;
   }
 
@@ -933,21 +936,23 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
           ast->get_location(),
           fmt::format("Type parameter '{}' of the instance is not used in "
                       "{}<...>",
-                      tp, ast->class_name));
+                      tp, ast->class_name.mangled()));
       return;
     }
 
-  auto tc_key = MonomorphizedKey::instance(ast->class_name, *types);
+  MonomorphizedKey tc_key{ast->class_name, *types};
 
   if (!ast->is_generic() && is_builtin_instance(tc_key)) {
     this->add_error(ast->get_location(),
                     fmt::format("{}<{}> is built in and can't be redefined",
-                                ast->class_name, tc_key.type_args_string()));
+                                tc_key.class_name(),
+                                tc_key.type_args_string()));
     return;
   }
   if (!ast->is_generic() && type_class_instances.contains(tc_key)) {
     this->add_error(ast->get_location(),
-                    fmt::format("Duplicate instance of {}<{}>", ast->class_name,
+                    fmt::format("Duplicate instance of {}<{}>",
+                                tc_key.class_name(),
                                 tc_key.type_args_string()));
     return;
   }
@@ -959,6 +964,14 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     return;
   }
   add_instance(ast, tc_key);
+}
+
+Reference
+BiTypeCheckerVisitor::method_reference(const MonomorphizedKey &key,
+                                       const std::string &method) {
+  if (is_builtin_instance(key))
+    return {Reference::Builtin{key}};
+  return {Reference::Function{key.to_typeclass_name(method)}};
 }
 
 void BiTypeCheckerVisitor::add_instance(TypeClassInstanceAST *ast,
@@ -975,7 +988,7 @@ void BiTypeCheckerVisitor::add_instance(TypeClassInstanceAST *ast,
 
 bool BiTypeCheckerVisitor::instantiate_generic_instance(
     const MonomorphizedKey &key) {
-  auto it = generic_instances.find(key.class_name());
+  auto it = generic_instances.find(key.name);
   if (it == generic_instances.end())
     return false;
   // A copy is only made for types known in full: an untyped literal's or
@@ -1038,7 +1051,7 @@ BiTypeCheckerVisitor::missing_instance(const MonomorphizedKey &key,
 std::string
 BiTypeCheckerVisitor::instance_template(const MonomorphizedKey &key) const {
   std::vector<std::string> methods;
-  if (auto it = type_class_defs.find(key.class_name());
+  if (auto it = type_class_defs.find(key.name);
       it != type_class_defs.end()) {
     auto *tc = it->second;
     TypeBindings bindings;

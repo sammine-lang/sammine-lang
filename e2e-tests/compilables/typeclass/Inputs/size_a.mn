@@ -1,0 +1,12 @@
+export struct Sq { side: i64, };
+export typeclass Size<T> {
+  Size(x: T) -> i64;
+  describe(x: T) -> i64;
+}
+typeclass Hidden<T> {
+  Hidden(x: T) -> i64;
+}
+export instance Size<Sq> {
+  let Size(s: Sq) -> i64 { s.side }
+  let describe(s: Sq) -> i64 { s.side * 10i64 }
+}

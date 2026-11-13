@@ -1,0 +1,42 @@
+// RUN: %sammine --file %dir/Inputs/size_a.mn %O && %sammine --file %dir/Inputs/size_b.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      4
+// CHECK-NEXT: 40
+// CHECK-NEXT: 40
+// CHECK-NEXT: 1005
+// CHECK-NEXT: 8
+// CHECK-NEXT: 9
+// CHECK-NEXT: 10
+
+// A typeclass is a definition of its module, as a struct is: two modules and
+// the program each have a Size, and each is its own class. Another module's
+// is named through it, in an instance too, and so is its method, by its own
+// name or through the class.
+
+import size_a;
+import size_b;
+import std;
+
+struct Mine { n: i64, };
+
+typeclass Size<T> {
+  Size(x: T) -> i64;
+}
+instance Size<Mine> {
+  let Size(m: Mine) -> i64 { m.n + 1i64 }
+}
+instance size_a::Size<Mine> {
+  let Size(m: Mine) -> i64 { m.n + 2i64 }
+  let describe(m: Mine) -> i64 { m.n + 3i64 }
+}
+
+let main() -> i32 {
+  let sq = size_a::Sq { side: 4i64 };
+  std::printf("%ld\n", size_a::Size<size_a::Sq>(sq));
+  std::printf("%ld\n", size_a::describe<size_a::Sq>(sq));
+  std::printf("%ld\n", size_a::Size<size_a::Sq>::describe(sq));
+  std::printf("%ld\n", size_b::Size<i64>(5i64));
+  std::printf("%ld\n", Size<Mine>(Mine { n: 7i64 }));
+  std::printf("%ld\n", size_a::Size<Mine>(Mine { n: 7i64 }));
+  std::printf("%ld\n", size_a::describe<Mine>(Mine { n: 7i64 }));
+  return 0;
+}

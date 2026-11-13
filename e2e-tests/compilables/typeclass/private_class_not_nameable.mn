@@ -1,0 +1,13 @@
+// RUN: %sammine --file %dir/Inputs/size_a.mn %O && (! %sammine --file %full %I -I %dir/Inputs %O 2>&1) | %check %full
+// CHECK: 'size_a::Hidden' is private to module 'size_a'
+
+// A typeclass a module doesn't export is its own: another module can't
+// declare an instance of it.
+
+import size_a;
+
+instance size_a::Hidden<i64> {
+  let Hidden(x: i64) -> i64 { x }
+}
+
+let main() -> i32 { 0 }

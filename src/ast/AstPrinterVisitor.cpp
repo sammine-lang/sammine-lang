@@ -476,7 +476,8 @@ void AstPrinterVisitor::visit(TypeClassDeclAST *ast) {
     params += ast->type_params[i];
   }
   add_to_rep(
-      fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name, params));
+      fmt::format("{}typeclass: {}<{}>\n", tabs(), ast->class_name.mangled(),
+                  params));
   for (auto &method : ast->methods)
     safeguard_visit(method.get(), "!!nullptr!! PrototypeAST\n");
   generic_postprint();
@@ -496,7 +497,7 @@ void AstPrinterVisitor::visit(TypeClassInstanceAST *ast) {
                     ? fmt::format("<{}>", fmt::join(ast->type_params, ", "))
                     : std::string();
   add_to_rep(fmt::format("{}instance{}: {}<{}>\n", tabs(), params,
-                         ast->class_name, types));
+                         ast->class_name.mangled(), types));
   for (auto &method : ast->methods)
     safeguard_visit(method.get(), "!!nullptr!! FuncDefAST\n");
   generic_postprint();

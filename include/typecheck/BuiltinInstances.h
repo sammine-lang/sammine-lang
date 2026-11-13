@@ -49,6 +49,10 @@ inline std::optional<TokenType> operator_of_class(std::string_view class_name) {
   return std::nullopt;
 }
 
+/// The typeclass whose instance for a type drops a value of it: the drops
+/// the compiler inserts call `Drop<T>::Drop`.
+inline constexpr std::string_view kDropClass = "Drop";
+
 /// The typeclass `x as T` goes through, as `Convert<From, T>`.
 inline constexpr std::string_view kConvertClass = "Convert";
 
@@ -104,10 +108,13 @@ inline bool is_builtin_equality(const Type &t) {
 
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
-  if (key.class_name() == kConvertClass)
+  // Only the prelude's classes have them: a module's own Add is its own.
+  if (!key.name.is_of_prelude())
+    return false;
+  if (key.is_of_prelude_class(kConvertClass))
     return key.type_args.size() == 2 &&
            is_builtin_conversion(key.type_args[0], key.type_args[1]);
-  auto op = operator_of_class(key.class_name());
+  auto op = operator_of_class(key.name.get_name());
   if (!op || key.type_args.size() != 1)
     return false;
   auto &t = key.type_args[0];

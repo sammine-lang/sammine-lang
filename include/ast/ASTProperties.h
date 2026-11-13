@@ -54,17 +54,21 @@ struct VariableProps {
 };
 
 struct BinaryProps {
-  std::optional<sammine_util::QualifiedName> resolved_op_method;
+  /// For an operator through a typeclass (`+` through Add): the instance's
+  /// method, a function or built in. Nothing for one that goes through none.
+  Reference method;
 };
 
 struct IndexProps {
-  /// For x[i] through an Indexer instance: the method it calls with &x and i.
-  std::optional<sammine_util::QualifiedName> indexer_method;
+  /// For x[i] through an Indexer instance: the method it calls with &x and
+  /// i. Nothing for an array's or a pointer's own indexing.
+  Reference method;
+  bool through_instance() const { return method.is<Reference::Function>(); }
 };
 
 struct CastProps {
-  /// The Convert<From, To> instance the cast goes through.
-  std::optional<MonomorphizedKey> instance;
+  /// The method of the Convert<From, To> instance the cast goes through.
+  Reference method;
 };
 
 struct TypeAliasProps {
@@ -88,6 +92,7 @@ class ASTProperties {
   std::unordered_map<sammine_util::QualifiedName, std::string,
                      sammine_util::QualifiedNameHash>
       symbols_;
+  std::optional<sammine_util::QualifiedName> entry_point_;
 
 public:
   // Mutable accessors — auto-insert a default-constructed entry
@@ -129,10 +134,20 @@ public:
     return it != for_props_.end() ? &it->second : nullptr;
   }
 
+  //! The function a program starts at, linked as `symbol`, which C's
+  //! runtime calls: NameResolver decides which it is.
+  void set_entry_point(const sammine_util::QualifiedName &name,
+                       std::string symbol) {
+    entry_point_ = name;
+    set_symbol(name, std::move(symbol));
+  }
+  bool is_entry_point(const sammine_util::QualifiedName &name) const {
+    return entry_point_ == name;
+  }
+
   //! The symbol the definition named `name` is linked as, where NameResolver
   //! decides it isn't the name's own: a C binding's is its C name, in every
-  //! module that binds it (std::printf and io::printf are both printf), and
-  //! a program's entry point is main.
+  //! module that binds it (std::printf and io::printf are both printf).
   void set_symbol(const sammine_util::QualifiedName &name, std::string symbol) {
     symbols_[name] = std::move(symbol);
   }

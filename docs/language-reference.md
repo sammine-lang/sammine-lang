@@ -754,6 +754,23 @@ mysize<i32>()                 // unqualified with type arg
 MySize<i32>::mysize()         // qualified: ClassName<Type>::method()
 ```
 
+A typeclass is a definition of its module, as a struct is, and each of its
+methods is a name of that module too. Another module names them through it,
+and declares an instance of the class the same way:
+
+```sammine
+import shapes;                           // export typeclass Area<T> { Area(x: T) -> f64; }
+
+instance shapes::Area<Mine> { let Area(m: Mine) -> f64 { 1.0 } }
+
+shapes::Area<Mine>(m)                    // the method named as its class
+shapes::Area<Mine>::Area(m)              // the same, through the class
+```
+
+Two modules can each have a typeclass of the same name: they are two
+classes. A module can't define a typeclass twice, or give two of its
+typeclasses a method of the same name.
+
 ### Generic Instances
 
 An instance can be written once for every type of a shape. Its type
@@ -1273,27 +1290,27 @@ math::multiply(3, 4);
 
 ### Exporting from Modules
 
-Use `export` to make definitions visible to importers. `export` works with functions, structs, enums, typeclass instances, and C bindings:
+Use `export` to make definitions visible to importers. `export` works with functions, structs, enums, typeclasses, typeclass instances, and C bindings:
 
 ```sammine
 // In math.mn:
 export let add(a: i32, b: i32) -> i32 { a + b }
 export struct Point { x: i32, y: i32, };
 export type Color = Red | Green | Blue;
-typeclass Norm<T> { Norm(x: T) -> i32; }
+export typeclass Norm<T> { Norm(x: T) -> i32; }
 export instance Norm<Point> { let Norm(p: Point) -> i32 { p.x + p.y } }
 export reuse printf(fmt: ptr<char>, ...) -> i32;
 ```
 
 An exported function or instance is compiled in its own module, and an importer calls that compiled code, so the module must be compiled first. Its body can use the module's definitions that aren't exported.
 
-A function, instance or type that isn't exported is private to its module: other modules can't name or use it ("'vec::grow_buf' is private to module 'vec'"). An exported function or struct can still use the module's private types, in its body, signature or fields, and their values can reach other modules, which just can't write their names.
+A function, instance, type or typeclass that isn't exported is private to its module: other modules can't name or use it ("'vec::grow_buf' is private to module 'vec'"). An exported function or struct can still use the module's private types, in its body, signature or fields, and their values can reach other modules, which just can't write their names.
 
 A generic function is compiled in each module that uses it, for the types it is used with, so its source comes along with the import. It still has to be exported to be called from another module. It counts as its module's own code wherever it is compiled, so an exported generic function can use its module's private functions and instances, as `vec::push` calls `vec`'s own `grow_buf`.
 
 ### Standard Library Modules
 
-- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`. `Hash` has instances for the integer types, `char` and `bool`, which mix every bit of the value into the hash (splitmix64's finalizer), so nearby keys land far apart in a table.
+- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. A module's own definition of the same name hides the prelude's in that module's code. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`. `Hash` has instances for the integer types, `char` and `bool`, which mix every bit of the value into the hash (splitmix64's finalizer), so nearby keys land far apart in a table.
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)

@@ -1023,10 +1023,12 @@ public:
 /// Typeclass declaration: `typeclass Name<T> { method signatures }`.
 class TypeClassDeclAST : public DefinitionAST {
 public:
-  std::string class_name;
+  /// NameResolver names it after its module, as any definition.
+  sammine_util::QualifiedName class_name;
   std::vector<std::string> type_params;
   std::vector<std::unique_ptr<PrototypeAST>> methods;
-  explicit TypeClassDeclAST(std::shared_ptr<Token> tok, std::string name,
+  explicit TypeClassDeclAST(std::shared_ptr<Token> tok,
+                            sammine_util::QualifiedName name,
                             std::vector<std::string> params,
                             std::vector<std::unique_ptr<PrototypeAST>> methods_)
       : DefinitionAST(NodeKind::TypeClassDeclAST), class_name(std::move(name)),
@@ -1041,7 +1043,9 @@ public:
 /// set of types it is used with.
 class TypeClassInstanceAST : public DefinitionAST {
 public:
-  std::string class_name;
+  /// The class it is an instance of: NameResolver rewrites it to the
+  /// class's name.
+  sammine_util::QualifiedName class_name;
   /// An instance imported from another module: its methods are only declared
   /// here, and their bodies are compiled in that module.
   bool is_declaration = false;
@@ -1054,7 +1058,7 @@ public:
   std::vector<std::unique_ptr<TypeExprAST>> concrete_type_exprs;
   std::vector<std::unique_ptr<FuncDefAST>> methods;
   explicit TypeClassInstanceAST(
-      std::shared_ptr<Token> tok, std::string class_name_,
+      std::shared_ptr<Token> tok, sammine_util::QualifiedName class_name_,
       std::vector<std::unique_ptr<TypeExprAST>> type_exprs,
       std::vector<std::unique_ptr<FuncDefAST>> methods_)
       : DefinitionAST(NodeKind::TypeClassInstanceAST),

@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: The name `Foo` has been introduced before
+// CHECK: The name `bar` has been introduced before
+
+// A typeclass is a top-level name of its module, and so is each of its
+// methods: neither can be defined twice.
+
+typeclass Foo<T> { foo(x: T) -> T; }
+typeclass Foo<T> { other(x: T) -> T; }
+
+typeclass A<T> { bar(x: T) -> T; }
+typeclass B<T> { bar(x: T) -> T; }
+
+let main() -> i32 { 0 }

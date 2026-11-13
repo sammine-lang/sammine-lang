@@ -338,20 +338,17 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
 
-  // A local shadows whatever else is named as it is: a call through it is
-  // a normal call, whichever function, method or variant shares its name.
+  // A callee of one part is a local, which no variant, method or generic
+  // function is named as: only the last resolver finds it.
   std::optional<ResolvedCall> call;
-  if (names_variable(ast->functionName))
-    call = resolve_normal_call(ast);
-  else
-    for (auto resolve : {&BiTypeCheckerVisitor::resolve_enum_call,
-                         &BiTypeCheckerVisitor::resolve_typeclass_call,
-                         &BiTypeCheckerVisitor::resolve_generic_call,
-                         &BiTypeCheckerVisitor::resolve_normal_call}) {
-      call = (this->*resolve)(ast);
-      if (call)
-        break;
-    }
+  for (auto resolve : {&BiTypeCheckerVisitor::resolve_enum_call,
+                       &BiTypeCheckerVisitor::resolve_typeclass_call,
+                       &BiTypeCheckerVisitor::resolve_generic_call,
+                       &BiTypeCheckerVisitor::resolve_normal_call}) {
+    call = (this->*resolve)(ast);
+    if (call)
+      break;
+  }
   if (!call || call->failed)
     return ast->set_type(Type::Poisoned());
 
@@ -545,32 +542,20 @@ BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
 
 std::optional<ResolvedCall>
 BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
-  // Support both syntaxes:
-  //   add<i32>(x, y)       — method_name = "add", type arg in
-  //   explicit_type_args Add<i32>::add(x, y)  — method_name = "add"
-  //   (get_name()), class from qualifier
-  std::string method_name;
-  std::string class_name;
-
-  if (ast->functionName.is_qualified()) {
-    // Qualified syntax: Add<i32>::add — extract method from last part
-    method_name = ast->functionName.get_name();
-    class_name = ast->functionName.get_qualifier();
-  }
-
-  if (class_name.empty()) {
-    // Unqualified syntax: add<i32>(x, y) — look up method in method_to_class
-    method_name = ast->functionName.get_name();
-    auto class_it = method_to_class.find(method_name);
+  // A method through its class, Add<i32>::add(x, y), or by its own name,
+  // add<i32>(x, y), which NameResolver resolved beside its class's.
+  auto &callee = ast->functionName;
+  auto method_name = callee.get_name();
+  auto tc_it = callee.is_qualified() ? type_class_defs.find(callee.qualifier())
+                                     : type_class_defs.end();
+  if (tc_it == type_class_defs.end()) {
+    auto class_it = method_to_class.find(callee);
     if (class_it == method_to_class.end())
       return std::nullopt;
-    class_name = class_it->second;
+    tc_it = type_class_defs.find(class_it->second);
   }
-
-  auto tc_it = type_class_defs.find(class_name);
-  if (tc_it == type_class_defs.end())
-    return std::nullopt;
   auto *tc = tc_it->second;
+  auto class_name = tc->class_name.mangled();
 
   if (ast->explicit_type_args.size() != tc->type_params.size()) {
     add_error(ast->get_location(),
@@ -586,7 +571,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
     return ResolvedCall::failure();
   auto &[tc_bindings, tc_type_args] = *resolved_args;
 
-  auto tc_key = MonomorphizedKey::instance(class_name, tc_type_args);
+  MonomorphizedKey tc_key{tc->class_name, tc_type_args};
   if (!has_instance(tc_key)) {
     add_error(ast->get_location(),
               missing_instance(tc_key,
@@ -619,10 +604,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   }
 
   auto resolved_name = tc_key.to_typeclass_name(method_name);
-  if (is_builtin_instance(tc_key))
-    props_.call(ast->id()).callee = {Reference::Builtin{tc_key}};
-  else
-    props_.call(ast->id()).callee = {Reference::Function{resolved_name}};
+  props_.call(ast->id()).callee = method_reference(tc_key, method_name);
   auto [expected, result] = resolve_generic_signature(
       method_proto, params, func_type.get_return_type(), tc_bindings);
   // The instance's signature, as for any other call: the linear checker reads
@@ -1014,7 +996,7 @@ bool BiTypeCheckerVisitor::check_assign_target(BinaryExprAST *ast) {
   auto *target = ast->LHS.get();
   auto *root = write_root(target);
   if (auto *idx = llvm::dyn_cast<IndexExprAST>(root);
-      idx && props_.index(idx->id()).indexer_method) {
+      idx && props_.index(idx->id()).through_instance()) {
     this->add_error(
         root->get_location(),
         fmt::format("Cannot write into '{}' by index: its Indexer only reads",
@@ -1095,9 +1077,8 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
       return ast->set_type(Type::Poisoned());
     }
     // A built-in instance is an instruction; any other is called.
-    if (!is_builtin_instance(tc_key))
-      props_.binary(ast->id()).resolved_op_method =
-          tc_key.to_typeclass_name(tc_key.class_name());
+    props_.binary(ast->id()).method =
+        method_reference(tc_key, tc_key.class_name());
     return ast->set_type(ast->Op->is_comparison() ? Type::Bool() : lhs_type);
   }
 
@@ -1444,7 +1425,8 @@ Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
                                    key.type_args_string())));
     return ast->set_type(Type::Poisoned());
   }
-  props_.cast(ast->id()).instance = key;
+  props_.cast(ast->id()).method =
+      method_reference(key, std::string(kConvertClass));
   return ast->set_type(to);
 }
 
@@ -1624,10 +1606,10 @@ BiTypeCheckerVisitor::indexer_instances_for(const Type &coll) const {
       found.push_back(std::move(key));
   };
   for (auto &key : type_class_instances)
-    if (key.class_name() == kIndexerClass && key.type_args.size() == 2 &&
+    if (key.is_of_prelude_class(kIndexerClass) && key.type_args.size() == 2 &&
         key.type_args[0] == coll)
       add(key);
-  if (auto it = generic_instances.find(std::string(kIndexerClass));
+  if (auto it = generic_instances.find(Name::prelude(kIndexerClass));
       it != generic_instances.end())
     for (auto &generic : it->second) {
       TypeBindings bindings;
@@ -1699,8 +1681,8 @@ Type BiTypeCheckerVisitor::synthesize_indexer(IndexExprAST *ast,
                     coll.to_string(), element.to_string()));
     return Type::Poisoned();
   }
-  props_.index(ast->id()).indexer_method =
-      key.to_typeclass_name(std::string(kIndexerClass));
+  props_.index(ast->id()).method =
+      method_reference(key, std::string(kIndexerClass));
   return element;
 }
 Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
@@ -2011,7 +1993,7 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
 
   // Verify that Iterator<Range<element_type>, element_type> instance exists.
   // Declaring that instance is what instantiates Range<element_type>.
-  auto range_type = get_typename_type(bare("Range").with_type_args({resolved}));
+  auto range_type = get_typename_type(Name::prelude("Range").with_type_args({resolved}));
   if (!range_type || !has_instance(MonomorphizedKey::instance(
                          "Iterator", {*range_type, resolved}))) {
     this->add_error(

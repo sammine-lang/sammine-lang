@@ -158,9 +158,9 @@ Each concrete AST node class uses the `AST_NODE_METHODS` macro, which generates 
 
 Type information and per-node metadata are stored externally in `ASTProperties` (`include/ast/ASTProperties.h`), keyed by `NodeId`. This keeps AST nodes lightweight and allows type data to be set/queried from any pass without mutating the AST structure. Property bags include:
 
-- `CallProps` -- callee function type, partial application flag, resolved monomorphized name, type bindings, enum constructor flag, typeclass call flag, enum variant index
-- `VariableProps` -- enum unit variant flag and variant index
-- `BinaryProps` -- resolved typeclass operator method name
+- `CallProps` -- what is called, as a `Reference` (a local, a function by name, an enum variant, or a built-in instance), the callee function type, partial application flag
+- `VariableProps` -- what the variable is the value of, as a `Reference`
+- `BinaryProps`, `CastProps`, `IndexProps` -- the instance method the operator, `as` or `x[i]` goes through, as a `Reference`
 - `TypeAliasProps` -- the resolved underlying type
 - Node types -- the `Type` assigned to each node during type checking
 

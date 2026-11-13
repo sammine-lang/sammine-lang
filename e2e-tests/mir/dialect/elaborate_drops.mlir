@@ -136,14 +136,15 @@ func.func @fields(%arg: !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: 
 // -----
 
 // One with a Drop instance drops whole, through it, but not in its own
-// Drop, which would call itself: there, field by field.
+// Drop, which would call itself: there, field by field. The function marked
+// sammine.drops for the type is its Drop, whatever it is called.
 // CHECK-LABEL: func.func @"Drop<Res>::Drop"(
 // CHECK: sammine.extract %{{[0-9]+}}[0]
 // CHECK: sammine.drop %{{[0-9]+}} implicit : !sammine.ptr<i32, owned>
 // CHECK-LABEL: func.func @whole(
 // CHECK-NEXT: %[[R:[0-9]+]] = sammine.let "r"
 // CHECK-NEXT: sammine.drop %[[R]] implicit : !sammine.struct<"Res"
-func.func @"Drop<Res>::Drop"(%arg: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+func.func @"Drop<Res>::Drop"(%arg: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.drops = !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>, sammine.mir} {
   %r = sammine.let "r" %arg : !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>
   return
 }

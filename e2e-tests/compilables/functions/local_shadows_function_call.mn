@@ -3,6 +3,8 @@
 // CHECK-NEXT: 43
 // CHECK-NEXT: 44
 // CHECK-NEXT: 45
+// CHECK-NEXT: 46
+// CHECK-NEXT: 47
 
 // A local holding a function value shadows whatever else has its name: a
 // call through it calls what it holds, not the function, the generic
@@ -33,5 +35,10 @@ let main() -> i32 {
   std::printf("%d\n", id(43));
   let show: (i32) -> i32 = inc;
   std::printf("%d\n", show(44));
+  // The prelude's names too: its Sized, and its Iterator's next.
+  let Sized: (i32) -> i32 = inc;
+  std::printf("%d\n", Sized(45));
+  let next: (i32) -> i32 = inc;
+  std::printf("%d\n", next(46));
   return 0;
 }

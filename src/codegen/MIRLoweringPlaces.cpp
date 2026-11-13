@@ -75,7 +75,7 @@ bool MIRLowering::hasPlace(ExprAST *expr) const {
   if (auto *field = llvm::dyn_cast<FieldAccessExprAST>(expr))
     return hasPlace(field->object_expr.get());
   if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
-    if (auto *ip = props_.index(index->id()); ip && ip->indexer_method)
+    if (auto *ip = props_.index(index->id()); ip && ip->through_instance())
       return false;
     auto kind = index->array_expr->get_type().type_kind;
     return kind == TypeKind::Pointer ||

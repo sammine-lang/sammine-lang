@@ -214,8 +214,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
   auto stepType = types_.mirType(iteration.step);
   auto element = types_.mirType(elementType);
   auto nextSymbol = props_.symbol(iteration.next);
-  if (!rangeType || !optionType || !stepType || !element ||
-      !module_.lookupSymbol<mlir::FunctionOpInterface>(nextSymbol))
+  if (!rangeType || !optionType || !stepType || !element)
     return mlir::failure();
   auto location = loc(forExpr);
 

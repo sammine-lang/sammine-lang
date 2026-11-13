@@ -2,7 +2,7 @@
 // its names without a prefix. Like any module, it is compiled into a library
 // (definitions.so), and its exported instances are linked from there.
 
-typeclass Sized<T> {
+export typeclass Sized<T> {
   Sized() -> i64;
 }
 
@@ -26,60 +26,60 @@ export instance Sized<char> {
   let Sized() -> i64 { 1i64 }
 }
 
-typeclass Add<T> {
+export typeclass Add<T> {
   Add(a: T, b: T) -> T;
 }
 
-typeclass Sub<T> {
+export typeclass Sub<T> {
   Sub(a: T, b: T) -> T;
 }
 
-typeclass Mul<T> {
+export typeclass Mul<T> {
   Mul(a: T, b: T) -> T;
 }
 
-typeclass Div<T> {
+export typeclass Div<T> {
   Div(a: T, b: T) -> T;
 }
 
-typeclass Mod<T> {
+export typeclass Mod<T> {
   Mod(a: T, b: T) -> T;
 }
 
 // The comparisons: < goes through Less, == through Equal, and so on. The
 // compiler provides the instances for numbers and char, and Equal and
 // NotEqual also for bool, pointers and arrays of those.
-typeclass Less<T> {
+export typeclass Less<T> {
   Less(a: T, b: T) -> bool;
 }
 
-typeclass Greater<T> {
+export typeclass Greater<T> {
   Greater(a: T, b: T) -> bool;
 }
 
-typeclass LessEqual<T> {
+export typeclass LessEqual<T> {
   LessEqual(a: T, b: T) -> bool;
 }
 
-typeclass GreaterEqual<T> {
+export typeclass GreaterEqual<T> {
   GreaterEqual(a: T, b: T) -> bool;
 }
 
-typeclass Equal<T> {
+export typeclass Equal<T> {
   Equal(a: T, b: T) -> bool;
 }
 
-typeclass NotEqual<T> {
+export typeclass NotEqual<T> {
   NotEqual(a: T, b: T) -> bool;
 }
 
 // `x as To` converts through this. The compiler provides the instances
 // between the number types, and between char and the integer types.
-typeclass Convert<From, To> {
+export typeclass Convert<From, To> {
   Convert(x: From) -> To;
 }
 
-typeclass Hash<T> {
+export typeclass Hash<T> {
   Hash(val: T) -> u64;
 }
 
@@ -120,17 +120,17 @@ export instance Hash<bool> {
 // What a value of type T does when it ends, where it goes out of use or at
 // drop(x): it is given the value, and must use up what it owns. A type with
 // no instance drops part by part.
-typeclass Drop<T> {
+export typeclass Drop<T> {
   Drop(x: T) -> unit;
 }
 
-typeclass Indexer<T, E> {
+export typeclass Indexer<T, E> {
   Indexer(coll: ptr<T>, idx: i64) -> E;
 }
 
 export type Option<T> = Some(T) | None;
 
-typeclass Iterator<I, T> {
+export typeclass Iterator<I, T> {
   next(iter : I) -> Option<(I, T)>;
 }
 

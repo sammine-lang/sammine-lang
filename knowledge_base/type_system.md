@@ -10,7 +10,7 @@
 
 ## ASTProperties
 - Side table keyed by `NodeId` (auto-incrementing per `AstBase`)
-- `CallProps`: callee_func_type, is_partial, resolved_name, type_bindings, is_typeclass_call, is_enum_constructor, enum_variant_index. `callee_func_type` is the signature the call goes to (a generic's or an instance's, as `resolve_generic_signature` resolves it: `substitute()` would leave a generic struct named as the generic, `Vec<T>`), set for every call to a function, normal, generic or typeclass; MIR lowering reads it to tell a lent argument from a moved one
+- `CallProps`: `callee` (a `Reference`: `Local`, `Function{name}`, `Variant{index}` or `Builtin{instance}`, set once by the call's resolver), callee_func_type, is_partial. `VariableProps::value` is a `Reference` too, and so are `BinaryProps::method`, `CastProps::method` and `IndexProps::method`, all from `method_reference(key, method)`. `callee_func_type` is the signature the call goes to (a generic's or an instance's, as `resolve_generic_signature` resolves it: `substitute()` would leave a generic struct named as the generic, `Vec<T>`), set for every call to a function, normal, generic or typeclass; MIR lowering reads it to tell a lent argument from a moved one
 - `BinaryProps`: resolved_op_method
 - `VariableProps`: is_enum_unit_variant, enum_variant_index
 - Writers (BiTypeChecker): `props_.call(id).field = val`; Readers (codegen): `props_.call(id)->field`
@@ -29,7 +29,7 @@
 - `main`: must return `i32`, take 0 or 2 params `(i32, ptr<ptr<char>>)`
 
 ### Operators
-- **Arithmetic** (`+`/`-`/`*`/`/`/`%`): dispatch via typeclass instances (`Add<i32>::add` etc.); sets `resolved_op_method` on `BinaryProps`
+- **Arithmetic** (`+`/`-`/`*`/`/`/`%`): dispatch via typeclass instances (`Add<i32>::Add` etc.); sets `BinaryProps::method`
 - **Comparison** (`==`/`!=`/`<`/`>`/`<=`/`>=`): dispatch like arithmetic, through `Equal`/`NotEqual`/`Less`/`Greater`/`LessEqual`/`GreaterEqual` (`kOperatorClasses`), result `Bool`. Built in (`is_builtin_instance`): ordering for numbers (untyped literals too) and char; equality also for bool, pointers, arrays of those, and enums whose payloads have it (`is_builtin_equality`): same variant and equal payloads (`emitEnumEquality` compares tags, then selects the active variant's payload comparison, since other variants' bytes are unwritten; integer-backed enums compare as integers). No enum order. Structs and tuples need a user instance. Codegen: `emitComparison` for built-ins (operators and calls by name); otherwise the instance is called
 - **Logical** (`&&`/`||`): return LHS type (NOT Bool), no typeclass dispatch
 - **Bitwise** (`&`/`|`/`^`/`<<`/`>>`): valid on integers and integer-backed enums, return operand type
@@ -71,11 +71,11 @@
 - `synthesize_kernel_reduce`: input Array, operator `+`/`-`/`*`/`/`, concrete numeric element type, identity compat with element, result = element type
 
 ## Typeclasses
-- `TypeClassInfo`: name, type_param, methods. Instances keyed by `MonomorphizedKey`
+- A typeclass is a definition of its module: `TypeClassDeclAST::class_name` is a `QualifiedName` NameResolver names (`shapes::Area`, a program's by the module with no name, the prelude's `definitions::Add`, written `Add`), and an instance's `class_name` is resolved to it (`instance shapes::Area<T>`). `type_class_defs`, `generic_instances` and `method_to_class` are keyed by name. Instances keyed by `MonomorphizedKey`; `MonomorphizedKey::instance(cls, types)` is for the prelude's classes, and only those have built-in instances (`is_builtin_instance`)
 - Generic instances (`instance<T> Indexer<Vec<T>, T>`): `register_typeclass_instance` resolves their types with the parameters as `TypeParam`s and keeps them in `generic_instances` by class, not in `type_class_instances`. `has_instance(key)` falls back to `instantiate_generic_instance`, which unifies each pattern with the key, copies the instance (`Monomorphizer::instantiate_instance`, marked `is_instantiation`), registers it under the key and type-checks its methods. Keys with open or literal types are never instantiated. Copies are injected into the program like generic function copies and emitted with internal linkage; the generic instance itself is skipped by pre-registration, `visit`, the checks after typing and codegen. Overlap (`overlaps_registered_instance`) is two-sided unification (`unifiable`) with this instance's parameters renamed apart; built-in instances are not checked and win for their types
-- Mangling: `MonomorphizedKey::to_typeclass_name(method)` → `Add<i32>::add`
-- Dispatch supports both `sizeof<i32>()` (unqualified) and `Add<i32>::add(x,y)` (qualified)
-- Both set `resolved_name` + `is_typeclass_call` on `CallProps`
+- An instance method's name: `MonomorphizedKey::to_typeclass_name(method)` → `Add<i32>::Add`, `shapes::Area<shapes::Square>::Area`
+- Dispatch supports a method by its own name, `sizeof<i32>()`, and through its class, `Add<i32>::add(x,y)`. NameResolver declares each method beside its class (`m::show` for `m::Show`'s `show`; one named as its class is the class's name), so `show<i32>(x)` in the class's module and `m::show<i32>(x)` elsewhere resolve to it; `method_to_class` is keyed by that name. A module's own top-level name hides the prelude's of that name, a method's (`next`) as any other
+- Both set `CallProps::callee` through `method_reference`
 - Built-in instances (`Add<i32>` etc.) have no source: `is_builtin_instance()` in `typecheck/BuiltinInstances.h` decides them, and `kOperatorClasses` there maps each operator to its class. Look instances up with `has_instance()`, never `type_class_instances` directly. A call to one sets `CallProps::builtin_instance`, and codegen emits the instruction (`emitBuiltinInstanceCall`). Redefining one is an error
 
 ## Monomorphized Generics

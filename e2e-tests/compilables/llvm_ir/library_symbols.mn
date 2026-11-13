@@ -31,5 +31,5 @@ instance Twice<i64> {
 // CHECK: define i32 @"library_symbols::helper"(
 // CHECK: define i32 @"library_symbols::double"(
 // CHECK: define i32 @"library_symbols::first"(
-// CHECK: define %"sammine.struct.library_symbols::Num" @"Twice<library_symbols::Num>::Twice"(
-// CHECK: define i64 @"Twice<i64>::Twice"(
+// CHECK: define %"sammine.struct.library_symbols::Num" @"library_symbols::Twice<library_symbols::Num>::Twice"(
+// CHECK: define i64 @"library_symbols::Twice<i64>::Twice"(

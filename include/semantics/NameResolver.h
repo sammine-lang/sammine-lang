@@ -46,32 +46,28 @@ public:
         props(props) {}
 
   //! Name every definition of `program`, give each C binding and main its
-  //! symbol,
-  //! take its modules' import aliases, and give each module its top-level
-  //! names, before any name is resolved. A module defining a name twice, or
-  //! one the prelude exports, is reported.
+  //! symbol, take its modules' import aliases, and give each module its
+  //! top-level names, before any name is resolved. A module defining a name
+  //! twice is reported.
   void use_program(ProgramAST &program);
 
   //! The prelude, stdlib/definitions.mn: every other module imports it
-  //! without writing `import`, as Rust's prelude is, and its names are used
-  //! without a prefix (Option, not definitions::Option), everywhere,
-  //! including in its own library, so symbols built from them agree.
-  static constexpr std::string_view kPrelude = "definitions";
+  //! without writing `import`, as Rust's prelude is, and its names are
+  //! written without a prefix (Option, for definitions::Option). A module's
+  //! own definition of the same name hides it there, as in Rust.
+  static constexpr std::string_view kPrelude =
+      sammine_util::QualifiedName::kPreludeModule;
 
   //! The function a program starts at.
   static constexpr std::string_view kEntryPoint = "main";
 
   //! `name` as a definition of `module` is named: module::name, a program's
-  //! own by the module with no name. A name already qualified, or exported
-  //! by the prelude, is unchanged. The prelude's private names are qualified
-  //! as any module's: they aren't to be used, or taken, without a prefix
-  //! elsewhere.
+  //! own by the module with no name. A name already qualified is unchanged.
   static sammine_util::QualifiedName
-  qualify(const sammine_util::QualifiedName &name, const std::string &module,
-          bool exported = true);
+  qualify(const sammine_util::QualifiedName &name, const std::string &module);
 
   //! A type, in a type expression, or the type a struct literal or a
-  //! generic names.
+  //! generic names; or the typeclass an instance is of.
   void resolve_type(TypeExprAST *type, const ASTContext &where);
   void resolve_type_name(sammine_util::QualifiedName &name,
                          sammine_util::Location location,

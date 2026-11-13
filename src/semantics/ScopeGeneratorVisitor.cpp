@@ -63,9 +63,22 @@ void ScopeGeneratorVisitor::visit(CaseExprAST *ast) {
 }
 // An instance is code of its module like a function. Its methods' names
 // aren't registered: they are reached through the typeclass.
+// A typeclass's methods are only signatures: the types they are written
+// with are its module's.
+void ScopeGeneratorVisitor::visit(TypeClassDeclAST *ast) {
+  push_ast_context();
+  enter_definition(*ast, ast->type_params);
+  for (auto &method : ast->methods) {
+    for (auto &param : method->parameterVectors)
+      resolve_type(param->type_expr.get());
+    resolve_type(method->return_type_expr.get());
+  }
+  pop_ast_context();
+}
 void ScopeGeneratorVisitor::visit(TypeClassInstanceAST *ast) {
   push_ast_context();
   enter_definition(*ast, ast->type_params);
+  resolver.resolve_type_name(ast->class_name, ast->get_location(), ctx());
   for (auto &type : ast->concrete_type_exprs)
     resolve_type(type.get());
   pop_ast_context();

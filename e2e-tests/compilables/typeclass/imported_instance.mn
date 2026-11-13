@@ -6,7 +6,7 @@ import has_instance;
 import std;
 
 let main() -> i32 {
-  std::printf("%ld\n", describe<i32>());
-  std::printf("%ld\n", describe<i64>());
+  std::printf("%ld\n", has_instance::describe<i32>());
+  std::printf("%ld\n", has_instance::describe<i64>());
   return 0;
 }

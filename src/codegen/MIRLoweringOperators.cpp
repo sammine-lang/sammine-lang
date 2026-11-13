@@ -16,17 +16,17 @@ using namespace AST;
 // `x as T`, through the Convert<A, T> instance the type checker chose.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
   auto *cp = props_.cast(cast->id());
-  if (!cp || !cp->instance)
+  if (!cp)
     return mlir::failure();
   auto value = lowerValue(cast->operand.get());
   if (mlir::failed(value))
     return mlir::failure();
-  auto &key = *cp->instance;
-  if (is_builtin_instance(key))
-    return lowerBuiltinInstance(loc(cast), key, *value, cast->get_type());
-  return callMethod(loc(cast),
-                    key.to_typeclass_name(std::string(kConvertClass)), *value,
-                    cast->get_type(), "as");
+  if (auto *builtin = cp->method.as<Reference::Builtin>())
+    return lowerBuiltinInstance(loc(cast), builtin->instance, *value,
+                                cast->get_type());
+  if (auto *method = cp->method.as<Reference::Function>())
+    return callMethod(loc(cast), method->name, *value, cast->get_type(), "as");
+  return mlir::failure();
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
@@ -41,22 +41,16 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
 // An operator through the instance the type checker chose: one the program
 // declares is a call to its method, one the compiler provides lowerOperator.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
-  if (auto *bp = props_.binary(bin->id()); bp && bp->resolved_op_method) {
-    auto lhs = lowerValue(bin->LHS.get());
-    if (mlir::failed(lhs))
-      return mlir::failure();
-    auto rhs = lowerValue(bin->RHS.get());
-    if (mlir::failed(rhs))
-      return mlir::failure();
-    return callMethod(loc(bin), *bp->resolved_op_method, {*lhs, *rhs},
-                      bin->get_type(), bin->Op->lexeme);
-  }
   auto lhs = lowerValue(bin->LHS.get());
   if (mlir::failed(lhs))
     return mlir::failure();
   auto rhs = lowerValue(bin->RHS.get());
   if (mlir::failed(rhs))
     return mlir::failure();
+  auto *bp = props_.binary(bin->id());
+  if (auto *method = bp ? bp->method.as<Reference::Function>() : nullptr)
+    return callMethod(loc(bin), method->name, {*lhs, *rhs}, bin->get_type(),
+                      bin->Op->lexeme);
   // The operands' type decides what the operator does; a comparison's own
   // type is bool.
   return lowerOperator(loc(bin), bin->Op->tok_type, *lhs, *rhs,

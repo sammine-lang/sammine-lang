@@ -1,4 +1,4 @@
-typeclass Area<T> {
+export typeclass Area<T> {
   Area(x: T) -> f64;
 }
 

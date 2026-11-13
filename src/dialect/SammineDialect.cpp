@@ -247,16 +247,21 @@ bool definesMir(mlir::FunctionOpInterface func) {
   return func && !func.isExternal() && func->hasAttr(kMirAttr);
 }
 
+std::string sourceName(mlir::FunctionOpInterface function) {
+  if (auto name = function->getAttrOfType<mlir::StringAttr>(kSourceNameAttr))
+    return name.getValue().str();
+  return function.getName().str();
+}
+
 mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type) {
-  llvm::StringRef name;
-  if (auto st = mlir::dyn_cast<StructType>(type))
-    name = st.getName();
-  else if (auto en = mlir::dyn_cast<EnumType>(type))
-    name = en.getName();
-  else
+  // Only a struct or an enum is declared, so only one can have an instance.
+  if (!mlir::isa<StructType, EnumType>(type))
     return {};
-  return module.lookupSymbol<mlir::FunctionOpInterface>(
-      ("Drop<" + name + ">::Drop").str());
+  for (auto &op : *module.getBody())
+    if (auto drops = op.getAttrOfType<mlir::TypeAttr>(kDropsAttr);
+        drops && drops.getValue() == type)
+      return mlir::dyn_cast<mlir::FunctionOpInterface>(&op);
+  return {};
 }
 
 std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {

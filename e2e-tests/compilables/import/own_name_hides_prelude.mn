@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      0
+// CHECK-NEXT: 1
+// CHECK-NEXT: 2
+// CHECK-NEXT: 7 8
+
+// A module's own name hides the prelude's of the same name in its code: a
+// name written bare is a local, else the module's own, else the prelude's.
+// Range and next here are this program's; `for` still loops over the
+// prelude's Range, through the prelude's Iterator and its next.
+
+import std;
+
+struct Range { a: i32, };
+
+let next(r: Range) -> i32 { r.a + 1 }
+
+let main() -> i32 {
+  for i in 0i64..3 {
+    std::printf("%ld\n", i);
+  };
+  let r = Range { a: 7 };
+  std::printf("%d %d\n", r.a, next(r));
+  return 0;
+}

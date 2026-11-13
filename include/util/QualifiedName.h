@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -28,11 +29,13 @@ namespace sammine_util {
 /// are the same name when their parts and those types are: a name is a key
 /// as it is (QualifiedNameHash), and `mangled()` only shows it.
 ///
-/// A definition's name starts with its module. A program, which is no
-/// module, has the module with no name: its `helper` is [, helper], shown
-/// as `helper` and linked as `::helper`. So a value's name of one part is
-/// always a local, never a function, and no function's symbol is a C
-/// function's name.
+/// Every definition's name starts with its module, with no exception. A
+/// program, which is no module, has the module with no name: its `helper` is
+/// [, helper], linked as `::helper`. The prelude's `Option` is
+/// [definitions, Option]. Both are written, and shown, without the module:
+/// `helper`, `Option`. So a name of one part is never a definition's: it is
+/// a local, a type parameter or a built-in type; and no function's symbol
+/// is a C function's name.
 ///
 /// Its functions are defined at the end of typecheck/Types.h, where Type is
 /// whole.
@@ -62,7 +65,13 @@ private:
 public:
   QualifiedName();
 
+  /// The prelude's module: every module imports it without writing so, and
+  /// writes its names without it.
+  static constexpr std::string_view kPreludeModule = "definitions";
+
   static QualifiedName qualified(std::string module, std::string name);
+  /// The name of the prelude's `name`: definitions::Option.
+  static QualifiedName prelude(std::string_view name);
 
   // Convenience: create from plain strings (no type args)
   static QualifiedName from_parts(std::vector<std::string> names);
@@ -75,6 +84,9 @@ public:
 
   // Return a copy with an additional part appended
   QualifiedName with_appended(Part part) const;
+  /// The name `name` has beside this one, in the same module: m::Area's
+  /// sibling `area` is m::area.
+  QualifiedName sibling(std::string name) const;
 
   // Accessors
   const std::string &get_name() const { return parts_.back().name; }
@@ -92,11 +104,15 @@ public:
   bool is_of_program() const {
     return is_qualified() && parts_.front().name.empty();
   }
+  /// Whether this is a name of the prelude.
+  bool is_of_prelude() const {
+    return is_qualified() && parts_.front().name == kPreludeModule;
+  }
 
   bool operator==(const QualifiedName &other) const;
 
   /// The name as source writes it, `a::b<T>::c`, for messages. A program's
-  /// own is written without a module: `helper`.
+  /// own and the prelude's are written without a module: `helper`, `Option`.
   std::string mangled() const;
   /// The symbol a definition of this name is linked as: every part,
   /// `a::b<T>::c`, a program's own as `::helper`.

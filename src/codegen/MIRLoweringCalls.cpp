@@ -40,8 +40,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   if (!function)
     return mlir::failure();
   auto name = props_.symbol(function->name);
-  if (!module_.lookupSymbol<mlir::FunctionOpInterface>(name))
-    return mlir::failure();
   auto type = types_.mirFunctionType(
       std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
@@ -155,8 +153,7 @@ MIRLowering::lowerFunctionValue(VariableExprAST *var,
                                 const sammine_util::QualifiedName &function) {
   auto type = types_.mirType(var->get_type());
   auto name = props_.symbol(function);
-  if (!type || !mlir::isa<smn::FnType>(*type) ||
-      !module_.lookupSymbol<mlir::FunctionOpInterface>(name))
+  if (!type || !mlir::isa<smn::FnType>(*type))
     return mlir::failure();
   return smn::ClosureOp::create(builder_, loc(var), *type, name,
                                 mlir::ValueRange{})
@@ -171,7 +168,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::callMethod(
     mlir::ValueRange args, const Type &result, llvm::StringRef written) {
   auto type = types_.mirType(result);
   auto name = props_.symbol(method);
-  if (!type || !module_.lookupSymbol<mlir::func::FuncOp>(name))
+  if (!type)
     return mlir::failure();
   return smn::CallOp::create(builder_, location, mlir::TypeRange{*type}, name,
                              args, written)
@@ -184,7 +181,7 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                   const MonomorphizedKey &key,
                                   mlir::ValueRange args, const Type &result) {
-  if (key.class_name() == kConvertClass) {
+  if (key.is_of_prelude_class(kConvertClass)) {
     auto to = types_.mirType(key.type_args[1]);
     if (!to || args.size() != 1)
       return mlir::failure();
@@ -192,7 +189,7 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                 key.type_args[0].is_unsigned(),
                                 key.type_args[1].is_unsigned());
   }
-  auto op = operator_of_class(key.class_name());
+  auto op = operator_of_class(key.name.get_name());
   if (!op || args.size() != 2)
     return mlir::failure();
   return lowerOperator(location, *op, args[0], args[1], key.type_args[0]);

@@ -138,7 +138,8 @@ void Compiler::parse() {
 
   for (auto &def : programAST->DefinitionVec)
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get()))
-      if (fd->Prototype->functionName.get_name() == "main") {
+      if (fd->Prototype->functionName.get_name() ==
+          AST::NameResolver::kEntryPoint) {
         has_main = true;
         break;
       }

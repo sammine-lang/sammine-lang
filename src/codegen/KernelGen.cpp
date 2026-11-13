@@ -42,15 +42,10 @@ bool isUnsigned(const Type &type) {
 
 } // namespace
 
-std::string kernelSymbol(llvm::StringRef wrapper) {
-  std::string symbol = "__kernel_";
-  while (!wrapper.empty()) {
-    auto [part, rest] = wrapper.split("::");
-    symbol += part;
-    if (part.size() != wrapper.size())
-      symbol += "__";
-    wrapper = rest;
-  }
+std::string kernelSymbol(const sammine_util::QualifiedName &kernel) {
+  std::string symbol = "__kernel";
+  for (auto &part : kernel.parts())
+    symbol += "__" + part.name;
   return symbol;
 }
 
@@ -63,7 +58,7 @@ std::string KernelGen::publicName(AST::KernelDefAST *kd) const {
 }
 
 std::string KernelGen::internalName(AST::KernelDefAST *kd) const {
-  return kernelSymbol(publicName(kd));
+  return kernelSymbol(kd->Prototype->functionName);
 }
 
 // --- Declarations ---
@@ -75,7 +70,7 @@ void KernelGen::declare(AST::KernelDefAST *kd) {
   auto internal = internalName(kd);
   auto declarePrivate = [&](mlir::ModuleOp module, mlir::FunctionType type) {
     if (module.lookupSymbol(internal))
-      return;
+      internalError(fmt::format("two kernels are both linked as '{}'", internal));
     auto funcOp = mlir::func::FuncOp::create(unknown, internal, type);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     module.push_back(funcOp);
@@ -92,12 +87,17 @@ void KernelGen::declare(AST::KernelDefAST *kd) {
 
   auto name = publicName(kd);
   if (cpuModule_.lookupSymbol(name))
-    return;
+    internalError(fmt::format("two definitions are both linked as '{}'", name));
   auto wrapperType = wrapperFunctionType(kd->Prototype.get());
   auto funcOp = mlir::func::FuncOp::create(unknown, name, wrapperType);
   funcOp.setVisibility(library_ ? mlir::SymbolTable::Visibility::Public
                                 : mlir::SymbolTable::Visibility::Private);
   funcOp->setAttr("sammine.kernel_wrapper", builder_.getUnitAttr());
+  funcOp->setAttr(smn::kSourceNameAttr,
+                  builder_.getStringAttr(kd->Prototype->functionName.mangled()));
+  // Left a call, LLVM can hoist it out of a loop whose data it doesn't
+  // change: its LLVM function is noinline.
+  funcOp->setAttr("llvm.no_inline", builder_.getUnitAttr());
   // An array it returns, it fills in a buffer passed last.
   if (returnType(kd->Prototype.get()).type_kind == TypeKind::Array)
     funcOp.setArgAttr(wrapperType.getNumInputs() - 1, smn::kResultBufferAttr,

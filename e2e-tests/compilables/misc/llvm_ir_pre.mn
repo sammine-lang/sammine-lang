@@ -8,7 +8,7 @@
 // CHECK:      declare noalias ptr @malloc(i64)
 // CHECK:      declare void @free(ptr)
 // CHECK:      declare void @exit(i32)
-// CHECK:      define available_externally i64 @"Sized<i32>::Sized"()
+// CHECK:      define available_externally i64 @"definitions::Sized<i32>::Sized"()
 // CHECK:      define i32 @main(){{.*}}{
 // CHECK-NEXT:   ret i32 42
 // CHECK-NEXT: }

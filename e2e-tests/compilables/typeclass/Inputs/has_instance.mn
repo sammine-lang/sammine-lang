@@ -1,4 +1,4 @@
-typeclass Describe<T> {
+export typeclass Describe<T> {
   describe() -> i64;
 }
 

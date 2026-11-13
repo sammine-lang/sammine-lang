@@ -1,5 +1,4 @@
 #include "codegen/MLIRLowering.h"
-#include "codegen/KernelGen.h"
 #include "codegen/LinalgReduceToGpu.h"
 #include "compiler/Compiler.h"
 #include "dialect/ElaborateDrops.h"
@@ -263,8 +262,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
 
   // Annotate all functions with nounwind (sammine has no exceptions).
   // Mark malloc's return as noalias.
-  // Kernel wrappers are noinline to preserve LICM: LLVM can hoist the
-  // call out of loops when the ptr args point to loop-invariant data.
   // A copy of another module's function exists only to be inlined, so hint
   // it, as Rust's #[inline] does: LLVM gives it no bonus as it does a local
   // function's last call, and Iterator<Range>::next is over the default
@@ -275,8 +272,6 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       F.addFnAttr(llvm::Attribute::InlineHint);
     if (F.getName() == "malloc")
       F.addRetAttr(llvm::Attribute::NoAlias);
-    if (llvmModule->getFunction(kernelSymbol(F.getName())))
-      F.addFnAttr(llvm::Attribute::NoInline);
   }
 
   return llvmModule;

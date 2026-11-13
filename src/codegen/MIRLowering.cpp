@@ -31,7 +31,7 @@ public:
     addRoot(ast->operand.get());
   }
   void preorder_walk(IndexExprAST *ast) override {
-    if (auto *ip = props.index(ast->id()); ip && ip->indexer_method)
+    if (auto *ip = props.index(ast->id()); ip && ip->through_instance())
       addRoot(ast->array_expr.get());
   }
 
@@ -105,6 +105,10 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
       return false;
   }
 
+  // What its declaration says of it, it still is.
+  for (auto attr : decl->getAttrs())
+    if (!(*func)->hasAttr(attr.getName()))
+      (*func)->setAttr(attr.getName(), attr.getValue());
   (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
   if (ast->Prototype->is_unsafe)
     (*func)->setAttr(smn::kUnsafeAttr, builder_.getUnitAttr());
@@ -338,8 +342,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
   if (llvm::isa<DerefExprAST>(expr))
     return lowerPlaceRead(expr);
   if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {
-    if (auto *ip = props_.index(index->id()); ip && ip->indexer_method)
-      return lowerIndexerCall(index, *ip->indexer_method);
+    if (auto *ip = props_.index(index->id()); ip && ip->through_instance())
+      return lowerIndexerCall(index,
+                              ip->method.as<Reference::Function>()->name);
     if (hasPlace(index))
       return lowerPlaceRead(expr);
     if (index->array_expr->get_type().type_kind == TypeKind::Array)

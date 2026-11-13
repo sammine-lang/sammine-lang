@@ -1728,7 +1728,8 @@ auto Parser::ParseTypeClassDecl() -> p<DefinitionAST> {
   REQUIRE(_rc, TokRightCurly, "Expected '}' to close type class",
           kw->get_location());
   return {std::make_unique<TypeClassDeclAST>(
-              kw, name_tok->lexeme, std::move(type_params), std::move(methods)),
+              kw, sammine_util::QualifiedName::local(name_tok->lexeme),
+              std::move(type_params), std::move(methods)),
           SUCCESS};
 }
 
@@ -1741,8 +1742,10 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
 
   REQUIRE(name_tok, TokID, "Expected type class name after 'instance'",
           kw->get_location());
+  // Another module's class is named through it: instance shapes::Area<...>.
+  auto class_name = parseQualifiedNameTail(name_tok);
   REQUIRE(_lt, TokLESS, "Expected '<' after type class name",
-          name_tok->get_location());
+          class_name.location);
 
   auto [type_exprs, te_ok] =
       comma_separated<TypeExprAST>([&] { return ParseTypeExpr(); }, *this);
@@ -1769,7 +1772,7 @@ auto Parser::ParseTypeClassInstance() -> p<DefinitionAST> {
   REQUIRE(_rc, TokRightCurly, "Expected '}' to close instance",
           kw->get_location());
   auto instance = std::make_unique<TypeClassInstanceAST>(
-      kw, name_tok->lexeme, std::move(type_exprs), std::move(methods));
+      kw, std::move(class_name.qn), std::move(type_exprs), std::move(methods));
   instance->type_params = std::move(type_params);
   return {std::move(instance), SUCCESS};
 }

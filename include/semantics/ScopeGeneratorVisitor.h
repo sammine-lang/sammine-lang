@@ -68,8 +68,9 @@ public:
     exit_new_scope();
   }
 
-  // Type class decls/instances: skip scope checking for their methods
-  virtual void visit(TypeClassDeclAST *ast) override {}
+  // A typeclass's methods have no bodies; an instance's are its module's
+  // code.
+  virtual void visit(TypeClassDeclAST *ast) override;
   virtual void visit(TypeClassInstanceAST *ast) override;
 
   virtual void visit(ExternAST *ast) override;

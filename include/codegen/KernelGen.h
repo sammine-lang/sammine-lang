@@ -16,17 +16,17 @@
 #include <string>
 
 //! \file KernelGen.h
-//! \brief A kernel's code: its linalg function, `__kernel_<name>`, in a
+//! \brief A kernel's code: its linalg function (kernelSymbol), in a
 //! module of its own (tensor types), and its wrapper `<name>` in the CPU
 //! module, which a sammine call goes through.
 
 namespace sammine_lang {
 
-/// The symbol of the kernel whose wrapper is linked as `wrapper`:
-/// `__kernel_` and the wrapper's, its `::` written `__`, as a GPU's assembler
-/// takes only letters, digits and `_` (m::scale's is __kernel_m__scale). No
+/// The symbol of the kernel named `kernel`'s own function: `__kernel`, then
+/// each part of its name after `__`, as a GPU's assembler takes only
+/// letters, digits and `_` (m::scale's is __kernel__m__scale). No part of a
 /// name has `__` in it, so no two kernels share one.
-std::string kernelSymbol(llvm::StringRef wrapper);
+std::string kernelSymbol(const sammine_util::QualifiedName &kernel);
 
 class KernelGen {
 public:

@@ -1,7 +1,7 @@
 // A library whose exported generic functions use its private parts. They are
 // compiled in the module that uses them, which can't name those parts itself.
 
-typeclass Combine<T> {
+export typeclass Combine<T> {
   Combine(a: T, b: T) -> T;
 }
 

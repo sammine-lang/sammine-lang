@@ -43,6 +43,6 @@
 | `io_runtime.c` | C runtime for io module |
 
 - Stdlib dir: `<binary>/../lib/sammine/`
-- Prelude: `Resolver::Resolve` imports `definitions` into every module (libraries too) unless compiling definitions.mn itself. Its names get no module prefix (`NameResolver::kPrelude`, the one exception, in `qualify`), in its own library too, so `Iterator<Range<i32>, i32>::next` matches on both sides
+- Prelude: `Resolver::Resolve` imports `definitions` into every module (libraries too) unless compiling definitions.mn itself. Its definitions are named `definitions::Option` like any module's (`QualifiedName::prelude`, `kPreludeModule`), and written and shown without the module (`mangled()`); a bare name falls back to what the prelude exports (`NameResolver::top_level`), so a module's own name hides the prelude's. The compiler names what it uses of the prelude through `QualifiedName::prelude` (`Range`, `Option`, the operator classes, `Drop`, `Iterator`), so a module's own `Range` changes nothing for `for`
 - `for` calls `Iterator<Range<T>, T>::next`, defined in definitions.so; the importer's `available_externally` copy is inlined, so loops cost what they did when the prelude was compiled into each program
 - Every stdlib module is compiled to `.so`/`.a` and its `.mn` copied to the build dir by CMake (`STDLIB_COMPILED`), one whose code is all generic too: its generic code, compiled where it is used, links to the module's functions that aren't (`vec`'s `check_index`)

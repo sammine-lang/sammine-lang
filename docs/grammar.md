@@ -39,7 +39,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 
 **typeclass_decl** ::= `typeclass` ID `<` ID (`,` ID)* `>` `{` **method_proto*** `}`
 
-**typeclass_instance** ::= `instance` **type_params**? ID `<` **type** (`,` **type**)* `>` `{` **func_def*** `}`
+**typeclass_instance** ::= `instance` **type_params**? ID (`::` ID)* `<` **type** (`,` **type**)* `>` `{` **func_def*** `}`
 
 ## Supporting Rules
 

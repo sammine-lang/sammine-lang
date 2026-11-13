@@ -642,15 +642,19 @@ struct MonomorphizedKey {
     return {name, std::move(args)};
   }
 
-  /// The key of the instance of typeclass `cls` for `types`: Add applied
-  /// to (i32).
+  /// The key of the instance of the prelude's typeclass `cls` for `types`:
+  /// Add applied to (i32).
   static MonomorphizedKey instance(std::string_view cls,
                                    std::vector<Type> types) {
-    return {sammine_util::QualifiedName::from_parts({std::string(cls)}),
-            std::move(types)};
+    return {sammine_util::QualifiedName::prelude(cls), std::move(types)};
   }
-  /// The typeclass an instance's key is of.
-  const std::string &class_name() const { return name.get_name(); }
+  /// Whether this is the key of an instance of the prelude's typeclass
+  /// `cls`, not of a module's own class of that name.
+  bool is_of_prelude_class(std::string_view cls) const {
+    return name == sammine_util::QualifiedName::prelude(cls);
+  }
+  /// The typeclass an instance's key is of, as source writes it.
+  std::string class_name() const { return name.mangled(); }
 
   /// "i32, f64" — comma-separated, no brackets. For error messages and
   /// QualifiedName construction.
@@ -671,12 +675,11 @@ struct MonomorphizedKey {
   }
 
   /// The name of `method` of this instance of a typeclass: Drop applied to
-  /// (Vec<i32>) has Drop<Vec<i32>>::Drop.
+  /// (Vec<i32>) has Drop<Vec<i32>>::Drop, shapes::Area applied to (Square)
+  /// has shapes::Area<Square>::Area.
   sammine_util::QualifiedName
   to_typeclass_name(const std::string &method) const {
-    return sammine_util::QualifiedName::from_parts(
-        std::vector<sammine_util::QualifiedName::Part>{
-            {name.get_name(), type_args}, {method, {}}});
+    return generic_name().with_appended({method, {}});
   }
 };
 struct MonomorphizedKeyHash {
@@ -766,6 +769,9 @@ inline QualifiedName QualifiedName::qualified(std::string module,
   return from_parts(
       std::vector<Part>{{std::move(module), {}}, {std::move(name), {}}});
 }
+inline QualifiedName QualifiedName::prelude(std::string_view name) {
+  return qualified(std::string(kPreludeModule), std::string(name));
+}
 inline QualifiedName QualifiedName::from_parts(std::vector<std::string> names) {
   QualifiedName qn;
   qn.parts_.clear();
@@ -790,6 +796,11 @@ inline QualifiedName QualifiedName::with_appended(Part part) const {
   copy.parts_.push_back(std::move(part));
   return copy;
 }
+inline QualifiedName QualifiedName::sibling(std::string name) const {
+  auto copy = *this;
+  copy.parts_.back() = {std::move(name), {}};
+  return copy;
+}
 inline std::string QualifiedName::get_module() const {
   return parts_.size() > 1 ? parts_.front().name : "";
 }
@@ -809,7 +820,7 @@ inline std::string QualifiedName::joined(size_t first) const {
   return result;
 }
 inline std::string QualifiedName::mangled() const {
-  return joined(is_of_program() ? 1 : 0);
+  return joined(is_of_program() || is_of_prelude() ? 1 : 0);
 }
 inline std::string QualifiedName::symbol() const { return joined(0); }
 inline std::string name_text(const QualifiedName &name) {

@@ -9,8 +9,8 @@ namespace sammine_lang::AST {
 
 sammine_util::QualifiedName
 NameResolver::qualify(const sammine_util::QualifiedName &name,
-                      const std::string &module, bool exported) {
-  if (name.is_qualified() || (module == kPrelude && exported))
+                      const std::string &module) {
+  if (name.is_qualified())
     return name;
   return sammine_util::QualifiedName::from_parts(
       std::vector<sammine_util::QualifiedName::Part>{{module, {}},
@@ -19,18 +19,23 @@ NameResolver::qualify(const sammine_util::QualifiedName &name,
 
 void NameResolver::use_program(ProgramAST &program) {
   module_aliases = program.module_aliases;
-  auto declare = [&](DefinitionAST &def, sammine_util::QualifiedName &n,
-                     sammine_util::Location location) {
+  // `n`, which `def`'s module's code writes as n's last part, is a
+  // top-level name of that module.
+  auto add = [&](DefinitionAST &def, const sammine_util::QualifiedName &n,
+                 sammine_util::Location location) {
     auto &module = def.defining_module;
-    auto written = n.get_name();
-    n = qualify(n, module, def.is_exported);
     // Defined twice in its module.
     if (auto it = definitions.find(n); it != definitions.end()) {
-      report_redefinition(written, location, it->second.location);
+      report_redefinition(n.get_name(), location, it->second.location);
       return;
     }
-    top_levels[module].emplace(written, n);
+    top_levels[module].emplace(n.get_name(), n);
     definitions[n] = {module, def.is_exported, location};
+  };
+  auto declare = [&](DefinitionAST &def, sammine_util::QualifiedName &n,
+                     sammine_util::Location location) {
+    n = qualify(n, def.defining_module);
+    add(def, n, location);
   };
   for (auto &def : program.DefinitionVec) {
     // An instance's methods are code of its module.
@@ -42,7 +47,7 @@ void NameResolver::use_program(ProgramAST &program) {
       declare(*def, fn, fd->Prototype->get_location());
       // C's runtime calls a program's main by that name.
       if (fn.is_of_program() && fn.get_name() == kEntryPoint)
-        props.set_symbol(fn, std::string(kEntryPoint));
+        props.set_entry_point(fn, std::string(kEntryPoint));
     } else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
       declare(*def, kd->Prototype->functionName, kd->Prototype->get_location());
     else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
@@ -56,16 +61,16 @@ void NameResolver::use_program(ProgramAST &program) {
       declare(*def, ed->enum_name, ed->get_location());
     else if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
       declare(*def, ta->alias_name, ta->get_location());
-  }
-  // The prelude's names are in every module's scope: a library may not
-  // take one it exports for its own either.
-  for (auto &[module, table] : top_levels) {
-    if (module == kPrelude)
-      continue;
-    for (auto &[written, name] : table)
-      if (auto theirs = prelude_export(written))
-        report_redefinition(written, definitions.at(name).location,
-                            definitions.at(*theirs).location);
+    else if (auto *tc = llvm::dyn_cast<TypeClassDeclAST>(def.get())) {
+      declare(*def, tc->class_name, tc->get_location());
+      // A method is called by its name where its class is named by its own:
+      // show<i32>(x) in the class's module, m::show<i32>(x) elsewhere. One
+      // named as its class is the class's name already.
+      for (auto &method : tc->methods)
+        if (auto &name = method->functionName.get_name();
+            name != tc->class_name.get_name())
+          add(*def, tc->class_name.sibling(name), method->get_location());
+    }
   }
 }
 
@@ -177,8 +182,8 @@ void NameResolver::check_visible(const sammine_util::QualifiedName &name,
   auto *found = definition_of(name);
   if (!found)
     return;
-  auto &[module, exported, _] = found->second;
-  if (!exported && !module.empty() && module != where.module)
+  auto &module = found->second.module;
+  if (!found->second.exported && !module.empty() && module != where.module)
     reportee.add_error(location, fmt::format("'{}' is private to module '{}'",
                                              found->first.mangled(), module));
 }
@@ -263,7 +268,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
         enums.push_back(e);
     if (enums.empty())
       for (auto &e : it->second)
-        if (where.module.empty() || !e.is_qualified())
+        if (where.module.empty() || e.is_of_prelude())
           enums.push_back(e);
     if (enums.size() > 1) {
       reportee.add_error(

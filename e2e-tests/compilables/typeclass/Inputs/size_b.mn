@@ -1,0 +1,6 @@
+export typeclass Size<T> {
+  Size(x: T) -> i64;
+}
+export instance Size<i64> {
+  let Size(x: i64) -> i64 { x + 1000i64 }
+}
