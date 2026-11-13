@@ -143,3 +143,26 @@ func.func @"Drop<Res>::Drop"(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, ow
 func.func @whole(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
   return
 }
+
+// -----
+
+// A store drops what the place held; the program's drop of a box drops
+// what it points at first.
+// CHECK-LABEL: func.func @before_store(
+// CHECK: %[[OLD:[0-9]+]] = sammine.move %{{[0-9]+}}
+// CHECK-NEXT: sammine.drop %[[OLD]] implicit
+// CHECK-NEXT: sammine.store
+// CHECK-LABEL: func.func @before_box_drop(
+// CHECK: %[[IN:[0-9]+]] = sammine.move
+// CHECK-NEXT: sammine.drop %[[IN]] implicit : !sammine.ptr<i32, owned>
+// CHECK-NEXT: sammine.drop %arg0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+func.func @before_store(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>, %n: i32) -> !sammine.ptr<!sammine.ptr<i32, owned>, owned> attributes {sammine.mir} {
+  %new = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %at = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
+  sammine.store %new, %at : <!sammine.ptr<i32, owned>>
+  return %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+}
+func.func @before_box_drop(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+  sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  return
+}

@@ -100,10 +100,11 @@ public:
       return;
     number();
     collectReturns();
+    collectEnds();
     collectEdges();
-    for (auto &[ret, paths] : atReturns_) {
-      mlir::OpBuilder builder(ret);
-      dropAll(builder, ret->getLoc(), paths);
+    for (auto &[op, paths] : before_) {
+      mlir::OpBuilder builder(op);
+      dropAll(builder, op->getLoc(), paths);
     }
     for (auto &edge : onEdges_)
       dropOnEdge(edge);
@@ -122,8 +123,9 @@ private:
   mlir::DominanceInfo dominance_;
   /// Each value in the order the function defines it: drops go in reverse.
   llvm::DenseMap<mlir::Value, unsigned> order_;
+  /// What to drop before an op: a return, a box's drop, a store.
   llvm::SmallVector<std::pair<mlir::Operation *, llvm::SmallVector<Path>>>
-      atReturns_;
+      before_;
   llvm::SmallVector<Edge> onEdges_;
 
   void number() {
@@ -151,12 +153,43 @@ private:
     for (auto &path : live)
       if (keep(path))
         paths.push_back(path);
+    sort(paths);
+    return paths;
+  }
+
+  /// Last bound first, a pointee before its box.
+  void sort(llvm::SmallVectorImpl<Path> &paths) {
     llvm::sort(paths, [&](const Path &a, const Path &b) {
       if (a.root != b.root)
         return order_.lookup(a.root) > order_.lookup(b.root);
       return b < a;
     });
-    return paths;
+  }
+
+  /// What an op ends that is still live: before the program drops a box,
+  /// what it points at; before a store, what the place holds.
+  void collectEnds() {
+    func_.walk([&](mlir::Operation *op) {
+      std::optional<Path> ended;
+      if (auto drop = mlir::dyn_cast<smn::DropOp>(op);
+          drop && !drop.getImplicit()) {
+        auto ptr = mlir::dyn_cast<smn::PtrType>(drop.getValue().getType());
+        if (auto path = pathOf(drop.getValue()); path && ptr && ptr.isBox())
+          ended = path->child({Step::Pointee});
+      } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
+        ended = pathOf(store.getPlace());
+      }
+      if (!ended || !flow_.reaches(op->getBlock()))
+        return;
+      auto *before = flow_.before(op);
+      if (!before)
+        return;
+      llvm::SmallVector<Path> paths;
+      collect(*before, *ended, paths);
+      sort(paths);
+      if (!paths.empty())
+        before_.push_back({op, std::move(paths)});
+    });
   }
 
   /// What of `path` is live in `owners` and is dropped, as its type drops:
@@ -214,7 +247,7 @@ private:
       applyOp(owners, ret, nullptr);
       auto paths = droppable(owners, ret, [](const Path &) { return true; });
       if (!paths.empty())
-        atReturns_.push_back({ret, std::move(paths)});
+        before_.push_back({ret, std::move(paths)});
     });
   }
 

@@ -1,6 +1,7 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 10 are done, and 11 for inserted drops.
+Status: in progress. Steps 1 to 12 are done, but for a wildcard arm's
+unnamed payloads and arrays.
 
 ## Goal
 
@@ -281,10 +282,13 @@ Each a commit, the suite passing after each.
     tag, in `expandDrops`, with the layout moved onto MIR types; a case
     arm's bindings drop as any. Still to come: a wildcard arm's unnamed
     payloads, and arrays, whose elements the check follows as one.)
-11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done for the
-    drops elaboration inserts. `drop(p)` the program writes still wants
-    `*p` gone first.)
+11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done: an
+    inserted drop of a box drops what it points at first, and so does
+    elaboration before a `drop(p)` the program writes.)
 12. Stores, shadowing, temporaries, and a wildcard arm's unnamed payloads.
+    (Done but the wildcard: a store drops what the place held first; a
+    shadowed binding and a temporary are values like any, dropped where
+    they go out of use, not at the statement's end.)
 13. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
     becomes "owning" in the diagnostics that stay; docs.
 

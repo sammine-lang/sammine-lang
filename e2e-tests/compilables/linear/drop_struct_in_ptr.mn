@@ -1,0 +1,22 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md):
+// dropping a box drops what it points at first, and a store drops what the
+// place held. valgrind checks that all of it is freed, and freed once.
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+};
+
+let main() -> i32 {
+  let inner: 'ptr<i32> = alloc<i32>(1);
+  let p: 'ptr<Box> = alloc<Box>(1);
+  *inner = 42;
+  *p = Box { data: inner };
+  drop(p);
+  return 0;
+}
