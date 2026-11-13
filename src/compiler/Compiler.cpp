@@ -612,7 +612,9 @@ void Compiler::jit_execute() {
     libraries.push_back(fmt::format("lib{}.so", library));
   auto &jit = resPtr->sammineJIT;
   jit_exit_code_ =
-      jit->execute_main(std::move(resPtr->Module), std::move(resPtr->Context),
+      jit->execute_main(llvm::orc::ThreadSafeModule(
+                            std::move(resPtr->Module),
+                            std::move(resPtr->Context)),
                         libraries, options_.jit_args);
   reporter.report(*jit);
 

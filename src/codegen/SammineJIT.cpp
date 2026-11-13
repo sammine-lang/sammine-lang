@@ -65,8 +65,7 @@ llvm::Error SammineJIT::addModule(llvm::orc::ThreadSafeModule TSM,
   return CompileLayer.add(RT, std::move(TSM));
 }
 
-int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
-                             std::unique_ptr<llvm::LLVMContext> context,
+int SammineJIT::execute_main(llvm::orc::ThreadSafeModule module,
                              const std::vector<std::string> &libraries,
                              const std::vector<std::string> &jit_args) {
   using sammine_util::Location;
@@ -91,10 +90,7 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
   }
 
   // Add the compiled module to the JIT.
-  auto TSCtx = llvm::orc::ThreadSafeContext(std::move(context));
-  auto TSM = llvm::orc::ThreadSafeModule(std::move(module), TSCtx);
-
-  if (auto err = addModule(std::move(TSM))) {
+  if (auto err = addModule(std::move(module))) {
     add_error(Location::NonPrintable(), fmt::format("JIT addModule failed: {}",
                                                     toString(std::move(err))));
     return 1;

@@ -59,8 +59,10 @@ public:
     return ES->lookup({&MainJD}, Mangle(Name.str()));
   }
 
-  int execute_main(std::unique_ptr<llvm::Module> module,
-                   std::unique_ptr<llvm::LLVMContext> context,
+  /// Runs `module`'s main. The module comes with its context, as one
+  /// value: it must end before the context does, on every way out of here,
+  /// and the two apart could end in either order.
+  int execute_main(llvm::orc::ThreadSafeModule module,
                    const std::vector<std::string> &libraries,
                    const std::vector<std::string> &program_args = {});
 

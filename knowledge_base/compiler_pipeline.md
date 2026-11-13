@@ -36,5 +36,5 @@ lex → parse → imports → semantics → typecheck → dump_ast → mir → c
 - `Reporter`: groups by location, renders Unicode waterfall art, TTY-aware coloring. `--diagnostics=dev` appends C++ source location.
 
 ## LLVMRes
-- Shared LLVM resources: LLVMContext, Module, TargetMachine, SammineJIT
+- Shared LLVM resources: LLVMContext, Module, TargetMachine, SammineJIT. The JIT takes the module with its context as one `ThreadSafeModule` (`execute_main`), so the module ends before the context on every way out, an error before the module is added too
 - Module replaced by MLIR-lowered module in `codegen_mlir()` (data layout/triple copied)
