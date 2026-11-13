@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Cannot store, through a pointer, a partial application of 'deref_add' that captured a non-linear pointer (may dangle once the function returns)
+
+// Owned memory outlives the function: a closure that bound a view of a
+// local can't be stored there.
+
+let deref_add(p: ptr<i32>, offset: i32) -> i32 { *p + offset }
+
+let keep(out: 'ptr<(i32) -> i32>) -> 'ptr<(i32) -> i32> {
+  let x : i32 = 42;
+  *out = deref_add(&x);
+  out
+}
+
+let main() -> i32 { 0 }

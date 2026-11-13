@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
+
+// A closure that bound a view of a local is followed through the if that
+// picks it, not only through names and literals.
+
+let deref_add(p: ptr<i32>, offset: i32) -> i32 { *p + offset }
+let add(a: i32, b: i32) -> i32 { a + b }
+
+let pick(first: bool) -> (i32) -> i32 {
+  let x : i32 = 42;
+  if first { deref_add(&x) } else { add(1) }
+}
+
+let main() -> i32 { 0 }

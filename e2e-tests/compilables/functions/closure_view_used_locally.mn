@@ -1,0 +1,17 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 43
+
+// A closure that bound a view of a local may be called in the function
+// that made it, and passed to one: only leaving it is an error.
+
+import std;
+
+let deref_add(p: ptr<i32>, offset: i32) -> i32 { *p + offset }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+
+let main() -> i32 {
+  let x : i32 = 42;
+  let f = deref_add(&x);
+  std::printf("%d\n", apply(f, 1));
+  0
+}

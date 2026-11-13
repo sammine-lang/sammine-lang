@@ -69,3 +69,39 @@ func.func @addr_of_owner(%n: i32) attributes {sammine.mir} {
   %view = sammine.addr %slot : <!sammine.ptr<i32, owned>>
   return
 }
+
+// -----
+
+// A closure binds no value that owns memory: it could be called twice.
+func.func private @take(%p: !sammine.ptr<i32, owned>, %x: i32) -> i32
+func.func @binds_owner(%n: i32) attributes {sammine.mir} {
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{Cannot bind 'p' that owns memory into a partial application of 'take': the closure can be called more than once}}
+  %f = sammine.closure @take(%p) : (!sammine.ptr<i32, owned>) -> !sammine.fn<(i32) -> i32>
+  return
+}
+
+// -----
+
+// A closure that bound a view is followed into what is built of it and
+// across blocks, to the return.
+func.func private @peek(%p: !sammine.ptr<i32, view>, %x: i32) -> i32
+func.func @escapes(%c: i1, %v: !sammine.ptr<i32, view>) -> !sammine.tuple<!sammine.fn<(i32) -> i32>> attributes {sammine.mir} {
+  %f = sammine.closure @peek(%v) : (!sammine.ptr<i32, view>) -> !sammine.fn<(i32) -> i32>
+  cf.br ^bb1(%f : !sammine.fn<(i32) -> i32>)
+^bb1(%g: !sammine.fn<(i32) -> i32>):
+  %t = sammine.aggregate(%g) : (!sammine.fn<(i32) -> i32>) -> !sammine.tuple<!sammine.fn<(i32) -> i32>>
+  // expected-error @+1 {{Cannot return a partial application of 'peek' that captured a non-linear pointer (may dangle after return)}}
+  return %t : !sammine.tuple<!sammine.fn<(i32) -> i32>>
+}
+
+// -----
+
+// Called where it was made, it leaves nothing behind.
+func.func private @peek(%p: !sammine.ptr<i32, view>, %x: i32) -> i32
+func.func @stays(%v: !sammine.ptr<i32, view>, %x: i32) -> i32 attributes {sammine.mir} {
+  %f = sammine.closure @peek(%v) : (!sammine.ptr<i32, view>) -> !sammine.fn<(i32) -> i32>
+  %r = sammine.call_indirect %f(%x) : <(i32) -> i32>, (i32) -> i32
+  return %r : i32
+}

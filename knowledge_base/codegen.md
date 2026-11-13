@@ -54,7 +54,9 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 - Runs in the `mir` stage before the ownership check, reporting the same way; `sammine-check-views` in `sammine-opt`. Op by op: a `store` or an `addr` is judged by the nearest pointer its place is reached through (`deref`, or `through` of a pointer held in a slot, past `field`, `elem` and `ptr_elem`)
 - Nothing is written through a view: a `store` reached through a `ptr<T, view>` is reported at the `deref`. `*p = &x`, a view stored through a pointer, is this too: a `'ptr` can't hold a view (`ViewPlacementCheck`)
 - `&` (`addr`) of a place holding an owned pointer would alias its one owner; of a place reached through an owned pointer it could outlive the owner's drop. A `lend` is not a `&`
-- MIR names a view only if it is in a slot (`sammine.let` names values that own memory), so a message names the pointer only then; the error underlines it
+- A `closure` binds no value that owns memory: the closure can be called more than once
+- A closure that bound a view is followed, as a taint, from its `closure` through what is built of it (aggregates, variants, `extract`/`payload`/`element`), block arguments and slots (a `store` into one, a `copy`/`move` out), to where it would leave the function: a `return`, or a `store` through a pointer. Reported there, naming the function the closure wraps. It isn't followed through a call that returns it
+- MIR names a view or a closure only if it is in a slot (`sammine.let` names values that own memory), so a message names the pointer only then, and the closure by its function; the error underlines it
 
 ### The ownership check (`src/dialect/Ownership*.cpp`)
 - Three files: `OwnershipPaths` (paths into values and places, their names), `OwnershipAnalysis` (the lattice, the transfer function `applyOp`/`applyEdge`, the solver run `OwnershipFlow`; what it finds wrong goes to an `OwnershipObserver`), `OwnershipCheck` (the observer that reports, in the source's words, and the pass). The analysis knows no message: a client such as the drops pass uses it without reporting

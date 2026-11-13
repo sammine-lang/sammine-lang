@@ -4,7 +4,7 @@
 // CHECK-NEXT:   19|  let p = alloc<i64>(1);
 // CHECK-NEXT:   20|  let f = set_to(p);
 // CHECK-NEXT:     |                 ┬
-// CHECK-NEXT:     |                 ╰─ Cannot bind 'p' of linear type ''ptr<i64>' into a partial application of 'set_to': the closure can be called more than once
+// CHECK-NEXT:     |                 ╰─ Cannot bind 'p' that owns memory into a partial application of 'set_to': the closure can be called more than once
 // CHECK-NOT:  must be consumed
 
 // A closure can be called any number of times, so it can't own a value:

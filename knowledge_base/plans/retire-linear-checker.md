@@ -1,6 +1,6 @@
 # Plan: retire the AST linear checker
 
-Status: in progress. Steps 1 to 3 done.
+Status: in progress. Steps 1 to 4 done.
 
 `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`, 791 lines) is
 what's left of the AST ownership checking: rules that don't depend on
@@ -96,6 +96,8 @@ Each a commit, the suite passing after each.
    snippet echoed their CHECK line: they index a pointer outside an unsafe
    function; now they are unsafe and test the rule.)
 4. Closures in `ViewCheck`: binding an owning value, a view-capturing
-   closure escaping.
+   closure escaping. (Done. The messages name the function a closure
+   wraps, not the variable, which MIR doesn't name. It now also finds a
+   closure returned from an if, or stored through a pointer.)
 5. The temporary and wildcard tests take MIR's messages.
 6. `LinearTypeChecker`, its stage and `Use` go; docs.

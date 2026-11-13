@@ -4,7 +4,7 @@
 // CHECK-NEXT:   42|  let f : (i32) -> i32 = read_a(p);
 // CHECK-NEXT:   43|  return f;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'read_a' that captured a non-linear pointer (may dangle after return)
 // CHECK-NEXT:   44|}
 // CHECK-NEXT:   45|
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 // CHECK-NEXT:   49|  let f : (i32) -> i32 = read_b(p);
 // CHECK-NEXT:   50|  return f;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'read_b' that captured a non-linear pointer (may dangle after return)
 // CHECK-NEXT:   51|}
 // CHECK-NEXT:   52|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

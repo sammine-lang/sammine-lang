@@ -4,7 +4,7 @@
 // CHECK-NEXT:   37|  let w : Wrapper = Wrapper { cb: f };
 // CHECK-NEXT:   38|  return w;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return 'w' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
 // CHECK-NEXT:   39|}
 // CHECK-NEXT:   40|
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 // CHECK-NEXT:   43|  let f : (i32) -> i32 = deref_add(&x);
 // CHECK-NEXT:   44|  return Wrapper { cb: f };
 // CHECK-NEXT:     |  ─────────────────────┬
-// CHECK-NEXT:     |                       ╰─ Cannot return a value containing 'f' — it is a closure that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |                       ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
 // CHECK-NEXT:   45|}
 // CHECK-NEXT:   46|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
