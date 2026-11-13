@@ -22,7 +22,7 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **linear_check** -- `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`) checks the rules on pointers and linear values that don't depend on control flow: where a non-owning `ptr<T>` may appear, what may be written through or have its address taken, what a closure may bind or a function return.
 
-**mir** -- Builds the program's MLIR (each function's body in MIR, see **codegen**) and runs the ownership check on it (`src/dialect/OwnershipCheck.cpp`): every heap-allocated `'ptr<T>`, and every value holding one, is consumed exactly once on every path, through `drop()`, a move, or `return`, and none is still owned when its function returns. It is a dataflow analysis on MIR's control flow, so branches, loops and early returns need no special handling. Its errors are reported like any stage's.
+**mir** -- Builds the program's MLIR (each function's body in MIR, see **codegen**) and runs the ownership check on it (`src/dialect/OwnershipCheck.cpp`, over the analysis in `OwnershipAnalysis.cpp`): every heap-allocated `'ptr<T>`, and every value holding one, is consumed exactly once on every path, through `drop()`, a move, or `return`, and none is still owned when its function returns. It is a dataflow analysis on MIR's control flow, so branches, loops and early returns need no special handling. Its errors are reported like any stage's.
 
 **dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
@@ -350,7 +350,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
    - `BiTypeCheckerSynthesize.cpp` (type resolution)
    - `TypeLayout.cpp` (`layout::typeSize`)
    - `MIRTypes.cpp` (`mirType`) and the `MIRLowering*.cpp` files (lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
-   - `MIRTypes.cpp` and `SammineDialect.cpp` (`ownsMemory`), and `OwnershipCheck.cpp` (`partsOf`, `typeOf`), if the type can hold owned memory
+   - `MIRTypes.cpp` and `SammineDialect.cpp` (`ownsMemory`), and `OwnershipPaths.cpp` (`partsOf`, `typeOf`), if the type can hold owned memory
 6. Add parsing support in `Parser.cpp` if the type has new syntax.
 7. Add e2e tests in `e2e-tests/compilables/types/`.
 
