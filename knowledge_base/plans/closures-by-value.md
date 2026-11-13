@@ -1,6 +1,7 @@
 # Plan: closures carry what they bind
 
-Status: stage 1 done. Stage 2 is a TODO (below).
+Status: stage 1 done; stage 2a (monovariant lambda sets) done; stage 2b
+(per-call-site specialization) is a TODO (below).
 
 ## Goal
 
@@ -80,21 +81,43 @@ has `k = 0` and is a code pointer.
   fixed point over the call graph; a call through a function value is
   assumed to let its arguments escape.
 
-## Stage 2: specialization (TODO)
+## Stage 2a: lambda sets (done)
 
-Not started. Two things it would give:
+`src/dialect/LambdaSets.cpp`. One lambda set per flow of function values
+across the module, as MLton's defunctionalization has them: unification
+along every op that moves a value, each `closure` in its result's set. A
+value of a known set becomes what its closure binds, a tuple for one
+closure, an enum (`lambdas<N>`, a variant per closure) for several; a
+`call_indirect` through it a `call` of the closure's function, given what
+it binds then the arguments, or a `cf.switch` on the tag of such calls. A
+call no closure reaches is `unreachable`, and the blocks after it go.
 
-- **Speed.** Every call through a function value is indirect, through its
-  code pointer, so LLVM can't inline `f` into `fold` or `twice`. With
-  lambda sets a call is a direct call when one function can reach it, a
-  switch of direct calls when a few can, and each higher-order function is
-  copied per lambda set it is called with, so most calls are direct.
-- **Self-binding closures escape.** `twice(add(1))` can't be returned
-  today (`error_reporting/closure_self_type_escapes.mn`): one size per
-  function type can't hold a value of itself. Its lambda set,
-  `{twice[{add[i32]}]}`, holds `add`'s, a different and finite set, so
-  only truly recursive closures (the paper's `μ` sets) would stay in their
-  maker's frame.
+What it gave:
+
+- **Speed.** Calls through closures are direct, and LLVM inlines them:
+  `functions/closure_self_type_returns.mn` folds to constants.
+- **Self-binding closures escape.** `twice(add(1))` has set
+  `{twice[{add}]}`, finite. Only a set that holds itself (`nest`,
+  `error_reporting/closure_holds_itself_escapes.mn`) stays stage 1, and its
+  closures that bind themselves stay in their maker's frame.
+
+`markLambdaSets` runs before the checks and marks each closure of a set
+that becomes what it binds (`sammine.by_value`): the escape check only
+keeps in their frame the stage-1 closures that `bindsInline` says can't
+carry what they bind. `lowerLambdaSets` runs first in the lowering to LLVM.
+A struct or enum holding a lowered value is renamed `<name>#<n>` (its LLVM
+struct is identified by name; `dropFunction` looks up the part before `#`),
+and an enum's payload size and the offsets of its `variant`s and
+`payload`s are recomputed. A value of no size, a closure binding nothing,
+is neither written to nor read from a payload.
+
+## Stage 2b: specialization (TODO)
+
+The paper's own step: sets generalized per function (per call-graph SCC,
+section 6.3) with inclusion constraints, and each function copied per set
+it is called with, as generics are per type. Today a higher-order function
+called with `add` in one place and `mul` in another switches between them
+inside one copy; specialized, each copy calls one directly.
 
 How, worked out against the code (2026-11):
 

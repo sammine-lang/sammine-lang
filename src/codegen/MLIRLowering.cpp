@@ -1,8 +1,9 @@
+#include "codegen/MLIRLowering.h"
 #include "codegen/LinalgReduceToGpu.h"
+#include "compiler/Compiler.h"
+#include "dialect/LambdaSets.h"
 #include "dialect/LowerSammineOps.h"
 #include "dialect/MIRToLLVM.h"
-#include "codegen/MLIRLowering.h"
-#include "compiler/Compiler.h"
 #include "util/Utilities.h"
 
 #include "mlir/Conversion/AffineToStandard/AffineToStandard.h"
@@ -194,6 +195,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
   if (isGPU(gpuTarget)) {
     mlir::PassManager pm(context);
+    pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());
     pm.addPass(mlir::createSCFToControlFlowPass());
     pm.addPass(mlir::createGpuToLLVMConversionPass());
@@ -202,6 +204,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       return nullptr;
   } else {
     mlir::PassManager pm(context);
+    pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());
     pm.addPass(mlir::createSCFToControlFlowPass());
     pm.addPass(mlir::createArithToLLVMConversionPass());

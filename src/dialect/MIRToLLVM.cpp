@@ -632,11 +632,14 @@ struct VariantLowering : public mlir::OpConversionPattern<smn::VariantOp> {
         llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     mlir::LLVM::StoreOp::create(rewriter, loc, tag, tagPtr);
-    for (auto [field, offset] :
-         llvm::zip(adaptor.getPayload(), op.getOffsets()))
-      mlir::LLVM::StoreOp::create(
-          rewriter, loc, field,
-          payloadField(rewriter, loc, enumType, slot, offset));
+    // A field of no size, such as a closure binding nothing, has no bytes
+    // to write; an enum of only such has no payload at all.
+    for (auto [field, mirField, offset] : llvm::zip(
+             adaptor.getPayload(), op.getPayload().getTypes(), op.getOffsets()))
+      if (smn::sizeOf(mirField) > 0)
+        mlir::LLVM::StoreOp::create(
+            rewriter, loc, field,
+            payloadField(rewriter, loc, enumType, slot, offset));
     rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, enumType, slot);
     return mlir::success();
   }
@@ -664,6 +667,11 @@ struct PayloadLowering : public mlir::OpConversionPattern<smn::PayloadOp> {
     auto fieldType = getTypeConverter()->convertType(op.getType());
     if (!fieldType)
       return mlir::failure();
+    if (smn::sizeOf(op.getType()) == 0) {
+      // Nothing to read: a value of no size (VariantLowering).
+      rewriter.replaceOpWithNewOp<mlir::LLVM::PoisonOp>(op, fieldType);
+      return mlir::success();
+    }
     auto slot = entrySlot(rewriter, op, enumType);
     mlir::LLVM::StoreOp::create(rewriter, loc, adaptor.getValue(), slot);
     rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(

@@ -9,6 +9,7 @@
 #include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
 #include "dialect/ElaborateDrops.h"
+#include "dialect/LambdaSets.h"
 #include "dialect/OwnershipCheck.h"
 #include "dialect/SammineDialect.h"
 #include "dialect/ViewCheck.h"
@@ -434,6 +435,9 @@ void Compiler::mir() {
         add(note.getLocation(), note.str());
       return mlir::success();
     });
+    // Which closures carry what they bind by value whatever their words,
+    // which the view check reads.
+    markLambdaSets(*modules_.cpuModule);
     (void)checkViews(*modules_.cpuModule);
     // Drops where values go out of use, then the check, on what will run.
     elaborateDrops(*modules_.cpuModule);

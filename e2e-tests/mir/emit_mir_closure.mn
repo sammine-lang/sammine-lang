@@ -1,5 +1,7 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
-// A function value is !sammine.fn, with the words it carries: the most any
+// A closure whose lambda set becomes what it binds is marked
+// sammine.by_value (LambdaSets). A function value is !sammine.fn, with the
+// words it carries: the most any
 // closure of its type binds, one i32 or one view here. A function named as a
 // value is
 // sammine.closure binding nothing; a partial application binds the
@@ -12,10 +14,10 @@
 // CHECK-NEXT: sammine.call_indirect %arg0(%arg1) : <(i32) -> i32, 1>, (i32) -> i32
 // CHECK-LABEL: func.func private @use_inc(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @inc() : () -> !sammine.fn<(i32) -> i32, 1>
+// CHECK-NEXT: sammine.closure @inc() {sammine.by_value} : () -> !sammine.fn<(i32) -> i32, 1>
 // CHECK-LABEL: func.func private @add_to(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @add(%arg0) : (i32) -> !sammine.fn<(i32) -> i32, 1>
+// CHECK-NEXT: sammine.closure @add(%arg0) {sammine.by_value} : (i32) -> !sammine.fn<(i32) -> i32, 1>
 // CHECK-LABEL: func.func private @peek_into(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.lend

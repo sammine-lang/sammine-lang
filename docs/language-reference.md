@@ -1157,13 +1157,19 @@ let add5 = make(5);
 std::printf("%d\n", add5(3));         // 8
 ```
 
+The compiler works out which closures each function value can be, and a
+call through one whose closures it knows is a direct call, which the
+optimizer can inline. `twice(add(1))`, for `twice(f: (i32) -> i32, x: i32)`,
+binds an `(i32) -> i32` and is one, and can still be returned: it carries
+`add(1)`'s binding, which is not itself.
+
 Two kinds of closure stay in the call that made them, as a view (`ptr<T>`)
-does: one that bound a view, and one that binds a value of its own function
-type, directly or through other closures, such as `twice(add(1))` for
-`twice(f: (i32) -> i32, x: i32)`: it would have to carry itself, so it
-keeps what it binds in the frame of the call that made it. Either can be
-called and passed to a function that only calls it; returning it, storing
-it, or passing it to a function that keeps it is an error.
+does: one that bound a view, and one that can hold itself through what it
+binds, such as `nest(twice(f), n - 1)` passing `twice(f)` on as the `f` of
+the next call: it would have to carry itself without end, so it keeps what
+it binds in the frame of the call that made it. Either can be called and
+passed to a function that only calls it; returning it, storing it, or
+passing it to a function that keeps it is an error.
 
 ---
 

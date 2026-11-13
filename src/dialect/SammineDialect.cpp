@@ -158,6 +158,9 @@ mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type) {
     name = en.getName();
   else
     return {};
+  // A type holding function values of other lambda sets is named apart,
+  // after a `#` (LambdaSets); its instance is its source type's.
+  name = name.take_until([](char c) { return c == '#'; });
   return module.lookupSymbol<mlir::FunctionOpInterface>(
       ("Drop<" + name + ">::Drop").str());
 }
@@ -351,8 +354,11 @@ mlir::LogicalResult DropOp::verify() {
 }
 
 mlir::LogicalResult LendOp::verify() {
+  // A closure of a lambda set lowered to what it binds holds its captures
+  // in an aggregate or a variant (LambdaSets).
   for (auto *user : getResult().getUsers())
-    if (!mlir::isa<CallOp, ClosureOp>(user))
+    if (!mlir::isa<CallOp, ClosureOp>(user) &&
+        !user->hasAttr("sammine.captures"))
       return emitOpError("is a view lent to a call or a closure, so only "
                          "sammine.call or sammine.closure can use it, not ")
              << user->getName();

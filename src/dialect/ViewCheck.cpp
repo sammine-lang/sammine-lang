@@ -1,4 +1,5 @@
 #include "dialect/ViewCheck.h"
+#include "dialect/LambdaSets.h"
 #include "dialect/OwnershipPaths.h"
 #include "dialect/SammineDialect.h"
 
@@ -239,8 +240,8 @@ private:
   static std::string what(smn::ClosureOp closure) {
     return "a partial application of '" + writtenName(closure) + "' that " +
            (bindsView(closure) ? "captured a view (ptr<T>)"
-                               : "binds a closure of its own type, so keeps "
-                                 "what it binds in this call's frame");
+                               : "can hold itself through what it binds, so "
+                                 "keeps that in this call's frame");
   }
 
   void error(mlir::Location at, const std::string &msg) {
@@ -277,7 +278,10 @@ private:
       func.walk([&](mlir::Operation *op) {
         if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op)) {
           auto taint = anyOf(op->getOperands());
-          if (bindsView(closure) || !closure.bindsInline())
+          // A closure of a lambda set that becomes what it binds carries it
+          // by value whatever its type's words (LambdaSets).
+          if (bindsView(closure) ||
+              (!closure.bindsInline() && !closure->hasAttr(kByValueAttr)))
             taint.closure = closure;
           changed |= add(closure.getResult(), taint);
         } else if (mlir::isa<smn::AggregateOp, smn::VariantOp, smn::LetOp,
