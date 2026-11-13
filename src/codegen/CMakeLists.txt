@@ -14,7 +14,7 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/TypeLayout.cpp
   ${CMAKE_CURRENT_LIST_DIR}/RangeIteration.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRGenBinaryOps.cpp
-  ${CMAKE_CURRENT_LIST_DIR}/MLIRGenKernel.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/KernelGen.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MLIRLowering.cpp
   ${CMAKE_CURRENT_LIST_DIR}/LinalgReduceToGpu.cpp
 )

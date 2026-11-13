@@ -2,8 +2,8 @@
 
 ## Architecture
 - `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernel defs); `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
-- `MLIRGenImpl` builds the module around the code: a declaration of every function in MIR types (`forwardDeclareFunc`, `mirFunctionType`), C bindings (`emitExtern`), kernels (`MLIRGenKernel.cpp`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
-- Files: `MLIRGen.cpp` (generate, types, definitions), `MLIRGenFunction.cpp` (declarations, C bindings, linkage), `MLIRGenKernel.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR: statements, the dispatch over expressions, literals; `MIRLowering{Calls,ControlFlow,Aggregates,Places,Operators}.cpp` the rest, by concern), `MIRTypes.cpp` (each sammine type's MIR type), `MLIRGenBinaryOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
+- `MLIRGenImpl` builds the module around the code: a declaration of every function in MIR types (`forwardDeclareFunc`, `mirFunctionType`), C bindings (`emitExtern`), kernels (`KernelGen`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
+- Files: `MLIRGen.cpp` (generate, types, definitions), `MLIRGenFunction.cpp` (declarations, C bindings, linkage), `KernelGen.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR: statements, the dispatch over expressions, literals; `MIRLowering{Calls,ControlFlow,Aggregates,Places,Operators}.cpp` the rest, by concern), `MIRTypes.cpp` (each sammine type's MIR type), `MLIRGenBinaryOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
 - `SourceLocator` maps AST byte offsets to MLIR locations
 
 ## MIR (see `plans/mir.md`)
@@ -70,7 +70,7 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 - A function an IR test inspects must be in a library (no `main`), or the optimizer may inline or remove it
 
 ## Kernel Codegen (2-Module Architecture)
-- A kernel's scalar code, a map lambda's body and a reduce's identity, goes through MIR: `MIRLowering::lowerKernelScalar` lowers it where the kernel codegen's builder is, the lambda's parameter bound, and it must be plain `arith` ops in the one block a linalg region has (`lowerArithOnly`), else a located error. MLIRGenImpl always has a MIRLowering for this
+- A kernel's scalar code, a map lambda's body and a reduce's identity, goes through MIR: `MIRLowering::lowerKernelScalar` lowers it where the kernel codegen's builder is, the lambda's parameter bound, and it must be plain `arith` ops in the one block a linalg region has (`lowerArithOnly`), else a located error. `KernelGen` builds with the same builder as the `MIRLowering` it is given
 
 ### Invariants
 - Kernel module: only arith/math/tensor/linalg/func ops — NO llvm dialect
@@ -78,14 +78,16 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 - DPS: array-returning kernels get output as last param, never allocate internally
 - Kernel wrappers: `sammine.kernel_wrapper` attr; an array-returning one fills a buffer passed last, its argument marked `smn::kResultBufferAttr`. A call to one is `sammine.call`, lowered by `callKernel` (see MIR, Calls)
 
-### Kernel Type Conversion (`convertTypeForKernel`)
+### Kernel types (`KernelGen::kernelType`)
 - `Array` → `RankedTensorType` (default) or `MemRefType` (post-bufferization)
 - Rejected: Pointer, Function, String, Struct, Enum, Tuple, nested arrays
+- `kernelFunctionType`: the kernel's, in tensors or memrefs; `wrapperFunctionType`: the wrapper's, an array a `!llvm.ptr` on the CPU and a memref on the GPU, a scalar itself
 
 ### Emission
-- `emitKernelMapExpr`: `linalg::MapOp` with body builder; DPS output = last block arg
-- `emitKernelReduceExpr`: 0-d output via `tensor::EmptyOp` + `FillOp` + `linalg::ReduceOp`; extract scalar via `tensor::ExtractOp`
-- `emitKernelWrapper`: `kernel_abi::memrefOfPointer` per array input + the result buffer; calls `__kernel_` with memref args
+- `KernelGen::declare`, before any body is lowered: the kernel in the kernel module, the kernel in memref types and its wrapper in the CPU module; `define`: the kernel and its wrapper
+- `defineMap`: `linalg::MapOp` with body builder; DPS output = last block arg
+- `defineReduce`: 0-d output via `tensor::EmptyOp` + `FillOp` + `linalg::ReduceOp`; extract scalar via `tensor::ExtractOp`
+- `defineWrapper`: `kernel_abi::memrefOfPointer` per array input + the result buffer (CPU), `sammine.to_device`/`to_host` (GPU); calls `__kernel_` with memref args
 
 ### `kernel_abi::memrefOfPointer` (`include/cabi/KernelABI.h`)
 Constructs `{ allocated_ptr, aligned_ptr, offset=0, sizes={N}, strides={1} }` from raw `!llvm.ptr`, cast to `memref<NxT>` via `unrealized_conversion_cast`.

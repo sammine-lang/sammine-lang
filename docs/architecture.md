@@ -24,7 +24,7 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
-**codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`) builds the MLIR module: types, function declarations, C bindings and kernels. Every function body goes through MIR, a mid-level IR in the `sammine` dialect (`MIRLowering.cpp`), which is lowered to the LLVM dialect first thing in the lowering to LLVM IR. See Section 6 for details.
+**codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenFunction.cpp`) builds the MLIR module: function declarations, C bindings, and kernels through `KernelGen` (`KernelGen.cpp`). Every function body goes through MIR, a mid-level IR in the `sammine` dialect (`MIRLowering.cpp`), which is lowered to the LLVM dialect first thing in the lowering to LLVM IR. See Section 6 for details.
 
 **optimize** -- The LLVM IR module (produced by MLIR lowering) is run through LLVM's `O2` optimization pipeline using the new pass manager. `--emit llvm`, `--emit llvm-opt` and `--emit llvm-diff` print the IR before optimization, after it, or a diff of the two, then stop. `--emit mlir` prints the MLIR module before it is lowered to LLVM IR.
 
@@ -54,7 +54,7 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `include/semantics/` | `ScopeGeneratorVisitor.h`, `GeneralSemanticsVisitor.h` | Visitor declarations. |
 | `src/typecheck/` | `BiTypeChecker.cpp`, `BiTypeCheckerSynthesize.cpp`, `LinearTypeChecker.cpp`, `Monomorphizer.cpp`, `Types.cpp` | Type checking, synthesis, linear checking, generic instantiation, type utilities. |
 | `include/typecheck/` | `BiTypeChecker.h`, `LinearTypeChecker.h`, `Monomorphizer.h`, `Types.h` | Type system definitions, checker/monomorphizer declarations. |
-| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `MLIRGenKernel.cpp`, `MIRLowering*.cpp`, `MIRTypes.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR (split by concern: calls, control flow, aggregates, places, operators), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
+| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `KernelGen.cpp`, `MIRLowering*.cpp`, `MIRTypes.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR (split by concern: calls, control flow, aggregates, places, operators), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
 | `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MIRLowering.h`, `MIRTypes.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
 | `src/dialect/`, `include/dialect/` | `SammineOps.td`, `SammineTypes.td`, `MIRToLLVM.cpp` | The `sammine` dialect, MIR's types and ops, and its lowering to the LLVM dialect. |
 | `src/cabi/`, `include/cabi/` | `CABI.cpp`, `KernelABI.cpp` | Calling conventions: how C takes structs and variadic arguments, how a kernel's wrapper takes arrays. |
@@ -268,7 +268,7 @@ Nodes invoke synthesis through `accept_synthesis(TypeCheckerVisitor*)`, which ca
 
 ## 6. MLIR Codegen
 
-The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/codegen/MLIRGenImpl.h`, with method bodies split across `MLIRGen.cpp`, `MLIRGenFunction.cpp` and `MLIRGenKernel.cpp`). It builds the module around the code; function bodies go through MIR (`MIRLowering`, `knowledge_base/plans/mir.md`).
+The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/codegen/MLIRGenImpl.h`, with method bodies split across `MLIRGen.cpp` and `MLIRGenFunction.cpp`; kernels are `KernelGen`'s, `KernelGen.cpp`). It builds the module around the code; function bodies go through MIR (`MIRLowering`, `knowledge_base/plans/mir.md`).
 
 ### MIR
 

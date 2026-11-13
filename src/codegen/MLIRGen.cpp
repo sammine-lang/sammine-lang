@@ -42,6 +42,9 @@ namespace sammine_lang {
 
 mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
+  kernels = std::make_unique<KernelGen>(builder, theModule, *mirLowering,
+                                        props_, locator, reporter, gpu_mode_,
+                                        /*library=*/!moduleName.empty());
 
   declareRuntimeFunctions();
 
@@ -57,82 +60,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
     } else if (auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get())) {
       emitExtern(ext);
     } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def.get())) {
-      if (!kd->Prototype->is_generic()) {
-        auto publicName = mangleName(kd->Prototype->functionName);
-        auto internalName = kKernelPrefix.str() + publicName;
-
-        // Create kernel module lazily on first kernel def
-        if (!kernelModule)
-          kernelModule = mlir::ModuleOp::create(builder.getUnknownLoc());
-
-        // 1. Forward-declare internal kernel in kernel module (tensor types)
-        auto kernelFuncType = buildKernelFuncType(kd->Prototype.get());
-        if (!kernelModule.lookupSymbol(internalName)) {
-          auto funcOp = mlir::func::FuncOp::create(
-              builder.getUnknownLoc(), internalName, kernelFuncType);
-          funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
-          kernelModule.push_back(funcOp);
-        }
-
-        // 2. Forward-declare internal kernel in CPU module (memref types).
-        // The wrapper calls __kernel_ with memref types; this declaration
-        // ensures func.call resolves during verification. Replaced during
-        // merge with the actual bufferized definition.
-        auto memrefFuncType =
-            buildKernelFuncType(kd->Prototype.get(), /*asMemref=*/true);
-        if (!theModule.lookupSymbol(internalName)) {
-          auto funcOp = mlir::func::FuncOp::create(
-              builder.getUnknownLoc(), internalName, memrefFuncType);
-          funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
-          theModule.push_back(funcOp);
-        }
-
-        // 3. Forward-declare public wrapper in CPU module.
-        // GPU: memref args so wrapper body is pure memref/gpu dialect.
-        // CPU: !llvm.ptr args (kernel ABI — arrays by reference).
-        {
-          auto vis = moduleName.empty()
-                         ? mlir::SymbolTable::Visibility::Private
-                         : mlir::SymbolTable::Visibility::Public;
-
-          mlir::FunctionType wrapperFuncType;
-          if (targetGPU()) {
-            wrapperFuncType = buildGpuWrapperFuncType(kd->Prototype.get());
-          } else {
-            // CPU: manually build the type with !llvm.ptr for arrays + sret
-            llvm::SmallVector<mlir::Type, 4> argTypes;
-            for (auto &param : kd->Prototype->parameterVectors) {
-              if (param->get_type().type_kind == TypeKind::Array)
-                argTypes.push_back(llvmPtrTy());
-              else
-                argTypes.push_back(llvmType(param->get_type()));
-            }
-            llvm::SmallVector<mlir::Type, 1> retTypes;
-            auto protoFT = std::get<FunctionType>(
-                kd->Prototype->get_type().type_data);
-            auto retSamType = protoFT.get_return_type();
-            if (retSamType.type_kind == TypeKind::Array)
-              argTypes.push_back(llvmPtrTy()); // sret
-            else if (retSamType.type_kind != TypeKind::Unit)
-              retTypes.push_back(llvmType(retSamType));
-            wrapperFuncType = builder.getFunctionType(argTypes, retTypes);
-          }
-
-          if (!theModule.lookupSymbol(publicName)) {
-            auto funcOp = mlir::func::FuncOp::create(
-                builder.getUnknownLoc(), publicName, wrapperFuncType);
-            funcOp.setVisibility(vis);
-            funcOp->setAttr("sammine.kernel_wrapper", builder.getUnitAttr());
-            // An array it returns, it fills in a buffer passed last.
-            if (std::get<FunctionType>(kd->Prototype->get_type().type_data)
-                    .get_return_type()
-                    .type_kind == TypeKind::Array)
-              funcOp.setArgAttr(wrapperFuncType.getNumInputs() - 1,
-                                smn::kResultBufferAttr, builder.getUnitAttr());
-            theModule.push_back(funcOp);
-          }
-        }
-      }
+      kernels->declare(kd);
     }
   }
 
@@ -143,11 +71,10 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   for (auto &def : program->DefinitionVec)
     emitDefinition(def.get());
 
-  if (kernelModule) {
-    if (mlir::failed(mlir::verify(kernelModule))) {
-      kernelModule.emitError("MLIR kernel module verification failed");
-      return nullptr;
-    }
+  if (auto kernelModule = kernels->kernelModule();
+      kernelModule && mlir::failed(mlir::verify(kernelModule))) {
+    kernelModule.emitError("MLIR kernel module verification failed");
+    return nullptr;
   }
 
   if (mlir::failed(mlir::verify(theModule))) {
@@ -223,15 +150,6 @@ mlir::Type MLIRGenImpl::llvmType(const Type &type) {
   return llvm;
 }
 
-bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
-  return type.type_kind == TypeKind::U32_t || type.type_kind == TypeKind::U64_t;
-}
-
-bool MLIRGenImpl::isFloatType(const Type &type) {
-  return type.type_kind == TypeKind::F64_t ||
-         type.type_kind == TypeKind::F32_t || type.type_kind == TypeKind::Flt;
-}
-
 // ===--- Definition emission ---===
 
 // The function bodies a definition is compiled to: a function's own, or an
@@ -284,7 +202,7 @@ void MLIRGenImpl::emitDefinition(AST::DefinitionAST *def) {
   else if (llvm::isa<AST::TypeClassDeclAST>(def))
     ; // Skip typeclass declarations (no codegen needed)
   else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(def)) {
-    emitKernelDef(kd);
+    kernels->define(kd);
   } else {
     imm_error(fmt::format("unknown definition type '{}'", def->getTreeName()),
               def->get_location());
@@ -331,7 +249,7 @@ MLIRGenResult mlirGen(mlir::MLIRContext &context, AST::ProgramAST *program,
   auto cpuModule = impl.generate(program);
   if (!cpuModule)
     return {};
-  return {cpuModule, impl.kernelModule};
+  return {cpuModule, impl.kernels->kernelModule()};
 }
 
 } // namespace sammine_lang

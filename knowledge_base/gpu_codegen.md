@@ -71,11 +71,9 @@ wherever the kernel is called), using `kernel_abi::memrefOfPointer`, in `sammine
 in the CPU-side code where they belong, and the GPU wrapper is clean for `gpu-to-llvm`.
 
 Key files:
-- `MLIRGenImpl.h`: added `gpuTarget` member, `targetGPU()`, `gpuCopyToDevice`,
-  `gpuCopyToHostAndDealloc`, `gpuDealloc`, `buildGpuWrapperFuncType`
-- `MLIRGen.cpp`: GPU branch in `emitKernelWrapper`, forward-declaration uses
-  `buildGpuWrapperFuncType` for GPU
-- `MLIRGenFunction.cpp`: call site converts `!llvm.ptr` → memref when calling
+- `KernelGen.cpp`: `targetGPU()`, `gpuDealloc`, the GPU branch of
+  `defineWrapper`, and `wrapperFunctionType`'s memref parameters
+- `MIRToLLVM.cpp`: `callKernel` converts `!llvm.ptr` → memref when calling
   a kernel wrapper with `--gpu` (detected via `sammine.kernel_wrapper` attribute)
 
 **The async discovery.** After all the refactoring, `gpu-to-llvm` still wasn't
@@ -221,9 +219,8 @@ time via a `MLIR_LLVM_LIB_DIR` compile definition.
 | `CMakeLists.txt` | `MLIR_LLVM_LIB_DIR` define |
 | `src/codegen/CMakeLists.txt` | GPU CMake targets |
 | `include/codegen/MLIRGen.h` | `gpuTarget` parameter on `mlirGen()` |
-| `include/codegen/MLIRGenImpl.h` | `gpuTarget` member, `targetGPU()`, GPU helpers |
-| `src/codegen/MLIRGen.cpp` | GPU wrapper codegen, `buildGpuWrapperFuncType`, async gpu helpers |
-| `src/codegen/MLIRGenFunction.cpp` | Call site `!llvm.ptr` → memref conversion for GPU |
+| `src/codegen/KernelGen.cpp` | GPU wrapper codegen, `wrapperFunctionType`, `gpuDealloc` |
+| `src/dialect/MIRToLLVM.cpp` | Call site `!llvm.ptr` → memref conversion for GPU (`callKernel`) |
 | `include/codegen/MLIRLowering.h` | `gpuTarget` parameter |
 | `src/codegen/MLIRLowering.cpp` | GPU kernel pipeline, Phase 2 gpu-to-llvm, merge, teardown fix |
 | `e2e-tests/lit.cfg.py` | `cuda` feature detection |
