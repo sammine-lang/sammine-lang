@@ -120,6 +120,7 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
   case TypeKind::Bool:
   case TypeKind::Char:
   case TypeKind::String:
+  case TypeKind::Formatter:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:
@@ -336,6 +337,7 @@ static bool unify_impl(const Type &pattern_in, const Type &concrete_in,
   case TypeKind::Bool:
   case TypeKind::Char:
   case TypeKind::String:
+  case TypeKind::Formatter:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

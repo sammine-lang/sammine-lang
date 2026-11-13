@@ -136,8 +136,7 @@ bool Type::operator==(const Type &other) const {
       this->type_kind == TypeKind::Array ||
       this->type_kind == TypeKind::Struct ||
       this->type_kind == TypeKind::Enum || this->type_kind == TypeKind::Tuple ||
-      this->type_kind == TypeKind::TypeParam ||
-      this->type_kind == TypeKind::String)
+      this->type_kind == TypeKind::TypeParam)
     return this->type_data == other.type_data;
 
   return true;
@@ -165,8 +164,9 @@ size_t std::hash<Type>::operator()(const Type &t) const {
   case TypeKind::Flt:
   case TypeKind::Hole:
   case TypeKind::Generic:
-    break;
   case TypeKind::String:
+  case TypeKind::Formatter:
+    break;
   case TypeKind::TypeParam:
     hash_combine(h,
                  std::hash<std::string>{}(std::get<std::string>(t.type_data)));

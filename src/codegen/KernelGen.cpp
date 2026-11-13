@@ -350,6 +350,7 @@ mlir::Type KernelGen::kernelType(const Type &type, bool asMemref) {
   case TypeKind::Pointer:
   case TypeKind::Function:
   case TypeKind::String:
+  case TypeKind::Formatter:
   case TypeKind::Struct:
   case TypeKind::Enum:
   case TypeKind::Tuple:

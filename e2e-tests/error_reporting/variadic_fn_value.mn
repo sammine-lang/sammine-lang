@@ -21,7 +21,7 @@
 
 import std;
 
-reuse printf(fmt: ptr<char>, ...) -> i32;
+reuse printf(fmt: string, ...) -> i32;
 
 let main() -> i32 {
   let p = printf;

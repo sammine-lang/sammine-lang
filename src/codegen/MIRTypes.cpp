@@ -33,6 +33,11 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     return mlir::IntegerType::get(ctx_, 1);
   case TypeKind::Char:
     return mlir::IntegerType::get(ctx_, 8);
+  case TypeKind::Formatter: // where and how, in one word (FormatterBits)
+    return mlir::IntegerType::get(ctx_, 64);
+  case TypeKind::String: // a view of its chars
+    return smn::PtrType::get(ctx_, mlir::IntegerType::get(ctx_, 8),
+                             smn::Ownership::View);
   case TypeKind::Pointer: {
     // 'ptr<T> owns what it points at, 'buf<T> a buffer of them; ptr<T> is a
     // view of either.

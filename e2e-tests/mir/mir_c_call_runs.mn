@@ -9,10 +9,10 @@ import std;
 
 reuse abs(x: i32) -> i32;
 
-let unsafe show(fmt: ptr<char>, a: i32, c: char, b: bool, f: f32) {
+let unsafe show(fmt: string, a: i32, c: char, b: bool, f: f32) {
   std::printf(fmt, a, c, b, f);
 }
-let unsafe show_text(fmt: ptr<char>, text: 'ptr<char>) -> 'ptr<char> {
+let unsafe show_text(fmt: string, text: 'ptr<char>) -> 'ptr<char> {
   std::printf(fmt, text);
   text
 }

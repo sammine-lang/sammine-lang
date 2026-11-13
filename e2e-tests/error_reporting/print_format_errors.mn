@@ -6,7 +6,7 @@
 // CHECK: print()'s format has a '}' with no '{' before it; write '}}' for a brace
 // CHECK: '{.2}' gives a float's digits after the point, and this is 'i32'
 // CHECK: print()'s format must be a string literal: the compiler reads it to print each argument
-// CHECK: print() prints numbers, bools, chars and strings, not 'P'
+// CHECK: print() can't print 'P': no instance of Format<P>
 // CHECK: print() needs a format: print("what to say")
 
 // The compiler reads print's format: each {} takes one argument, of a type

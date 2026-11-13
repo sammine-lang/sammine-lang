@@ -1,0 +1,64 @@
+// RUN: (%sammine_jit --file %full 2>/dev/null; echo "status $?") | %check %full
+// RUN: (%sammine_jit --file %full 2>&1 >/dev/null; true) | %check %full --check-prefix ERR
+// CHECK:      at (1, 2) and (3, 4), 7
+// CHECK-NEXT: line (1, 2) to (5, 6)
+// CHECK-NEXT: $2.500000 $2.50 $3
+// CHECK-NEXT: hello, text
+// CHECK-NEXT: status 1
+// ERR:      warning: (1, 2) costs $0.5
+// ERR-NEXT: {{.*}}format_instance.mn:49:16: panic: bad point (-1, 0), true
+
+// `{}` prints an argument through the instance of Format for its type. An
+// instance is given a Formatter, which says where to write and how, and
+// writes its parts to it with write(f, ...): the same instance prints to
+// stdout, to stderr, and in a panic. Handing the Formatter on to another
+// instance, the compiler's too, hands on the placeholder's digits.
+
+import str;
+
+struct Point { x: i32, y: i32, };
+
+instance Format<Point> {
+  let Format(p: Point, f: Formatter) -> unit {
+    write(f, "({}, {})", p.x, p.y)
+  }
+}
+
+type Shape = Dot(Point) | Line(Point, Point);
+
+instance Format<Shape> {
+  let Format(s: Shape, f: Formatter) -> unit {
+    case s {
+      Dot(p) => write(f, "dot {}", p),
+      Line(a, b) => write(f, "line {} to {}", a, b),
+    }
+  }
+}
+
+struct Money { amount: f64, };
+
+// The amount prints with the digits the placeholder gave Money.
+instance Format<Money> {
+  let Format(m: Money, f: Formatter) -> unit {
+    write(f, "$");
+    Format<f64>(m.amount, f)
+  }
+}
+
+let check(p: Point) -> i32 {
+  if p.x < 0 { panic("bad point {}, {}", p, true) };
+  p.x
+}
+
+let main() -> i32 {
+  let p = Point { x: 1, y: 2 };
+  print("at {} and {}, {}\n", p, Point { x: 3, y: 4 }, 7);
+  print("{}\n", Line(p, Point { x: 5, y: 6 }));
+  let m = Money { amount: 2.5 };
+  print("{} {.2} {.0}\n", m, m, Money { amount: 3.0 });
+  eprint("warning: {} costs {.1}\n", p, Money { amount: 0.5 });
+  // A String prints through a view of it.
+  let s = str::append(str::new("hello"), ", text");
+  print("{}\n", &s);
+  check(Point { x: -1, y: 0 })
+}

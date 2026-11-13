@@ -832,15 +832,17 @@ public:
   AST_NODE_METHODS("LenExprAST", NodeKind::LenExprAST)
 };
 
-/// `print("format", args...)` or `panic("format", args...)`: the format
-/// with each `{}` in it replaced by an argument, as its type prints
-/// (util/FormatString.h). `print` writes it to stdout and is (). `panic`
+/// Formatted output: a format with each `{}` in it replaced by an argument,
+/// as the Format instance of its type writes it (util/FormatString.h).
+/// `print("format", args...)` writes to stdout, `eprint` to stderr, and
+/// `write(f, "format", args...)` to the Formatter `f`, as an instance does
+/// with the one it is given: all three are (). `panic("format", args...)`
 /// writes where it is and the message to stderr and ends the program with
 /// status 1; nothing is dropped, and it gives no value, so it fits where
 /// any is expected: its type is Never.
 class FormatExprAST : public ExprAST {
 public:
-  enum class Kind { Print, Panic };
+  enum class Kind { Print, EPrint, Write, Panic };
   Kind kind;
   std::vector<std::unique_ptr<ExprAST>> arguments;
   explicit FormatExprAST(Kind kind_, std::shared_ptr<Token> tok,
@@ -851,10 +853,22 @@ public:
     for (auto &arg : arguments)
       this->join_location(arg.get());
   }
-  /// What source calls it: `print` or `panic`.
+  /// What source calls it.
   std::string_view keyword() const {
-    return kind == Kind::Print ? "print" : "panic";
+    switch (kind) {
+    case Kind::Print:
+      return "print";
+    case Kind::EPrint:
+      return "eprint";
+    case Kind::Write:
+      return "write";
+    case Kind::Panic:
+      return "panic";
+    }
+    return "";
   }
+  /// Which argument is the format: the first, but after write's Formatter.
+  size_t format_index() const { return kind == Kind::Write ? 1 : 0; }
   std::string to_string() const override;
   AST_NODE_METHODS("FormatExprAST", NodeKind::FormatExprAST)
 };

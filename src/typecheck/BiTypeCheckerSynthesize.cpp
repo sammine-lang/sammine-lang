@@ -1108,8 +1108,9 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
 Type BiTypeCheckerVisitor::synthesize(StringExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
-  // String literals are char pointers at runtime
-  return ast->set_type(Type::Pointer(Type::Char()));
+  // A literal is text that lives as long as the program, and ends where C
+  // reads it to: a string, not just any pointer to a char.
+  return ast->set_type(Type::String());
 }
 
 Type BiTypeCheckerVisitor::synthesize(NumberExprAST *ast) {
@@ -1436,6 +1437,12 @@ Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
     from = settled;
   }
 
+  // Nothing says a pointer points at text that ends, or lives on: only an
+  // unsafe function can call one a string.
+  if (to.type_kind == TypeKind::String && from.type_kind == TypeKind::Pointer)
+    check_unsafe_allowed(ast->get_location(),
+                         "converting a pointer to a string");
+
   auto key = MonomorphizedKey::instance(kConvertClass, {from, to});
   if (!has_instance(key)) {
     add_error(ast->get_location(),
@@ -1723,11 +1730,11 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   return ast->set_type(Type::I32_t());
 }
 
-// print("format", args...) is (), and panic("format", args...) never gives
-// a value: Never, which fits where any is expected. The format is a
-// literal, read here: each `{}` in it takes an argument, a number, bool,
-// char or string, which prints as its type does. Those own nothing, so
-// ending the program drops nothing of them.
+// Formatted output. print, eprint and write are (), and panic never gives a
+// value: Never, which fits where any is expected. The format is a literal,
+// read here: each `{}` in it takes an argument, written by the instance of
+// Format for its type, the compiler's for a number, bool, char or string.
+// write's first argument is the Formatter it writes to.
 Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
@@ -1736,40 +1743,60 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
     arg->accept_vis(this);
 
   auto keyword = ast->keyword();
-  if (ast->arguments.empty()) {
-    this->add_error(ast->get_location(),
-                    fmt::format("{0}() needs a format: {0}(\"what to say\")",
-                                keyword));
+  auto &args = ast->arguments;
+  auto &fp = props_.format(ast->id());
+  fp = {};
+  size_t format_at = ast->format_index();
+  bool ok = true;
+  if (ast->kind == FormatExprAST::Kind::Write) {
+    auto first = args.empty() ? Type::Poisoned()
+                              : args.front()->accept_synthesis(this);
+    if (first.type_kind != TypeKind::Formatter) {
+      if (!first.is_poisoned() || args.empty())
+        this->add_error(ast->get_location(),
+                        "write() takes the Formatter to write to first: "
+                        "write(f, \"what to say\")");
+      ok = false;
+    }
+  }
+  if (args.size() <= format_at) {
+    if (ok)
+      this->add_error(
+          ast->get_location(),
+          fmt::format("{0}() needs a format: {0}(\"what to say\")", keyword));
     return ast->set_type(Type::Poisoned());
   }
-  bool ok = true;
   std::vector<const sammine_util::FormatString::Piece *> placeholders;
-  auto *literal = llvm::dyn_cast<StringExprAST>(ast->arguments.front().get());
-  auto format = literal
-                    ? sammine_util::FormatString::parse(literal->string_content)
-                    : std::unexpected(std::string());
-  size_t given = ast->arguments.size() - 1;
+  auto *literal = llvm::dyn_cast<StringExprAST>(args[format_at].get());
+  size_t given = args.size() - format_at - 1;
   if (!literal) {
-    this->add_error(ast->arguments.front()->get_location(),
+    this->add_error(args[format_at]->get_location(),
                     fmt::format("{}()'s format must be a string literal: the "
                                 "compiler reads it to print each argument",
                                 keyword));
     ok = false;
-  } else if (!format) {
+  } else if (auto format =
+                 sammine_util::FormatString::parse(literal->string_content);
+             !format) {
     this->add_error(literal->get_location(),
                     fmt::format("{}()'s format has {}", keyword,
                                 format.error()));
     ok = false;
-  } else if (placeholders = format->placeholders();
-             placeholders.size() != given) {
-    this->add_error(ast->get_location(),
-                    fmt::format("{}() has {} placeholder{} but {} argument{}",
-                                keyword, placeholders.size(),
-                                placeholders.size() == 1 ? "" : "s", given,
-                                given == 1 ? "" : "s"));
-    ok = false;
+  } else {
+    fp.format = std::move(*format);
+    placeholders = fp.format->placeholders();
+    if (placeholders.size() != given) {
+      this->add_error(
+          ast->get_location(),
+          fmt::format("{}() has {} placeholder{} but {} argument{}", keyword,
+                      placeholders.size(), placeholders.size() == 1 ? "" : "s",
+                      given, given == 1 ? "" : "s"));
+      ok = false;
+    }
   }
-  for (auto [index, arg] : llvm::enumerate(llvm::drop_begin(ast->arguments))) {
+  for (auto [index, arg] :
+       llvm::enumerate(llvm::drop_begin(args, format_at + 1))) {
+    fp.methods.emplace_back();
     auto type = arg->accept_synthesis(this);
     if (type.is_poisoned()) {
       ok = false;
@@ -1778,24 +1805,29 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
     // A type not whole yet is reported as that, where it is.
     if (type.is_open())
       continue;
-    // A string is a pointer to chars, a literal's or one that owns them:
-    // printing only reads it, so an owned one is lent.
-    bool string =
-        type.type_kind == TypeKind::Pointer &&
-        std::get<PointerType>(type.type_data).get_pointee().type_kind ==
-            TypeKind::Char;
-    // An enum that is an integer prints as it.
-    auto *en = std::get_if<EnumType>(&type.type_data);
-    if (!(type.is_numeric() || type.type_kind == TypeKind::Bool ||
-          type.type_kind == TypeKind::Char || string ||
-          (en && en->is_integer_backed()))) {
-      this->add_error(arg->get_location(),
-                      fmt::format("{}() prints numbers, bools, chars and "
-                                  "strings, not '{}'",
-                                  keyword, type.to_string()));
+    // A literal with no type written prints as the type it would be.
+    if (auto settled = default_polymorphic_type(type); !(settled == type)) {
+      resolve_literal_type(arg.get(), settled);
+      type = settled;
+    }
+    auto key = MonomorphizedKey::instance(kFormatClass, {type});
+    if (!has_instance(key)) {
+      this->add_error(
+          arg->get_location(),
+          missing_instance(key,
+                           fmt::format("{}() can't print '{}': no instance "
+                                       "of Format<{}>",
+                                       keyword, type.to_string(),
+                                       key.type_args_string())));
       ok = false;
-    } else if (index < placeholders.size() && placeholders[index]->precision &&
-               !type.is_float()) {
+      continue;
+    }
+    fp.methods.back() = method_reference(key, std::string(kFormatClass));
+    // A program's instance is handed the digits, in its Formatter, to do
+    // with as it sees fit. The compiler's use them for a float alone.
+    if (fp.methods.back().is<Reference::Builtin>() &&
+        index < placeholders.size() && placeholders[index]->precision &&
+        !type.is_float()) {
       this->add_error(arg->get_location(),
                       fmt::format("'{{.{}}}' gives a float's digits after "
                                   "the point, and this is '{}'",

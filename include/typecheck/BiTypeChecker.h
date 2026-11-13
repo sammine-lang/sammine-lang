@@ -146,6 +146,8 @@ public:
     typename_to_type.registerNameT(bare("f32"), Type::F32_t());
     typename_to_type.registerNameT(bare("bool"), Type::Bool());
     typename_to_type.registerNameT(bare("char"), Type::Char());
+    typename_to_type.registerNameT(bare("string"), Type::String());
+    typename_to_type.registerNameT(bare("Formatter"), Type::Formatter());
     typename_to_type.registerNameT(bare("unit"), Type::Unit());
   }
   virtual void exit_new_scope() override {

@@ -1,19 +1,17 @@
-export reuse printf(fmt: ptr<char>, ...) -> i32;
-reuse sammine_io_eprint(s: ptr<char>) -> unit;
-reuse sammine_io_eprintln(s: ptr<char>) -> unit;
+export reuse printf(fmt: string, ...) -> i32;
 // C hands back what it reads as new values: a buffer and its length, plus
 // the file handle for a file read. It never writes into sammine memory.
 reuse sammine_io_read_line() -> ('buf<char>, i64);
 reuse sammine_io_read_i32() -> i32;
 reuse sammine_io_read_i64() -> i64;
 reuse sammine_io_read_f64() -> f64;
-reuse sammine_io_open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char>;
+reuse sammine_io_open(path: string, mode: string) -> 'ptr<char>;
 reuse sammine_io_close(handle: 'ptr<char>) -> unit;
 reuse sammine_io_file_read_line(handle: 'ptr<char>) -> ('ptr<char>, 'buf<char>, i64);
 reuse sammine_io_file_write(handle: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char>;
-reuse sammine_io_read_file(path: ptr<char>) -> ('buf<char>, i64);
-reuse sammine_io_write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
-reuse sammine_io_append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
+reuse sammine_io_read_file(path: string) -> ('buf<char>, i64);
+reuse sammine_io_write_file(path: string, content: ptr<char>, nbytes: i64) -> i32;
+reuse sammine_io_append_file(path: string, content: ptr<char>, nbytes: i64) -> i32;
 
 export let print_i32(n: i32) -> unit { print("{}", n); }
 export let print_i64(n: i64) -> unit { print("{}", n); }
@@ -21,8 +19,6 @@ export let print_f64(n: f64) -> unit { print("{}", n); }
 export let print_char(c: char) -> unit { print("{}", c); }
 export let print_bool(b: bool) -> unit { print("{}", b); }
 
-export let unsafe eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
-export let unsafe eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
 // What a read produced: a buffer the caller owns and its length, or Eof when
 // there was nothing to read.
@@ -50,7 +46,7 @@ export instance Drop<File> {
   let unsafe Drop(f: File) -> unit { sammine_io_close(f.handle) }
 }
 
-export let unsafe open(path: ptr<char>, mode: ptr<char>) -> File {
+export let unsafe open(path: string, mode: string) -> File {
   File { handle: sammine_io_open(path, mode) }
 }
 export let close(f: File) -> unit { drop(f) }
@@ -64,13 +60,13 @@ export let unsafe file_write(f: File, content: ptr<char>, nbytes: i64) -> File {
 }
 
 // Eof if the file cannot be read.
-export let unsafe read_file(path: ptr<char>) -> ReadResult {
+export let unsafe read_file(path: string) -> ReadResult {
   let (buf, n) = sammine_io_read_file(path);
   to_read_result(buf, n)
 }
-export let unsafe write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+export let unsafe write_file(path: string, content: ptr<char>, nbytes: i64) -> i32 {
   sammine_io_write_file(path, content, nbytes)
 }
-export let unsafe append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+export let unsafe append_file(path: string, content: ptr<char>, nbytes: i64) -> i32 {
   sammine_io_append_file(path, content, nbytes)
 }

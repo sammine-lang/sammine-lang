@@ -64,6 +64,7 @@ static bool has_misplaced_pointer(const Type &type, bool ptr_allowed_here) {
   case TypeKind::Bool:
   case TypeKind::Char:
   case TypeKind::String:
+  case TypeKind::Formatter:
   case TypeKind::Never:
   case TypeKind::NonExistent:
   case TypeKind::Poisoned:

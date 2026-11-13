@@ -1,8 +1,8 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: panic() prints numbers, bools, chars and strings, not ''ptr<i32>'
+// CHECK: panic() can't print ''ptr<i32>': no instance of Format<'ptr<i32>>
 
-// What panic prints owns nothing: ending the program drops nothing of it.
+// panic prints what has an instance of Format: an owned pointer has none.
 let main() -> i32 {
   let p = alloc<i32>(1);
-  panic("%p", p)
+  panic("{}", p)
 }

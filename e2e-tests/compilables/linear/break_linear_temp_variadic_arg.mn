@@ -1,7 +1,7 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: must not be discarded
 
-reuse printf(fmt: ptr<char>, ...) -> i32;
+reuse printf(fmt: string, ...) -> i32;
 let a1() -> 'ptr<i32> { alloc<i32>(1) }
 
 let unsafe main() -> i32 {

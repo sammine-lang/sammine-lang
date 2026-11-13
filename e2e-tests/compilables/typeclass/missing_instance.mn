@@ -11,7 +11,7 @@
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
 
-reuse printf(fmt : ptr<char>, ...) -> i32;
+reuse printf(fmt: string, ...) -> i32;
 
 let main() -> i32 {
   print("{}\n", Sized<ptr<i32>>());

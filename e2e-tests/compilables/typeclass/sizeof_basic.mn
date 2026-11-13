@@ -4,7 +4,7 @@
 // CHECK-NEXT: 8
 // CHECK-NEXT: 1
 
-reuse printf(fmt : ptr<char>, ...) -> i32;
+reuse printf(fmt: string, ...) -> i32;
 let main() -> i32 {
   print("{}\n", Sized<i32>());
   print("{}\n", Sized<i64>());

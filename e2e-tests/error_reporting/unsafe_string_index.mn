@@ -1,9 +1,9 @@
 // RUN: (! %sammine --file %full %O --check 2>&1) | %check %full
-// A string literal is a ptr<char>, so indexing it is pointer indexing.
+// A string's chars, viewed, are indexed as any pointer is.
 // CHECK: indexing a pointer is only allowed in an unsafe function
 
 let main() -> i32 {
-  let s = "hi";
+  let s = "hi" as ptr<char>;
   let c = s[0];
   return 0;
 }

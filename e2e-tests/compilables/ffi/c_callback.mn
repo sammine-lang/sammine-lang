@@ -39,7 +39,7 @@ let unsafe main() -> i32 {
   // A C function, given back to C.
   print("abs {}\n", c::apply(abs, -7));
   // 0xC3, the first byte of "é": negative as a signed char.
-  let s = "é";
+  let s = "é" as ptr<char>;
   print("char {}\n", c::call_char(negate, s[0]));
   print("bool {} {}\n", c::call_bool(is_big, 7), c::call_bool(is_big, 1));
   print("mixed {.1}\n", c::call_mixed(mixed, 1.5, 2.0f32, 3i64));

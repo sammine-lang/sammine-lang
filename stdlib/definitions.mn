@@ -124,6 +124,14 @@ export typeclass Drop<T> {
   Drop(x: T) -> unit;
 }
 
+// `{}` in a format prints its argument through this. An instance is given
+// a Formatter, which says where to write and how, and writes the value's
+// parts to it: write(f, "({}, {})", p.x, p.y). The compiler provides the
+// instances for numbers, bool, char and string.
+export typeclass Format<T> {
+  Format(val: T, f: Formatter) -> unit;
+}
+
 export typeclass Indexer<T, E> {
   Indexer(coll: ptr<T>, idx: i64) -> E;
 }

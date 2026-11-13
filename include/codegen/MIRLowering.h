@@ -176,6 +176,25 @@ private:
   mlir::FailureOr<mlir::Value> lowerFormat(AST::FormatExprAST *ast);
   /// "true" or "false", as the bool `value` is.
   mlir::Value boolText(mlir::Location location, mlir::Value value);
+  /// What printf is given for `value`, of a `type` the compiler prints.
+  mlir::Value printable(mlir::Location location, const Type &type,
+                        mlir::Value value);
+  /// Where formatted text is written: stdout or stderr, known where print,
+  /// eprint or panic is written, or wherever `formatter` says, for write.
+  struct WriteTo {
+    bool stderr_ = false;
+    mlir::Value formatter;
+  };
+  /// The Formatter a method is handed for a `{}` written to `to`, with the
+  /// placeholder's digits after the point.
+  mlir::Value formatterFor(mlir::Location location, const WriteTo &to,
+                           std::optional<unsigned> precision);
+  /// Writes C's `format` with `args` to `to`.
+  void write(mlir::Location location, const WriteTo &to,
+             llvm::StringRef format, mlir::ValueRange args);
+  /// Format<T>(value, formatter), of a `type` the compiler prints.
+  void writeBuiltin(mlir::Location location, mlir::Value formatter,
+                    const Type &type, mlir::Value value);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerDrop(AST::DropExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

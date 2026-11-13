@@ -1,13 +1,13 @@
 // RUN: %sammine_jit --file %full | %check %full
 // String literals from MIR, with escapes, the same one twice, and one handed
-// to a function as a ptr<char>.
+// to a function as a string.
 // CHECK: "quoted"	tab
 // CHECK-NEXT: 100% twice
 // CHECK-NEXT: 100% twice
 // CHECK-NEXT: [from main]
 import std;
 
-let show(s: ptr<char>) { print("[{}]\n", s); }
+let show(s: string) { print("[{}]\n", s); }
 let twice() {
   print("100% twice\n");
   print("100% twice\n");

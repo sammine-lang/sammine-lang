@@ -2,7 +2,7 @@
 // CHECK: Cannot write through non-owning pointer
 
 let main() -> i32 {
-  let s: ptr<char> = "hi";
+  let s = "hi" as ptr<char>;
   *s = 'x';
   return 0;
 }

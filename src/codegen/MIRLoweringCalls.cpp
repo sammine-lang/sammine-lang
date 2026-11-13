@@ -176,7 +176,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::callMethod(
 }
 
 // An instance the compiler provides has no function to call: Convert<A, B>
-// is a number conversion, an operator's class the operator on scalars.
+// is a number conversion, Format<T> a write of the value, an operator's
+// class the operator on scalars.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                   const MonomorphizedKey &key,
@@ -185,9 +186,19 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
     auto to = types_.mirType(key.type_args[1]);
     if (!to || args.size() != 1)
       return mlir::failure();
+    // A string and a view of its chars are one pointer.
+    if (args[0].getType() == *to)
+      return args[0];
     return emitNumberConversion(builder_, location, args[0], *to,
                                 key.type_args[0].is_unsigned(),
                                 key.type_args[1].is_unsigned());
+  }
+  // Format<T>(value, to), of a type the compiler prints.
+  if (key.is_of_prelude_class(kFormatClass)) {
+    if (args.size() != 2)
+      return mlir::failure();
+    writeBuiltin(location, args[1], key.type_args[0], args[0]);
+    return mlir::Value();
   }
   auto op = operator_of_class(key.name.get_name());
   if (!op || args.size() != 2)

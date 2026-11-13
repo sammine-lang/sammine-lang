@@ -22,9 +22,25 @@ Comments begin with `#` and extend to the end of the line.
 | `f64`  | 64-bit floating point        | 8 bytes |
 | `bool` | Boolean (`true` or `false`)  | 1 byte  |
 | `char` | Single character             | 1 byte  |
+| `string` | Text that lives as long as the program | a pointer |
+| `Formatter` | Where a `Format` instance writes, and how (see Print) | 8 bytes |
 | `unit` | Unit type (no meaningful value) | 0 bytes |
 
-Strings are C-compatible `ptr<char>` and written as double-quoted literals: `"hello"`.
+A double-quoted literal, `"hello"`, is a `string`: its text lives as long as
+the program and ends where C reads it to, so it is passed to C as it is. A
+string is a value like a number: it is bound, passed, returned and kept in a
+struct. It is not a pointer to a `char`: nothing says where a `ptr<char>`'s
+text ends, so one is no string and doesn't print as one.
+
+```sammine
+let name = "ada";                        // string
+struct Person { name: string, age: i32, };
+let chars = name as ptr<char>;           // a view of its chars, always allowed
+let unsafe text(p: ptr<char>) -> string { p as string }   // unsafe: p must end
+```
+
+`str::String` is text a program builds, owned and growable (see the `str`
+module).
 
 Char literals use single quotes: `'A'`, `'0'`, `'\n'`.
 
@@ -68,7 +84,7 @@ All variables are immutable. Declare with `let`:
 ```sammine
 let x: i32 = 5;       // explicit type annotation
 let y = 10;            // type inferred as i32
-let name = "hello";    // type inferred as ptr<char>
+let name = "hello";    // type inferred as string
 ```
 
 ### Shadowing
@@ -180,7 +196,7 @@ The `reuse` keyword declares a C function binding:
 
 ```sammine
 reuse sqrt(x: f64) -> f64;                     // bind to C sqrt()
-reuse printf(fmt: ptr<char>, ...) -> i32;       // varargs supported
+reuse printf(fmt: string, ...) -> i32;       // varargs supported
 ```
 
 C never writes into sammine memory, because sammine values are immutable. A C function hands back what it produces as its result, including new pointers, and a `ptr<T>` parameter is one C only reads. The compiler cannot see what C does, so a declaration that says otherwise is a bug in the declaration. Passing an address through `...`, as in `sscanf(s, "%d", &v)`, is an error, since nothing declares how C uses it.
@@ -222,7 +238,7 @@ Imported modules can re-export C bindings with `export reuse`:
 
 ```sammine
 // In stdlib/std.mn:
-export reuse printf(fmt: ptr<char>, ...) -> i32;
+export reuse printf(fmt: string, ...) -> i32;
 ```
 
 A function from a C library other than the C library itself is declared in a
@@ -309,20 +325,62 @@ print("{.2} {} {}\n", 0.125, true, 'x');   // 0.13 true x
 print("{{}} is a placeholder, 100%\n");    // {} is a placeholder, 100%
 ```
 
-- **An argument prints as its type prints**: `i32`, `i64`, `u32` and `u64`
-  as numbers, `f32` and `f64` with six digits after the point, `bool` as
-  `true` or `false`, `char` as the character, a pointer to `char` as a
-  string, an integer-backed enum as its integer. Nothing in the format says
-  the type again, so nothing can say it wrong. A string that owns its chars
-  (`'buf<char>`) is lent: printing only reads it. Any other type is an error.
-- **`{.N}`** prints a float with `N` digits after the point. **`{{`** and
-  **`}}`** are a brace each.
+- **An argument prints through the `Format` instance for its type.** The
+  compiler provides the instances for `i32`, `i64`, `u32` and `u64`, for
+  `f32` and `f64` (six digits after the point), for `bool` (`true` or
+  `false`), `char`, `string`, and an integer-backed enum (its integer).
+  Nothing in the format says the type again, so nothing can say it wrong. A
+  type with no instance is an error ("print() can't print 'P': no instance of
+  Format<P>").
+- **`{.N}`** prints a float with `N` digits after the point; an instance of
+  your own is handed the digits. **`{{`** and **`}}`** are a brace each.
 - **The format is a string literal**, which the compiler reads: a
   placeholder for each argument and an argument for each placeholder, or it
   is an error ("print() has 2 placeholders but 1 argument").
 - **It needs no import and no unsafe function.** C's `printf` can still be
   bound with `reuse`, and called from an unsafe function, for what `print`
   doesn't say.
+
+`eprint("format", args...)` is `print` to stderr.
+
+A type of your own prints once it has an instance of `Format`. The instance
+is given a `Formatter`, which says where to write and how, and writes the
+value's parts to it: `write(f, "format", args...)` is `print` to wherever `f`
+says.
+
+```sammine
+struct Point { x: i32, y: i32, };
+
+instance Format<Point> {
+  let Format(p: Point, f: Formatter) -> unit {
+    write(f, "({}, {})", p.x, p.y)
+  }
+}
+
+print("at {}\n", Point { x: 1, y: 2 });   // at (1, 2)
+eprint("warning: {}\n", p);               // to stderr
+panic("bad point {}", p);                  // in a panic's message
+```
+
+A `Formatter` is only handed on: to `write`, or to another instance's
+`Format`. It carries the placeholder's digits, so an instance that hands it
+to a float's prints the float with them:
+
+```sammine
+struct Money { amount: f64, };
+
+instance Format<Money> {
+  let Format(m: Money, f: Formatter) -> unit {
+    write(f, "$");
+    Format<f64>(m.amount, f)
+  }
+}
+
+print("{} {.2}\n", m, m);                 // $2.500000 $2.50
+```
+
+A value that owns memory prints through a view, as it compares through one:
+`str` gives `Format<ptr<String>>`, so a `String` prints as `print("{}", &s)`.
 
 ### Panic
 
@@ -346,7 +404,7 @@ let half(n: i32) -> i32 {
   as an argument, an operand or an element: that is an error, as it is for an
   `if` whose branches all panic or return.
 - **The format is `print`'s**: a string literal, a `{}` for each argument,
-  the arguments numbers, bools, chars and strings.
+  each printed through its type's `Format` instance, to stderr.
 - **Nothing is dropped.** The program ends where it panics, as `exit()` ends
   it: values still owned, here or in the functions that called it, aren't
   dropped, and their `Drop` instances don't run. C's streams are flushed, so
@@ -1102,7 +1160,8 @@ The compiler checks neither which element `p[i]` names nor whether it is in
 bounds, so the linearity of owned elements reached through `p[i]` is not
 checked either. `let unsafe` marks the functions where that is up to the
 author: when a program crashes, look at its unsafe functions first. This holds
-for every buffer and view, including string literals (`"hi"[0]`).
+for every buffer and view, a view of a string's chars too
+(`("hi" as ptr<char>)[0]`).
 Fixed arrays are bounds-checked and can be indexed anywhere.
 
 ### Buffers
@@ -1335,7 +1394,7 @@ export struct Point { x: i32, y: i32, };
 export type Color = Red | Green | Blue;
 export typeclass Norm<T> { Norm(x: T) -> i32; }
 export instance Norm<Point> { let Norm(p: Point) -> i32 { p.x + p.y } }
-export reuse printf(fmt: ptr<char>, ...) -> i32;
+export reuse printf(fmt: string, ...) -> i32;
 ```
 
 An exported function or instance is compiled in its own module, and an importer calls that compiled code, so the module must be compiled first. Its body can use the module's definitions that aren't exported.
@@ -1346,9 +1405,9 @@ A generic function is compiled in each module that uses it, for the types it is 
 
 ### Standard Library Modules
 
-- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. A module's own definition of the same name hides the prelude's in that module's code. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`. `Hash` has instances for the integer types, `char` and `bool`, which mix every bit of the value into the hash (splitmix64's finalizer), so nearby keys land far apart in a table.
+- **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. A module's own definition of the same name hides the prelude's in that module's code. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Format`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`. `Hash` has instances for the integer types, `char` and `bool`, which mix every bit of the value into the hash (splitmix64's finalizer), so nearby keys land far apart in a table.
 - **`std`** -- provides C's `printf`, for an unsafe function; `print` is built in
-- **`io`** -- provides `printf` (C's, for an unsafe function), `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
+- **`io`** -- provides `printf` (C's, for an unsafe function), `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
 - **`map`** -- provides `Map<K, V>`, a hash table (see below)
 - **`set`** -- provides `Set<T>`, a set of values over `Map<T, bool>` (see below)

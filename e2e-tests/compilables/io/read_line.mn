@@ -2,16 +2,17 @@
 // CHECK:      got: hello stdin (11)
 
 import io;
+import str;
 
 let main() -> i32 {
   case io::read_line() {
     Line(line, n) => {
       print("got: ");
-      print("{}", line);
+      let text = str::String { data: line, length: n, cap: n };
+      print("{}", &text);
       print(" (");
       io::print_i64(n);
       print(")\n");
-      drop(line);
     },
     Eof => print("eof\n"),
   };

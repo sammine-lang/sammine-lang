@@ -8,7 +8,7 @@
 // CHECK-NEXT:     |                                    ───┬
 // CHECK-NEXT:     |                                       ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
 // CHECK-NEXT:     |                                                            ──────┬
-// CHECK-NEXT:     |                                                                  ╰─ Argument 1 to 'g::identity<i32>': expected i32, got ptr<char>
+// CHECK-NEXT:     |                                                                  ╰─ Argument 1 to 'g::identity<i32>': expected i32, got string
 // CHECK-NEXT:     |                                                            ──────┬
 // CHECK-NEXT:     |                                                                  ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
 // CHECK-NEXT:   25|  return 0;

@@ -57,7 +57,8 @@ inline constexpr std::string_view kDropClass = "Drop";
 inline constexpr std::string_view kConvertClass = "Convert";
 
 /// True if `Convert<from, to>` is built in: between any two number types,
-/// and between char and the integer types. Like C, a conversion to a narrower
+/// between char and the integer types, and between a string and a view of
+/// its chars. Like C, a conversion to a narrower
 /// integer type keeps the low bits. A float to an integer drops the fraction
 /// and saturates: NaN gives 0, and a value out of range the type's min or max.
 inline bool is_builtin_conversion(const Type &from, const Type &to) {
@@ -67,6 +68,17 @@ inline bool is_builtin_conversion(const Type &from, const Type &to) {
   auto is_int = [](const Type &t) {
     return t.is_integer() && !t.is_polymorphic_numeric();
   };
+  // A string is a pointer to its chars, which a view of them reads; such
+  // a view is a string only where an unsafe function says so (the type
+  // checker asks, where the conversion is written).
+  auto is_char_view = [](const Type &t) {
+    return t.type_kind == TypeKind::Pointer && !t.is_linear_v() &&
+           std::get<PointerType>(t.type_data).get_pointee().type_kind ==
+               TypeKind::Char;
+  };
+  if ((from.type_kind == TypeKind::String && is_char_view(to)) ||
+      (is_char_view(from) && to.type_kind == TypeKind::String))
+    return true;
   bool from_char = from.type_kind == TypeKind::Char;
   bool to_char = to.type_kind == TypeKind::Char;
   if (from_char && to_char)
@@ -106,6 +118,44 @@ inline bool is_builtin_equality(const Type &t) {
   }
 }
 
+/// The typeclass `{}` prints an argument through, as `Format<T>`.
+inline constexpr std::string_view kFormatClass = "Format";
+
+/// How C's printf prints a value of `t`, for the types whose `Format<t>`
+/// the compiler provides; none for any other. The numbers print as numbers
+/// (a float's digits after the point come from the placeholder), a char as
+/// itself, a string as its text, and a bool as text too, `true` or `false`.
+/// An enum that is an integer prints as it: its values needn't be a variant
+/// each, as Read | Write isn't.
+inline std::optional<std::string_view> builtin_format_directive(const Type &t) {
+  auto kind = t.type_kind;
+  if (auto *en = std::get_if<EnumType>(&t.type_data)) {
+    if (!en->is_integer_backed())
+      return std::nullopt;
+    kind = en->get_backing_type();
+  }
+  switch (kind) {
+  case TypeKind::I32_t:
+    return "%d";
+  case TypeKind::I64_t:
+    return "%lld";
+  case TypeKind::U32_t:
+    return "%u";
+  case TypeKind::U64_t:
+    return "%llu";
+  case TypeKind::F32_t:
+  case TypeKind::F64_t:
+    return "%f";
+  case TypeKind::Char:
+    return "%c";
+  case TypeKind::Bool:
+  case TypeKind::String:
+    return "%s";
+  default:
+    return std::nullopt;
+  }
+}
+
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
   // Only the prelude's classes have them: a module's own Add is its own.
@@ -114,6 +164,9 @@ inline bool is_builtin_instance(const MonomorphizedKey &key) {
   if (key.is_of_prelude_class(kConvertClass))
     return key.type_args.size() == 2 &&
            is_builtin_conversion(key.type_args[0], key.type_args[1]);
+  if (key.is_of_prelude_class(kFormatClass))
+    return key.type_args.size() == 1 &&
+           builtin_format_directive(key.type_args[0]).has_value();
   auto op = operator_of_class(key.name.get_name());
   if (!op || key.type_args.size() != 1)
     return false;

@@ -4,7 +4,7 @@
 
 // Qualified typeclass call syntax: ClassName<Type>::method()
 
-reuse printf(fmt : ptr<char>, ...) -> i32;
+reuse printf(fmt: string, ...) -> i32;
 
 typeclass MySize<T> {
   mysize() -> i64;

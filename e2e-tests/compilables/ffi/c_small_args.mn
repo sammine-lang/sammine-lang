@@ -12,7 +12,7 @@ import c_small_args as c;
 
 let unsafe main() -> i32 {
   // 0xC3, the first byte of "é": negative as a signed char.
-  let s = "é";
+  let s = "é" as ptr<char>;
   let x = s[0];
   let big = 7;
   print("char {}\n", c::char_to_int(x));

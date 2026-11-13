@@ -1,9 +1,7 @@
 // RUN: %sammine_jit --file %full 2>&1 | %check %full
 // CHECK:      error: something went wrong
 
-import io;
-
 let main() -> i32 {
-  io::eprintln("error: something went wrong");
+  eprint("error: something went wrong\n");
   0
 }

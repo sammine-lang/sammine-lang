@@ -30,7 +30,7 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 | `functions/` | First-class functions, partial application, closures |
 | `generics/` | Monomorphized generics |
 | `import/` | Module imports (library sources in `Inputs/`) |
-| `io/` | typed prints, eprint, file I/O, linear file handles, stdin |
+| `io/` | typed prints, file I/O, linear file handles, stdin |
 | `kernel/` | map, reduce, 2-module codegen, kernel_no_malloc golden test |
 | `linear/` | ~59 tests: alloc/drop, consumption, branches, loops, struct/array/enum fields. `break_` prefix = expected-failure; `drop_` prefix = a value the compiler drops, the program built and run twice under the leak check, at `--opt-level 0` and at the default O2 (`REQUIRES: asan`, `%asan %T/%base.exe`: ASan's runtime preloaded, which reports anything left allocated or freed twice, in a program built as users build it). Unoptimized because O2 deletes an allocation nothing reads, and with it the leak; optimized, as that is what runs. lit.cfg finds the runtime with `clang -print-file-name`; valgrind did this at 50 times the cost |
 | `llvm_ir/` | LLVM IR patterns via `--emit llvm` / `--emit llvm-opt` + FileCheck |

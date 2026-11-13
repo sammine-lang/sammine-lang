@@ -1,0 +1,32 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      yes no
+// CHECK-NEXT: ada 36
+// CHECK-NEXT: i 2
+
+// A literal is a string: text that lives as long as the program. It goes
+// where any value goes, a field or a function's result, and prints the
+// same from a binding as written in place. Its chars are read through a
+// view, `as ptr<char>`; a pointer is called a string only where an unsafe
+// function says it is one.
+
+struct Person { name: string, age: i32, };
+
+let answer(b: bool) -> string { if b { "yes" } else { "no" } }
+
+let unsafe second(s: string) -> char {
+  let chars = s as ptr<char>;
+  chars[1]
+}
+
+let unsafe tail(s: string) -> string {
+  let chars = s as ptr<char>;
+  &chars[1] as string
+}
+
+let main() -> i32 {
+  print("{} {}\n", answer(true), answer(false));
+  let p = Person { name: "ada", age: 36 };
+  print("{} {}\n", p.name, p.age);
+  print("{} {}\n", second("hi"), tail("x2"));
+  0
+}

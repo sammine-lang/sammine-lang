@@ -2,9 +2,10 @@
 // CHECK:      line written ok
 
 import io;
+import str;
 
 let main() -> i32 {
-  let content: ptr<char> = "line written ok\n";
+  let content = "line written ok\n" as ptr<char>;
   io::write_file("/tmp/sammine_test_handle.txt", content, 16);
 
   let f: io::File = io::open("/tmp/sammine_test_handle.txt", "r");
@@ -12,8 +13,8 @@ let main() -> i32 {
   let (f, result) = io::file_read_line(f);
   case result {
     Line(buf, n) => {
-      print("{}\n", buf);
-      drop(buf);
+      let text = str::String { data: buf, length: n, cap: n };
+      print("{}\n", &text);
     },
     Eof => print("eof\n"),
   };

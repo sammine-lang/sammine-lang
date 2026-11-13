@@ -2,6 +2,7 @@
 
 #include "ast/AstDecl.h"
 #include "typecheck/Types.h"
+#include "util/FormatString.h"
 #include "util/QualifiedName.h"
 #include <optional>
 #include <string>
@@ -71,6 +72,14 @@ struct CastProps {
   Reference method;
 };
 
+struct FormatProps {
+  /// The format, as the type checker read it.
+  std::optional<sammine_util::FormatString> format;
+  /// For each argument the format prints, in order, the method of the
+  /// Format<T> instance that prints it.
+  std::vector<Reference> methods;
+};
+
 struct TypeAliasProps {
   Type resolved_type = Type::NonExistent();
 };
@@ -85,6 +94,7 @@ class ASTProperties {
   std::unordered_map<NodeId, VariableProps> variable_props_;
   std::unordered_map<NodeId, BinaryProps> binary_props_;
   std::unordered_map<NodeId, CastProps> cast_props_;
+  std::unordered_map<NodeId, FormatProps> format_props_;
   std::unordered_map<NodeId, IndexProps> index_props_;
   std::unordered_map<NodeId, TypeAliasProps> type_alias_props_;
   std::unordered_map<NodeId, ForProps> for_props_;
@@ -100,6 +110,7 @@ public:
   VariableProps &variable(NodeId id) { return variable_props_[id]; }
   BinaryProps &binary(NodeId id) { return binary_props_[id]; }
   CastProps &cast(NodeId id) { return cast_props_[id]; }
+  FormatProps &format(NodeId id) { return format_props_[id]; }
   IndexProps &index(NodeId id) { return index_props_[id]; }
   TypeAliasProps &type_alias(NodeId id) { return type_alias_props_[id]; }
   ForProps &for_loop(NodeId id) { return for_props_[id]; }
@@ -120,6 +131,10 @@ public:
   const CastProps *cast(NodeId id) const {
     auto it = cast_props_.find(id);
     return it != cast_props_.end() ? &it->second : nullptr;
+  }
+  const FormatProps *format(NodeId id) const {
+    auto it = format_props_.find(id);
+    return it != format_props_.end() ? &it->second : nullptr;
   }
   const IndexProps *index(NodeId id) const {
     auto it = index_props_.find(id);

@@ -17,7 +17,7 @@ let right(x: bool) -> bool {
   x
 }
 
-let show(name: ptr<char>, x: bool) -> unit {
+let show(name: string, x: bool) -> unit {
   if x { print("{} true\n", name); } else { print("{} false\n", name); };
 }
 

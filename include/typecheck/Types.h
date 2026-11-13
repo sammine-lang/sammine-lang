@@ -26,7 +26,8 @@ enum class TypeKind {
   Unit,  // void-like type, written as ()
   Bool,
   Char,
-  String,
+  String, // text that lives as long as the program, as a literal: `string`
+  Formatter, // where a Format instance writes, and how: `Formatter`
   // --- Compound types (carry TypeData payload) ---
   Function,
   Pointer,
@@ -237,8 +238,9 @@ struct Type {
   static Type Flt() { return Type{TypeKind::Flt, std::monostate()}; }
   static Type Hole() { return Type{TypeKind::Hole, std::monostate()}; }
   static Type Generic() { return Type{TypeKind::Generic, std::monostate()}; }
-  static Type String(const std::string &str) {
-    return Type{TypeKind::String, str};
+  static Type String() { return Type{TypeKind::String, std::monostate()}; }
+  static Type Formatter() {
+    return Type{TypeKind::Formatter, std::monostate()};
   }
   static Type NonExistent() {
     return Type{TypeKind::NonExistent, std::monostate()};
@@ -390,7 +392,9 @@ private:
         return fmt::format("{}({})", sammine_util::kPoisonedMarker, *origin);
       return std::string(sammine_util::kPoisonedMarker);
     case TypeKind::String:
-      return fmt::format("\"{}\"", std::get<std::string>(type_data));
+      return "string";
+    case TypeKind::Formatter:
+      return "Formatter";
     case TypeKind::Integer:
       return "numeric literal";
     case TypeKind::Flt:
@@ -423,6 +427,7 @@ public:
     case TypeKind::Char:
     case TypeKind::Unit:
     case TypeKind::String:
+    case TypeKind::Formatter:
     case TypeKind::Integer:
     case TypeKind::Flt:
       return true;
@@ -713,8 +718,9 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
 std::string open_type_message(const Type &type,
                               const std::optional<std::string> &variant);
 
-inline constexpr std::array<std::string_view, 10> kBuiltinTypeNames = {
-    "i32", "i64", "f32", "f64", "bool", "char", "u32", "u64", "string", "unit"};
+inline constexpr std::array<std::string_view, 11> kBuiltinTypeNames = {
+    "i32",  "i64",  "f32",  "f64",    "bool",      "char",
+    "u32",  "u64",  "string", "unit", "Formatter"};
 
 inline bool is_builtin_type_name(std::string_view name) {
   for (auto b : kBuiltinTypeNames)

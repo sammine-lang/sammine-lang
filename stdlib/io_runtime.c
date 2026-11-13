@@ -3,10 +3,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-// stderr (need global FILE* stderr)
-void sammine_io_eprint(const char* s)   { fputs(s, stderr); }
-void sammine_io_eprintln(const char* s) { fprintf(stderr, "%s\n", s); }
-
 // Reads hand back what they produce instead of writing through pointers
 // into sammine memory. A read is a malloc'd buffer the caller owns and its
 // length, or NULL with a length of -1 when there is nothing to read.

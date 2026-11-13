@@ -280,6 +280,7 @@ bool BiTypeCheckerVisitor::c_passes(const Type &type) {
     return en->is_integer_backed();
   return type.is_numeric() || type.type_kind == TypeKind::Bool ||
          type.type_kind == TypeKind::Char ||
+         type.type_kind == TypeKind::String ||
          type.type_kind == TypeKind::Pointer;
 }
 

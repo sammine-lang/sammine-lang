@@ -18,7 +18,7 @@ let show(o: Option<char>) -> char { case o { Some(c) => c, None => '?' } }
 let main() -> i32 {
   let s = str::push(str::new("ab"), 'c');
   let s = str::push(str::append(s, "defghijklmnop"), '!');
-  print("{} length {}\n", s.data, str::length(&s));
+  print("{} length {}\n", &s, str::length(&s));
   print("get {} {} {}\n", show(str::get(&s, 0i64)),
               show(str::get(&s, 16i64)), show(str::get(&s, 17i64)));
   // Grown from nothing.

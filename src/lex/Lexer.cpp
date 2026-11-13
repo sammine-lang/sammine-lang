@@ -102,6 +102,8 @@ std::optional<TokenType> keyword_token(std::string_view word) {
     {"dim", TokDim},
     {"panic", TokPanic},
     {"print", TokPrint},
+    {"eprint", TokEPrint},
+    {"write", TokWrite},
     {"import", TokImport},
     {"as", TokAs},
     {"typeclass", TokTypeclass},

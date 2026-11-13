@@ -8,7 +8,7 @@ import str;
 
 let main() -> i32 {
   let s: str::String = str::new("hello");
-  print("text = {}\n", s.data);
+  print("text = {}\n", &s);
   str::delete(s);
   return 0;
 }

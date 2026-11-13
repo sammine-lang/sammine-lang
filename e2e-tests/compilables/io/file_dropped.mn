@@ -7,14 +7,18 @@
 // Drop instance: its handle is closed, not freed. So is the line it read.
 
 import io;
+import str;
 import std;
 
 let main() -> i32 {
-  io::write_file("/tmp/sammine_test_file_dropped.txt", "dropped ok\n", 11);
+  io::write_file("/tmp/sammine_test_file_dropped.txt", "dropped ok\n" as ptr<char>, 11);
   let f = io::open("/tmp/sammine_test_file_dropped.txt", "r");
   let (f, line) = io::file_read_line(f);
   case line {
-    Line(buf, n) => { print("{}", buf); () },
+    Line(buf, n) => {
+      let text = str::String { data: buf, length: n, cap: n };
+      print("{}", &text);
+    },
     Eof => { },
   };
   0

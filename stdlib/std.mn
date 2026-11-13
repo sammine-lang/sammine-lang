@@ -1,1 +1,1 @@
-export reuse printf(fmt : ptr<char>, ...) -> i32;
+export reuse printf(fmt : string, ...) -> i32;
