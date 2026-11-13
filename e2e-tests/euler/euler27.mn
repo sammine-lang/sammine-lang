@@ -1,0 +1,42 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: -59231
+
+// Project Euler Problem 27: Quadratic primes
+// n^2 + n + 41 is prime for the 40 consecutive values n = 0 to 39. For
+// |a| < 1000 and |b| <= 1000, find the product of the coefficients a and b
+// of n^2 + an + b that gives primes for the most consecutive n from 0.
+
+import std;
+import range;
+
+// Whether no d from d up to sqrt(n) divides n.
+let no_divisor(n: i64, d: i64) -> bool {
+  d * d > n || (n % d != 0 && no_divisor(n, d + 1))
+}
+
+let is_prime(n: i64) -> bool { n >= 2 && no_divisor(n, 2) }
+
+// The first n from n on for which n^2 + an + b isn't prime.
+let run(a: i64, b: i64, n: i64) -> i64 {
+  if is_prime(n * n + a * n + b) { run(a, b, n + 1) } else { n }
+}
+
+// The longer of the best run so far and the one a and b give, each kept
+// with its a * b; the earlier on a tie.
+let longer(b: i64, best: (i64, i64), a: i64) -> (i64, i64) {
+  let (best_run, _) = best;
+  let length = run(a, b, 0);
+  if length > best_run { (length, a * b) } else { best }
+}
+
+// The best run over every a, for b.
+let best_for(best: (i64, i64), b: i64) -> (i64, i64) {
+  range::fold(-999, 1000, best, longer(b))
+}
+
+let main() -> i32 {
+  // n = 0 gives b itself, so only a prime b, and so a positive one, starts a run.
+  let (_, product) = range::fold(2, 1001, (0, 0), best_for);
+  std::printf("%ld\n", product);
+  0
+}
