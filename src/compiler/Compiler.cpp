@@ -56,6 +56,7 @@
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
 #include "typecheck/LinearTypeChecker.h"
+#include "typecheck/OpenTypeCheck.h"
 #include "util/Logging.h"
 #include "util/QualifiedName.h"
 #include "util/Tracy.h"
@@ -260,7 +261,16 @@ void Compiler::typecheck() {
   }
 
   reporter.report(vs);
-  if (vs.has_errors())
+  if (vs.has_errors()) {
+    set_error();
+    return;
+  }
+
+  // Type arguments nothing decided, now that nothing can.
+  auto open = sammine_lang::AST::OpenTypeCheck(props_);
+  programAST->accept_vis(&open);
+  reporter.report(open);
+  if (open.has_errors())
     set_error();
 }
 

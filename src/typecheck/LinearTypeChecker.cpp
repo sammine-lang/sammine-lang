@@ -180,40 +180,11 @@ static bool is_place_or_statement(const ExprAST *expr) {
 
 // ── Expressions ─────────────────────────────────────────────────────
 
-// The variant `expr` is, if it is one written without type arguments its
-// payload doesn't decide, as None or Left(1i64): each open type argument
-// starts at one such variant, and is reported there.
-static std::optional<std::string>
-variant_leaving_type_open(const ExprAST *expr, const ASTProperties *props) {
-  auto type = expr->get_type();
-  if (type.type_kind != TypeKind::Enum || !props)
-    return std::nullopt;
-  auto *instance_of = type.instance_of();
-  if (!instance_of ||
-      std::ranges::none_of(instance_of->type_args, [](const Type &arg) {
-        return arg.type_kind == TypeKind::Hole;
-      }))
-    return std::nullopt;
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(expr);
-      var && props->variable(var->id()) &&
-      props->variable(var->id())->is_enum_unit_variant)
-    return var->variableName.get_name();
-  if (auto *call = llvm::dyn_cast<CallExprAST>(expr);
-      call && props->call(call->id()) &&
-      props->call(call->id())->is_enum_constructor)
-    return call->functionName.get_name();
-  return std::nullopt;
-}
-
 // Every expression is visited with what its parent does with it. A linear
 // temporary has no name to be consumed by later, so it may only be where
 // it is taken. Writing to a place or taking its address reaches it through
-// any field or array element. A type argument still open here is one its
-// context never decided.
+// any field or array element.
 void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
-  if (auto variant = variant_leaving_type_open(expr, props_))
-    this->add_error(expr->get_location(),
-                    open_type_message(expr->get_type(), variant));
   if (use != Use::Own && !is_place_or_statement(expr) &&
       expr->get_type().containsLinearTypes())
     this->add_error(expr->get_location(),
