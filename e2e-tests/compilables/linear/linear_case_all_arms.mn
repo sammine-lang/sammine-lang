@@ -9,9 +9,9 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   let c : Color = Red;
   case c {
-    Color::Red => free(p),
-    Color::Green => free(p),
-    Color::Blue => free(p),
+    Color::Red => drop(p),
+    Color::Green => drop(p),
+    Color::Blue => drop(p),
   };
   std::printf("done\n");
   return 0;

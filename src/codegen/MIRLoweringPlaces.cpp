@@ -3,7 +3,7 @@
 //! \file MIRLoweringPlaces.cpp
 //! \brief Places and what reads and writes them: bindings whose address is
 //! taken,
-//! `*p`, `p[i]`, fields and elements; `alloc`, `free`, `&` and `=`.
+//! `*p`, `p[i]`, fields and elements; `alloc`, `drop`, `&` and `=`.
 
 namespace sammine_lang {
 
@@ -18,7 +18,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
   return smn::AllocOp::create(builder_, loc(alloc), *type, *count).getResult();
 }
 
-mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
+mlir::FailureOr<mlir::Value> MIRLowering::lowerDrop(DropExprAST *free) {
   auto ptr = lowerValue(free->operand.get());
   if (mlir::failed(ptr))
     return mlir::failure();

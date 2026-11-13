@@ -20,6 +20,6 @@ let main() -> i32 {
   let x = Look<i32>::Look(b);
   let y = Look<i32>::Look(b);
   std::printf("%d %d\n", x, y);
-  free(b);
+  drop(b);
   0
 }

@@ -7,6 +7,6 @@ let two() -> S { S { a: a1(), b: a1() } }
 
 let main() -> i32 {
   let f = two().a;
-  free(f);
+  drop(f);
   return 0;
 }

@@ -30,6 +30,6 @@ let unsafe main() -> i32 {
     for j in 2..(n - 1) / k + 1 { sums[j * k] = sums[j * k] + k; };
   };
   std::printf("%ld\n", range::sum(1, n, unless_abundant_sum(sums)));
-  free(sums);
+  drop(sums);
   0
 }

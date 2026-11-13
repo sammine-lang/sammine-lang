@@ -11,6 +11,6 @@ let main() -> i32 {
   let b = alloc<i32>(1);
   *b = 7;
   std::printf("%d %d\n", look(b), look(b));
-  free(b);
+  drop(b);
   return 0;
 }

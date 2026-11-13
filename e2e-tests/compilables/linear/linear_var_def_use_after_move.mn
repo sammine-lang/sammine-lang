@@ -5,10 +5,10 @@
 // CHECK-NEXT:    19|  let q = p;
 // CHECK-NEXT:     |  ────────┬
 // CHECK-NEXT:     |          ╰─ 'p' was moved here
-// CHECK-NEXT:    20|  free(p);
+// CHECK-NEXT:    20|  drop(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved previously
-// CHECK-NEXT:    21|  free(q);
+// CHECK-NEXT:    21|  drop(q);
 // CHECK-NEXT:    22|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -17,7 +17,7 @@
 let main() -> i32 {
   let p = alloc<i32>(1);
   let q = p;
-  free(p);
-  free(q);
+  drop(p);
+  drop(q);
   return 0;
 }

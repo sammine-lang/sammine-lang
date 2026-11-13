@@ -33,7 +33,7 @@ class IfExprAST;
 class DerefExprAST;
 class AddrOfExprAST;
 class AllocExprAST;
-class FreeExprAST;
+class DropExprAST;
 class CastExprAST;
 class ArrayLiteralExprAST;
 class RangeExprAST;

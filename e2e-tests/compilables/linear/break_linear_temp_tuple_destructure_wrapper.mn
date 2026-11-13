@@ -7,6 +7,6 @@ let tupw() -> ('ptr<i32>, W) { (a1(), W { p: a1() }) }
 
 let main() -> i32 {
   let (a, w) = tupw();
-  free(a);
+  drop(a);
   return 0;
 }

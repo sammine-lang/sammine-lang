@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |               ╰─ sammine has no 'while' loop: use 'for i in a..b' or recursion
 // CHECK-NEXT:   20|    *i = *i - 1;
 // CHECK-NEXT:   21|  };
-// CHECK-NEXT:   22|  free(i);
+// CHECK-NEXT:   22|  drop(i);
 // CHECK-NEXT:   23|  0
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -19,6 +19,6 @@ let main() -> i32 {
   while *i > 0 {
     *i = *i - 1;
   };
-  free(i);
+  drop(i);
   0
 }

@@ -12,7 +12,7 @@ struct TwoPtr {
 
 let pick_a(s: TwoPtr) -> 'ptr<i32> {
   let q = s.a;
-  free(s.b);
+  drop(s.b);
   return q;
 }
 
@@ -24,7 +24,7 @@ let main() -> i32 {
   let s : TwoPtr = TwoPtr { a: p1, b: p2 };
   let r = pick_a(s);
   let v : i32 = *r;
-  free(r);
+  drop(r);
   std::printf("%d\n", v);
   return 0;
 }

@@ -18,6 +18,6 @@ let unsafe main() -> i32 {
   names[0] = str::new("alpha");
   names[1] = str::new("beta");
   names[2] = str::new("gamma");
-  free(buffer::each(names, 3i64, print_and_delete));
+  drop(buffer::each(names, 3i64, print_and_delete));
   0
 }

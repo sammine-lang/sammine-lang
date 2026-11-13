@@ -21,6 +21,6 @@ let main() -> i32 {
   let b = alloc<[3]i32>(1);
   let b = write_elem(b, 1, 99);
   std::printf("%d\n", (*b)[1]);
-  free(b);
+  drop(b);
   return 0;
 }

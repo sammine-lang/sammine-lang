@@ -13,6 +13,6 @@ let main() -> i32 {
     *sum_p = *sum_p + b[0];
   };
   io::printf("%f\n", *sum_p);
-  free(sum_p);
+  drop(sum_p);
   0
 }

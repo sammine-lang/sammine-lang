@@ -5,7 +5,7 @@
 // CHECK-NEXT:   31|  let v : i32 = consume_ptr(p);
 // CHECK-NEXT:     |                            ┬
 // CHECK-NEXT:     |                            ╰─ 'p' was passed to function here
-// CHECK-NEXT:   32|  free(p);
+// CHECK-NEXT:   32|  drop(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already passed to function previously
 // CHECK-NEXT:   33|  std::printf("%d
@@ -21,7 +21,7 @@ import std;
 
 let consume_ptr(p: 'ptr<i32>) -> i32 {
   let v : i32 = *p;
-  free(p);
+  drop(p);
   return v;
 }
 
@@ -29,7 +29,7 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   *p = 42;
   let v : i32 = consume_ptr(p);
-  free(p);
+  drop(p);
   std::printf("%d
 ", v);
   return 0;

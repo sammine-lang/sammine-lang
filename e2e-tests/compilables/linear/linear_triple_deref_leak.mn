@@ -7,7 +7,7 @@ let main() -> i32 {
   let ppp = alloc<'ptr<'ptr<i32>>>(1);
   *ppp = alloc<'ptr<i32>>(1);
   **ppp = alloc<i32>(1);
-  free(*ppp);
-  free(ppp);
+  drop(*ppp);
+  drop(ppp);
   0
 }

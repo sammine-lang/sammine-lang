@@ -5,7 +5,7 @@ import io;
 
 let main() -> i32 {
   case io::read_file("/nonexistent/sammine_no_such_file.txt") {
-    Line(data, n) => free(data),
+    Line(data, n) => drop(data),
     Eof => io::println("missing"),
   };
   0

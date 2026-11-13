@@ -6,7 +6,7 @@
 struct S { a: 'ptr<i32> };
 let main() -> i32 {
   let p = alloc<S>(1);
-  free((*p).a);
-  free(p);
+  drop((*p).a);
+  drop(p);
   0
 }

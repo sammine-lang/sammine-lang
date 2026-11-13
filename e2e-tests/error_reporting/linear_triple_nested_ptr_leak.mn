@@ -4,8 +4,8 @@
 // CHECK-NEXT:   21|  *b = a;
 // CHECK-NEXT:   22|  *c = b;
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ Linear variable '*c' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:   23|  free(c);
+// CHECK-NEXT:     |       ╰─ Linear variable '*c' must be consumed before scope exit (use drop() to deallocate)
+// CHECK-NEXT:   23|  drop(c);
 // CHECK-NEXT:   24|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -20,6 +20,6 @@ let main() -> i32 {
   *a = 1;
   *b = a;
   *c = b;
-  free(c);
+  drop(c);
   return 0;
 }

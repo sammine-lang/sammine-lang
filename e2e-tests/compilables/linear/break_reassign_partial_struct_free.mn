@@ -4,9 +4,9 @@
 // CHECK-NEXT:   28|  *q = 20;
 // CHECK-NEXT:   29|  let s : TwoPtr = TwoPtr { a: p, b: q };
 // CHECK-NEXT:     |  ───────────────────────────────────┬
-// CHECK-NEXT:     |                                     ╰─ Linear variable 's.b' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                                     ╰─ Linear variable 's.b' must be consumed before scope exit (use drop() to deallocate)
 // CHECK-NEXT:   30|  let v : i32 = *(s.a);
-// CHECK-NEXT:   31|  free(s.a);
+// CHECK-NEXT:   31|  drop(s.a);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -28,7 +28,7 @@ let main() -> i32 {
   *q = 20;
   let s : TwoPtr = TwoPtr { a: p, b: q };
   let v : i32 = *(s.a);
-  free(s.a);
+  drop(s.a);
   std::printf("%d
 ", v);
   return 0;

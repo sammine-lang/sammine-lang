@@ -13,6 +13,6 @@ let unsafe main() -> i32 {
   p[0] = 9i64;
   let r = case Option<i64>::Some(3i64) { Some(p) => p, None => 0i64, };
   std::printf("%ld %ld %ld %ld\n", s, o, v, p[0]);
-  free(p);
+  drop(p);
   0
 }

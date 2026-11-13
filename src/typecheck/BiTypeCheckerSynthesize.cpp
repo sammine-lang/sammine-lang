@@ -1301,7 +1301,7 @@ Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
   return ast->set_type(to);
 }
 
-Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
+Type BiTypeCheckerVisitor::synthesize(DropExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
@@ -1310,7 +1310,7 @@ Type BiTypeCheckerVisitor::synthesize(FreeExprAST *ast) {
   auto operand_type = ast->operand->accept_synthesis(this);
   if (operand_type.type_kind != TypeKind::Pointer) {
     this->add_error(ast->get_location(),
-                    fmt::format("Cannot free non-pointer type '{}'",
+                    fmt::format("Cannot drop non-pointer type '{}'",
                                 operand_type.to_string()));
     return ast->set_type(Type::Poisoned());
   }

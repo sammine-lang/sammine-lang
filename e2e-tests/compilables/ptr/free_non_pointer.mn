@@ -2,9 +2,9 @@
 // CHECK: free_non_pointer.mn:15:2
 // CHECK-NEXT:    13|let main() -> i32 {
 // CHECK-NEXT:    14|  let x : i32 = 42;
-// CHECK-NEXT:    15|  free(x);
+// CHECK-NEXT:    15|  drop(x);
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ Cannot free non-pointer type 'i32'
+// CHECK-NEXT:     |       ╰─ Cannot drop non-pointer type 'i32'
 // CHECK-NEXT:    16|  return 0;
 // CHECK-NEXT:    17|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -12,6 +12,6 @@
 // CHECK-NEXT: --------------------------------------------------------------------------
 let main() -> i32 {
   let x : i32 = 42;
-  free(x);
+  drop(x);
   return 0;
 }

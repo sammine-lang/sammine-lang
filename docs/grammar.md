@@ -142,7 +142,7 @@ Operator precedence (low to high). `as` binds tighter than all of these:
   | ID (`<` **type** (`,` **type**)* `>`)? `{` **field_init** (`,` **field_init**)* `}`  *struct literal*
   | `[` **expr** (`,` **expr**)* `]`          *array literal*
   | `alloc` `<` **type** `>` `(` **expr** `)` *heap allocation*
-  | `free` `(` **expr** `)`                   *deallocation*
+  | `drop` `(` **expr** `)`                   *deallocation*
   | `len` `(` **expr** `)`                    *array length*
 
 **field_init** ::= ID `:` **expr**

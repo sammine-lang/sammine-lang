@@ -4,10 +4,10 @@
 // CHECK-NEXT:   20|  let p = alloc<i32>(1);
 // CHECK-NEXT:   21|  let a : [1]'ptr<i32> = [p];
 // CHECK-NEXT:     |  ────────────────────────┬
-// CHECK-NEXT:     |                          ╰─ Linear variable 'a[*]' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                          ╰─ Linear variable 'a[*]' must be consumed before scope exit (use drop() to deallocate)
 // CHECK-NEXT:     |                          ┬
 // CHECK-NEXT:     |                          ╰─ 'p' was moved into array here
-// CHECK-NEXT:   22|  free(p);
+// CHECK-NEXT:   22|  drop(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into array previously
 // CHECK-NEXT:   23|  return 0;
@@ -19,6 +19,6 @@
 let main() -> i32 {
   let p = alloc<i32>(1);
   let a : [1]'ptr<i32> = [p];
-  free(p);
+  drop(p);
   return 0;
 }

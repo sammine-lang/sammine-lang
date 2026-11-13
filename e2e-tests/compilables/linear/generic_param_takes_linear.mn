@@ -13,6 +13,6 @@ let unsafe main() -> i32 {
   p[0] = 42i64;
   let q = pass<'ptr<i64>>(p);
   std::printf("%ld\n", q[0]);
-  free(q);
+  drop(q);
   0
 }

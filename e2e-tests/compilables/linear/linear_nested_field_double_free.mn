@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:      ╰─ 'o.i.a' was freed here
-// CHECK:      ╰─ Cannot use linear variable 'o.i.a' — it was already freed previously
+// CHECK:      ╰─ 'o.i.a' was dropped here
+// CHECK:      ╰─ Cannot use linear variable 'o.i.a' — it was already dropped previously
 // CHECK-NOT:  must be consumed before scope exit
 
 struct In { a: 'ptr<i32> };
@@ -8,7 +8,7 @@ struct Out { i: In };
 
 let main() -> i32 {
   let o = Out { i: In { a: alloc<i32>(1) } };
-  free(o.i.a);
-  free(o.i.a);
+  drop(o.i.a);
+  drop(o.i.a);
   0
 }

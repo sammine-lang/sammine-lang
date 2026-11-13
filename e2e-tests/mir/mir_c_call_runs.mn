@@ -22,7 +22,7 @@ let empty() -> 'ptr<char> { let s = alloc<char>(1); *s = '\0'; s }
 let main() -> i32 {
   show("%d %c %d %f\n", 42, 'z', true, 2.5f32);
   let s = show_text("[%s]\n", empty());
-  free(s);
+  drop(s);
   std::printf("%d\n", distance(2, 7));
   0
 }

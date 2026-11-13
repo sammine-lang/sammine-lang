@@ -16,7 +16,7 @@ let unsafe main() -> i32 {
   fs[0] = 1.0;
   fs[1] = 2.5;
   std::printf("%lld %lld %lld %lld %.1f\n", at(xs, 0i64), at(xs, 1i64), at(xs, 2i64), at(xs, 3i64), second(fs));
-  free(xs);
-  free(fs);
+  drop(xs);
+  drop(fs);
   0
 }

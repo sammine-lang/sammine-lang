@@ -806,8 +806,8 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
     return ParseUnaryPrefixExpr<AddrOfExprAST>(TokAndLogical, "&");
   };
   // Builtin calls: keyword(expr)
-  auto free_ = [this]() {
-    return ParseBuiltinCallExpr<FreeExprAST>(TokFree, "free");
+  auto drop_ = [this]() {
+    return ParseBuiltinCallExpr<DropExprAST>(TokDrop, "drop");
   };
   auto len = [this]() {
     return ParseBuiltinCallExpr<LenExprAST>(TokLen, "len");
@@ -842,7 +842,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   };
 
   auto result = tryParsers<ExprAST>(
-      neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr, free_, len,
+      neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr, drop_, len,
       dim, &Parser::ParseArrayLiteralExpr, &Parser::ParseIdentifierExpr,
       &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
       &Parser::ParseWhileExpr, &Parser::ParseForExpr, num, bool_, chr, str);

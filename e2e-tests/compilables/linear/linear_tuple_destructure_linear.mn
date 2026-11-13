@@ -11,7 +11,7 @@ let main() -> i32 {
   let t = (p, 10);
   let (a, b) = t;
   let v : i32 = *a;
-  free(a);
+  drop(a);
   std::printf("%d\n", v);
   return 0;
 }

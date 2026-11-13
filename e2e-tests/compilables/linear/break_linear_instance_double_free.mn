@@ -10,8 +10,8 @@ typeclass Probe<T> {
 instance Probe<i32> {
   let Probe(a: i32) -> i32 {
     let p = a1();
-    free(p);
-    free(p);
+    drop(p);
+    drop(p);
     0
   }
 }

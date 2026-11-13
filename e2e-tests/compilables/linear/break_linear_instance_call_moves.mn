@@ -10,13 +10,13 @@ typeclass Take<T> {
 }
 
 instance Take<i32> {
-  let Take(p: 'ptr<i32>) -> i32 { let v = *p; free(p); v }
+  let Take(p: 'ptr<i32>) -> i32 { let v = *p; drop(p); v }
 }
 
 let main() -> i32 {
   let b = alloc<i32>(1);
   *b = 7;
   let x = Take<i32>::Take(b);
-  free(b);
+  drop(b);
   x
 }

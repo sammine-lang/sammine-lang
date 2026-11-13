@@ -6,9 +6,9 @@
 // CHECK-NEXT:     |  ───────────────────┬
 // CHECK-NEXT:     |                     ╰─ Linear variable 'p' is consumed in some branches but not others
 // CHECK-NEXT:   24|  if (1 == 1) {
-// CHECK-NEXT:   25|    free(p);
+// CHECK-NEXT:   25|    drop(p);
 // CHECK-NEXT:     |    ─────┬
-// CHECK-NEXT:     |         ╰─ 'p' was freed here
+// CHECK-NEXT:     |         ╰─ 'p' was dropped here
 // CHECK-NEXT:   26|  };
 // CHECK-NEXT:   27|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -22,7 +22,7 @@
 let main() -> i32 {
   let p = alloc<i32>(1);
   if (1 == 1) {
-    free(p);
+    drop(p);
   };
   return 0;
 }

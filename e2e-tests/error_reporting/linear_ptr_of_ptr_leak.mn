@@ -9,6 +9,6 @@ let main() -> i32 {
   *x = 0;
   *pp = x;
   **pp = 42;
-  free(pp);
+  drop(pp);
   return 0;
 }

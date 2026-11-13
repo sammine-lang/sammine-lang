@@ -6,6 +6,6 @@ struct O { p: 'ptr<S> };
 let main() -> i32 {
   let o = O { p: alloc<S>(1) };
   *o.p = S { a: alloc<i32>(1) };
-  free(o.p);
+  drop(o.p);
   0
 }

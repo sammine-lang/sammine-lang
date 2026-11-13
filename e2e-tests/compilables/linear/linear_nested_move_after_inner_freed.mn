@@ -1,18 +1,18 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:      ╰─ 'o.i.a' was freed here
-// CHECK:      ╰─ Cannot move 'o.i' — its part 'o.i.a' was already freed
+// CHECK:      ╰─ 'o.i.a' was dropped here
+// CHECK:      ╰─ Cannot move 'o.i' — its part 'o.i.a' was already dropped
 
 struct In { a: 'ptr<i32> };
 struct Out { i: In };
 
 let eat(i: In) -> i32 {
-  free(i.a);
+  drop(i.a);
   0
 }
 
 let main() -> i32 {
   let o = Out { i: In { a: alloc<i32>(1) } };
-  free(o.i.a);
+  drop(o.i.a);
   eat(o.i);
   0
 }

@@ -20,6 +20,6 @@ let unsafe main() -> i32 {
   ap[1] = &y;
   ap[2] = &w;
   std::printf("%d\n", *ap[2]);
-  free(ap);
+  drop(ap);
   return 0;
 }

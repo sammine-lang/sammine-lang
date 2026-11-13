@@ -7,11 +7,11 @@
 // CHECK-NEXT:     |                     ╰─ Linear variable 'p' is consumed in some branches but not others
 // CHECK-NEXT:   23|  let c : Color = Red;
 // CHECK-NEXT:   24|  case c {
-// CHECK-NEXT:   25|    Color::Red => free(p),
+// CHECK-NEXT:   25|    Color::Red => drop(p),
 // CHECK-NEXT:     |                  ─────┬
-// CHECK-NEXT:     |                       ╰─ 'p' was freed here
+// CHECK-NEXT:     |                       ╰─ 'p' was dropped here
 // CHECK-NEXT:   26|    Color::Green => *p = 1,
-// CHECK-NEXT:   27|    Color::Blue => free(p),
+// CHECK-NEXT:   27|    Color::Blue => drop(p),
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -22,9 +22,9 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   let c : Color = Red;
   case c {
-    Color::Red => free(p),
+    Color::Red => drop(p),
     Color::Green => *p = 1,
-    Color::Blue => free(p),
+    Color::Blue => drop(p),
   };
   return 0;
 }

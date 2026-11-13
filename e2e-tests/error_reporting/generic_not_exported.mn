@@ -14,6 +14,6 @@ import vec;
 let main() -> i32 {
   let d = alloc<i32>(1);
   let d2 = vec::grow_buf<i32>(d, 0i64, 1i64);
-  free(d2);
+  drop(d2);
   return 0;
 }

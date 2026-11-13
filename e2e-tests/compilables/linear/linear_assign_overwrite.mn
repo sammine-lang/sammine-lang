@@ -4,8 +4,8 @@
 // CHECK-NEXT:    16|  let p = alloc<i32>(1);
 // CHECK-NEXT:    17|  let q = alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────────────┬
-// CHECK-NEXT:     |                     ╰─ Linear variable 'q' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:    18|  free(p);
+// CHECK-NEXT:     |                     ╰─ Linear variable 'q' must be consumed before scope exit (use drop() to deallocate)
+// CHECK-NEXT:    18|  drop(p);
 // CHECK-NEXT:    19|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -15,6 +15,6 @@
 let main() -> i32 {
   let p = alloc<i32>(1);
   let q = alloc<i32>(1);
-  free(p);
+  drop(p);
   return 0;
 }

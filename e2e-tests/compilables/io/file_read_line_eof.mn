@@ -12,7 +12,7 @@ let main() -> i32 {
   case first {
     Line(line, n) => {
       io::println(line);
-      free(line);
+      drop(line);
     },
     Eof => io::println("eof"),
   };
@@ -21,7 +21,7 @@ let main() -> i32 {
   case second {
     Line(line, n) => {
       io::println(line);
-      free(line);
+      drop(line);
     },
     Eof => io::println("eof"),
   };

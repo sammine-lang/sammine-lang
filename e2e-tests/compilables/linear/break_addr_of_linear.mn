@@ -6,7 +6,7 @@
 // CHECK-NEXT:     |          ─┬
 // CHECK-NEXT:     |           ╰─ Cannot take address of a linear value — linear values cannot be aliased
 // CHECK-NEXT:   23|  let v : i32 = *(*b);
-// CHECK-NEXT:   24|  free(a);
+// CHECK-NEXT:   24|  drop(a);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -21,7 +21,7 @@ let main() -> i32 {
   *a = 42;
   let b = &a;
   let v : i32 = *(*b);
-  free(a);
+  drop(a);
   std::printf("%d\n", v);
   return 0;
 }

@@ -4,7 +4,7 @@
 // CHECK-NEXT:   24|let main() -> i32 {
 // CHECK-NEXT:   25|  let b : Box = Box { data: alloc<i32>(1), tag: 1 };
 // CHECK-NEXT:     |  ──────────────────────────────────────────────┬
-// CHECK-NEXT:     |                                                ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                                                ╰─ Linear variable 'b.data' must be consumed before scope exit (use drop() to deallocate)
 // CHECK-NEXT:   26|  *(b.data) = 99;
 // CHECK-NEXT:   27|  let v : i32 = *(b.data);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

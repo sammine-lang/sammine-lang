@@ -7,7 +7,7 @@ let look(p: ptr<i32>) -> i32 {
 
 let main() -> i32 {
   let b = alloc<i32>(1);
-  free(b);
+  drop(b);
   look(b);
   return 0;
 }

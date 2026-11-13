@@ -25,6 +25,6 @@ let main() -> i32 {
   let q = pass(p);
   let x: i64 = 3i64;
   let r = *q + pick(&x, &x);
-  free(q);
+  drop(q);
   r - 48
 }

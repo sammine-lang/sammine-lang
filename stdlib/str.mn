@@ -21,7 +21,7 @@ export let new(src: ptr<char>) -> String {
 }
 
 export let delete(s: String) -> unit {
-  free(s.data)
+  drop(s.data)
 }
 
 reuse strcmp(a: ptr<char>, b: ptr<char>) -> i32;

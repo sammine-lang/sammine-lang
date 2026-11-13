@@ -7,7 +7,7 @@ let main() -> i32 {
   let p : 'ptr<i32> = alloc<i32>(1);
   *p = 42;
   let v : i32 = *p;
-  free(p);
+  drop(p);
   std::printf("%d\n", v);
   return 0;
 }

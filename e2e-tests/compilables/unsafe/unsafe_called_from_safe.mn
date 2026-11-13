@@ -19,6 +19,6 @@ let main() -> i32 {
   let p = apply(put, p);
   // CHECK: 10 20
   std::printf("%lld %lld\n", get<i64>(p, 0i64), get(p, 1i64));
-  free(p);
+  drop(p);
   return 0;
 }

@@ -730,16 +730,16 @@ public:
   AST_NODE_METHODS("AllocExprAST", NodeKind::AllocExprAST)
 };
 
-class FreeExprAST : public ExprAST {
+class DropExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;
-  explicit FreeExprAST(std::shared_ptr<Token> tok,
+  explicit DropExprAST(std::shared_ptr<Token> tok,
                        std::unique_ptr<ExprAST> operand_)
-      : ExprAST(NodeKind::FreeExprAST), operand(std::move(operand_)) {
+      : ExprAST(NodeKind::DropExprAST), operand(std::move(operand_)) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;
-  AST_NODE_METHODS("FreeExprAST", NodeKind::FreeExprAST)
+  AST_NODE_METHODS("DropExprAST", NodeKind::DropExprAST)
 };
 /// `operand as T`, which converts through the `Convert<From, T>` instance.
 class CastExprAST : public ExprAST {

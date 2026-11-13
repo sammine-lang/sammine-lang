@@ -20,7 +20,7 @@ let unsafe main() -> i32 {
   values[3] = 10i64;
   let order = buffer::sort_by(order, 4i64, value_after(values));
   std::printf("%ld %ld %ld %ld\n", order[0], order[1], order[2], order[3]);
-  free(values);
-  free(order);
+  drop(values);
+  drop(order);
   0
 }

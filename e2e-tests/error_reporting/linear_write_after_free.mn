@@ -2,12 +2,12 @@
 // CHECK: linear_write_after_free.mn
 // CHECK-NEXT:    19|let main() -> i32 {
 // CHECK-NEXT:    20|  let p = alloc<i32>(1);
-// CHECK-NEXT:    21|  free(p);
+// CHECK-NEXT:    21|  drop(p);
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ 'p' was freed here
+// CHECK-NEXT:     |       ╰─ 'p' was dropped here
 // CHECK-NEXT:    22|  *p = 7;
 // CHECK-NEXT:     |  ─┬
-// CHECK-NEXT:     |   ╰─ Cannot dereference 'p' — it was already freed previously
+// CHECK-NEXT:     |   ╰─ Cannot dereference 'p' — it was already dropped previously
 // CHECK-NEXT:   23|  std::printf("%d\n", 7);
 // CHECK-NEXT:   24|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -18,7 +18,7 @@ import std;
 
 let main() -> i32 {
   let p = alloc<i32>(1);
-  free(p);
+  drop(p);
   *p = 7;
   std::printf("%d\n", 7);
   return 0;

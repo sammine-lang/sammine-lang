@@ -20,7 +20,7 @@ let unsafe main() -> i32 {
 
   std::printf("%d %d %d %d %d\n", (*p).n, p[1].n, p[1].inner.a[1],
               p[1].inner.t.1, (*q)[1][0]);
-  free(p);
-  free(q);
+  drop(p);
+  drop(q);
   return 0;
 }

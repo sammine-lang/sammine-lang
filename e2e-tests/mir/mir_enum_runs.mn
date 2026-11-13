@@ -28,11 +28,11 @@ let depth(w: Wrap) -> i32 {
 }
 let take(o: Owned) -> i32 {
   case o {
-    Owned::Holds(p) => { let v = *p; free(p); v },
+    Owned::Holds(p) => { let v = *p; drop(p); v },
     Owned::Nothing => 0,
   }
 }
-let sum_to(n: i32) -> i32 { let s = alloc<i32>(1); *s = 0; for i in 0..n { *s = *s + i; }; let v = *s; free(s); v }
+let sum_to(n: i32) -> i32 { let s = alloc<i32>(1); *s = 0; for i in 0..n { *s = *s + i; }; let v = *s; drop(s); v }
 let make(v: i32) -> Owned { let p = alloc<i32>(1); *p = v; Owned::Holds(p) }
 
 let main() -> i32 {

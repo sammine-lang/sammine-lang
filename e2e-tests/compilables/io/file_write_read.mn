@@ -9,7 +9,7 @@ let main() -> i32 {
   case io::read_file("/tmp/sammine_test_io.txt") {
     Line(data, n) => {
       io::println(data);
-      free(data);
+      drop(data);
     },
     Eof => io::println("could not read"),
   };

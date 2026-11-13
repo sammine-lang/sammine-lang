@@ -315,8 +315,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerCall(call);
   if (auto *alloc = llvm::dyn_cast<AllocExprAST>(expr))
     return lowerAlloc(alloc);
-  if (auto *free = llvm::dyn_cast<FreeExprAST>(expr))
-    return lowerFree(free);
+  if (auto *free = llvm::dyn_cast<DropExprAST>(expr))
+    return lowerDrop(free);
   if (llvm::isa<DerefExprAST>(expr))
     return lowerPlaceRead(expr);
   if (auto *index = llvm::dyn_cast<IndexExprAST>(expr)) {

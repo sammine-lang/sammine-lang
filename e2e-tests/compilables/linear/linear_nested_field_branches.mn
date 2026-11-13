@@ -11,7 +11,7 @@ struct Out { i: In };
 let main() -> i32 {
   let o = Out { i: In { a: alloc<i32>(1) } };
   let c = 1 > 0;
-  if c { free(o.i.a); } else { free(o.i.a); };
+  if c { drop(o.i.a); } else { drop(o.i.a); };
   std::printf("done\n");
   0
 }

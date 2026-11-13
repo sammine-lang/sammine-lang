@@ -7,11 +7,11 @@ let mk() -> M { L(alloc<i32>(1)) }
 let main() -> i32 {
   let m = mk();
   case m {
-    L(p) => { free(p); },
+    L(p) => { drop(p); },
     E => { },
   };
   case m {
-    L(q) => { free(q); },
+    L(q) => { drop(q); },
     E => { },
   };
   return 0;

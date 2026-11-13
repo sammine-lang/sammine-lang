@@ -14,7 +14,7 @@ let clamp(p: 'ptr<i32>, v: i32) -> 'ptr<i32> { *p = if v > 0 { v } else { 0 }; p
 let set5(p: 'ptr<i32>) -> 'ptr<i32> { clamp(p, 5) }
 let fact(n: i64) -> i64 { if n < 2i64 { 1i64 } else { n * fact(n - 1i64) } }
 let down(n: i64) -> i64 { sq(n) - fact(n) }
-let release(p: 'ptr<i32>) { free(p); }
+let release(p: 'ptr<i32>) { drop(p); }
 let done(p: 'ptr<i32>) { release(p); }
 
 let main() -> i32 {

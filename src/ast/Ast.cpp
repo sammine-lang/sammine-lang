@@ -160,7 +160,7 @@ void ASTVisitor::visit(CastExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
-void ASTVisitor::visit(FreeExprAST *ast) {
+void ASTVisitor::visit(DropExprAST *ast) {
   ast->walk_with_preorder(this);
   ast->operand->accept_vis(this);
   ast->walk_with_postorder(this);

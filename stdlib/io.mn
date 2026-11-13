@@ -33,7 +33,7 @@ export type ReadResult = Line('ptr<char>, i64) | Eof;
 // The runtime signals "nothing to read" with a NULL buffer and a negative
 // length. Freeing NULL does nothing, but it consumes the owned pointer.
 let to_read_result(buf: 'ptr<char>, n: i64) -> ReadResult {
-  if n < 0i64 { free(buf); Eof } else { Line(buf, n) }
+  if n < 0i64 { drop(buf); Eof } else { Line(buf, n) }
 }
 
 export let read_line() -> ReadResult {

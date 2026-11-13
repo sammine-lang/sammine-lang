@@ -5,7 +5,7 @@ let main() -> i32 {
   let pp = alloc<'ptr<i32>>(1);
   *pp = alloc<i32>(1);
   let c = 1 > 0;
-  if c { free(*pp); } else { };
-  free(pp);
+  if c { drop(*pp); } else { };
+  drop(pp);
   0
 }

@@ -264,8 +264,8 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::CallExprAST:
     check_call(llvm::cast<CallExprAST>(expr));
     break;
-  case NK::FreeExprAST:
-    own(llvm::cast<FreeExprAST>(expr)->operand.get());
+  case NK::DropExprAST:
+    own(llvm::cast<DropExprAST>(expr)->operand.get());
     break;
   case NK::ReturnStmtAST: {
     auto *ret = llvm::cast<ReturnStmtAST>(expr);
@@ -389,7 +389,7 @@ void LinearTypeChecker::check_through_pointer(ExprAST *pointer, Use use,
   }
   if (use == Use::TakeAddress && is_owned) {
     this->add_error(loc, "Cannot take the address of memory owned by a linear "
-                         "pointer — it could dangle after free");
+                         "pointer — it could dangle after drop");
     return;
   }
   check_expr(pointer);

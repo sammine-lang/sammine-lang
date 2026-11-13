@@ -32,9 +32,9 @@ func.func @not_mir(%n: i32) {
 func.func @double_free(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
-  // expected-note @+1 {{'p' was freed here}}
+  // expected-note @+1 {{'p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Cannot use linear variable 'p' — it was already freed previously}}
+  // expected-error @+1 {{Cannot use linear variable 'p' — it was already dropped previously}}
   sammine.free %p : !sammine.ptr<i32, owned>
   return
 }
@@ -44,9 +44,9 @@ func.func @double_free(%n: i32) attributes {sammine.mir} {
 func.func @deref_after_free(%n: i32) -> i32 attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
-  // expected-note @+1 {{'p' was freed here}}
+  // expected-note @+1 {{'p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Cannot dereference 'p' — it was already freed previously}}
+  // expected-error @+1 {{Cannot dereference 'p' — it was already dropped previously}}
   %1 = sammine.deref %p : <i32, owned>
   %2 = sammine.copy %1 : <i32>
   return %2 : i32
@@ -69,7 +69,7 @@ func.func @twice_in_one_call(%n: i32) attributes {sammine.mir} {
 
 func.func @leak(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Linear variable 'p' must be consumed before scope exit (use free() to deallocate)}}
+  // expected-error @+1 {{Linear variable 'p' must be consumed before scope exit (use drop() to deallocate)}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   return
 }
@@ -122,7 +122,7 @@ func.func @one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^a, ^done
 ^a:
-  // expected-note @+1 {{'p' was freed here}}
+  // expected-note @+1 {{'p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
@@ -136,11 +136,11 @@ func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^a, ^done
 ^a:
-  // expected-note @+1 {{'p' was freed here}}
+  // expected-note @+1 {{'p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
-  // expected-error @+1 {{Cannot use linear variable 'p' — it was freed in some branches}}
+  // expected-error @+1 {{Cannot use linear variable 'p' — it was dropped in some branches}}
   sammine.free %p : !sammine.ptr<i32, owned>
   return
 }
@@ -155,7 +155,7 @@ func.func @constant_condition(%n: i32) attributes {sammine.mir} {
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %false, ^a, ^done
 ^a:
-  // expected-note @+1 {{'p' was freed here}}
+  // expected-note @+1 {{'p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:

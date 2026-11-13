@@ -18,7 +18,7 @@
 // on one path and leaked on the other.
 
 let done(p: 'ptr<i64>) -> bool {
-  free(p);
+  drop(p);
   true
 }
 

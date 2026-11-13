@@ -9,7 +9,7 @@
 // CHECK-NEXT:     |  ─────────────────────────┬
 // CHECK-NEXT:     |                           ╰─ Cannot use linear variable 'b.data' — it was already moved previously
 // CHECK-NEXT:   33|  let v : i32 = *q;
-// CHECK-NEXT:   34|  free(q);
+// CHECK-NEXT:   34|  drop(q);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -31,8 +31,8 @@ let main() -> i32 {
   let q : 'ptr<i32> = b.data;
   let r : 'ptr<i32> = b.data;
   let v : i32 = *q;
-  free(q);
-  free(r);
+  drop(q);
+  drop(r);
   std::printf("%d\n", v);
   return 0;
 }

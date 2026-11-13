@@ -4,7 +4,7 @@
 // CHECK-NEXT:    14|let main() -> i32 {
 // CHECK-NEXT:    15|  let p = alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────────────┬
-// CHECK-NEXT:     |                     ╰─ Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                     ╰─ Linear variable 'p' must be consumed before scope exit (use drop() to deallocate)
 // CHECK-NEXT:    16|  *p = 42;
 // CHECK-NEXT:    17|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

@@ -13,6 +13,6 @@ let main() -> i32 {
   let w = W { p: alloc<i32>(1) };
   *w.p = 5;
   std::printf("%d\n", look(w.p));
-  free(w.p);
+  drop(w.p);
   return 0;
 }

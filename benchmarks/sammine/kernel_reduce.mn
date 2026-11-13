@@ -12,6 +12,6 @@ let main() -> i32 {
     *total_p = *total_p + sum_arr(a);
   };
   io::printf("%f\n", *total_p);
-  free(total_p);
+  drop(total_p);
   0
 }

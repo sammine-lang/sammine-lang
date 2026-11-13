@@ -11,7 +11,7 @@ let main() -> i32 {
   *acc = 0i64;
   for i in 0i64..1000i64 { *acc = *acc + i; };
   std::printf("%ld\n", *acc);
-  free(acc);
+  drop(acc);
   return 0;
 }
 

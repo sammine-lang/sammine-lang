@@ -30,7 +30,7 @@ let unsafe grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
   for i in 0i64..l {
     new_d[i] = old_d[i];
   };
-  free(old_d);
+  drop(old_d);
   new_d
 }
 
@@ -46,5 +46,5 @@ export let unsafe push<T>(v: Vec<T>, val: T) -> Vec<T> {
 }
 
 export let delete<T>(v: Vec<T>) -> unit {
-  free(v.data)
+  drop(v.data)
 }

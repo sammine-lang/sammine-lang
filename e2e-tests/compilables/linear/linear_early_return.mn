@@ -7,18 +7,18 @@ type Choice = Keep | Drop;
 
 let early(c: bool) -> i32 {
   let p = alloc<i32>(1);
-  if c { free(p); return 1; };
-  free(p);
+  if c { drop(p); return 1; };
+  drop(p);
   2
 }
 
 let arm(c: Choice) -> i32 {
   let p = alloc<i32>(1);
   case c {
-    Drop => { free(p); return 3; },
+    Drop => { drop(p); return 3; },
     Keep => 0,
   };
-  free(p);
+  drop(p);
   4
 }
 
@@ -36,7 +36,7 @@ let main() -> i32 {
   // CHECK: 1 2 3 4 5 6
   std::printf("%d %d %d %d %d %d\n", early(true), early(false), arm(Choice::Drop),
               arm(Choice::Keep), *a, *b);
-  free(a);
-  free(b);
+  drop(a);
+  drop(b);
   return 0;
 }

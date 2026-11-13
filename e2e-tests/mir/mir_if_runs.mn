@@ -17,7 +17,7 @@ let sign(a: i32) -> i32 {
 let both(a: bool, b: i32) -> bool { (a && b > 1) || b == 0 }
 let below(a: u32, b: u32, x: f64) -> bool { a < b && x < 2.0 }
 let keep(p: 'ptr<i32>, q: 'ptr<i32>, first: bool) -> 'ptr<i32> {
-  if first { free(q); p } else { free(p); q }
+  if first { drop(q); p } else { drop(p); q }
 }
 let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
 let loud() -> bool { std::printf("called!\n"); true }
@@ -29,7 +29,7 @@ let main() -> i32 {
   std::printf("%d %d\n", below(1u32, 4000000000u32, 1.5), below(5u32, 4u32, 1.5));
   let p = keep(make(1), make(2), false);
   std::printf("%d\n", *p);
-  free(p);
+  drop(p);
   std::printf("never called: %d\n", skips());
   0
 }

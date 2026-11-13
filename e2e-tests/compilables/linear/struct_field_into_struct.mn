@@ -13,6 +13,6 @@ let main() -> i32 {
   *a.data = 42;
   let b = Box { data: a.data, tag: a.tag };
   std::printf("%d", *b.data);
-  free(b.data);
+  drop(b.data);
   return 0;
 }

@@ -32,7 +32,7 @@ let sign(a: i32) -> i32 {
 let both(a: bool, b: i32) -> bool { (a && b > 1) || b == 0 }
 let below(a: u32, b: u32, x: f64) -> bool { a < b && x < 2.0 }
 let keep(p: 'ptr<i32>, q: 'ptr<i32>, first: bool) -> 'ptr<i32> {
-  if first { free(q); p } else { free(p); q }
+  if first { drop(q); p } else { drop(p); q }
 }
 
 let main() -> i32 { 0 }

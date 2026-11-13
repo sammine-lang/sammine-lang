@@ -14,7 +14,7 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   *p = 42;
   let v : i32 = read_val(p);
-  free(p);
+  drop(p);
   std::printf("%d\n", v);
   return 0;
 }

@@ -43,8 +43,8 @@ let peek(p: 'ptr<i32>) -> 'ptr<i32> {
 let add_views(a: ptr<i32>, b: ptr<i32>) -> i32 { *a + *b }
 let both(a: 'ptr<i32>, b: 'ptr<i32>) -> i32 {
   let s = add_views(a, b);
-  free(a);
-  free(b);
+  drop(a);
+  drop(b);
   s
 }
 let look_inner(pp: ptr<'ptr<i32>>) -> i32 { 3 }

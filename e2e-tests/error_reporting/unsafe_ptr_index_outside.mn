@@ -12,6 +12,6 @@ let read(p: ptr<i64>) -> i64 { p[0] }
 let main() -> i32 {
   let p = alloc<i64>(1);
   p[0] = 3i64;
-  free(p);
+  drop(p);
   return 0;
 }

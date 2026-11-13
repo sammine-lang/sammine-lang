@@ -6,6 +6,6 @@
 let main() -> i32 {
   let pp = alloc<'ptr<i32>>(1);
   *pp = alloc<i32>(1);
-  free(*pp);
+  drop(*pp);
   0
 }

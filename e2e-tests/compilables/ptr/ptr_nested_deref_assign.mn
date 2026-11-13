@@ -10,7 +10,7 @@ let main() -> i32 {
   *pp = x;
   **pp = 42;
   std::printf("%d\n", **pp);
-  free(*pp);
-  free(pp);
+  drop(*pp);
+  drop(pp);
   return 0;
 }

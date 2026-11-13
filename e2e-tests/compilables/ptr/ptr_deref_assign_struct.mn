@@ -19,6 +19,6 @@ let main() -> i32 {
   *p = Point { x: 30, y: 40 };
   std::printf("%d\n", (*p).x);
   std::printf("%d\n", (*p).y);
-  free(p);
+  drop(p);
   return 0;
 }

@@ -16,7 +16,7 @@ let swap(p: Point) -> Point { Point { y: p.x, x: p.y } }
 let norm1(p: Point) -> i32 { p.x + p.y }
 let split(n: i32) -> (i32, i32) { (n / 2 + n % 2, n / 2) }
 let make(id: i32, v: i32) -> Owner { let p = alloc<i32>(1); *p = v; Owner { id: id, data: p } }
-let release(o: Owner) -> i32 { let v = *o.data; free(o.data); v }
+let release(o: Owner) -> i32 { let v = *o.data; drop(o.data); v }
 let wrap<T>(v: T) -> Box<T> { Box<T> { value: v } }
 let boxed(v: i32) -> i32 { wrap<i32>(v).value }
 let shown(p: Point) -> i32 { if p.x > 0 { p.x } else { p.y } }

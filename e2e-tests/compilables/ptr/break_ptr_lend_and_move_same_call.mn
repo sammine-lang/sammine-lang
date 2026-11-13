@@ -2,7 +2,7 @@
 // CHECK: in the same call
 
 let both(p: ptr<i32>, q: 'ptr<i32>) -> i32 {
-  free(q);
+  drop(q);
   0
 }
 

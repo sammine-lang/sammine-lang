@@ -10,6 +10,6 @@ let unsafe main() -> i32 {
   p[1] = 2.72;
   std::printf("%.2f\n", p[0]);
   std::printf("%.2f\n", p[1]);
-  free(p);
+  drop(p);
   return 0;
 }

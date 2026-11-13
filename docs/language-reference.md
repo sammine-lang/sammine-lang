@@ -831,13 +831,13 @@ sammine-lang has two pointer kinds: **linear** (`'ptr<T>`) for heap-allocated me
 
 ### Heap Allocation (Linear Pointers)
 
-`alloc<T>(count)` allocates memory on the heap and returns a linear `'ptr<T>`. Linear pointers must be consumed exactly once -- via `free()`, a move, or a return:
+`alloc<T>(count)` allocates memory on the heap and returns a linear `'ptr<T>`. Linear pointers must be consumed exactly once -- via `drop()`, a move, or a return:
 
 ```sammine
 let p: 'ptr<i32> = alloc<i32>(1);    // allocate 1 element
 *p = 42;                              // write through pointer
 let y: i32 = *p;                      // dereference (read)
-free(p);                              // deallocate (consumes p)
+drop(p);                              // deallocate (consumes p)
 std::printf("%d\n", y);               // 42
 ```
 
@@ -845,13 +845,13 @@ Assignment only writes through a pointer: `*p`, `p[i]`, and any field or
 element reached from them, such as `(*p).x`, `p[i].x` or `(*p)[i][j]`. Variables,
 array values and struct values can't be assigned to.
 
-Failing to free a linear pointer is a compile-time error:
+Failing to drop a linear pointer is a compile-time error:
 
 ```sammine
 let p = alloc<i32>(1);
 *p = 42;
 return 0;
-// Error: Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
+// Error: Linear variable 'p' must be consumed before scope exit (use drop() to deallocate)
 ```
 
 ### Address-Of (Non-Linear Pointers)
@@ -875,10 +875,10 @@ at. The compiler enforces that:
 - **Parameters and locals only.** A `ptr<T>` can't be returned, stored in a
   struct, tuple, array or enum, or held by a `'ptr<T>`. A view of a view, such
   as `argv: ptr<ptr<char>>`, is allowed.
-- **Never freed.** Only the owner frees memory.
+- **Never dropped.** Only the owner drops (and so frees) memory.
 
 An owned pointer can be **lent** to a function that takes a `ptr<T>`. The caller
-keeps ownership and still has to free it:
+keeps ownership and still has to drop it:
 
 ```sammine
 let look(p: ptr<i32>) -> i32 { *p }
@@ -887,14 +887,14 @@ let main() -> i32 {
   let b = alloc<i32>(1);
   *b = 7;
   let v = look(b);      // b is lent, not moved
-  free(b);              // main still owns b
+  drop(b);              // main still owns b
   return 0;
 }
 ```
 
 Lending only happens at a call: `let q: ptr<i32> = b;` is a type mismatch, and
 taking the address of owned memory (`&*b`, `&b[0]`) is an error, since the view
-could outlive a `free`.
+could outlive a `drop`.
 
 ### Pointer Indexing
 
@@ -909,7 +909,7 @@ let unsafe main() -> i32 {
   p[2] = 42;
   std::printf("%d\n", p[0]);         // 10
   std::printf("%d\n", p[2]);         // 42
-  free(p);
+  drop(p);
   return 0;
 }
 ```
@@ -932,7 +932,7 @@ let unsafe put(p: 'ptr<i64>, i: i64, v: i64) -> 'ptr<i64> {
 
 let main() -> i32 {
   let p = put(alloc<i64>(1), 0i64, 7i64);
-  free(p);
+  drop(p);
   return 0;
 }
 ```
@@ -948,7 +948,7 @@ let p = alloc<i32>(1);
 *p = 55;
 let q = p;            // p is consumed, q now owns the memory
 let v: i32 = *q;
-free(q);              // must free q, not p
+drop(q);              // must drop q, not p
 ```
 
 ### Returning Linear Pointers
@@ -965,7 +965,7 @@ let make_ptr() -> 'ptr<i32> {
 let main() -> i32 {
   let p = make_ptr();
   let v: i32 = *p;
-  free(p);            // caller must free
+  drop(p);            // caller must drop
   std::printf("%d\n", v);
   return 0;
 }
@@ -1117,7 +1117,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 
 - **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`.
 - **`std`** -- provides `printf`
-- **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('ptr<char>, i64) | Eof`: the buffer, which the caller must free, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` also hands back the file handle, as `(f, result)`.
+- **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('ptr<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` also hands back the file handle, as `(f, result)`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
 - **`str`** -- provides `String` type with `new` and `delete`, and orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`, and `&a < &b`, `>`, `<=` and `>=` compare through views (instances on `ptr<String>`), since a comparison only reads the strings. `==` on views still compares addresses, as for any pointer
 

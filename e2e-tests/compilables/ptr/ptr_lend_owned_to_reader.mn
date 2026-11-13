@@ -12,6 +12,6 @@ let main() -> i32 {
   (*b)[0] = 10;
   (*b)[2] = 30;
   std::printf("%d %d\n", read_elem(b, 0), read_elem(b, 2));
-  free(b);
+  drop(b);
   return 0;
 }

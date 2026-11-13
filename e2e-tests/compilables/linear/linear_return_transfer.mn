@@ -14,7 +14,7 @@ let make_ptr() -> 'ptr<i32> {
 let main() -> i32 {
   let p = make_ptr();
   let v : i32 = *p;
-  free(p);
+  drop(p);
   std::printf("%d\n", v);
   return 0;
 }

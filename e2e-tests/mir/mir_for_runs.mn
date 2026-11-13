@@ -10,7 +10,7 @@ let sum(n: i32) -> i32 {
   *acc = 0;
   for i in 0..n { *acc = *acc + i; };
   let total = *acc;
-  free(acc);
+  drop(acc);
   total
 }
 let sum64(n: i64) -> i64 {
@@ -18,7 +18,7 @@ let sum64(n: i64) -> i64 {
   *acc = 0i64;
   for i in 0i64..n { *acc = *acc + i; };
   let total = *acc;
-  free(acc);
+  drop(acc);
   total
 }
 let pairs(n: u32) -> u32 {
@@ -26,7 +26,7 @@ let pairs(n: u32) -> u32 {
   *acc = 0u32;
   for i in 0u32..n { for j in 0u32..i { *acc = *acc + 1u32; }; };
   let total = *acc;
-  free(acc);
+  drop(acc);
   total
 }
 let first_square_over(limit: i32) -> i32 {

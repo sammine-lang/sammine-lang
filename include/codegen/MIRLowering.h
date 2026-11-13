@@ -167,7 +167,7 @@ private:
   mlir::LogicalResult checkBounds(mlir::Location location, mlir::Value offset,
                                   int64_t size);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
-  mlir::FailureOr<mlir::Value> lowerFree(AST::FreeExprAST *free);
+  mlir::FailureOr<mlir::Value> lowerDrop(AST::DropExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);
   mlir::FailureOr<mlir::Value> lowerPtrElemPlace(AST::IndexExprAST *index);
   mlir::FailureOr<mlir::Value> lowerPlace(AST::ExprAST *target);

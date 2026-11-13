@@ -17,7 +17,7 @@ export let total(n: i64) -> Money {
   *acc = 0i64;
   for i in 0i64..n { *acc = *acc + i; };
   let m = Money { cents: *acc };
-  free(acc);
+  drop(acc);
   m
 }
 

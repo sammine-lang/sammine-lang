@@ -7,7 +7,7 @@ let a1() -> 'ptr<i32> { alloc<i32>(1) }
 
 let main() -> i32 {
   let p = if true { a1() } else { a1() };
-  free(p);
+  drop(p);
   std::printf("done\n");
   return 0;
 }

@@ -8,7 +8,7 @@ let main() -> i32 {
   *p = 99;
   let q = p;
   let y : i32 = *q;
-  free(q);
+  drop(q);
   std::printf("%d\n", y);
   return 0;
 }

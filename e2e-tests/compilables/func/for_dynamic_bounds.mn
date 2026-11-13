@@ -10,7 +10,7 @@ let compute(n: i64) -> i64 {
     *result = *result + i;
   };
   let r = *result;
-  free(result);
+  drop(result);
   r
 }
 

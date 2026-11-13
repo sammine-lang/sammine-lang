@@ -32,10 +32,10 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 | `import/` | Module imports (library sources in `Inputs/`) |
 | `io/` | print, println, eprint, file I/O, linear file handles, stdin |
 | `kernel/` | map, reduce, 2-module codegen, kernel_no_malloc golden test |
-| `linear/` | ~59 tests: alloc/free, consumption, branches, loops, struct/array/enum fields. `break_` prefix = expected-failure |
+| `linear/` | ~59 tests: alloc/drop, consumption, branches, loops, struct/array/enum fields. `break_` prefix = expected-failure |
 | `llvm_ir/` | LLVM IR patterns via `--emit llvm` / `--emit llvm-opt` + FileCheck |
 | `misc/` | General tests, compiler flags, readme_demo |
-| `ptr/` | Pointers, alloc/free |
+| `ptr/` | Pointers, alloc/drop |
 | `type_inference/` | Numeric literal resolution |
 | `typeclass/` | Typeclass decls & instances |
 | `types/` | Type system (records, etc.) |

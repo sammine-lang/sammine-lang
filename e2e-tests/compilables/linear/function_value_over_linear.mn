@@ -19,6 +19,6 @@ let twice(step: ('ptr<i64>, i64) -> 'ptr<i64>, p: 'ptr<i64>) -> 'ptr<i64> {
 let unsafe main() -> i32 {
   let p = twice(set, alloc<i64>(1));
   std::printf("%ld\n", p[0]);
-  free(p);
+  drop(p);
   0
 }

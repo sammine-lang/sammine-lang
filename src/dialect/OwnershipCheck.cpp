@@ -96,7 +96,7 @@ struct Owner {
   Kind kind = Live;
   /// Where it got what it holds: its binding, or the store that filled it.
   mlir::LocationAttr definedAt;
-  /// Where it was moved, by which op, and why ("freed").
+  /// Where it was moved, by which op, and why ("dropped").
   mlir::LocationAttr movedAt;
   mlir::Operation *movedBy = nullptr;
   llvm::StringRef reason;
@@ -460,7 +460,7 @@ llvm::StringRef reasonFor(mlir::Operation *op) {
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::VariantOp>(op))
     return "passed to function";
   if (mlir::isa<smn::FreeOp>(op))
-    return "freed";
+    return "dropped";
   if (mlir::isa<mlir::func::ReturnOp>(op))
     return "returned";
   if (mlir::isa<smn::ClosureOp>(op))
@@ -667,7 +667,7 @@ private:
     } else {
       reports_->error(mlir::Location(owner.definedAt),
                       "Linear variable '" + name +
-                          "' must be consumed before scope exit (use free() "
+                          "' must be consumed before scope exit (use drop() "
                           "to deallocate)");
     }
   }
@@ -784,7 +784,7 @@ void Transfer::apply(mlir::Operation *op) {
         for (auto &part : live)
           reportLeak(part);
       }
-    take(free.getPtr(), op, "freed");
+    take(free.getPtr(), op, "dropped");
     return;
   }
   if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {

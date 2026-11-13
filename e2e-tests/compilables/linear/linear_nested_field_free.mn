@@ -11,6 +11,6 @@ struct Out { i: In, n: i32 };
 let main() -> i32 {
   let o = Out { i: In { a: alloc<i32>(1) }, n: 7 };
   std::printf("%d\n", o.n);
-  free(o.i.a);
+  drop(o.i.a);
   0
 }

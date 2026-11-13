@@ -65,7 +65,7 @@ let main() -> i32 {
   let p: 'ptr<i32> = alloc<i32>(1);         // heap allocation (count, linear)
   *p = 42;                                   // write through pointer
   let val = *p;                              // dereference
-  free(p);                                   // manual deallocation
+  drop(p);                                   // manual deallocation
 
   let q: ptr<i32> = &x;                     // address-of (stack pointer)
   let pp: ptr<ptr<i32>> = &q;               // nested pointers

@@ -13,6 +13,6 @@ let unsafe main() -> i32 {
   std::printf("%d\n", p[0]);
   std::printf("%d\n", p[1]);
   std::printf("%d\n", p[2]);
-  free(p);
+  drop(p);
   return 0;
 }

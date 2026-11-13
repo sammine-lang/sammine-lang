@@ -4,6 +4,6 @@
 let main() -> i32 {
   let b = alloc<i32>(1);
   let q: ptr<i32> = b;
-  free(b);
+  drop(b);
   return 0;
 }

@@ -7,7 +7,7 @@ import std;
 
 let pick_first(t: ('ptr<i32>, 'ptr<i32>)) -> 'ptr<i32> {
   let (a, b) = t;
-  free(b);
+  drop(b);
   return a;
 }
 
@@ -18,7 +18,7 @@ let main() -> i32 {
   *q = 99;
   let r = pick_first((p, q));
   let v : i32 = *r;
-  free(r);
+  drop(r);
   std::printf("%d\n", v);
   return 0;
 }

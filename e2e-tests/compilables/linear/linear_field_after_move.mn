@@ -7,14 +7,14 @@
 struct P { a: 'ptr<i32>, b: 'ptr<i32> };
 
 let eat(p: P) -> i32 {
-  free(p.a);
-  free(p.b);
+  drop(p.a);
+  drop(p.b);
   0
 }
 
 let main() -> i32 {
   let p = P { a: alloc<i32>(1), b: alloc<i32>(1) };
   eat(p);
-  free(p.a);
+  drop(p.a);
   0
 }

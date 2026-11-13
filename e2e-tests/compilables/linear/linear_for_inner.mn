@@ -7,7 +7,7 @@ let main() -> i32 {
   for i in 0..3 {
     let p = alloc<i32>(1);
     *p = i;
-    free(p);
+    drop(p);
   };
   std::printf("done\n");
   return 0;

@@ -47,6 +47,6 @@ let unsafe main() -> i32 {
   n[0] = 1i64;
   let n = factorial_from(n, 2i64, 100i64);
   std::printf("%lld\n", chunk_digit_sum(n, 0));
-  free(n);
+  drop(n);
   return 0;
 }

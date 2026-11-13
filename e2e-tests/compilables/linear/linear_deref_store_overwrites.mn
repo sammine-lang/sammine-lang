@@ -8,7 +8,7 @@ let main() -> i32 {
   let p = alloc<S>(1);
   *p = S { a: alloc<i32>(1) };
   *p = S { a: alloc<i32>(1) };
-  free((*p).a);
-  free(p);
+  drop((*p).a);
+  drop(p);
   0
 }

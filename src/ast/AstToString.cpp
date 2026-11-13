@@ -210,8 +210,8 @@ std::string CastExprAST::to_string() const {
   return operand->to_string() + " as " + target_type->to_string();
 }
 
-std::string FreeExprAST::to_string() const {
-  return "free(" + operand->to_string() + ")";
+std::string DropExprAST::to_string() const {
+  return "drop(" + operand->to_string() + ")";
 }
 
 std::string ArrayLiteralExprAST::to_string() const {

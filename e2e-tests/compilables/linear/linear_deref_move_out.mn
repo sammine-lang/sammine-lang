@@ -9,9 +9,9 @@ let main() -> i32 {
   let pp = alloc<'ptr<i32>>(1);
   *pp = alloc<i32>(1);
   let q = *pp;
-  free(q);
-  free(*pp);
-  free(pp);
+  drop(q);
+  drop(*pp);
+  drop(pp);
   std::printf("ok\n");
   0
 }

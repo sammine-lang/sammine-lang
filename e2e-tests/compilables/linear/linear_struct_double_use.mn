@@ -4,10 +4,10 @@
 // CHECK-NEXT:   26|  *p = 42;
 // CHECK-NEXT:   27|  let b : Box = Box { data: p, tag: 1 };
 // CHECK-NEXT:     |  ──────────────────────────────────┬
-// CHECK-NEXT:     |                                    ╰─ Linear variable 'b.data' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:     |                                    ╰─ Linear variable 'b.data' must be consumed before scope exit (use drop() to deallocate)
 // CHECK-NEXT:     |                            ────────┬
 // CHECK-NEXT:     |                                    ╰─ 'p' was moved into struct here
-// CHECK-NEXT:   28|  free(p);
+// CHECK-NEXT:   28|  drop(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into struct previously
 // CHECK-NEXT:   29|  return 0;
@@ -25,6 +25,6 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   *p = 42;
   let b : Box = Box { data: p, tag: 1 };
-  free(p);
+  drop(p);
   return 0;
 }

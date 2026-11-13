@@ -4,8 +4,8 @@
 // CHECK-NEXT:   23|  *inner = 42;
 // CHECK-NEXT:   24|  *p = Box { data: inner };
 // CHECK-NEXT:     |  ─────────────────────┬
-// CHECK-NEXT:     |                       ╰─ Linear variable '*p.data' must be consumed before scope exit (use free() to deallocate)
-// CHECK-NEXT:   25|  free(p);
+// CHECK-NEXT:     |                       ╰─ Linear variable '*p.data' must be consumed before scope exit (use drop() to deallocate)
+// CHECK-NEXT:   25|  drop(p);
 // CHECK-NEXT:   26|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -22,6 +22,6 @@ let main() -> i32 {
   let p: 'ptr<Box> = alloc<Box>(1);
   *inner = 42;
   *p = Box { data: inner };
-  free(p);
+  drop(p);
   return 0;
 }

@@ -6,12 +6,12 @@ import std;
 
 let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
 let bump(p: 'ptr<i32>) -> 'ptr<i32> { *p = *p + 1; p }
-let release(p: 'ptr<i32>) { free(p); }
+let release(p: 'ptr<i32>) { drop(p); }
 let roundtrip(p: 'ptr<i32>) -> 'ptr<i32> {
   let pp = alloc<'ptr<i32>>(1);
   *pp = p;
   let q = *pp;
-  free(pp);
+  drop(pp);
   q
 }
 

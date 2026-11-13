@@ -6,7 +6,7 @@ import std;
 let main() -> i32 {
   let p = alloc<i32>(1);
   let q = if true { p } else { p };
-  free(q);
+  drop(q);
   std::printf("done\n");
   return 0;
 }

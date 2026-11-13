@@ -13,6 +13,6 @@ let main() -> i32 {
   let q = pass(p);
   let x: i64 = 3i64;
   std::printf("%d %d\n", *q + 1, pick(&x, &x));
-  free(q);
+  drop(q);
   0
 }

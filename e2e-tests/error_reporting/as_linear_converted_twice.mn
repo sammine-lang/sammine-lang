@@ -15,7 +15,7 @@ struct Plain { n: i32, };
 instance Convert<Boxed, Plain> {
   let Convert(x: Boxed) -> Plain {
     let n = *x.p;
-    free(x.p);
+    drop(x.p);
     Plain { n: n }
   }
 }

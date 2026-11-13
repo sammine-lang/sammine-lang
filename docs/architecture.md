@@ -22,7 +22,7 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **linear_check** -- `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`) checks the rules on pointers and linear values that don't depend on control flow: where a non-owning `ptr<T>` may appear, what may be written through or have its address taken, what a closure may bind or a function return.
 
-**mir** -- Builds the program's MLIR (each function's body in MIR, see **codegen**) and runs the ownership check on it (`src/dialect/OwnershipCheck.cpp`): every heap-allocated `'ptr<T>`, and every value holding one, is consumed exactly once on every path, through `free()`, a move, or `return`, and none is still owned when its function returns. It is a dataflow analysis on MIR's control flow, so branches, loops and early returns need no special handling. Its errors are reported like any stage's.
+**mir** -- Builds the program's MLIR (each function's body in MIR, see **codegen**) and runs the ownership check on it (`src/dialect/OwnershipCheck.cpp`): every heap-allocated `'ptr<T>`, and every value holding one, is consumed exactly once on every path, through `drop()`, a move, or `return`, and none is still owned when its function returns. It is a dataflow analysis on MIR's control flow, so branches, loops and early returns need no special handling. Its errors are reported like any stage's.
 
 **dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
@@ -94,7 +94,7 @@ enum class NodeKind {
   NumberExprAST, StringExprAST, BoolExprAST, CharExprAST,
   BinaryExprAST, CallExprAST, ReturnStmtAST, UnitExprAST,
   VariableExprAST, IfExprAST, DerefExprAST, AddrOfExprAST,
-  AllocExprAST, FreeExprAST, ArrayLiteralExprAST, IndexExprAST,
+  AllocExprAST, DropExprAST, ArrayLiteralExprAST, IndexExprAST,
   LenExprAST, UnaryNegExprAST, StructLiteralExprAST,
   FieldAccessExprAST, CaseExprAST, WhileExprAST,
   TupleLiteralExprAST,
@@ -374,7 +374,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 ### Adding a New Expression
 
 1. Follow the "Adding a New AST Node" checklist above with the node in the `FirstExpr..LastExpr` range.
-2. Add parsing in `Parser.cpp`. If it is an infix operator, add it to the precedence table. If it is a prefix construct (like `alloc`, `free`, `len`), add a new parse method and call it from the appropriate entry point.
+2. Add parsing in `Parser.cpp`. If it is an infix operator, add it to the precedence table. If it is a prefix construct (like `alloc`, `drop`, `len`), add a new parse method and call it from the appropriate entry point.
 3. Implement `synthesize()` in `BiTypeCheckerSynthesize.cpp` to compute the expression's type.
 4. Add a `lowerMyExpr()` method to `MIRLowering` and call it from `lowerExpr()`; if it needs new MIR ops, add them to `SammineOps.td` with their lowering in `MIRToLLVM.cpp`.
 

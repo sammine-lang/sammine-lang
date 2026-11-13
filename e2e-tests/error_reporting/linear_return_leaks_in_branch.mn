@@ -6,7 +6,7 @@
 
 let f(c: bool) -> i32 {
   let p = alloc<i32>(1);
-  if c { return 1; } else { free(p); };
+  if c { return 1; } else { drop(p); };
   0
 }
 

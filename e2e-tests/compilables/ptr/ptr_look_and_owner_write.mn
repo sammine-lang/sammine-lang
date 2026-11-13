@@ -9,6 +9,6 @@ let main() -> i32 {
   let q = alloc<i32>(1);
   *q = 7;
   std::printf("%d %d\n", *p, *q);
-  free(q);
+  drop(q);
   return 0;
 }

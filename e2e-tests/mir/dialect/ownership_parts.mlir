@@ -7,9 +7,9 @@ func.func private @take(!sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: 
 func.func @part_then_whole(%b0: !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
   %b = sammine.let "b" %b0 : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>
   %p = sammine.extract %b[0] : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)> -> !sammine.ptr<i32, owned>
-  // expected-note @+1 {{'b.p' was freed here}}
+  // expected-note @+1 {{'b.p' was dropped here}}
   sammine.free %p : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Cannot move 'b' — its part 'b.p' was already freed}}
+  // expected-error @+1 {{Cannot move 'b' — its part 'b.p' was already dropped}}
   sammine.call @take(%b) : (!sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>) -> ()
   return
 }
@@ -17,7 +17,7 @@ func.func @part_then_whole(%b0: !sammine.struct<"Box", (p: !sammine.ptr<i32, own
 // -----
 
 func.func @part_left(%b0: !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
-  // expected-error @+1 {{Linear variable 'b.q' must be consumed before scope exit (use free() to deallocate)}}
+  // expected-error @+1 {{Linear variable 'b.q' must be consumed before scope exit (use drop() to deallocate)}}
   %b = sammine.let "b" %b0 : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>
   %p = sammine.extract %b[0] : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)> -> !sammine.ptr<i32, owned>
   sammine.free %p : !sammine.ptr<i32, owned>
@@ -79,7 +79,7 @@ func.func @free_with_live_pointee(%n: i32) attributes {sammine.mir} {
   %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %1 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
-  // expected-error @+1 {{Linear variable '*pp' must be consumed before scope exit (use free() to deallocate)}}
+  // expected-error @+1 {{Linear variable '*pp' must be consumed before scope exit (use drop() to deallocate)}}
   sammine.store %1, %place : <!sammine.ptr<i32, owned>>
   sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
@@ -91,9 +91,9 @@ func.func @free_with_live_pointee(%n: i32) attributes {sammine.mir} {
 func.func @through_freed_pointer(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
-  // expected-note @+1 {{'pp' was freed here}}
+  // expected-note @+1 {{'pp' was dropped here}}
   sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
-  // expected-error @+1 {{Cannot dereference 'pp' — it was already freed previously}}
+  // expected-error @+1 {{Cannot dereference 'pp' — it was already dropped previously}}
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
   %inner = sammine.move %place : <!sammine.ptr<i32, owned>>
   sammine.free %inner : !sammine.ptr<i32, owned>
@@ -171,7 +171,7 @@ func.func @through_held_pointer(%n: i32) attributes {sammine.mir} {
   %2 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %again = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
   %inner = sammine.through %again : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>> -> <!sammine.ptr<i32, owned>>
-  // expected-error @+1 {{Linear variable '**pp' must be consumed before scope exit (use free() to deallocate)}}
+  // expected-error @+1 {{Linear variable '**pp' must be consumed before scope exit (use drop() to deallocate)}}
   sammine.store %2, %inner : <!sammine.ptr<i32, owned>>
   %last = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
   %taken = sammine.move %last : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>>

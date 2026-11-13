@@ -12,7 +12,7 @@ let sum(n: i32) -> i32 {
   *acc = 0;
   for i in 0..n { *acc = *acc + i; };
   let total = *acc;
-  free(acc);
+  drop(acc);
   total
 }
 
