@@ -355,8 +355,11 @@ public:
 /// statements (is_statement=true, value discarded) or as values.
 class ExprAST : public AstBase, public Printable {
 public:
-  bool is_statement =
-      true; // false when used as value (e.g. last expr in block)
+  /// Whether, in a block, this is a statement, its value dropped: a `let`, a
+  /// `return`, or an expression a `;` follows. The parser sets it where it
+  /// reads one; anything else, a block's last expression or the one a block
+  /// the parser makes holds, is a value.
+  bool is_statement = false;
   ExprAST(NodeKind kind_) : AstBase(kind_) {}
   ~ExprAST() = default;
   static bool classof(const AstBase *node) {

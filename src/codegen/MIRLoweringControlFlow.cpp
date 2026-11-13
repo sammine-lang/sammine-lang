@@ -17,7 +17,7 @@ using namespace AST;
 // reached; failure if MIR has no type for it.
 mlir::FailureOr<std::optional<mlir::Type>>
 MIRLowering::branchResultType(const Type &type) const {
-  if (type.type_kind == TypeKind::Unit || type.type_kind == TypeKind::Never)
+  if (givesNoValue(type))
     return std::optional<mlir::Type>();
   auto mir = types_.mirType(type);
   if (!mir)

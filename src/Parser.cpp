@@ -1231,8 +1231,6 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
     auto [else_if_expr, else_if_result] = ParseIfExpr();
     // `else if`: a block whose value is the inner if's.
     auto else_block = std::make_unique<BlockAST>();
-    if (else_if_expr)
-      else_if_expr->is_statement = false;
     else_block->Statements.push_back(std::move(else_if_expr));
     return {std::make_unique<IfExprAST>(std::move(cond), std::move(then_block),
                                         std::move(else_block)),
@@ -1408,7 +1406,6 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
       // `Some(x) => x`: a block whose value is the expression.
       auto block = std::make_unique<BlockAST>();
       block->join_location(expr.get());
-      expr->is_statement = false;
       block->Statements.push_back(std::move(expr));
       arm.body = std::move(block);
     }
@@ -1555,26 +1552,29 @@ auto Parser::ParseBlock() -> p<BlockAST> {
     if (a_result == SUCCESS) {
       auto tok = tokStream->peek();
       if (tok->tok_type == TokenType::TokSemiColon) {
+        a->is_statement = true;
         blockAST->Statements.push_back(std::move(a));
         tokStream->consume();
         continue;
       }
       if (tok->tok_type == TokenType::TokRightCurly) {
         blockAST->Statements.push_back(std::move(a));
-        blockAST->Statements.back()->is_statement = false;
         break;
       }
       report_error(
           fmt::format("Missing ';' after expression — found '{}' instead",
                       tok->lexeme),
           tok->get_location());
+      a->is_statement = true;
       blockAST->Statements.push_back(std::move(a));
       tokStream->exhaust_until(TokSemiColon);
       continue;
     }
     if (a_result != NONCOMMITTED) {
-      if (a)
+      if (a) {
+        a->is_statement = true;
         blockAST->Statements.push_back(std::move(a));
+      }
       (void)expect(TokenType::TokSemiColon, /*exhausts=*/true);
       block_error = true;
       (void)expect(TokSemiColon);
@@ -1585,8 +1585,11 @@ auto Parser::ParseBlock() -> p<BlockAST> {
       auto &[node, result] = parseResult;
       if (result == NONCOMMITTED)
         return false;
-      if (node)
+      // A `let` or a `return`.
+      if (node) {
+        node->is_statement = true;
         blockAST->Statements.push_back(std::move(node));
+      }
       if (result != SUCCESS)
         block_error = true;
       return true;

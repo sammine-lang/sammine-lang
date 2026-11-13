@@ -206,18 +206,17 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
 // lowered first, so `let x = x + 1` reads the x it shadows. `let (a, b) = t`
 // names each element of t.
 mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
-  // What never gives a value, as a panic, binds none: the block ends in it.
-  if (def->Expression->get_type().is_never()) {
-    auto value = lowerExpr(def->Expression.get());
-    return mlir::success(mlir::succeeded(value) && terminated());
-  }
-  // `let u = ()`, or of what gives (): the name means (), no value, as a
-  // `()` expression is.
-  if (!def->is_tuple_destructure &&
-      def->get_type().type_kind == TypeKind::Unit) {
+  // A let of what gives no value, () or a panic, is lowered for what it
+  // does, and its names mean (), no value, as `()` itself is. After a panic
+  // the block has ended, and nothing reads them.
+  if (givesNoValue(def->Expression->get_type())) {
     if (mlir::failed(lowerExpr(def->Expression.get())))
       return mlir::failure();
-    names_[def->TypedVar->name] = mlir::Value();
+    if (def->is_tuple_destructure)
+      for (auto &var : def->destructure_vars)
+        names_[var->name] = mlir::Value();
+    else
+      names_[def->TypedVar->name] = mlir::Value();
     return mlir::success();
   }
   // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.

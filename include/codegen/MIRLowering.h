@@ -205,6 +205,11 @@ private:
   /// An arm that is `body`, after `bind`, if any.
   Arm armOf(mlir::Block *block, AST::BlockAST *body,
             std::function<void()> bind = nullptr);
+  /// Whether a value of `type` is none in MIR: (), or what is never reached.
+  static bool givesNoValue(const Type &type) {
+    return type.type_kind == TypeKind::Unit ||
+           type.type_kind == TypeKind::Never;
+  }
   mlir::FailureOr<std::optional<mlir::Type>>
   branchResultType(const Type &type) const;
   mlir::FailureOr<mlir::Value> lowerArms(mlir::Location location,
