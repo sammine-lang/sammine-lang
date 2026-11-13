@@ -287,15 +287,13 @@ The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/co
 
 `MLIRGenImpl::generate()` runs several phases:
 
-1. **Runtime function declarations.** Declares `malloc`, `free`, `exit` and `dprintf`, for allocation and bounds-check reports. Also registers the closure struct type (`sammine.closure`).
+1. **Runtime function declarations.** Declares `malloc`, `free`, `exit` and `dprintf`, for allocation and bounds-check reports.
 
-2. **Pre-pass 1: Type registration.** Iterates over all `StructDefAST` and `EnumDefAST` nodes to create LLVM struct types (`LLVMStructType::getIdentified`) and store them in the `structTypes` / `enumTypes` maps. This must happen before any function signatures reference these types. Like functions, struct types are declared before any is defined: the first loop creates each struct type empty, and a second loop fills in its fields, so a struct can hold another struct defined later in `DefinitionVec` (generic instantiations such as `Box<Pt>` are injected at the front, before `Pt`). An enum's layout only needs payload sizes, so it is complete in the first loop.
+2. **Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies) in MIR types (`MIRTypes`), and C bindings. This enables mutual recursion and function-as-value references. `sammine-mir-to-llvm` converts a declaration's MIR types as it does a definition's. A C binding that is an `llvm.func` needs LLVM types already: it gets them from its MIR types through `llvmTypeOf`, the pass's own conversion, so there is one mapping from sammine types to LLVM's.
 
-3. **Pre-pass 2: Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies), and C bindings. This enables mutual recursion and function-as-value references.
+3. **MIR.** `lowerThroughMIR` gives every function declaration its body through MIR.
 
-4. **MIR.** `lowerThroughMIR` gives every function declaration its body through MIR.
-
-5. **Definition emission.** Iterates again, calling `emitDefinition()` for each node: functions get their linkage; kernels are emitted; struct/enum/type-alias/typeclass-decl nodes are no-ops (already handled).
+4. **Definition emission.** Iterates again, calling `emitDefinition()` for each node: functions get their linkage; kernels are emitted; struct/enum/type-alias/typeclass-decl nodes are no-ops (already handled).
 
 ### Lowering Pipeline
 
@@ -349,7 +347,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 5. Update every `switch` on `TypeKind`. The compiler will help you find them via `-Wswitch` -- expect hits in:
    - `Types.cpp` (`compatible_to_from`, `structurally_compatible`, `TypeMapOrdering::populate`)
    - `BiTypeCheckerSynthesize.cpp` (type resolution)
-   - `MLIRGen.cpp` (`convertType`) and `TypeLayout.cpp` (`layout::typeSize`)
+   - `TypeLayout.cpp` (`layout::typeSize`)
    - `MIRTypes.cpp` (`mirType`) and the `MIRLowering*.cpp` files (lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
    - `LinearTypeChecker.cpp` (if the type can be linear)
 6. Add parsing support in `Parser.cpp` if the type has new syntax.

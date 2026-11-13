@@ -807,6 +807,10 @@ struct MIRToLLVMPass
 
 } // namespace
 
+mlir::Type llvmTypeOf(mlir::Type type) {
+  return MIRTypeConverter().convertType(type);
+}
+
 std::unique_ptr<mlir::Pass> createMIRToLLVMPass() {
   return std::make_unique<MIRToLLVMPass>();
 }

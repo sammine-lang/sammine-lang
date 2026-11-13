@@ -3,6 +3,7 @@
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
 #include "codegen/MIRLowering.h"
+#include "codegen/MIRTypes.h"
 #include "codegen/SourceLocator.h"
 #include "codegen/TypeLayout.h"
 #include "compiler/Compiler.h"
@@ -21,8 +22,6 @@
 namespace sammine_lang {
 
 // Named constants for magic strings used across MLIR codegen
-static constexpr llvm::StringLiteral kClosureTypeName = "sammine.closure";
-static constexpr llvm::StringLiteral kStructTypePrefix = "sammine.struct.";
 static constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
 static constexpr llvm::StringLiteral kMallocFunc = "malloc";
 static constexpr llvm::StringLiteral kFreeFunc = "free";
@@ -39,7 +38,7 @@ public:
               const AST::ASTProperties &props, GPUMode gpu_mode)
       : builder(&context), moduleName(moduleName_),
         locator(fileName_, sourceText), reporter(fileName_, sourceText, 3),
-        gpu_mode_(gpu_mode), props_(props) {
+        types(&context), gpu_mode_(gpu_mode), props_(props) {
     mirLowering = std::make_unique<MIRLowering>(builder, props_, locator);
   }
 
@@ -58,6 +57,8 @@ public:
   sammine_util::Reporter reporter;
   /// Lowers each function's body, and kernels' scalar code.
   std::unique_ptr<MIRLowering> mirLowering;
+  /// Each sammine type's MIR type, what the module declares functions in.
+  MIRTypes types;
 
   GPUMode gpu_mode_;
 
@@ -72,13 +73,6 @@ public:
   }
 
   AST::LexicalStack<mlir::Value> symbolTable;
-
-  std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
-      structTypes;
-  std::unordered_map<Type, mlir::LLVM::LLVMStructType, std::hash<Type>>
-      enumTypes;
-
-  mlir::LLVM::LLVMStructType closureType;
 
   const AST::ASTProperties &props_;
   bool targetGPU() const {
@@ -99,11 +93,14 @@ public:
   // --- Runtime function declarations ---
   void declareRuntimeFunctions();
 
-  // --- Type conversion ---
-  mlir::Type convertType(const Type &type);
+  // --- Types ---
+  /// `proto`'s type in MIR types, which sammine-mir-to-llvm converts.
+  mlir::FunctionType mirFunctionType(AST::PrototypeAST *proto);
+  /// The LLVM type of `type`, through its MIR type: for a C function's
+  /// declaration, which has to be in LLVM's types already.
+  mlir::Type llvmType(const Type &type);
   bool isUnsignedIntegerType(const Type &type);
   bool isFloatType(const Type &type);
-  mlir::Type getEnumBackingMLIRType(const EnumType &et);
 
   // --- Kernel type conversion ---
   /// Convert a sammine Type to an MLIR type for kernel context.
@@ -139,7 +136,6 @@ public:
                                mlir::Value hostMemref, mlir::Location loc);
   /// GPU: deallocate a device memref.
   void gpuDealloc(mlir::Value deviceMemref, mlir::Location loc);
-  mlir::FunctionType buildFuncType(AST::PrototypeAST *proto);
   /// The symbol `qn` is defined and called as, as NameResolver decided it.
   std::string mangleName(const sammine_util::QualifiedName &qn) const;
 

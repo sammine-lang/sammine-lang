@@ -437,7 +437,7 @@ MLIRGenImpl::buildGpuWrapperFuncType(AST::PrototypeAST *proto) {
       argTypes.push_back(
           convertTypeForKernel(param->get_type(), /*asMemref=*/true));
     else
-      argTypes.push_back(convertType(param->get_type()));
+      argTypes.push_back(llvmType(param->get_type()));
   }
   llvm::SmallVector<mlir::Type, 1> retTypes;
   auto funcType = std::get<FunctionType>(proto->get_type().type_data);
@@ -446,7 +446,7 @@ MLIRGenImpl::buildGpuWrapperFuncType(AST::PrototypeAST *proto) {
     argTypes.push_back(
         convertTypeForKernel(retType, /*asMemref=*/true));
   } else if (retType.type_kind != TypeKind::Unit) {
-    retTypes.push_back(convertType(retType));
+    retTypes.push_back(llvmType(retType));
   }
   return builder.getFunctionType(argTypes, retTypes);
 }

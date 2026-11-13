@@ -6,7 +6,7 @@
 - **ASTProperties side table**: semantic properties (types, resolved names) live in `ASTProperties` keyed by `NodeId`, NOT on AST nodes — writers use `props_.call(id).field = val`, readers use `props_.call(id)->field`
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
 - **Generic templates skipped**: BiTypeChecker, LinearTypeChecker, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
-- **`TypeKind::TypeParam` must never reach codegen** — `convertType()` aborts on it
+- **`TypeKind::TypeParam` must never reach codegen** — `MIRTypes::mirType()` has no type for it, and declaring or lowering a function using it is an error
 - **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
 - **Kernel lambdas**: a map lambda's body and a reduce's identity go through `MIRLowering::lowerKernelScalar`, which accepts only plain arith ops in one block, what a linalg region holds
 - **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `kernel_abi::memrefOfPointer` output
@@ -18,9 +18,8 @@
 2. Add `TypeData` variant class if compound
 3. Add `Type::` factory method + `to_string()` case
 4. Register in `enter_new_scope()` if named
-5. Add `convertType()` case in `MLIRGen.cpp`
-6. Add a `layout::typeSize()` case if it can be an enum payload
-7. Add a `MIRTypes::mirType()` case, with a MIR type and its conversion to LLVM if it needs one
+5. Add a `layout::typeSize()` case if it can be an enum payload
+6. Add a `MIRTypes::mirType()` case, with a MIR type and its conversion to LLVM in `MIRToLLVM.cpp` if it needs one
 
 ## New AST Node Checklist
 1. Forward declare in `AstDecl.h`

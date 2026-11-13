@@ -2,12 +2,12 @@
 
 ## Architecture
 - `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernel defs); `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
-- `MLIRGenImpl` builds the module around the code: types (`convertType`), a declaration of every function (`forwardDeclareFunc`, `buildFuncType`), C bindings (`emitExtern`), kernels (`MLIRGenKernel.cpp`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
+- `MLIRGenImpl` builds the module around the code: a declaration of every function in MIR types (`forwardDeclareFunc`, `mirFunctionType`), C bindings (`emitExtern`), kernels (`MLIRGenKernel.cpp`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
 - Files: `MLIRGen.cpp` (generate, types, definitions), `MLIRGenFunction.cpp` (declarations, C bindings, linkage), `MLIRGenKernel.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR: statements, the dispatch over expressions, literals; `MIRLowering{Calls,ControlFlow,Aggregates,Places,Operators}.cpp` the rest, by concern), `MIRTypes.cpp` (each sammine type's MIR type), `MLIRGenBinaryOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
 - `SourceLocator` maps AST byte offsets to MLIR locations
 
 ## MIR (see `plans/mir.md`)
-`MIRLowering` lowers a type-checked, monomorphized body to MIR in the `sammine` dialect; `sammine-mir-to-llvm` (`src/dialect/MIRToLLVM.cpp`), first in the lowering to LLVM, turns it into LLVM dialect. A function MIR defines is marked `sammine.mir` (`smn::kMirAttr`) and has MIR types in its signature; a declaration (another module's function, a C binding, a kernel's wrapper) has LLVM types.
+`MIRLowering` lowers a type-checked, monomorphized body to MIR in the `sammine` dialect; `sammine-mir-to-llvm` (`src/dialect/MIRToLLVM.cpp`), first in the lowering to LLVM, turns it into LLVM dialect. A function MIR defines is marked `sammine.mir` (`smn::kMirAttr`). Every function is declared in MIR types, which the pass converts; a C binding that is an `llvm.func` (variadic, or taking or giving a struct) and a kernel's wrapper are in LLVM types already, a C binding's from its MIR types through `llvmTypeOf`.
 
 ### Values and places
 - Bindings are the values they name (`names_`), except one whose address the code takes: `AddressedBindings`, a visitor over the body, finds the variable at the root of `&x`, `&x.f`, `&a[i]` or of `x[i]` through an Indexer; `bind` gives it a slot, `sammine.local`, holding its value. Bindings are immutable and nothing writes through a view, so the slot keeps it
@@ -26,7 +26,7 @@
 | integer-backed enum | its backing integer | same |
 | function value | `!sammine.fn<(A) -> R>` | identified `sammine.closure`, `{code, env}` |
 
-Identified LLVM types are unique by name, so a struct's or enum's type is the one declarations (`convertType`) use. A struct or enum that reaches itself through a pointer has no MIR type. Element lists print through `custom<TypeList>`, which allows an empty one (`!sammine.tuple<>`).
+There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `MIRTypeConverter` (`llvmTypeOf` for what needs LLVM types before the pass). A struct or enum that reaches itself through a pointer has no MIR type. Element lists print through `custom<TypeList>`, which allows an empty one (`!sammine.tuple<>`).
 
 ### Values
 - Literals: numbers are `arith.constant`; a string is `sammine.string`, a `!sammine.ptr<i8, view>` nothing owns, lowered to a constant global `.mir.str.N` (one per distinct string, `cabi::createString`)
@@ -51,32 +51,14 @@ Identified LLVM types are unique by name, so a struct's or enum's type is the on
 - `sammine.alloc`/`sammine.free` lower to `malloc` (size from the data layout, count widened to i64) and `free`; a place is its pointer, a view lent or taken of it the same pointer; `sammine.local`, and what calls to C or kernels pass through memory, are stack slots at the top of the function (`entrySlot`)
 
 ### Lowering to LLVM, the dialect, tools
-- `sammine-mir-to-llvm` converts every block's argument types itself (`FuncLowering`; MLIR's own function pattern converts only the entry block, see `upstream/mlir-func-signature-conversion-blocks`)
+- `sammine-mir-to-llvm` converts a function's signature and entry block with MLIR's function pattern, and every other block through the branches into it (`cf::populateCFStructuralTypeConversionsAndLegality`; see `upstream/mlir-func-signature-conversion-blocks`)
 - The dialect lives in `include/dialect/`, `src/dialect/`: `SammineDialect.td`, `SammineTypes.td`, `SammineOps.td`. Libraries: `SammineDialect` (types and ops; linking it brings the generated headers, on the `SYSTEM` include path) and `SammineDialectTransforms` (`MIRToLLVM`, and `LowerSammineOps` for the GPU transfer ops)
 - `sammine-opt` (`tools/sammine-opt`) is `MlirOptMain` with the sammine, func, arith and cf dialects; lit runs `.mlir` tests with `%sammine_opt` (`e2e-tests/mir/dialect/`). `--emit mlir` prints MIR
 
-## Declarations (`convertType`)
-| TypeKind | MLIR Type |
-|---|---|
-| I32/U32/Integer | i32 |
-| I64/U64 | i64 |
-| F64/Flt | f64 |
-| F32 | f32 |
-| Bool | i1 |
-| Char | i8 |
-| Unit | no result |
-| String/Pointer | `!llvm.ptr` |
-| Function | `!llvm.struct<"sammine.closure", (ptr, ptr)>` |
-| Array | `LLVMArrayType`, returned by value, as MIR returns it |
-| Struct | named struct in `structTypes` map |
-| Enum | `{ i32 tag, [N x i8] payload }` or integer backing type |
-| Tuple | `LLVMStructType::getLiteral(elementTypes)` |
-
 ## Forward Declarations (`generate()`)
-1. Register types: all StructDef/EnumDef → MLIR types. Structs are declared first and their fields filled in a second loop, so order never matters (`Box<Pt>` is instantiated at the front, before `Pt`)
-2. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods
-3. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
-4. `lowerThroughMIR` replaces each function's declaration with its MIR definition
+1. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods, in MIR types
+2. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
+3. `lowerThroughMIR` replaces each function's declaration with its MIR definition
 
 ## C Functions
 - `emitExtern` declares a C binding under its C name (`std::printf` is `printf`). A variadic one, or one taking or giving a struct, is an `llvm.func`; any other is a `func.func`

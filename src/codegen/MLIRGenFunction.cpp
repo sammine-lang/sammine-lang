@@ -19,7 +19,7 @@ namespace sammine_lang {
 void MLIRGenImpl::forwardDeclareFunc(AST::PrototypeAST *proto) {
   if (proto->is_generic())
     return;
-  auto funcType = buildFuncType(proto);
+  auto funcType = mirFunctionType(proto);
   auto funcName = mangleName(proto->functionName);
   if (!theModule.lookupSymbol(funcName)) {
     builder.setInsertionPointToEnd(theModule.getBody());
@@ -118,7 +118,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     mlir::Type cRetType = llvmVoidTy();
     mlir::Type sretType;
     if (is_struct(retType)) {
-      auto structTy = convertType(retType);
+      auto structTy = llvmType(retType);
       if (auto regTy = cabi::registerType(structTy, layout)) {
         cRetType = regTy;
       } else {
@@ -126,7 +126,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
         paramTypes.push_back(llvmPtrTy());
       }
     } else if (retType.type_kind != TypeKind::Unit) {
-      cRetType = convertType(retType);
+      cRetType = llvmType(retType);
     }
 
     // Registers still free for arguments; the sret pointer takes one.
@@ -141,7 +141,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
 
     llvm::SmallVector<std::pair<unsigned, mlir::Type>> byvalTypes;
     for (auto &param : params) {
-      auto paramTy = convertType(param->get_type());
+      auto paramTy = llvmType(param->get_type());
       if (!is_struct(param->get_type())) {
         take(cabi::registersFor(paramTy));
         paramTypes.push_back(paramTy);
@@ -177,12 +177,12 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     // Vararg C functions must use LLVM dialect (func dialect has no varargs)
     llvm::SmallVector<mlir::Type, 4> paramTypes;
     for (auto &param : ast->Prototype->parameterVectors)
-      paramTypes.push_back(convertType(param->get_type()));
+      paramTypes.push_back(llvmType(param->get_type()));
     mlir::Type llvmRetType;
     if (retType.type_kind == TypeKind::Unit)
       llvmRetType = llvmVoidTy();
     else
-      llvmRetType = convertType(retType);
+      llvmRetType = llvmType(retType);
     auto fnTy = mlir::LLVM::LLVMFunctionType::get(llvmRetType, paramTypes,
                                                   /*isVarArg=*/true);
     auto funcOp =
@@ -190,7 +190,7 @@ void MLIRGenImpl::emitExtern(AST::ExternAST *ast) {
     if (ast->is_c_function)
       markCExtensions(funcOp, ast->Prototype.get(), 0);
   } else {
-    auto funcType = buildFuncType(ast->Prototype.get());
+    auto funcType = mirFunctionType(ast->Prototype.get());
     auto funcOp = mlir::func::FuncOp::create(
         location, llvm::StringRef(funcName), funcType);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);

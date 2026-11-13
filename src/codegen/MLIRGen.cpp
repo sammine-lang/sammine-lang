@@ -2,6 +2,7 @@
 #include "cabi/CABI.h"
 #include "codegen/MLIRGenImpl.h"
 #include "compiler/Compiler.h"
+#include "dialect/MIRToLLVM.h"
 
 using sammine_util::cautious_at;
 using sammine_util::cautious_value;
@@ -35,76 +36,15 @@ namespace sammine_lang {
 // (lowerThroughMIR); what is emitted here is the module around them: types,
 // declarations, C bindings, kernels.
 //
-// Three pre-passes before emitting definitions:
-// 1) Declare runtime functions (malloc, free, exit)
-// 2) Register all struct/enum LLVM types (so forward refs work): declare each
-//    struct, then fill in its fields
-// 3) Forward-declare all function signatures (needed for function-as-value
-// refs)
+// Before emitting definitions, it declares the runtime functions (malloc,
+// free, dprintf, exit) and every function, in MIR types, so a body MIR lowers
+// can call or take any of them.
 
 mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
   theModule = mlir::ModuleOp::create(builder.getUnknownLoc());
 
   declareRuntimeFunctions();
 
-  // Register the closure struct type: { ptr, ptr }
-  auto closurePtrTy = llvmPtrTy();
-  closureType = mlir::LLVM::LLVMStructType::getIdentified(builder.getContext(),
-                                                          kClosureTypeName);
-  (void)closureType.setBody({closurePtrTy, closurePtrTy}, /*isPacked=*/false);
-
-  // Pre-pass 1: register struct and enum types so that function
-  // forward-declarations can reference them. A struct's fields can be any
-  // struct or enum, in any order: generic instantiations come first in the
-  // DefinitionVec, yet Box<Pt> needs Pt. So, as with functions, every struct
-  // type is declared here, and its fields are filled in below. An enum's layout
-  // only needs payload sizes, so it is complete here.
-  for (auto &def : program->DefinitionVec) {
-    if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
-      if (sd->get_type().type_kind == TypeKind::Struct) {
-        auto type = sd->get_type();
-        auto &st = std::get<StructType>(type.type_data);
-        structTypes[type] = mlir::LLVM::LLVMStructType::getIdentified(
-            builder.getContext(),
-            kStructTypePrefix.str() + st.get_name().mangled());
-      }
-    } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
-      if (ed->get_type().type_kind == TypeKind::Enum) {
-        auto et = std::get<EnumType>(ed->get_type().type_data);
-        // Integer-backed enums are bare integers — no struct registration
-        if (et.is_integer_backed())
-          continue;
-        auto name = et.get_name().mangled();
-        // Compute max payload size across all variants
-        int64_t max_payload_size = 0;
-        for (auto &vi : et.get_variants())
-          max_payload_size = std::max(max_payload_size,
-                                      layout::variantPayloadSize(vi.payload_types));
-        // Enum layout: { i32 tag, [N x i8] payload }
-        llvm::SmallVector<mlir::Type> fields;
-        fields.push_back(builder.getI32Type());
-        if (max_payload_size > 0)
-          fields.push_back(mlir::LLVM::LLVMArrayType::get(
-              builder.getI8Type(), static_cast<uint64_t>(max_payload_size)));
-        auto enumTy = mlir::LLVM::LLVMStructType::getIdentified(
-            builder.getContext(), "sammine.enum." + name);
-        (void)enumTy.setBody(fields, /*isPacked=*/false);
-        enumTypes[ed->get_type()] = enumTy;
-      }
-    }
-  }
-  for (auto &def : program->DefinitionVec) {
-    auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get());
-    if (!sd || sd->get_type().type_kind != TypeKind::Struct)
-      continue;
-    auto type = sd->get_type();
-    llvm::SmallVector<mlir::Type> fieldTypes;
-    for (auto &ft : std::get<StructType>(type.type_data).get_field_types())
-      fieldTypes.push_back(convertType(ft));
-    (void)structTypes[type].setBody(fieldTypes, /*isPacked=*/false);
-  }
-
-  // Pre-pass 2: forward-declare functions (now that all types are registered).
   for (auto &def : program->DefinitionVec) {
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
       if (!fd->Prototype->is_generic())
@@ -165,7 +105,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
               if (param->get_type().type_kind == TypeKind::Array)
                 argTypes.push_back(llvmPtrTy());
               else
-                argTypes.push_back(convertType(param->get_type()));
+                argTypes.push_back(llvmType(param->get_type()));
             }
             llvm::SmallVector<mlir::Type, 1> retTypes;
             auto protoFT = std::get<FunctionType>(
@@ -174,7 +114,7 @@ mlir::ModuleOp MLIRGenImpl::generate(AST::ProgramAST *program) {
             if (retSamType.type_kind == TypeKind::Array)
               argTypes.push_back(llvmPtrTy()); // sret
             else if (retSamType.type_kind != TypeKind::Unit)
-              retTypes.push_back(convertType(retSamType));
+              retTypes.push_back(llvmType(retSamType));
             wrapperFuncType = builder.getFunctionType(argTypes, retTypes);
           }
 
@@ -261,92 +201,26 @@ void MLIRGenImpl::declareRuntimeFunctions() {
   }
 }
 
-// ===--- Type conversion ---===
-// Maps sammine Types to MLIR types. Scalars → builtin integer/float types.
-// Pointers → !llvm.ptr (opaque). Arrays → LLVMArrayType. Structs/enums → named
-// LLVMStructType. Functions → closure fat pointer struct { code_ptr, env_ptr }.
+// ===--- Types ---===
 
-mlir::Type MLIRGenImpl::convertType(const Type &type) {
-  switch (type.type_kind) {
-  case TypeKind::I32_t:
-  case TypeKind::U32_t:
-  case TypeKind::Integer:
-    return builder.getI32Type();
-  case TypeKind::I64_t:
-  case TypeKind::U64_t:
-    return builder.getI64Type();
-  case TypeKind::F64_t:
-  case TypeKind::Flt:
-    return builder.getF64Type();
-  case TypeKind::F32_t:
-    return builder.getF32Type();
-  case TypeKind::Bool:
-    return builder.getI1Type();
-  case TypeKind::Char:
-    return builder.getI8Type();
-  case TypeKind::Unit:
-    return mlir::NoneType::get(builder.getContext());
-  case TypeKind::String:
-    // String is a pointer to i8 in LLVM
-    return llvmPtrTy();
-  case TypeKind::Pointer:
-    return llvmPtrTy();
-  case TypeKind::Function:
-    // Function-typed values are represented as closure fat pointers
-    return closureType;
-  case TypeKind::Array: {
-    auto &arrType = std::get<ArrayType>(type.type_data);
-    auto elemMlirType = convertType(arrType.get_element());
-    return mlir::LLVM::LLVMArrayType::get(elemMlirType, arrType.get_size());
-  }
-  case TypeKind::Struct:
-    return cautious_at(structTypes, type, "structTypes");
-  case TypeKind::Enum: {
-    auto &et = std::get<EnumType>(type.type_data);
-    if (et.is_integer_backed())
-      return getEnumBackingMLIRType(et);
-    return cautious_at(enumTypes, type, "enumTypes");
-  }
-  case TypeKind::Tuple: {
-    auto &tt = std::get<TupleType>(type.type_data);
-    std::vector<mlir::Type> elemTypes;
-    for (auto &et : tt.get_element_types())
-      elemTypes.push_back(convertType(et));
-    return mlir::LLVM::LLVMStructType::getLiteral(builder.getContext(),
-                                                  elemTypes);
-  }
-  case TypeKind::NonExistent:
-    imm_error("type was never resolved (NonExistent) — "
-              "this is a compiler bug: a type expression was not "
-              "visited during type checking");
-  case TypeKind::Poisoned:
-    imm_error("poisoned type reached codegen — "
-              "a type error should have been reported and "
-              "compilation halted before codegen");
-  case TypeKind::Generic:
-    imm_error("generic template type reached codegen — "
-              "this is a compiler bug: the generic definition was "
-              "not monomorphized before codegen");
-  case TypeKind::TypeParam:
-    imm_error(fmt::format(
-        "unresolved type parameter '{}' reached codegen — "
-        "this is a compiler bug: the type parameter was not substituted "
-        "during monomorphization",
-        type.to_string()));
-  case TypeKind::Hole:
-    imm_error(fmt::format(
-        "open type argument in '{}' reached codegen — "
-        "this is a compiler bug: the type checker should have given it a "
-        "type from its context or reported that it couldn't",
-        type.to_string()));
-  case TypeKind::Never:
-    imm_error("'never' type reached codegen — "
-              "this is a compiler bug: a diverging expression's "
-              "type was not handled before codegen");
-  default:
-    imm_error(fmt::format("unhandled type kind in convertType: {}",
-                          type.to_string()));
-  }
+mlir::FunctionType MLIRGenImpl::mirFunctionType(AST::PrototypeAST *proto) {
+  auto protoType = proto->get_type();
+  auto *fn = std::get_if<FunctionType>(&protoType.type_data);
+  auto type = fn ? types.mirFunctionType(*fn) : std::nullopt;
+  if (!type)
+    imm_error(fmt::format("the compiler has no type for '{}'",
+                          proto->functionName.mangled()),
+              proto->get_location());
+  return *type;
+}
+
+mlir::Type MLIRGenImpl::llvmType(const Type &type) {
+  auto mir = types.mirType(type);
+  auto llvm = mir ? llvmTypeOf(*mir) : mlir::Type();
+  if (!llvm)
+    imm_error(
+        fmt::format("the compiler has no type for '{}'", type.to_string()));
+  return llvm;
 }
 
 bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
@@ -356,19 +230,6 @@ bool MLIRGenImpl::isUnsignedIntegerType(const Type &type) {
 bool MLIRGenImpl::isFloatType(const Type &type) {
   return type.type_kind == TypeKind::F64_t ||
          type.type_kind == TypeKind::F32_t || type.type_kind == TypeKind::Flt;
-}
-
-mlir::Type MLIRGenImpl::getEnumBackingMLIRType(const EnumType &et) {
-  switch (et.get_backing_type()) {
-  case TypeKind::I32_t:
-  case TypeKind::U32_t:
-    return builder.getI32Type();
-  case TypeKind::I64_t:
-  case TypeKind::U64_t:
-    return builder.getI64Type();
-  default:
-    imm_error("invalid enum backing type — expected i32, i64, u32, or u64");
-  }
 }
 
 // ===--- Definition emission ---===
@@ -443,24 +304,6 @@ void MLIRGenImpl::lowerThroughMIR(AST::ProgramAST *program) {
                               name),
                   fd->Prototype->get_location());
     }
-}
-
-// A function's declaration, in LLVM types: what MIR defines it as, once
-// lowered, so a call from another module, which declares it from here,
-// agrees. An array is returned by value, as MIR returns it.
-mlir::FunctionType MLIRGenImpl::buildFuncType(AST::PrototypeAST *proto) {
-  llvm::SmallVector<mlir::Type, 4> argTypes;
-  for (auto &param : proto->parameterVectors)
-    argTypes.push_back(convertType(param->get_type()));
-
-  llvm::SmallVector<mlir::Type, 1> retTypes;
-  if (proto->get_type().type_kind == TypeKind::Function) {
-    auto retType =
-        std::get<FunctionType>(proto->get_type().type_data).get_return_type();
-    if (retType.type_kind != TypeKind::Unit)
-      retTypes.push_back(convertType(retType));
-  }
-  return builder.getFunctionType(argTypes, retTypes);
 }
 
 std::string

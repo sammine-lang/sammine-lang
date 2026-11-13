@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mlir/IR/Types.h"
 #include "mlir/Pass/Pass.h"
 
 #include <memory>
@@ -16,6 +17,11 @@ namespace sammine_lang {
 /// or a kernel's wrapper as they take their arguments, a string literal the
 /// address of a constant global.
 std::unique_ptr<mlir::Pass> createMIRToLLVMPass();
+
+/// The LLVM type the pass converts MIR's `type` to, or a null type if it
+/// can't: for what has to be in LLVM's types before the pass runs, e.g. a C
+/// function's declaration.
+mlir::Type llvmTypeOf(mlir::Type type);
 
 /// Makes the pass available to tools by its name, e.g. sammine-opt.
 void registerMIRToLLVMPass();
