@@ -3,7 +3,7 @@
 ## Core Types
 - Scalars: `I32_t`, `I64_t`, `U32_t`, `U64_t`, `F64_t`, `F32_t`, `Bool`, `Char`, `Unit`, `String`
 - Compounds: `Function`, `Pointer`, `Array`, `Struct`, `Enum`, `Tuple`
-- Pseudo: `Never`, `NonExistent`, `Poisoned`, `Integer` (polymorphic → default i32), `Flt` (→ default f64), `TypeParam`, `Generic`
+- Pseudo: `Never`, `NonExistent`, `Poisoned` (prints as `?poisoned(file:line)`, `sammine_util::kPoisonedMarker`; `Reportee::echoes_error` drops an error, warning or note naming one once an error is reported: it echoes that error, so no check need test for it), `Integer` (polymorphic → default i32), `Flt` (→ default f64), `TypeParam`, `Generic`
 - `PointerType` uses `shared_ptr<Type>` (forward-decl needs indirection); copy/move ctors declared in header, defaulted in .cpp
 - `operator==` compares kind + data only (ignores mutability). Use `compatible_to_from(to, from)` for directional checks
 - All bindings are immutable. Blocks are scopes

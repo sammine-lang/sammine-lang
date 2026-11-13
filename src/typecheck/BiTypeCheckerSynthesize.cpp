@@ -1318,9 +1318,6 @@ Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
   ast->operand->accept_vis(this);
 
   auto operand_type = ast->operand->accept_synthesis(this);
-  // Already reported, as an index that would copy out an owned value.
-  if (operand_type.is_poisoned())
-    return ast->set_type(Type::Poisoned());
   if (operand_type.type_kind != TypeKind::Pointer) {
     this->add_error(ast->get_location(),
                     fmt::format("Cannot dereference non-pointer type '{}'",

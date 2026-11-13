@@ -376,9 +376,10 @@ struct Type {
     case TypeKind::NonExistent:
       return "??";
     case TypeKind::Poisoned:
+      // Where it was poisoned, for whoever debugs the compiler.
       if (auto *origin = std::get_if<std::string>(&type_data))
-        return fmt::format("Poisoned({})", *origin);
-      return "Poisoned";
+        return fmt::format("{}({})", sammine_util::kPoisonedMarker, *origin);
+      return std::string(sammine_util::kPoisonedMarker);
     case TypeKind::String:
       return fmt::format("\"{}\"", std::get<std::string>(type_data));
     case TypeKind::Integer:

@@ -152,6 +152,10 @@ public:
            source_info.get() == other.source_info.get();
   }
 };
+//! How a type an error poisoned prints: `?` is in no name or type the
+//! source can write, so a message holding it names such a type.
+inline constexpr std::string_view kPoisonedMarker = "?poisoned";
+
 class Reportee {
 public:
   virtual ~Reportee() = default;
@@ -193,24 +197,39 @@ public:
   }
   void add_error(Location loc, std::string msg,
                  std::source_location src = std::source_location::current()) {
-    reports.push_back({loc, {std::move(msg)}, ReportKind::error, src});
-    error_count++;
+    add_error(loc, std::vector<std::string>{std::move(msg)}, src);
   }
   void add_error(Location loc, std::vector<std::string> msgs,
                  std::source_location src = std::source_location::current()) {
+    if (echoes_error(msgs))
+      return;
     reports.push_back({loc, std::move(msgs), ReportKind::error, src});
     error_count++;
   }
   void add_warn(Location loc, std::string msg,
                 std::source_location src = std::source_location::current()) {
+    if (echoes_error({msg}))
+      return;
     reports.push_back({loc, {std::move(msg)}, ReportKind::warn, src});
     warn_count++;
   }
   void
   add_diagnostics(Location loc, std::string msg,
                   std::source_location src = std::source_location::current()) {
+    if (echoes_error({msg}))
+      return;
     reports.push_back({loc, {std::move(msg)}, ReportKind::diag, src});
     diag_count++;
+  }
+
+  //! Whether a report of `msgs` names a type an error poisoned: it echoes
+  //! that error, already reported, and isn't reported again. Before any
+  //! error is, it would be, so nothing is left unreported.
+  [[nodiscard]] bool echoes_error(const std::vector<std::string> &msgs) const {
+    return error_count > 0 &&
+           std::ranges::any_of(msgs, [](const std::string &msg) {
+             return msg.find(kPoisonedMarker) != std::string::npos;
+           });
   }
 
   [[nodiscard]] virtual bool has_errors() const { return error_count > 0; }
