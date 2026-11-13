@@ -189,18 +189,28 @@ private:
   mlir::FailureOr<mlir::Value> lowerEquality(mlir::Location location,
                                              mlir::Value lhs, mlir::Value rhs,
                                              const Type &type);
-  /// An arm of an if or a case: the block it starts in, what its pattern
-  /// binds (if anything), and its body.
+  /// An arm of an if, a case, `&&` or `||`: the block it starts in, and
+  /// what it leaves, lowered there in a scope of its own (binding what its
+  /// pattern binds, if anything, first).
   struct Arm {
     mlir::Block *block;
-    AST::BlockAST *body;
-    std::function<void()> bind;
+    std::function<mlir::FailureOr<mlir::Value>()> value;
   };
+  /// An arm that is `body`, after `bind`, if any.
+  Arm armOf(mlir::Block *block, AST::BlockAST *body,
+            std::function<void()> bind = nullptr);
   mlir::FailureOr<std::optional<mlir::Type>>
   branchResultType(const Type &type) const;
   mlir::FailureOr<mlir::Value> lowerArms(mlir::Location location,
                                          std::optional<mlir::Type> resultType,
                                          llvm::ArrayRef<Arm> arms);
+  /// `cond` picks `then` or `otherwise`, each lowered in a block of its own;
+  /// the value is the one the arm taken leaves, of `resultType`.
+  mlir::FailureOr<mlir::Value>
+  lowerBranch(mlir::Location location, mlir::Value cond,
+              std::optional<mlir::Type> resultType,
+              std::function<mlir::FailureOr<mlir::Value>()> then,
+              std::function<mlir::FailureOr<mlir::Value>()> otherwise);
   mlir::FailureOr<mlir::Value> lowerIf(AST::IfExprAST *ifExpr);
   mlir::FailureOr<mlir::Value> lowerCase(AST::CaseExprAST *caseExpr);
   mlir::FailureOr<mlir::Value> lowerFor(AST::ForExprAST *forExpr);

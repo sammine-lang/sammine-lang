@@ -26,9 +26,18 @@ MIRLowering::branchResultType(const Type &type) const {
   return mir;
 }
 
-// Each arm in its block: what its pattern binds, then its body. The arms
-// that don't return go on to a block after, which takes their value, of
-// `resultType`. There is none if every arm returns.
+MIRLowering::Arm MIRLowering::armOf(mlir::Block *block, BlockAST *body,
+                                    std::function<void()> bind) {
+  return Arm{block, [this, body, bind = std::move(bind)] {
+               if (bind)
+                 bind();
+               return lowerStatements(body);
+             }};
+}
+
+// Each arm in its block, in a scope of its own. The arms that don't return
+// go on to a block after, which takes their value, of `resultType`. There
+// is none if every arm returns.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerArms(mlir::Location location,
                        std::optional<mlir::Type> resultType,
@@ -43,9 +52,7 @@ MIRLowering::lowerArms(mlir::Location location,
     mlir::FailureOr<mlir::Value> value;
     {
       NameScope scope(*this);
-      if (arm.bind)
-        arm.bind();
-      value = lowerStatements(arm.body);
+      value = arm.value();
     }
     if (mlir::failed(value))
       return mlir::failure();
@@ -67,6 +74,21 @@ MIRLowering::lowerArms(mlir::Location location,
   return resultType ? after->getArgument(0) : mlir::Value();
 }
 
+mlir::FailureOr<mlir::Value> MIRLowering::lowerBranch(
+    mlir::Location location, mlir::Value cond,
+    std::optional<mlir::Type> resultType,
+    std::function<mlir::FailureOr<mlir::Value>()> then,
+    std::function<mlir::FailureOr<mlir::Value>()> otherwise) {
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *thenBlock = &region->emplaceBlock();
+  auto *elseBlock = &region->emplaceBlock();
+  mlir::cf::CondBranchOp::create(builder_, location, cond, thenBlock,
+                                 elseBlock);
+  return lowerArms(location, resultType,
+                   {Arm{thenBlock, std::move(then)},
+                    Arm{elseBlock, std::move(otherwise)}});
+}
+
 // `if c { a } else { b }`: c branches to a block for each side.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
   auto resultType = branchResultType(ifExpr->get_type());
@@ -75,14 +97,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIf(IfExprAST *ifExpr) {
   auto cond = lowerValue(ifExpr->bool_expr.get());
   if (mlir::failed(cond))
     return mlir::failure();
-  auto *region = builder_.getInsertionBlock()->getParent();
-  auto *thenBlock = &region->emplaceBlock();
-  auto *elseBlock = &region->emplaceBlock();
-  mlir::cf::CondBranchOp::create(builder_, loc(ifExpr), *cond, thenBlock,
-                                 elseBlock);
-  return lowerArms(loc(ifExpr), *resultType,
-                   {Arm{thenBlock, ifExpr->thenBlockAST.get(), nullptr},
-                    Arm{elseBlock, ifExpr->elseBlockAST.get(), nullptr}});
+  auto block = [this](BlockAST *body) {
+    return [this, body] { return lowerStatements(body); };
+  };
+  return lowerBranch(loc(ifExpr), *cond, *resultType,
+                     block(ifExpr->thenBlockAST.get()),
+                     block(ifExpr->elseBlockAST.get()));
 }
 
 // `case e { Some(x) => a, None => b }` on an enum: the tag picks the arm's
@@ -122,7 +142,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
     auto *block = &region->emplaceBlock();
     if (pattern.is_wildcard) {
       otherwise = block;
-      arms.push_back(Arm{block, arm.body.get(), nullptr});
+      arms.push_back(armOf(block, arm.body.get()));
       continue;
     }
     tags.push_back(static_cast<int32_t>(pattern.variant_index));
@@ -133,7 +153,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
       return mlir::failure();
     // Run by lowerArms, after this loop: it holds only what outlives it.
     arms.push_back(
-        Arm{block, arm.body.get(),
+        armOf(block, arm.body.get(),
             [this, &pattern, &payloadTypes, mirPayload, scrutinee = *value,
              location] {
               int64_t offset = 0;
@@ -145,7 +165,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
                                             static_cast<uint64_t>(at)),
                      loc(pattern.location));
               }
-            }});
+            }));
   }
   if (!otherwise) {
     otherwise = dests.pop_back_val();
@@ -269,7 +289,7 @@ MIRLowering::lowerScalarCase(CaseExprAST *caseExpr) {
   mlir::Block *otherwise = nullptr;
   for (auto &arm : caseExpr->arms) {
     auto *block = &region->emplaceBlock();
-    arms.push_back(Arm{block, arm.body.get(), nullptr});
+    arms.push_back(armOf(block, arm.body.get()));
     if (arm.pattern.is_wildcard) {
       otherwise = block;
       break;
@@ -330,36 +350,24 @@ void MIRLowering::branchOn(mlir::Location location, mlir::Value flag,
   branchOn(location, flag, values, dests, otherwise, otherwiseArgs);
 }
 
-// `a && b` reads b only if a is true, `a || b` only if a is false; the other
-// way, the result is a.
+// `a && b` is `if a { b } else { false }`, `a || b` is
+// `if a { true } else { b }`: b is read only on the side that needs it.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerLogical(BinaryExprAST *bin) {
   auto lhs = lowerValue(bin->LHS.get());
   if (mlir::failed(lhs))
     return mlir::failure();
   bool isAnd = bin->Op->tok_type == TokAND;
   auto location = loc(bin);
-  auto shortCut = intConstant(location, builder_.getI1Type(), isAnd ? 0 : 1);
-
-  auto *region = builder_.getInsertionBlock()->getParent();
-  auto *rhsBlock = &region->emplaceBlock();
-  auto *after = &region->emplaceBlock();
-  after->addArgument(builder_.getI1Type(), location);
-  if (isAnd)
-    mlir::cf::CondBranchOp::create(builder_, location, *lhs, rhsBlock,
-                                   mlir::ValueRange{}, after,
-                                   mlir::ValueRange{shortCut});
-  else
-    mlir::cf::CondBranchOp::create(builder_, location, *lhs, after,
-                                   mlir::ValueRange{shortCut}, rhsBlock,
-                                   mlir::ValueRange{});
-
-  builder_.setInsertionPointToStart(rhsBlock);
-  auto rhs = lowerValue(bin->RHS.get());
-  if (mlir::failed(rhs) || terminated())
-    return mlir::failure();
-  mlir::cf::BranchOp::create(builder_, location, after, mlir::ValueRange{*rhs});
-  continueIn(after);
-  return after->getArgument(0);
+  std::function<mlir::FailureOr<mlir::Value>()> rhs = [this, bin] {
+    return lowerValue(bin->RHS.get());
+  };
+  std::function<mlir::FailureOr<mlir::Value>()> known = [this, location,
+                                                         isAnd] {
+    return mlir::FailureOr<mlir::Value>(
+        intConstant(location, builder_.getI1Type(), isAnd ? 0 : 1));
+  };
+  return lowerBranch(location, *lhs, builder_.getI1Type(),
+                     isAnd ? rhs : known, isAnd ? known : rhs);
 }
 
 } // namespace sammine_lang
