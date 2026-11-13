@@ -10,7 +10,7 @@
 
 ## ASTProperties
 - Side table keyed by `NodeId` (auto-incrementing per `AstBase`)
-- `CallProps`: callee_func_type, is_partial, resolved_name, type_bindings, is_typeclass_call, is_enum_constructor, enum_variant_index. `callee_func_type` is the signature the call goes to (a generic's or an instance's, as `resolve_generic_signature` resolves it: `substitute()` would leave a generic struct named as the generic, `Vec<T>`), set for every call to a function, normal, generic or typeclass; the linear checker reads it to tell a lent argument from a moved one
+- `CallProps`: callee_func_type, is_partial, resolved_name, type_bindings, is_typeclass_call, is_enum_constructor, enum_variant_index. `callee_func_type` is the signature the call goes to (a generic's or an instance's, as `resolve_generic_signature` resolves it: `substitute()` would leave a generic struct named as the generic, `Vec<T>`), set for every call to a function, normal, generic or typeclass; MIR lowering reads it to tell a lent argument from a moved one
 - `BinaryProps`: resolved_op_method
 - `VariableProps`: is_enum_unit_variant, enum_variant_index
 - Writers (BiTypeChecker): `props_.call(id).field = val`; Readers (codegen): `props_.call(id)->field`
@@ -42,11 +42,10 @@
 - Goes through `Convert<From, To>` (declared in `definitions.mn`); `CastProps::instance` holds the key
 - Built in (`is_builtin_conversion`): number ↔ number, char ↔ integer. Codegen: `emitNumberConversion` (sext/zext by source signedness, trunc, `llvm.fpto[su]i.sat` so NaN → 0 and out of range clamps)
 - A polymorphic literal operand takes `T` if compatible, else its default (i32/f64)
-- Linear checker: operand is owned when its type contains linear types, else read
 
 ### Indexing
 - `arr[i]` → element type; static bounds checking for constant indices
-- Any other `x[i]` goes through `Indexer<T, E>` (`synthesize_indexer`): `indexer_instances_for` finds the instances, concrete or from a generic one, whose collection type is `x`'s, and exactly one must apply. The index must be `i64`, `E` must own nothing, and `IndexProps::indexer_method` names the method. The method takes `ptr<T>`, so the linear checker treats `x` as read (lent), and codegen calls the method with `x`'s address (`emitIndexerCall`; a temporary is spilled). `x[i] = v` is rejected in `check_assign_target`. `vec` has `instance<T> Indexer<Vec<T>, T>`
+- Any other `x[i]` goes through `Indexer<T, E>` (`synthesize_indexer`): `indexer_instances_for` finds the instances, concrete or from a generic one, whose collection type is `x`'s, and exactly one must apply. The index must be `i64`, `E` must own nothing, and `IndexProps::indexer_method` names the method. The method takes `ptr<T>`, so `x` is lent to it, and codegen calls the method with `x`'s address (`emitIndexerCall`; a temporary is spilled). `x[i] = v` is rejected in `check_assign_target`. `vec` has `instance<T> Indexer<Vec<T>, T>`
 - `ptr<T>[i]` → `T`; no bounds checking. Only allowed in a `let unsafe` function (`check_unsafe_allowed`, using `ctx().enclosing_function`); `PrototypeAST::is_unsafe` is copied to monomorphized instances. Calling an unsafe function needs no marker. Calling `reuse` is not yet restricted (TODO at `visit(ExternAST *)`, waiting on a printf rework)
 - `len(arr)` → `i32`; `dim(arr)` → tuple of `i32` per nesting level
 
@@ -72,7 +71,7 @@
 
 ## Typeclasses
 - `TypeClassInfo`: name, type_param, methods. Instances keyed by `MonomorphizedKey`
-- Generic instances (`instance<T> Indexer<Vec<T>, T>`): `register_typeclass_instance` resolves their types with the parameters as `TypeParam`s and keeps them in `generic_instances` by class, not in `type_class_instances`. `has_instance(key)` falls back to `instantiate_generic_instance`, which unifies each pattern with the key, copies the instance (`Monomorphizer::instantiate_instance`, marked `is_instantiation`), registers it under the key and type-checks its methods. Keys with open or literal types are never instantiated. Copies are injected into the program like generic function copies and emitted with internal linkage; the generic instance itself is skipped by pre-registration, `visit`, the linear checker and codegen. Overlap (`overlaps_registered_instance`) is two-sided unification (`unifiable`) with this instance's parameters renamed apart; built-in instances are not checked and win for their types
+- Generic instances (`instance<T> Indexer<Vec<T>, T>`): `register_typeclass_instance` resolves their types with the parameters as `TypeParam`s and keeps them in `generic_instances` by class, not in `type_class_instances`. `has_instance(key)` falls back to `instantiate_generic_instance`, which unifies each pattern with the key, copies the instance (`Monomorphizer::instantiate_instance`, marked `is_instantiation`), registers it under the key and type-checks its methods. Keys with open or literal types are never instantiated. Copies are injected into the program like generic function copies and emitted with internal linkage; the generic instance itself is skipped by pre-registration, `visit`, the checks after typing and codegen. Overlap (`overlaps_registered_instance`) is two-sided unification (`unifiable`) with this instance's parameters renamed apart; built-in instances are not checked and win for their types
 - Mangling: `MonomorphizedKey::to_typeclass_name(method)` → `Add<i32>::add`
 - Dispatch supports both `sizeof<i32>()` (unqualified) and `Add<i32>::add(x,y)` (qualified)
 - Both set `resolved_name` + `is_typeclass_call` on `CallProps`
@@ -90,7 +89,7 @@
 - That every `'ptr<T>`, and every value holding one, is consumed exactly once is checked on MIR: see `codegen.md`, "The ownership check"
 - `OpenTypeCheck` (after BiTypeChecker, once the generic copies are in) reports each type argument nothing decided, at the variant it starts from (`None` with nothing to say what `T` is): MIR has no type for one. BiTypeChecker reports it itself only where it needs the type to choose (`report_open_type`: an operator's instance, a case's patterns)
 - `ViewPlacementCheck` (after OpenTypeCheck) reports a non-linear `ptr<T>` anywhere but the whole type of a parameter or local (a view of a view is fine): in a struct's field or an enum's payload at its declaration, in an extern's or function's signature, in a `let`'s type, in a struct, array or tuple value (which catches a generic instance holding one)
-- `LinearTypeChecker` (a pass after BiTypeChecker) keeps the rules that don't depend on control flow: no linear temporary where nothing takes it (`check_expr`'s `Use::Own`: a `let`, a return, a linear parameter, a literal's field, `drop`, a store, a cast, a case's scrutinee, a block's value when its type is linear); no wildcard arm over a variant with a linear payload. Writing through a view, `&` of owned memory or of an owner, binding an owning value into a partial application, and a closure that bound a view leaving its function are MIR's (`ViewCheck`, see `codegen.md`)
+- The rest of what was the AST linear checker is on MIR: writing through a view, `&` of owned memory or of an owner, binding an owning value into a closure, a closure that bound a view leaving its function (`ViewCheck`, see `codegen.md`); a discarded temporary and a wildcard arm over an owning payload are reported by the ownership check as still owned, until drops (`plans/drops.md`) drop them
 
 ## Incompatibility Hints
 - `incompatibility_hint(expected, actual)` returns note explaining why types don't match

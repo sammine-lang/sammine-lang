@@ -146,7 +146,6 @@ class Compiler {
   void resolve_imports();
   void semantics();
   void typecheck();
-  void linear_check();
   void dump_ast();
   void mir();
   void codegen();

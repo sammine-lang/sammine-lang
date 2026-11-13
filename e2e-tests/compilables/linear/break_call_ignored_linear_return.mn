@@ -4,7 +4,7 @@
 // CHECK-NEXT:   25|let main() -> i32 {
 // CHECK-NEXT:   26|  make_ptr();
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Temporary of linear type ''ptr<i32>' must not be discarded (bind it with 'let' first)
+// CHECK-NEXT:     |         ╰─ Temporary owning memory must not be discarded (bind it with 'let' first)
 // CHECK-NEXT:   27|  std::printf("done\n");
 // CHECK-NEXT:   28|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

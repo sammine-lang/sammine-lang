@@ -9,8 +9,8 @@
 #include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
 #include "dialect/OwnershipCheck.h"
-#include "dialect/ViewCheck.h"
 #include "dialect/SammineDialect.h"
+#include "dialect/ViewCheck.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -56,7 +56,6 @@
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
-#include "typecheck/LinearTypeChecker.h"
 #include "typecheck/OpenTypeCheck.h"
 #include "typecheck/ViewPlacementCheck.h"
 #include "util/Logging.h"
@@ -277,23 +276,6 @@ void Compiler::typecheck() {
   programAST->accept_vis(&placement);
   reporter.report(placement);
   if (open.has_errors() || placement.has_errors())
-    set_error();
-}
-
-// Stage 7: Linear type checking — ensures 'ptr<T> values are consumed exactly
-// once.
-void Compiler::linear_check() {
-  SAMMINE_ZONE_NAMED("linear_check");
-  if (has_error())
-    return;
-  LOG({
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::green),
-               "Start linear type checking stage...\n");
-  });
-  auto lc = sammine_lang::AST::LinearTypeChecker();
-  lc.check(programAST.get(), props_);
-  reporter.report(lc);
-  if (lc.has_errors())
     set_error();
 }
 
@@ -756,7 +738,6 @@ int Compiler::start() {
       {"imports", &Compiler::resolve_imports},
       {"semantics", &Compiler::semantics},
       {"typecheck", &Compiler::typecheck},
-      {"linear_check", &Compiler::linear_check},
       {"dump_ast", &Compiler::dump_ast},
       {"mir", &Compiler::mir},
       {"codegen", &Compiler::codegen},

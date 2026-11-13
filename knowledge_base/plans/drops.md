@@ -162,8 +162,8 @@ The check runs after it, so what it still reports is misuse, not leaks.
   shadows, the old value is dropped. ("Reassigning linear variable … without
   consuming its previous value" goes.)
 - A temporary that owns memory and isn't taken, `f(alloc<i32>(1) == p)`, is
-  dropped at the end of its statement. ("Temporary of linear type … must
-  not be discarded" goes, from the AST checker too.)
+  dropped at the end of its statement. ("Temporary owning memory must not
+  be discarded", the ownership check's since the AST checker went, goes.)
 - Not before `exit`, a `panic` or `sammine.unreachable`: the process ends.
 
 A value whose type has a `Drop` instance moves and drops whole, but its
@@ -193,7 +193,7 @@ variant's payload inline.
 | "must be consumed before scope exit" | dropped; no error |
 | "consumed in some branches but not others" | dropped on the other edges; no error |
 | "Reassigning … without consuming its previous value" | old value dropped |
-| "Temporary of linear type … must not be discarded" | dropped at statement end |
+| "Temporary owning memory must not be discarded" | dropped at statement end |
 | "Cannot consume … inside a loop" | stays |
 | "Cannot use … already moved/freed" | stays, "moved/dropped" |
 | "no owned value is known to be stored there" | narrows to `alloc`'s pointer before a store; passing one on is the new error |
@@ -243,7 +243,7 @@ Each a commit, the suite passing after each.
    `drop(x)` of any type, a no-op for one that owns nothing.
 10. Enums: by tag, or by the variant a case arm knows.
 11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free.
-12. Stores, shadowing, temporaries; the AST checker's temporary rule goes.
+12. Stores, shadowing, temporaries, and a wildcard arm's unnamed payloads.
 13. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
     becomes "owning" in the diagnostics that stay; docs.
 

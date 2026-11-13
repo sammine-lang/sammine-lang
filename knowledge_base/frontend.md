@@ -57,4 +57,4 @@
 
 ## GeneralSemanticsVisitor (second semantic pass)
 - Reserved identifiers: names containing `__` rejected (C interop mangling). Checked on: FuncDef, VarDef, StructDef, EnumDef, TypeAliasDef
-- No return is inserted: what a body returns when it runs off its end is `FuncDefAST::body_value()`, its last expression when the function writes a return type and that expression is a value (not a statement, not a `return`); otherwise `()`. The type checker checks it as a `return` (`check_returned`), the linear checker applies its return rules to it, MIR lowering returns it
+- No return is inserted: what a body returns when it runs off its end is `FuncDefAST::body_value()`, its last expression when the function writes a return type and that expression is a value (not a statement, not a `return`); otherwise `()`. The type checker checks it as a `return` (`check_returned`), MIR lowering returns it

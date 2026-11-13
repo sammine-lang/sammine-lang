@@ -5,7 +5,7 @@
 - **Enum variant pre-qualification**: type checker assumes ALL variant calls arrive qualified — scope generator must rewrite unqualified variants before type checking
 - **ASTProperties side table**: semantic properties (types, resolved names) live in `ASTProperties` keyed by `NodeId`, NOT on AST nodes — writers use `props_.call(id).field = val`, readers use `props_.call(id)->field`
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
-- **Generic templates skipped**: BiTypeChecker, LinearTypeChecker, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
+- **Generic templates skipped**: BiTypeChecker, OpenTypeCheck, ViewPlacementCheck, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `MIRTypes::mirType()` has no type for it, and declaring or lowering a function using it is an error
 - **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
 - **Kernel lambdas**: a map lambda's body and a reduce's identity go through `MIRLowering::lowerKernelScalar`, which accepts only plain arith ops in one block, what a linalg region holds
@@ -49,7 +49,7 @@
 - **Generic struct returns**: `resolve_type_expr` on `GenericTypeExprAST` with unresolved TypeParams must build placeholder StructType, not return Poisoned — `substitute()` alone can't trigger struct instantiation
 - **Monomorphizer must preserve `is_linear`**: all type expression clones must carry linearity flag
 - **The ownership check follows parts**: a struct's fields, payloads, pointees are paths of their own; moving a whole moves its parts, and a branch join agrees each part
-- **Linear checker must skip generic templates**: template AST node IDs have no ASTProperties entries; only monomorphized copies have proper CallProps
+- **Checks after typing must skip generic templates**: template AST node IDs have no ASTProperties entries; only monomorphized copies have proper CallProps
 - **FieldAccessExprAST in struct/array/tuple literals**: must handle `v.data` as consumption of child, not just `VariableExprAST`
 
 ## Parser Gotchas

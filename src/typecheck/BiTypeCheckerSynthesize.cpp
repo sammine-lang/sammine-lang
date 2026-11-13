@@ -861,9 +861,8 @@ Type BiTypeCheckerVisitor::synthesize(BinaryExprAST *ast) {
                                     ast->RHS->get_type());
 }
 
-// Where a write to `target` lands, following the same path as
-// LinearTypeChecker's Use::Write: an array element or a field is written into
-// its base, while `*p` and `p[i]` reach memory through the pointer `p`.
+// Where a write to `target` lands: an array element or a field is written
+// into its base, while `*p` and `p[i]` reach memory through the pointer `p`.
 static const ExprAST *write_root(const ExprAST *target) {
   if (auto *idx = llvm::dyn_cast<IndexExprAST>(target);
       idx && idx->array_expr->get_type().type_kind == TypeKind::Array)
