@@ -21,6 +21,8 @@
 ## C Bindings (`reuse`)
 - In source, an imported module's binding is named like its other definitions (`std::printf`); its symbol is always its C name (`printf`). Codegen declares that symbol once, however many modules bind it, and calls it directly: no bridge in the library
 - Imported like any definition, private ones too, so a module's generic code compiled elsewhere can call its private bindings; naming a private one from outside is an error
+- `reuse "SDL3" { ... }` sets `ExternAST::library`. The resolver (`traceCLibraries`) collects each library once, from the program and every module, and looks for `libSDL3.so`/`.a` as for a module's library (relative to the module that names it). Found → linked by its file; not found → `system_libraries`, linked as `-lSDL3` and JIT-loaded as `libSDL3.so`. All come after every module's library in the link (static order: the modules use them)
+- Nothing records where a library was found (no rpath): the executable names it by soname and the system's loader finds it, so the program ships as is. (nix's cc wrapper adds a RUNPATH of its own; that isn't sammine's)
 
 ## Linkable Artifacts
 - Search per module: if Static → `.a` → `.so`; else `.so` → `.a`

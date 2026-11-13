@@ -107,17 +107,11 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
   }
 
   while (!tokStream->isEnd()) {
-    auto [def, result] = ParseDefinition();
-    if (result == SUCCESS) {
-      programAST->DefinitionVec.push_back(std::move(def));
+    auto result = ParseDefinitions(programAST->DefinitionVec);
+    if (result == SUCCESS)
       continue;
-    }
     if (result == NONCOMMITTED)
       break;
-    // A failed definition is kept for reporting, but it may be null and later
-    // stages expect no null entries.
-    if (def)
-      programAST->DefinitionVec.push_back(std::move(def));
     return programAST;
   }
   if (!tokStream->isEnd())
@@ -130,15 +124,19 @@ auto Parser::ParseProgram() -> u<ProgramAST> {
 // Try each definition parser in order. Each returns NONCOMMITTED if the leading
 // token doesn't match (e.g. no 'struct' keyword), allowing fallthrough to next.
 // 'export' prefix is handled here before dispatching to sub-parsers.
-auto Parser::ParseDefinition() -> p<DefinitionAST> {
+auto Parser::ParseDefinitions(std::vector<u<DefinitionAST>> &out)
+    -> ParserError {
   // Handle 'export' prefix
   auto export_tok = expect(TokenType::TokExport);
   bool is_exported = export_tok != nullptr;
 
+  if (!tokStream->isEnd() && tokStream->peek()->tok_type == TokReuse)
+    return ParseReuseDefs(out, is_exported);
+
   auto result = tryParsers<DefinitionAST>(
       &Parser::ParseTypeClassDecl, &Parser::ParseTypeClassInstance,
       &Parser::ParseKernelDef, &Parser::ParseStructDef, &Parser::ParseEnumDef,
-      &Parser::ParseReuseDef, &Parser::ParseFuncDef);
+      &Parser::ParseFuncDef);
 
   if (is_exported && result.uncommitted()) {
     report_error("Expected 'let', 'struct', 'type', or 'reuse' after 'export'",
@@ -146,10 +144,13 @@ auto Parser::ParseDefinition() -> p<DefinitionAST> {
     result.status = FAILED;
   }
 
-  if (is_exported && result.node)
-    result.node->is_exported = true;
-
-  return result;
+  // A failed definition is kept for reporting, but it may be null and later
+  // stages expect no null entries.
+  if (result.node) {
+    result.node->is_exported = is_exported;
+    out.push_back(std::move(result.node));
+  }
+  return result.status;
 }
 
 auto Parser::ParseStructDef() -> p<DefinitionAST> {
@@ -332,17 +333,64 @@ auto Parser::ParseEnumDef() -> p<DefinitionAST> {
   return {std::move(enum_def), SUCCESS};
 }
 
-auto Parser::ParseReuseDef() -> p<DefinitionAST> {
-  EXPECT(reuse_tok, TokenType::TokReuse);
-  auto [prototype, result] =
-      ParsePrototypeWithSemi("Missing ';' after reuse declaration");
-  if (result != SUCCESS) {
-    emit_if_uncommitted(result, "Expected a function prototype after 'reuse'",
-                        reuse_tok->get_location());
-    (void)expect(TokenType::TokSemiColon);
+// `reuse f(...) -> T;` binds one C function of the C library itself;
+// `reuse "SDL3" { f(...) -> T; ... }` binds functions of libSDL3, which the
+// program is then linked with.
+auto Parser::ParseReuseDefs(std::vector<u<DefinitionAST>> &out,
+                            bool is_exported) -> ParserError {
+  auto reuse_tok = expect(TokenType::TokReuse);
+  auto library = expect(TokenType::TokStr);
+  auto add = [&](u<PrototypeAST> prototype) {
+    auto ext = std::make_unique<ExternAST>(std::move(prototype));
+    ext->is_exported = is_exported;
+    if (library)
+      ext->library = library->lexeme;
+    out.push_back(std::move(ext));
+  };
+
+  if (!library) {
+    auto [prototype, result] =
+        ParsePrototypeWithSemi("Missing ';' after reuse declaration");
+    if (result != SUCCESS) {
+      emit_if_uncommitted(result, "Expected a function prototype after 'reuse'",
+                          reuse_tok->get_location());
+      (void)expect(TokenType::TokSemiColon);
+    }
+    add(std::move(prototype));
+    return result == SUCCESS ? SUCCESS : FAILED;
   }
-  return {std::make_unique<ExternAST>(std::move(prototype)),
-          result == SUCCESS ? SUCCESS : FAILED};
+
+  auto location = reuse_tok->get_location() | library->get_location();
+  if (library->lexeme.empty()) {
+    report_error("Expected a library name, such as \"SDL3\" for libSDL3",
+                 library->get_location());
+    return FAILED;
+  }
+  if (!expectOrError(TokenType::TokLeftCurly,
+                     fmt::format("Expected '{{' after 'reuse \"{}\"'",
+                                 library->lexeme),
+                     location))
+    return FAILED;
+  while (!tokStream->isEnd() &&
+         tokStream->peek()->tok_type != TokenType::TokRightCurly) {
+    auto [prototype, result] =
+        ParsePrototypeWithSemi("Missing ';' after reuse declaration");
+    if (result != SUCCESS) {
+      emit_if_uncommitted(result,
+                          fmt::format("Expected a function prototype or '}}' "
+                                      "in 'reuse \"{}\"'",
+                                      library->lexeme),
+                          tokStream->currentLocation());
+      return FAILED;
+    }
+    add(std::move(prototype));
+  }
+  if (!expectOrError(TokenType::TokRightCurly,
+                     fmt::format("Missing '}}' to close 'reuse \"{}\"'",
+                                 library->lexeme),
+                     location))
+    return FAILED;
+  return SUCCESS;
 }
 
 auto Parser::ParseFuncDef() -> p<DefinitionAST> {

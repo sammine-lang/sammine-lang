@@ -1,0 +1,20 @@
+// RUN: %cc -fPIC -shared -Wl,-soname,libgreet.so %dir/Inputs/greet.c -o %T/libgreet.so
+// RUN: %sammine_jit --file %full -I %dir/Inputs -I %T | %check %full
+// RUN: %sammine --file %full -I %dir/Inputs -I %T %O && env LD_LIBRARY_PATH=%T %T/%base.exe | %check %full
+// RUN: readelf -d %T/%base.exe | %check %full --check-prefix ELF
+// CHECK:      greet 21
+// CHECK-NEXT: 42
+// ELF:     Shared library: [libgreet.so]
+
+// libgreet.so is found on an -I path, as a module's library is, and linked.
+// The executable names it by its soname, not where it was found: the
+// system's loader finds it, here through LD_LIBRARY_PATH. (nix's cc wrapper
+// records a RUNPATH of its own for what it links, so that isn't checked.)
+
+import std;
+import greeter;
+
+let main() -> i32 {
+  std::printf("%d\n", greeter::greet_twice(21));
+  0
+}

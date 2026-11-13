@@ -1,0 +1,4 @@
+// Binds libgreet; a program that imports this is linked with it.
+export reuse "greet" {
+  greet_twice(x: i32) -> i32;
+}

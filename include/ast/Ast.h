@@ -341,6 +341,9 @@ public:
   // convention. An exported function of an imported sammine module is also
   // declared as an ExternAST, but it follows sammine's own convention.
   bool is_c_function = true;
+  /// The C library a `reuse "lib" { ... }` names, e.g. "SDL3" for
+  /// libSDL3; empty for one that names none (the C library itself).
+  std::string library;
 
   ExternAST(std::unique_ptr<PrototypeAST> Prototype_)
       : DefinitionAST(NodeKind::ExternAST), Prototype(std::move(Prototype_)) {

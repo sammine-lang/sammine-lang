@@ -173,7 +173,7 @@ void Compiler::resolve_imports() {
     source_dir = ".";
 
   Resolver rs(options_, reporter);
-  rs.Resolve(*programAST, source_dir, extra_object_files);
+  rs.Resolve(*programAST, source_dir, extra_object_files, system_libraries);
 
   if (rs.has_errors())
     set_error();
@@ -592,10 +592,15 @@ void Compiler::jit_execute() {
                "Start JIT execution stage...\n");
   });
 
+  // A system library is loaded by name, which the loader searches for as it
+  // would for the program.
+  auto libraries = extra_object_files;
+  for (auto &library : system_libraries)
+    libraries.push_back(fmt::format("lib{}.so", library));
   auto &jit = resPtr->sammineJIT;
   jit_exit_code_ =
       jit->execute_main(std::move(resPtr->Module), std::move(resPtr->Context),
-                        extra_object_files, options_.jit_args);
+                        libraries, options_.jit_args);
   reporter.report(*jit);
 
   if (jit->has_errors())
@@ -682,9 +687,14 @@ void Compiler::link() {
   std::string obj_file = output_path(stem + ".o");
   std::string exe_file = output_path(stem + ".exe");
 
+  // The executable names each shared library by its soname; the loader finds
+  // it where the system keeps libraries, so nothing records where it was
+  // found here.
   std::string obj_list = obj_file;
   for (auto &obj : extra_object_files)
     obj_list += " " + obj;
+  for (auto &library : system_libraries)
+    obj_list += " -l" + library;
 
   // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
   bool gpu = options_.gpu != GPUMode::NONE;

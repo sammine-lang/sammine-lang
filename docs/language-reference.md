@@ -183,6 +183,26 @@ Imported modules can re-export C bindings with `export reuse`:
 export reuse printf(fmt: ptr<char>, ...) -> i32;
 ```
 
+A function from a C library other than the C library itself is declared in a
+block that names the library. `"SDL3"` stands for `libSDL3`:
+
+```sammine
+export reuse "SDL3" {
+  SDL_Init(flags: u32) -> bool;
+  SDL_Quit() -> unit;
+}
+```
+
+A program that uses these, directly or through a module it imports, is
+linked with the library. The compiler looks for `libSDL3.so` or `libSDL3.a`
+where it looks for modules: the current directory, each `-I` path, the
+directory of the module that names it, then the stdlib directory. One it
+doesn't find there is left to the system: the linker looks for it as for
+`-lSDL3`. Either way, the program names the shared library by its soname,
+`libSDL3.so.0`, not where it was found, so at run time the system's loader
+finds it where the system keeps libraries (`LD_LIBRARY_PATH` too). The JIT
+loads the file found, or `libSDL3.so` by name.
+
 ---
 
 ## 4. Control Flow

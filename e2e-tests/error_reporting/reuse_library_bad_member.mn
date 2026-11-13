@@ -1,0 +1,17 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |reuse_library_bad_member.mn:14:2
+// CHECK-NEXT:   12|reuse "greet" {
+// CHECK-NEXT:   13|  greet_twice(x: i32) -> i32;
+// CHECK-NEXT:   14|  42;
+// CHECK-NEXT:     |  ─┬
+// CHECK-NEXT:     |   ╰─ Expected a function prototype or '}' in 'reuse "greet"'
+// CHECK-NEXT:   15|}
+// CHECK-NEXT:   16|
+
+// A block of a library holds only function prototypes.
+reuse "greet" {
+  greet_twice(x: i32) -> i32;
+  42;
+}
+
+let main() -> i32 { 0 }

@@ -42,10 +42,30 @@ class Resolver : public sammine_util::Reportee {
                      AST::ProgramAST &programAST,
                      std::vector<std::string> &extra_object_files);
 
+  /// A C library a `reuse "name" { ... }` binds, and the file found for it
+  /// (`lib<name>.so` or `.a`); none if it is left to the system's search.
+  struct CLibrary {
+    std::string name;
+    Path file;
+  };
+  /// The C libraries the program and its modules bind, in the order first
+  /// named.
+  std::vector<CLibrary> c_libraries_;
+
+  /// Find `<stem>.so` or `<stem>.a` in the directories modules are found in;
+  /// empty if there is none.
+  Path find_library(const std::string &stem, const Path &src_dir);
+
   /// Locate a linkable artifact (.a/.so) for `name` and append it to
   /// `extra_object_files`. Search order mirrors find_mn.
   void traceLinkableArtifacts(const std::string &name, const Path &src_dir,
                               std::vector<std::string> &extra_object_files);
+
+  /// Add each C library `definitions` bind that isn't already known to
+  /// c_libraries_, looking for it as a module's library is.
+  void traceCLibraries(
+      const std::vector<std::unique_ptr<AST::DefinitionAST>> &definitions,
+      const Path &src_dir);
 
   /// Find a .mn file by searching CWD → -I paths → source_dir → stdlib_dir.
   Path find_mn(const std::string &name, const Path &src_dir);
@@ -70,9 +90,11 @@ public:
 
   /// Entry point: resolve every `import` in `programAST` (recursively),
   /// mutating `programAST->DefinitionVec` and appending link artifacts to
-  /// `extra_object_files`. Stops early on the first fatal error.
+  /// `extra_object_files`, and the names of the C libraries left to the
+  /// system to `system_libraries`. Stops early on the first fatal error.
   void Resolve(AST::ProgramAST &programAST, const Path &source_dir,
-               std::vector<std::string> &extra_object_files);
+               std::vector<std::string> &extra_object_files,
+               std::vector<std::string> &system_libraries);
 };
 
 /// LibraryEmitter: owns the "package the module's .o into a .a or .so"
@@ -124,6 +146,9 @@ class Compiler {
   std::shared_ptr<LLVMRes> resPtr;
   std::string mod_name;
   std::vector<std::string> extra_object_files;
+  /// C libraries a `reuse` names that weren't found where modules are: the
+  /// linker and the loader look for them where the system keeps libraries.
+  std::vector<std::string> system_libraries;
 
   AST::ASTProperties props_;
   enum class State { Running, Finished, Error };

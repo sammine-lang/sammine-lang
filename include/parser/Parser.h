@@ -106,12 +106,16 @@ public:
   [[nodiscard]] auto ParseProgram() -> u<ProgramAST>;
 
   // Parse definition
-  [[nodiscard]] auto ParseDefinition() -> p<DefinitionAST>;
+  /// Parses one top-level definition, or a `reuse "lib" { ... }` block of
+  /// several, into `out`.
+  [[nodiscard]] auto ParseDefinitions(std::vector<u<DefinitionAST>> &out)
+      -> ParserError;
   [[nodiscard]] auto ParsePrototype() -> p<PrototypeAST>;
   [[nodiscard]] auto ParsePrototypeWithSemi(const std::string &semi_msg)
       -> p<PrototypeAST>;
   [[nodiscard]] auto ParseFuncDef() -> p<DefinitionAST>;
-  [[nodiscard]] auto ParseReuseDef() -> p<DefinitionAST>;
+  [[nodiscard]] auto ParseReuseDefs(std::vector<u<DefinitionAST>> &out,
+                                    bool is_exported) -> ParserError;
   [[nodiscard]] auto ParseVarDef() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructDef() -> p<DefinitionAST>;
   [[nodiscard]] auto ParseEnumDef() -> p<DefinitionAST>;

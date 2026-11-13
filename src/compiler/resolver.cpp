@@ -11,7 +11,9 @@ namespace sammine_lang {
 // transitive imports via `import_module`. Mirrors Parser::Parse() — all
 // orchestration lives here so Compiler::resolve_imports is a thin driver.
 void Resolver::Resolve(AST::ProgramAST &programAST, const Path &source_dir,
-                       std::vector<std::string> &extra_object_files) {
+                       std::vector<std::string> &extra_object_files,
+                       std::vector<std::string> &system_libraries) {
+  traceCLibraries(programAST.DefinitionVec, source_dir);
   // Every module imports the prelude, except the prelude itself.
   std::string prelude_name(AST::NameResolver::kPrelude);
   auto prelude = find_mn(prelude_name, source_dir);
@@ -29,6 +31,14 @@ void Resolver::Resolve(AST::ProgramAST &programAST, const Path &source_dir,
                   extra_object_files);
     if (has_errors())
       return;
+  }
+
+  // C libraries come after every module's library: those are what use them.
+  for (auto &library : c_libraries_) {
+    if (library.file.empty())
+      system_libraries.push_back(library.name);
+    else
+      extra_object_files.push_back(library.file.string());
   }
 }
 
@@ -67,6 +77,7 @@ bool Resolver::import_module(const std::string &name, const Path &src_dir,
   traceLinkableArtifacts(name, src_dir, extra_object_files);
 
   auto mod_src_dir = mn_path.parent_path();
+  traceCLibraries(mn_program->DefinitionVec, mod_src_dir);
   for (auto &sub_import : mn_program->imports)
     import_module(sub_import.module_name, mod_src_dir, sub_import.location,
                   programAST, extra_object_files);
@@ -150,36 +161,55 @@ void Resolver::inject_definitions(
     program_vec.insert(program_vec.begin(), std::move(def));
   }
 }
-void Resolver::traceLinkableArtifacts(
-    const std::string &name, const Path &src_dir,
-    std::vector<std::string> &extra_object_files) {
+// Find `<stem>.so` or `<stem>.a` where modules are found: CWD → -I paths →
+// `src_dir` → stdlib_dir; the format being built is preferred.
+Path Resolver::find_library(const std::string &stem, const Path &src_dir) {
   std::vector<std::string> lib_exts =
       options_.lib_format == LibFormat::Static
           ? std::vector<std::string>{".a", ".so"}
           : std::vector<std::string>{".so", ".a"};
-  Path obj_path;
-  auto find_lib = [&name, &obj_path,
-                   &lib_exts](const Path &dir) -> bool {
+  auto find_in = [&](const Path &dir) -> Path {
     for (auto &ext : lib_exts) {
-      auto candidate = dir / (name + ext);
-      if (std::filesystem::exists(candidate)) {
-        obj_path = candidate;
-        return true;
-      }
+      auto candidate = dir / (stem + ext);
+      if (std::filesystem::exists(candidate))
+        return candidate;
     }
-    return false;
+    return {};
   };
-  find_lib(".");
-  if (obj_path.empty()) {
-    for (auto &ipath : options_.import_paths)
-      if (find_lib(ipath))
-        break;
+  std::vector<Path> dirs{"."};
+  dirs.insert(dirs.end(), options_.import_paths.begin(),
+              options_.import_paths.end());
+  dirs.push_back(src_dir);
+  if (!options_.stdlib_dir.empty())
+    dirs.push_back(options_.stdlib_dir);
+  for (auto &dir : dirs)
+    if (auto found = find_in(dir); !found.empty())
+      return found;
+  return {};
+}
+
+void Resolver::traceLinkableArtifacts(
+    const std::string &name, const Path &src_dir,
+    std::vector<std::string> &extra_object_files) {
+  if (auto lib = find_library(name, src_dir); !lib.empty())
+    extra_object_files.push_back(lib.string());
+}
+
+// Each library a `reuse "lib" { ... }` names, once: libSDL3 for "SDL3",
+// looked for next to the module that names it, as its library is. One not
+// found is the system's, which the linker and loader find themselves.
+void Resolver::traceCLibraries(
+    const std::vector<std::unique_ptr<AST::DefinitionAST>> &definitions,
+    const Path &src_dir) {
+  for (auto &def : definitions) {
+    auto *ext = llvm::dyn_cast<AST::ExternAST>(def.get());
+    if (!ext || ext->library.empty() ||
+        std::ranges::any_of(c_libraries_, [&](const CLibrary &library) {
+          return library.name == ext->library;
+        }))
+      continue;
+    c_libraries_.push_back(
+        {ext->library, find_library("lib" + ext->library, src_dir)});
   }
-  if (obj_path.empty())
-    find_lib(src_dir);
-  if (obj_path.empty() && !options_.stdlib_dir.empty())
-    find_lib(options_.stdlib_dir);
-  if (!obj_path.empty())
-    extra_object_files.push_back(obj_path.string());
 }
 }; // namespace sammine_lang

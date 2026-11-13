@@ -29,6 +29,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 **func_def** ::= `export`? `let` `unsafe`? ID **type_params**? `(` **param_list**? `)` (`->` **type**)? **block**
 
 **extern_def** ::= `export`? `reuse` ID `(` **param_list_with_vararg**? `)` `->` **type** `;`
+  | `export`? `reuse` STRING `{` (ID `(` **param_list_with_vararg**? `)` `->` **type** `;`)* `}`
 
 **struct_def** ::= `export`? `struct` ID **type_params**? `{` **typed_var** (`,` **typed_var**)* `,` `}` `;`
 

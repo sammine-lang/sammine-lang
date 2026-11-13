@@ -1,0 +1,18 @@
+// RUN: rm -rf %T/sys && mkdir -p %T/sys && %cc -fPIC -shared -Wl,-soname,libgreet.so %dir/Inputs/greet.c -o %T/sys/libgreet.so
+// RUN: env LD_LIBRARY_PATH=%T/sys %sammine_jit --file %full -I %dir/Inputs | %check %full
+// RUN: env LIBRARY_PATH=%T/sys %sammine --file %full -I %dir/Inputs %O && env LD_LIBRARY_PATH=%T/sys %T/%base.exe | %check %full
+// CHECK:      greet 21
+// CHECK-NEXT: 42
+
+// libgreet is found nowhere modules are, so it is left to the system: the
+// linker looks for it where it looks for libraries (LIBRARY_PATH here), and
+// the loader, for the JIT and the executable, where it does
+// (LD_LIBRARY_PATH here).
+
+import std;
+import greeter;
+
+let main() -> i32 {
+  std::printf("%d\n", greeter::greet_twice(21));
+  0
+}

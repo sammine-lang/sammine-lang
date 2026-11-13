@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |reuse_library_missing_brace.mn:12:0
+// CHECK-NEXT:   10|
+// CHECK-NEXT:   11|// The functions of a named library come in a block.
+// CHECK-NEXT:   12|reuse "greet" greet_twice(x: i32) -> i32;
+// CHECK-NEXT:     |────────────┬
+// CHECK-NEXT:     |            ╰─ Expected '{' after 'reuse "greet"'
+// CHECK-NEXT:   13|
+// CHECK-NEXT:   14|let main() -> i32 { 0 }
+
+// The functions of a named library come in a block.
+reuse "greet" greet_twice(x: i32) -> i32;
+
+let main() -> i32 { 0 }

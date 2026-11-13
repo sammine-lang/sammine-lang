@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |reuse_library_empty_name.mn:12:6
+// CHECK-NEXT:   10|
+// CHECK-NEXT:   11|// A library is named: "SDL3" for libSDL3.
+// CHECK-NEXT:   12|reuse "" {
+// CHECK-NEXT:     |      ─┬
+// CHECK-NEXT:     |       ╰─ Expected a library name, such as "SDL3" for libSDL3
+// CHECK-NEXT:   13|  greet_twice(x: i32) -> i32;
+// CHECK-NEXT:   14|}
+
+// A library is named: "SDL3" for libSDL3.
+reuse "" {
+  greet_twice(x: i32) -> i32;
+}
+
+let main() -> i32 { 0 }
