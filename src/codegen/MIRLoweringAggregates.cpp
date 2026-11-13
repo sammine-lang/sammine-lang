@@ -3,6 +3,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/IR/Matchers.h"
 
 //! \file MIRLoweringAggregates.cpp
 //! \brief Struct, tuple, array and enum values: literals, fields, `len`, `dim`,
@@ -129,47 +130,25 @@ MIRLowering::lowerArrayLiteral(ArrayLiteralExprAST *array) {
   return lowerAggregate(loc(array), *type, elementTypes, exprs);
 }
 
-// `[a...b]`, an array of a, a + 1, ...: filled in a slot by a loop, then
-// read whole.
+// `[a...b]`, an array of a, a + 1, ..., b: the type checker has a and b
+// constants, so it is the array literal of those constants.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerRangeArray(RangeExprAST *range) {
   auto type = types_.mirType(range->get_type());
   if (!type)
     return mlir::failure();
   auto array = mlir::cast<smn::ArrayType>(*type);
-  auto element = mlir::dyn_cast<mlir::IntegerType>(array.getElement());
-  if (!element)
-    return mlir::failure();
+  auto element = array.getElement();
   auto start = lowerValue(range->start.get());
-  if (mlir::failed(start) || start->getType() != element)
+  llvm::APInt first;
+  if (mlir::failed(start) || !mlir::matchPattern(*start, mlir::m_ConstantInt(&first)))
     return mlir::failure();
   auto location = loc(range);
-  auto slot = smn::LocalOp::create(builder_, location, placeOf(array), "");
-
-  auto *region = builder_.getInsertionBlock()->getParent();
-  auto *header = &region->emplaceBlock();
-  header->addArgument(element, location);
-  auto *body = &region->emplaceBlock();
-  auto *after = &region->emplaceBlock();
-  mlir::cf::BranchOp::create(
-      builder_, location, header,
-      mlir::ValueRange{intConstant(location, element, 0)});
-  builder_.setInsertionPointToStart(header);
-  auto index = header->getArgument(0);
-  auto more = mlir::arith::CmpIOp::create(
-      builder_, location, mlir::arith::CmpIPredicate::slt, index,
-      intConstant(location, element, array.getSize()));
-  mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
-  builder_.setInsertionPointToStart(body);
-  auto value = mlir::arith::AddIOp::create(builder_, location, *start, index);
-  auto at =
-      smn::ElemOp::create(builder_, location, placeOf(element), slot, index);
-  smn::StoreOp::create(builder_, location, value, at);
-  auto next = mlir::arith::AddIOp::create(builder_, location, index,
-                                          intConstant(location, element, 1));
-  mlir::cf::BranchOp::create(builder_, location, header,
-                             mlir::ValueRange{next});
-  continueIn(after);
-  return read(location, slot);
+  llvm::SmallVector<mlir::Value> elements;
+  for (int64_t i = 0; i < array.getSize(); ++i)
+    elements.push_back(
+        intConstant(location, element, first.getSExtValue() + i));
+  return smn::AggregateOp::create(builder_, location, array, elements)
+      .getResult();
 }
 
 // An array's length is in its type.
