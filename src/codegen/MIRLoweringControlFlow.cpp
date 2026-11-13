@@ -169,6 +169,31 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
   if (!otherwise) {
     otherwise = dests.pop_back_val();
     tags.pop_back();
+  } else {
+    // A wildcard takes a variant no arm names with its payload, which owns
+    // what it holds: bound on the way to the wildcard's body, out of its
+    // reach, it is dropped there like any value going out of use.
+    llvm::SmallDenseSet<size_t> named;
+    for (auto &arm : caseExpr->arms)
+      if (!arm.pattern.is_wildcard)
+        named.insert(arm.pattern.variant_index);
+    for (uint64_t v = 0; v < enumType.getVariants().size(); ++v) {
+      auto payload = enumType.getPayload(v);
+      if (named.contains(v) || !llvm::any_of(payload, smn::ownsMemory))
+        continue;
+      auto *block = &region->emplaceBlock();
+      mlir::OpBuilder unnamed = mlir::OpBuilder::atBlockEnd(block);
+      auto offsets = smn::payloadOffsets(payload);
+      for (auto [i, field] : llvm::enumerate(payload))
+        if (smn::ownsMemory(field))
+          smn::LetOp::create(
+              unnamed, location, field, unnamed.getStringAttr("_"),
+              smn::PayloadOp::create(unnamed, location, field, *value, v, i,
+                                     static_cast<uint64_t>(offsets[i])));
+      mlir::cf::BranchOp::create(unnamed, location, otherwise);
+      tags.push_back(static_cast<int32_t>(v));
+      dests.push_back(block);
+    }
   }
   branchOn(location, tag, tags, dests, otherwise, mlir::ValueRange{});
   return lowerArms(location, *resultType, arms);

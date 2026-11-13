@@ -1,0 +1,16 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// A wildcard arm takes L, which no arm names, with its payload: the payload
+// is bound on the way to the wildcard's body, out of its reach, and dropped
+// there.
+
+type M = L('ptr<i32>) | E;
+let mk() -> M { L(alloc<i32>(1)) }
+
+let main() -> i32 {
+  case mk() {
+    _ => { },
+  };
+  return 0;
+}

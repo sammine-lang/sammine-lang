@@ -1,7 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 12 are done, but for a wildcard arm's
-unnamed payloads and arrays.
+Status: in progress. Steps 1 to 12 are done, but for arrays.
 
 ## Goal
 
@@ -280,8 +279,10 @@ Each a commit, the suite passing after each.
    is left. Arrays come with enums.)
 10. Enums: by tag, or by the variant a case arm knows. (Done: whole, by
     tag, in `expandDrops`, with the layout moved onto MIR types; a case
-    arm's bindings drop as any. Still to come: a wildcard arm's unnamed
-    payloads, and arrays, whose elements the check follows as one.)
+    arm's bindings drop as any. A wildcard arm's unnamed payloads too:
+    lowering binds each unnamed variant's payload in a block of its own on
+    the way to the wildcard's body, which the edge rule drops. Still to
+    come: arrays, whose elements the check follows as one.)
 11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done: an
     inserted drop of a box drops what it points at first, and so does
     elaboration before a `drop(p)` the program writes.)

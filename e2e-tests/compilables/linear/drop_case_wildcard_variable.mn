@@ -1,0 +1,20 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: other
+
+// As for a temporary: m's payload, which the wildcard takes, is dropped on
+// the way to its body. A named arm binds its own.
+
+import std;
+
+type M = L('ptr<i32>) | R('ptr<i64>) | E;
+let mk() -> M { L(alloc<i32>(1)) }
+
+let main() -> i32 {
+  let m = mk();
+  case m {
+    R(q) => { std::printf("r\n"); () },
+    _ => { std::printf("other\n"); () },
+  };
+  return 0;
+}
