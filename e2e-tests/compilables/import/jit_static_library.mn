@@ -1,13 +1,17 @@
-// RUN: %sammine --lib static --file %dir/Inputs/prelude_user.mn %O && (! %sammine_jit --file %full %I -I %dir/Inputs 2>&1) | %check %full
-// CHECK: JIT does not support static archives:
-// CHECK-SAME: prelude_user.a
+// RUN: %sammine --lib static --file %dir/Inputs/prelude_user.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// CHECK:      4950
+// CHECK-NEXT: 50.500000
 
-// The JIT loads shared libraries only: an import compiled to a static
-// archive is an error it reports, with the module and its context ended in
-// order on the way out.
+// The JIT runs a program whose import was compiled to a static archive:
+// the archive's objects are linked in as the program names what they
+// define, as a shared library's are found once it is loaded.
 
 import prelude_user;
+import std;
 
 let main() -> i32 {
+  let m = prelude_user::total(100i64);
+  std::printf("%ld\n", m.cents);
+  std::printf("%f\n", (m + prelude_user::Money { cents: 100i64 }) as f64);
   return 0;
 }

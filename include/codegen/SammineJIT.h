@@ -46,14 +46,10 @@ public:
   llvm::Error addModule(llvm::orc::ThreadSafeModule TSM,
                         llvm::orc::ResourceTrackerSP RT = nullptr);
 
-  llvm::Error loadLibrary(llvm::StringRef Path) {
-    auto G = llvm::orc::DynamicLibrarySearchGenerator::Load(
-        Path.data(), DL.getGlobalPrefix());
-    if (!G)
-      return G.takeError();
-    MainJD.addGenerator(std::move(*G));
-    return llvm::Error::success();
-  }
+  /// Makes what the library at `path` defines found by the program: a
+  /// shared library is loaded into the process, a static archive's objects
+  /// are linked in as the program names what they define.
+  llvm::Error loadLibrary(const std::string &path);
 
   llvm::Expected<llvm::orc::ExecutorSymbolDef> lookup(llvm::StringRef Name) {
     return ES->lookup({&MainJD}, Mangle(Name.str()));

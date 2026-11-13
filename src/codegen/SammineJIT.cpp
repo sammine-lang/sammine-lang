@@ -65,6 +65,23 @@ llvm::Error SammineJIT::addModule(llvm::orc::ThreadSafeModule TSM,
   return CompileLayer.add(RT, std::move(TSM));
 }
 
+llvm::Error SammineJIT::loadLibrary(const std::string &path) {
+  if (llvm::StringRef(path).ends_with(".a")) {
+    auto archive = llvm::orc::StaticLibraryDefinitionGenerator::Load(
+        ObjectLayer, path.c_str());
+    if (!archive)
+      return archive.takeError();
+    MainJD.addGenerator(std::move(*archive));
+    return llvm::Error::success();
+  }
+  auto shared = llvm::orc::DynamicLibrarySearchGenerator::Load(
+      path.c_str(), DL.getGlobalPrefix());
+  if (!shared)
+    return shared.takeError();
+  MainJD.addGenerator(std::move(*shared));
+  return llvm::Error::success();
+}
+
 int SammineJIT::execute_main(llvm::orc::ThreadSafeModule module,
                              const std::vector<std::string> &libraries,
                              const std::vector<std::string> &jit_args) {
@@ -72,14 +89,6 @@ int SammineJIT::execute_main(llvm::orc::ThreadSafeModule module,
 
   // Load imported module libraries into the JIT.
   for (auto &lib : libraries) {
-    if (lib.ends_with(".a")) {
-      add_error(Location::NonPrintable(),
-                fmt::format("JIT does not support static archives: '{}'. "
-                            "Recompile the dependency as a shared library "
-                            "(--lib=shared) or run without --jit.",
-                            lib));
-      return 1;
-    }
     LOG({ fmt::println("Loading {}", lib); });
     if (auto err = loadLibrary(lib)) {
       add_error(Location::NonPrintable(),
