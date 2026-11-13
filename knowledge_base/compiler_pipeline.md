@@ -11,7 +11,7 @@ lex → parse → imports → semantics → typecheck → dump_ast → mir → c
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec; then, if it found nothing, `OpenTypeCheck` and `ViewPlacementCheck`
 - `mir`: init the MLIR dialects (Arith, Func, LLVM, SCF, CF, sammine; MemRef, Linalg, Tensor, Bufferization, Affine for kernels) + bufferization interfaces → `generateModules()` → `checkViews()`, `elaborateDrops()` and `checkOwnership()`, their diagnostics reported through a `Reportee`
 - `codegen`: `lowerMLIRToLLVMIR()` on the modules the `mir` stage built
-- `optimize`: LLVM PassBuilder with O2
+- `optimize`: LLVM PassBuilder at `--opt-level` (O2 unless told; O0 builds the O0 pipeline)
 - `emit_library`: writes the `.so`/`.a`
 - `link`: `clang++` (fallback `g++`) with `io_runtime.o`
 
