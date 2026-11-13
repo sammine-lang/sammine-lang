@@ -27,7 +27,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
     return lowerBuiltinInstance(loc(cast), key, *value, cast->get_type());
   return callMethod(loc(cast),
                     key.to_typeclass_name(std::string(kConvertClass)), *value,
-                    cast->get_type());
+                    cast->get_type(), "as");
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
@@ -50,7 +50,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
     if (mlir::failed(rhs))
       return mlir::failure();
     return callMethod(loc(bin), *bp->resolved_op_method, {*lhs, *rhs},
-                      bin->get_type());
+                      bin->get_type(), bin->Op->lexeme);
   }
   auto lhs = lowerValue(bin->LHS.get());
   if (mlir::failed(lhs))

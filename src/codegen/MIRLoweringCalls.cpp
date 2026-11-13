@@ -165,16 +165,15 @@ MIRLowering::lowerFunctionValue(VariableExprAST *var) {
 // A call to `method`, a method of an instance the program declares, chosen
 // by the type checker: an operator, or `as` through Convert. Its arguments
 // are the operands, by value.
-mlir::FailureOr<mlir::Value>
-MIRLowering::callMethod(mlir::Location location,
-                        const sammine_util::QualifiedName &method,
-                        mlir::ValueRange args, const Type &result) {
+mlir::FailureOr<mlir::Value> MIRLowering::callMethod(
+    mlir::Location location, const sammine_util::QualifiedName &method,
+    mlir::ValueRange args, const Type &result, llvm::StringRef written) {
   auto type = types_.mirType(result);
   auto name = props_.symbol(method);
   if (!type || !module_.lookupSymbol<mlir::func::FuncOp>(name))
     return mlir::failure();
   return smn::CallOp::create(builder_, location, mlir::TypeRange{*type}, name,
-                             args)
+                             args, written)
       .getResult(0);
 }
 
@@ -223,7 +222,7 @@ MIRLowering::lowerIndexerCall(IndexExprAST *index,
     return mlir::failure();
   auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
   auto view = smn::LendOp::create(builder_, location, viewOf(holds), *place);
-  return callMethod(location, method, {view, *offset}, index->get_type());
+  return callMethod(location, method, {view, *offset}, index->get_type(), "[]");
 }
 
 } // namespace sammine_lang

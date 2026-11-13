@@ -150,8 +150,10 @@ private:
   mlir::FailureOr<mlir::Value>
   lowerFieldAccess(AST::FieldAccessExprAST *access);
   mlir::FailureOr<mlir::Value>
+  /// A call of `method` standing for the syntax `written`, as `as`.
   callMethod(mlir::Location location, const sammine_util::QualifiedName &method,
-             mlir::ValueRange args, const Type &result);
+             mlir::ValueRange args, const Type &result,
+             llvm::StringRef written);
   mlir::FailureOr<mlir::Value> lowerBuiltinInstance(mlir::Location location,
                                                     const MonomorphizedKey &key,
                                                     mlir::ValueRange args,

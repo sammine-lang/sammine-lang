@@ -192,7 +192,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
   builder_.setInsertionPointToStart(header);
   auto option =
       smn::CallOp::create(builder_, location, mlir::TypeRange{*optionType},
-                          iteration.next, header->getArgument(0))
+                          iteration.next, header->getArgument(0), "for")
           .getResult(0);
   auto tag =
       smn::TagOp::create(builder_, location, builder_.getI32Type(), option);

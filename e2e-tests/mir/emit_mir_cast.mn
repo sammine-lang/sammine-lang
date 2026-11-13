@@ -11,10 +11,10 @@
 // CHECK-NEXT: arith.sitofp %arg0 : i32 to f64
 // CHECK-LABEL: func.func private @dollars(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.call @"Convert<Money, f64>::Convert"(%arg0) : (!sammine.struct<"Money", (cents: i64)>) -> f64
+// CHECK: sammine.call @"Convert<Money, f64>::Convert"(%arg0) written "as" : (!sammine.struct<"Money", (cents: i64)>) -> f64
 // CHECK-LABEL: func.func private @sum(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.call @"Add<Vec2>::Add"(%arg0, %arg1)
+// CHECK: sammine.call @"Add<Vec2>::Add"(%arg0, %arg1) written "+"
 // CHECK-LABEL: func.func private @named(
 // CHECK-SAME: sammine.mir
 // CHECK: arith.addi

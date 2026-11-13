@@ -453,6 +453,10 @@ private:
 
 /// Why `op` takes the values it is given.
 llvm::StringRef reasonFor(mlir::Operation *op) {
+  // A call written as a cast converts what it is given.
+  if (auto call = mlir::dyn_cast<smn::CallOp>(op);
+      call && call.getWritten() == "as")
+    return "converted";
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::VariantOp>(op))
     return "passed to function";
   if (mlir::isa<smn::FreeOp>(op))

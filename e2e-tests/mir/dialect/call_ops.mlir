@@ -26,3 +26,14 @@ func.func @f(%p: !sammine.ptr<i32, owned>, %fmt: !sammine.ptr<i8, view>) -> i32 
   %n = sammine.call @printf(%fmt, %r, %ch) : (!sammine.ptr<i8, view>, i32, i8) -> i32
   return %r : i32
 }
+
+// -----
+
+// A call standing for other syntax says what was written.
+func.func private @"Convert<A, B>::Convert"(i32) -> i64
+// CHECK-LABEL: func.func @cast
+func.func @cast(%x: i32) -> i64 {
+  // CHECK: sammine.call @"Convert<A, B>::Convert"(%arg0) written "as" : (i32) -> i64
+  %y = sammine.call @"Convert<A, B>::Convert"(%x) written "as" : (i32) -> i64
+  return %y : i64
+}

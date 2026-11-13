@@ -345,10 +345,33 @@ def CallOp : Sammine_Op<"call",
     The callee may be a C function, an `llvm.func`: a variadic one takes any
     number of arguments after those it declares, which lowering promotes as
     C does.
+
+    A call that stands for other syntax says what was written: `as` for
+    `x as T` through Convert, an operator through its class, `[]` for
+    `x[i]` through Indexer, `for` for a loop's step through Iterator. A
+    message about what the call takes speaks of what was written.
   }];
-  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$args);
+  let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$args,
+                       OptionalAttr<StrAttr>:$written);
   let results = (outs Variadic<AnyType>:$results);
   let assemblyFormat = [{
-    $callee `(` $args `)` attr-dict `:` functional-type($args, results)
+    $callee `(` $args `)` (`written` $written^)? attr-dict `:`
+    functional-type($args, results)
   }];
+  let builders = [
+    // A call written as a call.
+    OpBuilder<(ins "::mlir::TypeRange":$results, "::llvm::StringRef":$callee,
+                   "::mlir::ValueRange":$args), [{
+      build($_builder, $_state, results,
+            ::mlir::FlatSymbolRefAttr::get($_builder.getContext(), callee),
+            args, ::mlir::StringAttr());
+    }]>,
+    // A call standing for the syntax `written`.
+    OpBuilder<(ins "::mlir::TypeRange":$results, "::llvm::StringRef":$callee,
+                   "::mlir::ValueRange":$args, "::llvm::StringRef":$written), [{
+      build($_builder, $_state, results,
+            ::mlir::FlatSymbolRefAttr::get($_builder.getContext(), callee),
+            args, $_builder.getStringAttr(written));
+    }]>,
+  ];
 }
