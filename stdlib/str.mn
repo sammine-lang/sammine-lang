@@ -42,9 +42,9 @@ export let unsafe get(s: ptr<String>, i: i64) -> Option<char> {
 }
 
 // A buffer with room for c characters and the terminator, holding the
-// first length of data and its terminator. data is freed.
-let unsafe grow(data: 'buf<char>, length: i64, c: i64) -> 'buf<char> {
-  let bigger = memcpy(malloc(c + 1i64), data, length + 1i64);
+// first n of data and its terminator. data is freed.
+let unsafe grow(data: 'buf<char>, n: i64, c: i64) -> 'buf<char> {
+  let bigger = memcpy(malloc(c + 1i64), data, n + 1i64);
   drop(data);
   bigger
 }

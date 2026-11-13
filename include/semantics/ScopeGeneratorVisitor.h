@@ -12,8 +12,8 @@ namespace sammine_lang::AST {
 class ScopeGeneratorVisitor : public ScopedASTVisitor {
 public:
   using ScopedASTVisitor::visit;
-  // A simple scoping class, doesn't differentiate between different names, like
-  // variable name, func name and all that
+  // The locals in scope: parameters, lets, case bindings, loop variables.
+  // Top-level names are the resolver's, per module.
   LexicalStack<sammine_util::Location> scope_stack;
   // variant_name → list of owning enum QualifiedNames
   std::map<std::string, std::vector<sammine_util::QualifiedName>>
@@ -44,18 +44,6 @@ public:
   virtual void exit_new_scope() override {
     this->scope_stack.pop_context();
     pop_ast_context();
-  }
-  NameQueryResult can_see(const std::string &symbol) const {
-    return this->scope_stack.recursiveQueryName(symbol);
-  }
-  NameQueryResult can_see_parent(const std::string &symbol) const {
-    const auto *parent_scope = this->scope_stack.parent_scope();
-    return parent_scope->recursiveQueryName(symbol);
-  }
-  void register_name_parent(const std::string &symbol,
-                            sammine_util::Location loc) {
-    auto *parent_scope = this->scope_stack.parent_scope();
-    return parent_scope->registerNameT(symbol, loc);
   }
   void register_name(const std::string &symbol, sammine_util::Location loc) {
     return this->scope_stack.registerNameT(symbol, loc);

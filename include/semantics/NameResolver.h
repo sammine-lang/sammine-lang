@@ -21,13 +21,17 @@ namespace sammine_lang::AST {
 //! only read names. It also decides the symbol each definition is linked as,
 //! in ASTProperties: its name, but a C binding's is its C name, as a C
 //! function is bound in many modules (std::printf, io::printf), each with
-//! the types it gives it, and C knows it as one (printf). A name is resolved in the module whose code it is
-//! (`where.module`), and that module's own definition comes first: code
-//! imported from module M finds M's definitions, which are named M::X in the
-//! importer, and an importer's same-named definition can't capture them.
+//! the types it gives it, and C knows it as one (printf).
 //!
-//! The names it looks up are the scope generator's: its scopes, whose root
-//! holds the top-level definitions, and its table of variants to enums.
+//! Every module has its own scope, wherever its code is compiled: a name
+//! written bare in module M's code is a local, else one of M's own top-level
+//! definitions, else one the prelude exports, and nothing else. An imported
+//! generic function, compiled in the importer, still sees only its module's
+//! names: the importer's can't capture its names, or clash with its
+//! parameters. A qualified name, m::f, goes through M's import aliases.
+//!
+//! Locals are the scope generator's scopes; its table of variants to enums
+//! is its too.
 class NameResolver {
 public:
   using Scopes = LexicalStack<sammine_util::Location>;
@@ -39,9 +43,10 @@ public:
       : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee),
         props(props) {}
 
-  //! Name every definition of `program` and give each C binding its symbol,
-  //! and take its modules' import aliases, before any name is registered or
-  //! resolved.
+  //! Name every definition of `program`, give each C binding its symbol,
+  //! take its modules' import aliases, and give each module its top-level
+  //! names, before any name is resolved. A module defining a name twice, or
+  //! one the prelude exports, is reported.
   void use_program(ProgramAST &program);
 
   //! The prelude, stdlib/definitions.mn: every other module imports it
@@ -51,10 +56,12 @@ public:
   static constexpr std::string_view kPrelude = "definitions";
 
   //! `name` as a definition of `module` is named: module::name. A name
-  //! already qualified, of no module (an executable's) or of the prelude, is
-  //! unchanged.
+  //! already qualified, of no module (an executable's) or exported by the
+  //! prelude, is unchanged. The prelude's private names are qualified as any
+  //! module's: they aren't to be used, or taken, without a prefix elsewhere.
   static sammine_util::QualifiedName
-  qualify(const sammine_util::QualifiedName &name, const std::string &module);
+  qualify(const sammine_util::QualifiedName &name, const std::string &module,
+          bool exported = true);
 
   //! A type, in a type expression, or the type a struct literal or a
   //! generic names.
@@ -72,18 +79,37 @@ public:
                        sammine_util::Location location,
                        const ASTContext &where);
 
+  //! Where `name`, written bare in `where.module`'s code, is already
+  //! defined, if it is: a local, or a top-level name in scope there.
+  std::optional<sammine_util::Location>
+  defined_at(const std::string &name, const ASTContext &where);
+
 private:
   Scopes &scopes;
   const VariantEnums &variant_to_enum;
   sammine_util::Reportee &reportee;
   ASTProperties &props;
   std::map<std::string, ImportAliases> module_aliases;
-  //! Each top-level definition's module, and whether it exports it.
-  struct Owner {
+  //! Each top-level definition, by its name (m::f): its module, whether it
+  //! exports it, and where it is.
+  struct Definition {
     std::string module;
     bool exported;
+    sammine_util::Location location;
   };
-  std::map<std::string, Owner> owners;
+  std::map<std::string, Definition> definitions;
+  //! Per module, its top-level definitions' names as its code writes them
+  //! (f), each to its name (m::f).
+  std::map<std::string, std::map<std::string, sammine_util::QualifiedName>>
+      top_levels;
+
+  //! The name of the top-level definition `name` means, written bare in
+  //! `module`'s code: one of the module's own, or one the prelude exports.
+  std::optional<sammine_util::QualifiedName>
+  top_level(const std::string &module, const std::string &name) const;
+  //! Whether `name` is a local: a parameter or a variable, not a top-level
+  //! definition.
+  bool is_local(const std::string &name) const;
 
   //! Reports `name` if what it resolved to, or the enum of a variant it
   //! names, is private to a module other than `where.module`. A definition
@@ -97,16 +123,6 @@ private:
   //! of the module's own (Shape::Line → shapes::Shape::Line). False if it is
   //! neither, leaving `name` as written.
   bool resolve_head(sammine_util::QualifiedName &name, const ASTContext &where);
-  //! The top-level definition of `where.module` that `name` means, if any.
-  std::optional<sammine_util::QualifiedName>
-  own_definition(const sammine_util::QualifiedName &name,
-                 const ASTContext &where);
-  //! Whether `name` is a local: a parameter or a variable, not a top-level
-  //! definition.
-  bool is_local(const std::string &name);
-  bool is_visible(const std::string &name) const {
-    return scopes.recursiveQueryName(name) == nameFound;
-  }
 };
 
 } // namespace sammine_lang::AST

@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: [SCOPE]: The name `Range` has been introduced before
+// CHECK: [SCOPE]: Most recently defined `Range` is here
+
+// The prelude's exported names are in every module's scope, a library's
+// too: it can't define its own Range, as a program can't. This file has no
+// main, so it is a library.
+export struct Range { a: i32, };

@@ -10,7 +10,7 @@
 3. Parse, record the module's import aliases, trace its library (before its imports', for static link order), then import its own imports the same way
 4. Every definition comes, private ones too (`is_exported` kept): functions, C bindings, instances, types, typeclass decls
 5. Bodies stay in the module (compiled first): a non-generic FuncDefAST becomes an ExternAST. Generic functions keep their bodies (compiled here). An instance becomes `is_declaration` but keeps its method bodies: type-checked here (as its module's code: methods get its `defining_module`) and emitted `available_externally` + `inlinehint`, so they inline but the module's copy is the one linked
-6. Privacy is a naming rule: `NameResolver::check_visible` rejects a private function or type named outside its module (owners table from `use_program`); the type checker rejects a private instance (`private_instances`, `has_instance` compares `enclosing_function->defining_module`, which generic instantiations inherit). A module's own code compiled here (its generic functions) may use both
+6. Privacy is a naming rule: `NameResolver::check_visible` rejects a private function or type named outside its module (`definitions` table from `use_program`); the type checker rejects a private instance (`private_instances`, `has_instance` compares `enclosing_function->defining_module`, which generic instantiations inherit). A module's own code compiled here (its generic functions) may use both
 7. Names: only `defining_module` is set here; `NameResolver` names the definitions
 8. Prepend to `DefinitionVec`
 

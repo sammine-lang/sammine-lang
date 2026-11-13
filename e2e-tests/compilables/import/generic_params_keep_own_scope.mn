@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 3 7 1 2
+
+// An imported generic function is compiled here, but its code is in its
+// module's scope, not this file's: vec::push's parameters `v` and `val`
+// don't clash with this file's functions of those names, nor get's `i`
+// with this one's.
+
+import std;
+import vec;
+
+let v() -> i32 { 1 }
+let val() -> i32 { 2 }
+let i() -> i32 { 0 }
+let cap(n: i32) -> i64 { n as i64 }
+
+let main() -> i32 {
+  let w = vec::push<i32>(vec::push<i32>(vec::new<i32>(cap(1)), v() + val()),
+                         7);
+  let first = case vec::get<i32>(&w, i() as i64) { Some(x) => x, None => 0 };
+  std::printf("%d %d %d %lld\n", first, w[1], v(), w.cap);
+  vec::delete<i32>(w);
+  0
+}

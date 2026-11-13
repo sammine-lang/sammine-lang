@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: [SCOPE]: The firstly defined `size` is here
+// CHECK: [SCOPE]: The name `size` has been introduced before
+
+// This file has no main, so it is a library: its top-level names are
+// size and twice, and a parameter may not take one, as in a program.
+export let size() -> i64 { 4i64 }
+export let twice(size: i64) -> i64 { size * 2i64 }
