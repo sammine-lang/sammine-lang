@@ -479,8 +479,8 @@ void Compiler::codegen_mlir() {
   resPtr->Module = std::move(llvmModule);
 }
 
-// Stage 9: Run LLVM O2 optimization pipeline. Supports --emit llvm/llvm-opt/llvm-diff
-// modes.
+// Stage 9: Run LLVM's optimization pipeline, at --opt-level (O2 unless told).
+// Supports --emit llvm/llvm-opt/llvm-diff modes.
 void Compiler::optimize() {
   SAMMINE_ZONE_NAMED("optimize");
   if (has_error()) {
@@ -517,8 +517,13 @@ void Compiler::optimize() {
   PB.registerLoopAnalyses(LAM);
   PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-  llvm::ModulePassManager MPM =
-      PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2);
+  static const llvm::OptimizationLevel levels[] = {
+      llvm::OptimizationLevel::O0, llvm::OptimizationLevel::O1,
+      llvm::OptimizationLevel::O2, llvm::OptimizationLevel::O3};
+  auto level = levels[static_cast<size_t>(options_.opt_level)];
+  llvm::ModulePassManager MPM = level == llvm::OptimizationLevel::O0
+                                    ? PB.buildO0DefaultPipeline(level)
+                                    : PB.buildPerModuleDefaultPipeline(level);
   MPM.run(*resPtr->Module, MAM);
 
   if (emit == EmitKind::LlvmOpt) {

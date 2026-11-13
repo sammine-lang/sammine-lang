@@ -102,6 +102,10 @@ Options::Options(int argc, char *argv[]) {
       ->expected(0, 1)
       ->default_str("shared");
 
+  app.add_option("--opt-level", opt_level,
+                 "LLVM optimization level, 0 to 3 (default 2)")
+      ->check(CLI::Range(0, 3));
+
   argv0 = argv[0];
   // CLI11 signals --help, like a bad flag, with an exception. app.exit
   // prints what it asks for and gives the exit code: 0 for --help.

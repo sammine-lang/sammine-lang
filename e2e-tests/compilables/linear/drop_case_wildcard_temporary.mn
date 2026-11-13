@@ -1,4 +1,4 @@
-// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// RUN: %sammine --file %full %O --opt-level 0 && %valgrind %T/%base.exe
 // REQUIRES: valgrind
 
 // A wildcard arm takes L, which no arm names, with its payload: the payload

@@ -42,6 +42,9 @@ public:
   std::filesystem::path output_dir;
   std::vector<std::string> import_paths;
   LibFormat lib_format;
+  /// LLVM's optimization level, 0 to 3. At 0, an allocation nothing reads
+  /// stays, so a leak check sees it.
+  int opt_level = 2;
   std::filesystem::path stdlib_dir;
   std::string argv0;
   Options() = delete;
