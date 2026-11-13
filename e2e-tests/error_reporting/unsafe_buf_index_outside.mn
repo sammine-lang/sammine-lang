@@ -1,0 +1,17 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: unsafe_buf_index_outside.mn:12:4
+// CHECK: declare it as 'let unsafe main' to allow it
+// CHECK: 14|  b[0] = 1;
+// CHECK: ╰─ indexing a pointer is only allowed in an unsafe function
+// CHECK: 15|  let x = b[0];
+// CHECK: ╰─ indexing a pointer is only allowed in an unsafe function
+
+// A buffer's slots are reached only in an unsafe function, read or written:
+// nothing checks which slot holds a value, nor the bounds.
+
+let main() -> i32 {
+  let b = alloc_buf<i32>(2);
+  b[0] = 1;
+  let x = b[0];
+  x
+}
