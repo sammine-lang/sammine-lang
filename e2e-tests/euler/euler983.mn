@@ -1,0 +1,296 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 1 5
+
+import std;
+import range;
+import set;
+import map;
+import buffer;
+
+// The grid point (x, y) as one number, so that adding two points' numbers
+// adds the points. y stays well inside a side.
+let point(x: i64, y: i64) -> i64 { x * 1048576 + y }
+
+// The least y from y on whose square reaches n.
+let ceil_root(n: i64, y: i64) -> i64 {
+  if y * y >= n { y } else { ceil_root(n, y + 1) }
+}
+
+// How many grid points (a, b) lie on the circle a^2 + b^2 = n with a >= x
+// and 0 <= b <= y.
+let quarter(n: i64, x: i64, y: i64) -> i64 {
+  if y < 0 { 0 }
+  else if x * x + y * y < n { quarter(n, x + 1, y) }
+  else if x * x + y * y > n { quarter(n, x, y - 1) }
+  else { 1 + quarter(n, x + 1, y - 1) }
+}
+
+// Those points, x then y, written to xy from point j on, each followed q,
+// 2q and 3q points later by its quarter turns: point i + 2q is -point i.
+let unsafe fill(n: i64, x: i64, y: i64, xy: 'buf<i64>, q: i64,
+                j: i64) -> 'buf<i64> {
+  if y < 0 { xy }
+  else if x * x + y * y < n { fill(n, x + 1, y, xy, q, j) }
+  else if x * x + y * y > n { fill(n, x, y - 1, xy, q, j) }
+  else {
+    xy[2 * j] = x;          xy[2 * j + 1] = y;
+    xy[2 * (q + j)] = 0 - y; xy[2 * (q + j) + 1] = x;
+    xy[2 * (2 * q + j)] = 0 - x; xy[2 * (2 * q + j) + 1] = 0 - y;
+    xy[2 * (3 * q + j)] = y; xy[2 * (3 * q + j) + 1] = 0 - x;
+    fill(n, x + 1, y - 1, xy, q, j + 1)
+  }
+}
+
+// The cell of (x, y) in a grid of the points no coordinate of which is
+// past h.
+let cell(h: i64, x: i64, y: i64) -> i64 { (x + h) * (2 * h + 1) + y + h }
+
+// A circle's vectors, and two grids: `on` marks the vectors, and `diffs`
+// each difference of two, 1 when it is 0 or a diameter, 2 otherwise.
+struct Circle {
+  xy: 'buf<i64>,
+  vs: 'buf<i64>,
+  on: 'buf<i64>,
+  diffs: 'buf<i64>,
+  top: i64,
+  m: i64,
+};
+
+let unsafe on_at(c: ptr<Circle>, x: i64, y: i64) -> i64 {
+  let h = (*c).top;
+  if x < 0 - h || x > h || y < 0 - h || y > h { 0 } else { (*c).on[cell(h, x, y)] }
+}
+
+let unsafe diff_at(c: ptr<Circle>, x: i64, y: i64) -> i64 {
+  let h = 2 * (*c).top;
+  if x < 0 - h || x > h || y < 0 - h || y > h { 0 } else { (*c).diffs[cell(h, x, y)] }
+}
+
+let unsafe encode(xy: ptr<i64>, vs: 'buf<i64>, i: i64) -> 'buf<i64> {
+  vs[i] = point(xy[2 * i], xy[2 * i + 1]);
+  vs
+}
+
+let unsafe mark_on(xy: ptr<i64>, h: i64, g: 'buf<i64>, i: i64) -> 'buf<i64> {
+  g[cell(h, xy[2 * i], xy[2 * i + 1])] = 1;
+  g
+}
+
+let unsafe mark_diff(xy: ptr<i64>, h: i64, nv: i64, g: 'buf<i64>,
+                     ab: i64) -> 'buf<i64> {
+  let a = ab / nv;
+  let b = ab % nv;
+  let opposite = a == b || b == (a + nv / 2) % nv;
+  g[cell(h, xy[2 * a] - xy[2 * b], xy[2 * a + 1] - xy[2 * b + 1])] =
+    if opposite { 1 } else { 2 };
+  g
+}
+
+let unsafe circle(n: i64, top: i64, q: i64) -> Circle {
+  let nv = 4 * q;
+  let xy = fill(n, 1, top, alloc_buf<i64>(2 * nv), q, 0);
+  let vs = range::fold(0, nv, alloc_buf<i64>(nv), encode(xy));
+  let on = range::fold(0, nv, buffer::filled((2 * top + 1) * (2 * top + 1), 0i64),
+                       mark_on(xy, top));
+  let side = 4 * top + 1;
+  let diffs = range::fold(0, nv * nv, buffer::filled(side * side, 0i64),
+                          mark_diff(xy, 2 * top, nv));
+  Circle { xy: xy, vs: vs, on: on, diffs: diffs, top: top, m: 2 * q }
+}
+
+let bits(t: i64) -> i64 { if t == 0 { 0 } else { (t & 1) + bits(t >> 1) } }
+
+// The exact check, for the sets the fast one can't settle.
+
+// The sum of the vectors from vs[i] on that t's bits choose.
+let unsafe sum_of(c: ptr<Circle>, t: i64, i: i64) -> i64 {
+  if t == 0 { 0 } else { (t & 1) * (*c).vs[i] + sum_of(c, t >> 1, i + 1) }
+}
+
+let unsafe centres_from(c: ptr<Circle>, mask: i64, odd: i64, t: i64,
+                        cs: 'buf<i64>, j: i64) -> 'buf<i64> {
+  let centre = bits(t) % 2 == odd;
+  if centre { cs[j] = sum_of(c, t, 0); };
+  if t == 0 { cs } else {
+    centres_from(c, mask, odd, (t - 1) & mask, cs,
+                 if centre { j + 1 } else { j })
+  }
+}
+
+let unsafe add_centre(cs: ptr<i64>, s: set::Set<i64>, i: i64) -> set::Set<i64> {
+  set::insert<i64>(s, cs[i])
+}
+
+let unsafe touches(cs: ptr<i64>, c: ptr<Circle>, nv: i64,
+                   s: ptr<set::Set<i64>>, i: i64) -> bool {
+  set::contains<i64>(s, cs[i / nv] + 2 * (*c).vs[i % nv])
+}
+
+struct Tally { on: map::Map<i64, i64>, shared: i64, };
+
+let unsafe pass(cs: ptr<i64>, c: ptr<Circle>, nv: i64, t: Tally,
+                i: i64) -> Tally {
+  let z = cs[i / nv] + (*c).vs[i % nv];
+  let seen = case map::get<i64, i64>(&t.on, z) { Some(k) => k, None => 0 };
+  Tally {
+    on: map::insert<i64, i64>(t.on, z, seen + 1),
+    shared: if seen == 1 { t.shared + 1 } else { t.shared },
+  }
+}
+
+let unsafe shared(cs: ptr<i64>, c: ptr<Circle>, nv: i64, n: i64) -> i64 {
+  let t = range::fold(0, n * nv, Tally { on: map::new<i64, i64>(), shared: 0 },
+                      pass(cs, c, nv));
+  let count = t.shared;
+  drop(t);
+  count
+}
+
+let unsafe perfect(c: ptr<Circle>, nv: i64, mask: i64, odd: i64) -> bool {
+  let n = 1 << (bits(mask) - 1);
+  let cs = centres_from(c, mask, odd, mask, alloc_buf<i64>(n), 0);
+  let s = range::fold(0, n, set::new<i64>(), add_centre(cs));
+  let ok = set::length<i64>(&s) == n &&
+    range::count(0, n * nv, touches(cs, c, nv, &s)) == 0 &&
+    shared(cs, c, nv, n) == n;
+  drop(s);
+  drop(cs);
+  ok
+}
+
+let unsafe fits(c: ptr<Circle>, mask: i64, last: bool) -> bool {
+  let nv = 2 * (*c).m;
+  if bits(mask) < 2 { true }
+  else if last { perfect(c, nv, mask, 0) || perfect(c, nv, mask, 1) }
+  else { perfect(c, nv, mask, 0) && perfect(c, nv, mask, 1) }
+}
+
+// The signed sums of the vectors chosen, each with how many it adds and
+// how many of those it adds rather than takes away.
+struct Sums {
+  xs: 'buf<i64>,
+  ys: 'buf<i64>,
+  terms: 'buf<i64>,
+  plus: 'buf<i64>,
+  count: i64,
+};
+
+let start() -> Sums {
+  Sums { xs: buffer::filled(1, 0i64), ys: buffer::filled(1, 0i64),
+         terms: buffer::filled(1, 0i64), plus: buffer::filled(1, 0i64),
+         count: 1 }
+}
+
+let unsafe spread(s: ptr<Sums>, x: i64, y: i64, t: Sums, j: i64) -> Sums {
+  t.xs[3 * j] = (*s).xs[j];
+  t.ys[3 * j] = (*s).ys[j];
+  t.terms[3 * j] = (*s).terms[j];
+  t.plus[3 * j] = (*s).plus[j];
+  t.xs[3 * j + 1] = (*s).xs[j] + x;
+  t.ys[3 * j + 1] = (*s).ys[j] + y;
+  t.terms[3 * j + 1] = (*s).terms[j] + 1;
+  t.plus[3 * j + 1] = (*s).plus[j] + 1;
+  t.xs[3 * j + 2] = (*s).xs[j] - x;
+  t.ys[3 * j + 2] = (*s).ys[j] - y;
+  t.terms[3 * j + 2] = (*s).terms[j] + 1;
+  t.plus[3 * j + 2] = (*s).plus[j];
+  t
+}
+
+// s's sums, each also with (x, y) added and taken away.
+let unsafe extend(s: ptr<Sums>, x: i64, y: i64) -> Sums {
+  let n = 3 * (*s).count;
+  range::fold(0, (*s).count,
+              Sums { xs: alloc_buf<i64>(n), ys: alloc_buf<i64>(n),
+                     terms: alloc_buf<i64>(n), plus: alloc_buf<i64>(n),
+                     count: n },
+              spread(s, x, y))
+}
+
+let clash() -> i64 { 1 }
+let crossing() -> i64 { 2 }
+let on_circle() -> i64 { 4 }
+let whole(plus: i64) -> i64 { if plus % 2 == 0 { 8 } else { 16 } }
+
+let with_flag(acc: i64, flag: i64) -> i64 {
+  if (acc & flag) == 0 { acc + flag } else { acc }
+}
+
+let unsafe kind(c: ptr<Circle>, x: i64, y: i64, terms: i64, plus: i64,
+                full: i64) -> i64 {
+  if terms % 2 == 0 && terms >= 4 {
+    let d = diff_at(c, x, y);
+    if d == 0 { 0 }
+    else if terms == full { whole(plus) }
+    else if d == 1 { clash() }
+    else { crossing() }
+  } else if terms % 2 == 1 && terms >= 3 && on_at(c, x, y) == 1 { on_circle() }
+  else { 0 }
+}
+
+let unsafe scan(c: ptr<Circle>, s: ptr<Sums>, x: i64, y: i64, full: i64,
+                j: i64, acc: i64) -> i64 {
+  if j == (*s).count { acc } else {
+    let k = kind(c, x + (*s).xs[j], y + (*s).ys[j], (*s).terms[j] + 1,
+                 (*s).plus[j] + 1, full);
+    if k == clash() { k } else {
+      scan(c, s, x, y, full, j + 1, if k == 0 { acc } else { with_flag(acc, k) })
+    }
+  }
+}
+
+let unsafe grows(c: ptr<Circle>, s: ptr<Sums>, clean: bool, mask: i64,
+                 i: i64, more: i64) -> bool {
+  more == 0 ||
+    ((*c).m - i >= more &&
+     (joins(c, s, clean, mask, i, more) || grows(c, s, clean, mask, i + 1, more)))
+}
+
+let unsafe joins(c: ptr<Circle>, s: ptr<Sums>, clean: bool, mask: i64,
+                 i: i64, more: i64) -> bool {
+  let last = more == 1;
+  let k = scan(c, s, (*c).xy[2 * i], (*c).xy[2 * i + 1], bits(mask) + 1, 0, 0);
+  let next = mask + (1 << i);
+  if (k & clash()) != 0 { false }
+  else if clean == false || (k & on_circle()) != 0 {
+    if fits(c, next, last) { deeper(c, s, false, next, i, more) } else { false }
+  }
+  else if (k & crossing()) != 0 { false }
+  else if last { k != 24 }
+  else if k != 0 { false }
+  else { deeper(c, s, true, next, i, more) }
+}
+
+let unsafe deeper(c: ptr<Circle>, s: ptr<Sums>, clean: bool, mask: i64,
+                  i: i64, more: i64) -> bool {
+  if more == 1 { true } else {
+    let t = extend(s, (*c).xy[2 * i], (*c).xy[2 * i + 1]);
+    let found = grows(c, &t, clean, mask, i + 1, more - 1);
+    drop(t);
+    found
+  }
+}
+
+let unsafe has_perfect(k: i64, n: i64) -> bool {
+  let top = ceil_root(n, 0);
+  let q = quarter(n, 1, top);
+  if 2 * q < k { false } else {
+    let c = circle(n, top, q);
+    let s = start();
+    let found = grows(&c, &s, true, 0, 0, k);
+    drop(s);
+    drop(c);
+    found
+  }
+}
+
+let unsafe least(k: i64, n: i64) -> i64 {
+  if has_perfect(k, n) { n } else { least(k, n + 1) }
+}
+
+let unsafe main() -> i32 {
+  print("{} {}\n", least(2, 1), least(3, 1));
+  print("{} {} {} {} {} {}\n", least(4, 1), least(5, 1), least(6, 1), least(7, 1), least(8, 1), least(9, 1));
+  print("{}\n", least(10, 1));
+  0
+}
