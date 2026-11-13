@@ -1,0 +1,44 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK-NOT: Cannot
+// CHECK: from_slot(b: 'ptr<i32>) -> (i32) -> i32 {
+// CHECK: Cannot return a partial application of 'look' that captured a view (ptr<T>) (may dangle after return)
+// CHECK: from_field(b: 'ptr<i32>) -> (i32) -> i32 {
+// CHECK: Cannot return a partial application of 'look' that captured a view (ptr<T>) (may dangle after return)
+
+// A pointer to where a closure is holds what the closure does: one that
+// bound a view, read back through a pointer to its slot, or to a struct it
+// is a field of, holds the view still, in the function reading it and in
+// the one that lent the pointer.
+
+struct Job { f: (i32) -> i32, };
+
+let look(p: ptr<i32>, x: i32) -> i32 { *p + x }
+let read(p: ptr<(i32) -> i32>) -> (i32) -> i32 { *p }
+let read_field(j: ptr<Job>) -> (i32) -> i32 { (*j).f }
+let call_field(j: ptr<Job>) -> i32 {
+  let f = (*j).f;
+  f(1)
+}
+
+let fine(b: 'ptr<i32>) -> i32 {
+  let j = Job { f: look(b) };
+  let n = call_field(&j);        // only called through the pointer: fine
+  drop(b);
+  n
+}
+
+let from_slot(b: 'ptr<i32>) -> (i32) -> i32 {
+  let f = look(b);
+  let g = read(&f);              // read hands back what f holds
+  drop(b);
+  g
+}
+
+let from_field(b: 'ptr<i32>) -> (i32) -> i32 {
+  let j = Job { f: look(b) };
+  let g = read_field(&j);
+  drop(b);
+  g
+}
+
+let main() -> i32 { 0 }

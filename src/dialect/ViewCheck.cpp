@@ -166,11 +166,12 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
 /// Where closures that must stay in the call that made them go: one that
 /// bound a view, or one that keeps what it binds in its maker's frame
 /// (smn::ClosureOp::bindsInline). Each is followed from where it is made,
-/// through what is built of it, block arguments, slots and calls, to where
-/// it would leave the call: a return, a store through a pointer, or a call
-/// that lets it go. Across functions it goes by summaries: which parameters
-/// a function lets escape and which it returns, to a fixed point over the
-/// module. A call through a function value lets its arguments escape.
+/// through what is built of it, block arguments, slots, pointers to them
+/// and calls, to where it would leave the call: a return, a store through a
+/// pointer, or a call that lets it go. Across functions it goes by summaries:
+/// which parameters a function lets escape and which it returns, to a fixed
+/// point over the module. A call through a function value lets its arguments
+/// escape.
 class ClosureEscapes {
 public:
   explicit ClosureEscapes(mlir::ModuleOp module)
@@ -219,20 +220,6 @@ private:
   llvm::DenseMap<mlir::Operation *, Summary> summaries_;
   bool failed_ = false;
 
-  static bool holdsFunction(mlir::Type type) {
-    if (mlir::isa<smn::FnType>(type))
-      return true;
-    if (auto st = mlir::dyn_cast<smn::StructType>(type))
-      return llvm::any_of(st.getFields(), holdsFunction);
-    if (auto tuple = mlir::dyn_cast<smn::TupleType>(type))
-      return llvm::any_of(tuple.getElements(), holdsFunction);
-    if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
-      return holdsFunction(array.getElement());
-    if (auto en = mlir::dyn_cast<smn::EnumType>(type))
-      return llvm::any_of(en.getVariants(), holdsFunction);
-    return false;
-  }
-
   static bool bindsView(smn::ClosureOp closure) {
     return llvm::any_of(closure.getBound(),
                         [](mlir::Value v) { return isView(v.getType()); });
@@ -280,7 +267,7 @@ private:
     };
 
     for (auto [i, arg] : llvm::enumerate(func.getArguments()))
-      if (holdsFunction(arg.getType()))
+      if (holdsFunctionValue(arg.getType()))
         add(arg, Taint{{}, {static_cast<unsigned>(i)}});
 
     for (bool changed = true; changed;) {
@@ -302,7 +289,10 @@ private:
         } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
           changed |=
               add(placeRoot(store.getPlace()), taintOf(store.getValue()));
-        } else if (mlir::isa<smn::CopyOp, smn::MoveOp>(op)) {
+        } else if (mlir::isa<smn::CopyOp, smn::MoveOp, smn::AddrOp, smn::LendOp,
+                             smn::DerefOp, smn::ThroughOp>(op)) {
+          // What is read from a place holds what the place does, and so
+          // does a pointer to it, and the place a pointer is reached to.
           changed |=
               add(op->getResult(0), taintOf(placeRoot(op->getOperand(0))));
         } else if (auto call = mlir::dyn_cast<smn::CallOp>(op)) {
