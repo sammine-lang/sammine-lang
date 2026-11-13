@@ -40,6 +40,7 @@ class RangeExprAST;
 class IndexExprAST;
 class LenExprAST;
 class DimExprAST;
+class PanicExprAST;
 class UnaryNegExprAST;
 class StructLiteralExprAST;
 class FieldAccessExprAST;

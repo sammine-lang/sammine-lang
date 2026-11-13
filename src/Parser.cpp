@@ -774,6 +774,19 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
   return {std::make_unique<NodeT>(kw_tok, std::move(operand)), SUCCESS};
 }
 
+// panic("message", args...): a message, then what it formats.
+auto Parser::ParsePanicExpr() -> p<ExprAST> {
+  EXPECT(kw_tok, TokPanic);
+  auto [args, result] = ParseArguments();
+  if (result == NONCOMMITTED) {
+    report_error("Expected '(' after 'panic'", kw_tok->get_location());
+    return {nullptr, FAILED};
+  }
+  if (result != SUCCESS)
+    return {nullptr, FAILED};
+  return {std::make_unique<PanicExprAST>(kw_tok, std::move(args)), SUCCESS};
+}
+
 // alloc<T>(count), an owned pointer to one T, or alloc_buf<T>(count), a
 // buffer of count of them.
 auto Parser::ParseAllocExpr() -> p<ExprAST> {
@@ -911,10 +924,11 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
   };
 
   auto result = tryParsers<ExprAST>(
-      neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr, drop_, len,
-      dim, &Parser::ParseArrayLiteralExpr, &Parser::ParseIdentifierExpr,
-      &Parser::ParseParenExpr, &Parser::ParseIfExpr, &Parser::ParseCaseExpr,
-      &Parser::ParseWhileExpr, &Parser::ParseForExpr, num, bool_, chr, str);
+      neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr,
+      &Parser::ParsePanicExpr, drop_, len, dim, &Parser::ParseArrayLiteralExpr,
+      &Parser::ParseIdentifierExpr, &Parser::ParseParenExpr,
+      &Parser::ParseIfExpr, &Parser::ParseCaseExpr, &Parser::ParseWhileExpr,
+      &Parser::ParseForExpr, num, bool_, chr, str);
   if (!result.ok())
     return result;
   return parsePostfixOps(std::move(result.node));

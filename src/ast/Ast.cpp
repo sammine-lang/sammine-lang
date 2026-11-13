@@ -199,6 +199,13 @@ void ASTVisitor::visit(DimExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
+void ASTVisitor::visit(PanicExprAST *ast) {
+  ast->walk_with_preorder(this);
+  for (auto &arg : ast->arguments)
+    arg->accept_vis(this);
+  ast->walk_with_postorder(this);
+}
+
 void ASTVisitor::visit(UnaryNegExprAST *ast) {
   ast->walk_with_preorder(this);
   ast->operand->accept_vis(this);

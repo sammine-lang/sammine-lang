@@ -238,6 +238,13 @@ std::string LenExprAST::to_string() const {
   return "len(" + operand->to_string() + ")";
 }
 
+std::string PanicExprAST::to_string() const {
+  std::string out = "panic(";
+  for (size_t i = 0; i < arguments.size(); ++i)
+    out += (i ? ", " : "") + arguments[i]->to_string();
+  return out + ")";
+}
+
 std::string DimExprAST::to_string() const {
   return "dim(" + operand->to_string() + ")";
 }

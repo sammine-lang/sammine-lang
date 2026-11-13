@@ -5,7 +5,7 @@
 - **Enum variant pre-qualification**: type checker assumes ALL variant calls arrive qualified — scope generator must rewrite unqualified variants before type checking
 - **ASTProperties side table**: semantic properties (types, resolved names) live in `ASTProperties` keyed by `NodeId`, NOT on AST nodes — writers use `props_.call(id).field = val`, readers use `props_.call(id)->field`
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
-- **Generic templates skipped**: BiTypeChecker, OpenTypeCheck, ViewPlacementCheck, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
+- **Generic templates skipped**: BiTypeChecker, OpenTypeCheck, ViewPlacementCheck, NeverValueCheck, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `MIRTypes::mirType()` has no type for it, and declaring or lowering a function using it is an error
 - **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
 - **Kernel lambdas**: a map lambda's body and a reduce's identity go through `MIRLowering::lowerKernelScalar`, which accepts only plain arith ops in one block, what a linalg region holds

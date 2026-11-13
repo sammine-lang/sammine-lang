@@ -203,10 +203,6 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerArrayIndex(IndexExprAST *index) {
 // in a block of its own.
 mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
                                              mlir::Value offset, int64_t size) {
-  if (!module_.lookupSymbol(runtime::kDprintf) ||
-      !module_.lookupSymbol(runtime::kExit))
-    return mlir::failure();
-  auto i32 = builder_.getI32Type();
   auto i64 = builder_.getI64Type();
   mlir::Value wide = offset;
   if (offset.getType() != i64)
@@ -220,25 +216,70 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
   auto outside = mlir::arith::OrIOp::create(builder_, location, high, low);
 
   auto *region = builder_.getInsertionBlock()->getParent();
-  auto *fail = &region->emplaceBlock();
+  auto *outOfBounds = &region->emplaceBlock();
   auto *inside = &region->emplaceBlock();
-  mlir::cf::CondBranchOp::create(builder_, location, outside, fail, inside);
+  mlir::cf::CondBranchOp::create(builder_, location, outside, outOfBounds,
+                                 inside);
 
-  builder_.setInsertionPointToStart(fail);
-  auto message = smn::StringOp::create(
-      builder_, location, viewOf(builder_.getI8Type()),
-      "index %lld out of bounds for an array of length %lld\n");
-  auto stderrFd = intConstant(location, i32, 2);
-  smn::CallOp::create(builder_, location, mlir::TypeRange{i32},
-                      runtime::kDprintf,
-                      mlir::ValueRange{stderrFd, message, wide, sizeValue});
-  auto one = intConstant(location, i32, 1);
-  smn::CallOp::create(builder_, location, mlir::TypeRange{}, runtime::kExit,
-                      mlir::ValueRange{one});
-  smn::UnreachableOp::create(builder_, location);
+  builder_.setInsertionPointToStart(outOfBounds);
+  if (mlir::failed(fail(
+          location, "index %lld out of bounds for an array of length %lld\n",
+          mlir::ValueRange{wide, sizeValue})))
+    return mlir::failure();
 
   builder_.setInsertionPointToStart(inside);
   return mlir::success();
+}
+
+mlir::LogicalResult MIRLowering::fail(mlir::Location location,
+                                      llvm::StringRef format,
+                                      mlir::ValueRange args) {
+  if (!module_.lookupSymbol(runtime::kDprintf) ||
+      !module_.lookupSymbol(runtime::kExit))
+    return mlir::failure();
+  auto i32 = builder_.getI32Type();
+  auto message = smn::StringOp::create(builder_, location,
+                                       viewOf(builder_.getI8Type()), format);
+  llvm::SmallVector<mlir::Value> operands{intConstant(location, i32, 2),
+                                          message};
+  operands.append(args.begin(), args.end());
+  smn::CallOp::create(builder_, location, mlir::TypeRange{i32},
+                      runtime::kDprintf, operands);
+  smn::CallOp::create(builder_, location, mlir::TypeRange{}, runtime::kExit,
+                      mlir::ValueRange{intConstant(location, i32, 1)});
+  smn::UnreachableOp::create(builder_, location);
+  return mlir::success();
+}
+
+// panic(message, args...): `file:line:col: panic: ` and the message, with
+// a newline, is dprintf's format, and the arguments what it formats. The
+// block ends there, unreachable, so no drop is put after it and no path
+// through it joins the rest: its value is none.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerPanic(PanicExprAST *panic) {
+  auto location = loc(panic);
+  auto *message = llvm::dyn_cast<StringExprAST>(panic->arguments.front().get());
+  if (!message)
+    return mlir::failure();
+  std::string format;
+  if (auto range = mlir::dyn_cast<mlir::FileLineColRange>(location)) {
+    // The file's name is printed as it is: a `%` in it isn't a format.
+    std::string where;
+    for (char c : range.getFilename().getValue())
+      where += c == '%' ? std::string("%%") : std::string(1, c);
+    format = where + ":" + std::to_string(range.getStartLine()) + ":" +
+             std::to_string(range.getStartColumn() + 1) + ": ";
+  }
+  format += "panic: " + message->string_content + "\n";
+  llvm::SmallVector<mlir::Value> args;
+  for (auto &arg : llvm::drop_begin(panic->arguments)) {
+    auto value = lowerValue(arg.get());
+    if (mlir::failed(value))
+      return mlir::failure();
+    args.push_back(*value);
+  }
+  if (mlir::failed(fail(location, format, args)))
+    return mlir::failure();
+  return mlir::Value();
 }
 
 /// Which field of its struct or tuple `access` reads.

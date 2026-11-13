@@ -1,0 +1,55 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 3 7 9 10
+// CHECK-NEXT: unreached 0
+// CHECK-NEXT: pair 3
+
+// panic gives no value, so it fits where any is expected: a case's arm, an
+// if's branch, what a let binds or takes apart, a function's last value. A generic unwrap
+// needs it, having no T to give where there is none.
+
+import std;
+
+type Maybe<T> = Has(T) | Not;
+
+let unwrap<T>(m: Maybe<T>) -> T {
+  case m { Has(v) => v, Not => panic("unwrap of Not") }
+}
+
+let positive(n: i32) -> i32 {
+  if n > 0 { n } else { panic("%d isn't positive", n) }
+}
+
+let checked(n: i32) -> i32 {
+  if n < 100 {
+    return n;
+  };
+  let never = panic("too big: %d", n);
+  never
+}
+
+let unreachable_tail(b: bool) -> i32 {
+  if b {
+    return 0;
+  };
+  panic("b was false")
+}
+
+// Takes apart no tuple: its names are what their annotations say, and
+// nothing after it runs.
+let pair(n: i32) -> (i32, i64) {
+  if n >= 0 {
+    return (n, 2i64);
+  };
+  let (a: i32, b: i64) = panic("no pair for %d", n);
+  (a, b)
+}
+
+let main() -> i32 {
+  std::printf("%d %d %d %d\n", unwrap<i32>(Has(3)), positive(7), checked(9),
+              unwrap<i64>(Has(10i64)));
+  std::printf("unreached %d\n", unreachable_tail(true));
+  let (p, _q) = pair(3);
+  std::printf("pair %d\n", p);
+  0
+}

@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: This never gives a value, so it can't be an argument: it ends the program or returns first. Make it a statement, or a branch's value
+// CHECK: This never gives a value, so it can't be an operand: it ends the program or returns first. Make it a statement, or a branch's value
+// CHECK: This never gives a value, so it can't be an element: it ends the program or returns first. Make it a statement, or a branch's value
+
+// A panic, or an if whose branches all end, has no value to pass, add or
+// put in a tuple.
+let id(n: i32) -> i32 { n }
+
+let main() -> i32 {
+  let a = id(panic("as an argument"));
+  let b = 1 + if a > 0 { panic("one") } else { panic("other") };
+  let t = (1, panic("as an element"));
+  0
+}

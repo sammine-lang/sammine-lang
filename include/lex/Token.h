@@ -75,6 +75,7 @@ enum TokenType {
   TokDrop,      // drop
   TokLen,       // len
   TokDim,       // dim
+  TokPanic,     // panic
   TokArrow,     // ->
   TokLet,       // let
   TokReuse,     // reuse
@@ -175,6 +176,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokDrop, "drop"},
     {TokLen, "len"},
     {TokDim, "dim"},
+    {TokPanic, "panic"},
     {TokReuse, "reuse"},
     {TokExport, "export"},
     {TokImport, "import"},

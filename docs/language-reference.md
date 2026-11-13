@@ -275,6 +275,36 @@ for i in 0..3 {
 };
 ```
 
+### Panic
+
+`panic("message", args...)` ends the program: it prints where it is and the
+message, formatted as `printf` formats it with the arguments, to stderr, and
+exits with status 1.
+
+```sammine
+let unwrap<T>(m: Maybe<T>) -> T {
+  case m { Has(v) => v, Not => panic("unwrap of Not") }
+}
+let half(n: i32) -> i32 {
+  if n % 2 == 0 { n / 2 } else { panic("%d is odd", n) }
+}
+// half(7) prints: file.mn:5:34: panic: 7 is odd
+```
+
+- **It gives no value**, so it fits where any is expected: a branch, a case's
+  arm, a function's last value, what a `let` binds or takes apart (a name
+  without an annotation is then `Never` too). Its value can't be used,
+  as an argument, an operand or an element: that is an error, as it is for an
+  `if` whose branches all panic or return.
+- **The message is a string literal**, the format, and the arguments are
+  numbers, bools, chars and strings (`ptr<char>` not owned): a `%` in the
+  message formats one, `%%` prints one.
+- **Nothing is dropped.** The program ends where it panics, as `exit()` ends
+  it: values still owned, here or in the functions that called it, aren't
+  dropped, and their `Drop` instances don't run. C's streams are flushed, so
+  what was printed and written to files before it is kept. Its path joins no
+  other, so a value moved where it doesn't panic is simply moved afterwards.
+
 ---
 
 ## 5. Operators

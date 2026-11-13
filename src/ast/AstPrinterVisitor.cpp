@@ -73,6 +73,7 @@ public:
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
   virtual void visit(DimExprAST *ast) override;
+  virtual void visit(PanicExprAST *ast) override;
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
@@ -386,6 +387,13 @@ void AstPrinterVisitor::visit(IndexExprAST *ast) {
 void AstPrinterVisitor::visit(LenExprAST *ast) {
   generic_preprintln(ast);
   safeguard_visit(ast->operand.get(), "!!nullptr!! ExprAST\n");
+  generic_postprint();
+}
+
+void AstPrinterVisitor::visit(PanicExprAST *ast) {
+  generic_preprintln(ast);
+  for (auto &arg : ast->arguments)
+    safeguard_visit(arg.get(), "!!nullptr!! ExprAST\n");
   generic_postprint();
 }
 

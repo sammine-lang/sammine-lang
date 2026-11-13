@@ -337,6 +337,12 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
                                           clone_expr(len->operand.get()));
     break;
   }
+  case NodeKind::PanicExprAST: {
+    auto *panic = llvm::cast<PanicExprAST>(expr);
+    result = std::make_unique<PanicExprAST>(make_tok("panic"),
+                                            clone_expr_vec(panic->arguments));
+    break;
+  }
   case NodeKind::DimExprAST: {
     auto *dim = llvm::cast<DimExprAST>(expr);
     result = std::make_unique<DimExprAST>(make_tok("dim"),

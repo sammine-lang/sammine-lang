@@ -138,6 +138,19 @@ Type BiTypeCheckerVisitor::synthesize_tuple_destructure(VarDefAST *ast) {
   if (expr_type.is_poisoned())
     return ast->set_type(Type::Poisoned());
 
+  // What never gives a value, as a panic, gives no tuple to take apart: each
+  // name is what its annotation says, or Never. Nothing after it runs.
+  if (expr_type.is_never()) {
+    for (auto &var : ast->destructure_vars) {
+      auto type = var->type_expr ? var->accept_synthesis(this) : Type::Never();
+      if (type.is_poisoned())
+        return ast->set_type(Type::Poisoned());
+      var->set_type(type);
+      register_variable(var->name, type);
+    }
+    return ast->set_type(Type::Unit());
+  }
+
   if (expr_type.type_kind != TypeKind::Tuple) {
     this->add_error(ast->Expression->get_location(),
                     fmt::format("Cannot destructure non-tuple type '{}'",
@@ -1694,6 +1707,52 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   }
 
   return ast->set_type(Type::I32_t());
+}
+
+// panic("message", args...) never gives a value: Never, which fits where
+// any is expected. The message is printf's format, so it is a literal, and
+// what it formats goes through dprintf's `...`: numbers, bools, chars and
+// strings, which own nothing, so ending the program drops nothing of them.
+Type BiTypeCheckerVisitor::synthesize(PanicExprAST *ast) {
+  if (ast->synthesized())
+    return ast->get_type();
+
+  for (auto &arg : ast->arguments)
+    arg->accept_vis(this);
+
+  if (ast->arguments.empty()) {
+    this->add_error(ast->get_location(),
+                    "panic() needs a message: panic(\"what went wrong\")");
+    return ast->set_type(Type::Poisoned());
+  }
+  bool ok = true;
+  if (!llvm::isa<StringExprAST>(ast->arguments.front().get())) {
+    this->add_error(ast->arguments.front()->get_location(),
+                    "panic()'s message must be a string literal: it is the "
+                    "format of what it prints, as printf's");
+    ok = false;
+  }
+  for (auto &arg : llvm::drop_begin(ast->arguments)) {
+    auto type = arg->accept_synthesis(this);
+    if (type.is_poisoned()) {
+      ok = false;
+      continue;
+    }
+    // A string is a ptr<char> it doesn't own, as a literal is.
+    bool string =
+        type.type_kind == TypeKind::Pointer && !type.is_linear_v() &&
+        std::get<PointerType>(type.type_data).get_pointee().type_kind ==
+            TypeKind::Char;
+    if (type.is_numeric() || type.type_kind == TypeKind::Bool ||
+        type.type_kind == TypeKind::Char || string)
+      continue;
+    this->add_error(arg->get_location(),
+                    fmt::format("panic() prints numbers, bools, chars and "
+                                "strings, not '{}'",
+                                type.to_string()));
+    ok = false;
+  }
+  return ast->set_type(ok ? Type::Never() : Type::Poisoned());
 }
 
 Type BiTypeCheckerVisitor::synthesize(DimExprAST *ast) {

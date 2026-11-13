@@ -100,6 +100,7 @@ std::optional<TokenType> keyword_token(std::string_view word) {
     {"drop", TokDrop},
     {"len", TokLen},
     {"dim", TokDim},
+    {"panic", TokPanic},
     {"import", TokImport},
     {"as", TokAs},
     {"typeclass", TokTypeclass},

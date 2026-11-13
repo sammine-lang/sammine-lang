@@ -1,0 +1,4 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: panic() needs a message: panic("what went wrong")
+
+let main() -> i32 { panic() }

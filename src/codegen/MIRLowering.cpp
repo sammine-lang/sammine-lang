@@ -204,6 +204,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
 // lowered first, so `let x = x + 1` reads the x it shadows. `let (a, b) = t`
 // names each element of t.
 mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
+  // What never gives a value, as a panic, binds none: the block ends in it.
+  if (def->Expression->get_type().is_never()) {
+    auto value = lowerExpr(def->Expression.get());
+    return mlir::success(mlir::succeeded(value) && terminated());
+  }
   // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.
   if (!def->is_tuple_destructure && !types_.mirType(def->get_type()))
     return mlir::failure();
@@ -340,6 +345,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerDim(dim);
   if (auto *len = llvm::dyn_cast<LenExprAST>(expr))
     return lowerLen(len);
+  if (auto *panic = llvm::dyn_cast<PanicExprAST>(expr))
+    return lowerPanic(panic);
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
   if (auto *lit = llvm::dyn_cast<StructLiteralExprAST>(expr))

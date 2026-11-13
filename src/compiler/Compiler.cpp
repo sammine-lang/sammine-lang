@@ -58,6 +58,7 @@
 #include "semantics/GeneralSemanticsVisitor.h"
 #include "semantics/ScopeGeneratorVisitor.h"
 #include "typecheck/BiTypeChecker.h"
+#include "typecheck/NeverValueCheck.h"
 #include "typecheck/OpenTypeCheck.h"
 #include "typecheck/ViewPlacementCheck.h"
 #include "util/Logging.h"
@@ -278,7 +279,11 @@ void Compiler::typecheck() {
   auto placement = sammine_lang::AST::ViewPlacementCheck();
   programAST->accept_vis(&placement);
   reporter.report(placement);
-  if (open.has_errors() || placement.has_errors())
+  // Values of what never gives one.
+  auto never = sammine_lang::AST::NeverValueCheck();
+  programAST->accept_vis(&never);
+  reporter.report(never);
+  if (open.has_errors() || placement.has_errors() || never.has_errors())
     set_error();
 }
 

@@ -147,6 +147,7 @@ Operator precedence (low to high). `as` binds tighter than all of these:
   | `alloc_buf` `<` **type** `>` `(` **expr** `)` *heap buffer*
   | `drop` `(` **expr** `)`                   *deallocation*
   | `len` `(` **expr** `)`                    *array length*
+  | `panic` `(` STRING (`,` **expr**)* `)`    *end the program*
 
 **field_init** ::= ID `:` **expr**
 

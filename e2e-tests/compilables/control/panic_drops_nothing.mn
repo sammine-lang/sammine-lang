@@ -1,0 +1,43 @@
+// RUN: (%sammine_jit --file %full 2>&1; echo "status $?") | %check %full
+// RUN: %sammine --file %full %O
+// RUN: (%T/%base.exe 2>&1; echo "status $?") | %check %full
+// CHECK: {{.*}}panic: bad pick
+// CHECK-NEXT: drop 1
+// CHECK-NEXT: drop 2
+// CHECK-NEXT: picked 3
+// CHECK-NEXT: status 1
+
+// A panic ends the program where it is: nothing still owned is dropped,
+// here or in the functions that called it, as exit() doesn't. Its path
+// ends, so it doesn't meet the others: `a`, moved where `bad` is false,
+// is moved after the if, with nothing to drop on the panic's way.
+// stdout is a pipe, written at exit, after stderr's panic.
+
+import std;
+
+struct Loud { id: i32, p: 'ptr<i32>, };
+
+instance Drop<Loud> {
+  let unsafe Drop(l: Loud) -> unit {
+    std::printf("drop %d\n", l.id);
+    drop(l.p)
+  }
+}
+
+let loud(id: i32) -> Loud { Loud { id: id, p: alloc<i32>(1) } }
+let take(l: Loud) -> i32 { l.id }
+
+let pick(bad: bool) -> i32 {
+  let a = loud(1);
+  let b = loud(2);
+  let r = if bad { panic("bad pick") } else { take(a) };
+  r + 2
+}
+
+let main() -> i32 {
+  let outer = loud(9);
+  std::printf("picked %d\n", pick(false));
+  std::printf("picked %d\n", pick(true));
+  std::printf("never %d\n", outer.id);
+  0
+}

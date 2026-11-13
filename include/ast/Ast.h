@@ -822,6 +822,24 @@ public:
   AST_NODE_METHODS("LenExprAST", NodeKind::LenExprAST)
 };
 
+/// `panic("message", args...)`: prints where it is and the message, as
+/// printf formats it with the arguments, to stderr, and ends the program
+/// with status 1. Nothing is dropped. It gives no value, so it fits where
+/// any is expected: its type is Never.
+class PanicExprAST : public ExprAST {
+public:
+  std::vector<std::unique_ptr<ExprAST>> arguments;
+  explicit PanicExprAST(std::shared_ptr<Token> tok,
+                        std::vector<std::unique_ptr<ExprAST>> arguments_)
+      : ExprAST(NodeKind::PanicExprAST), arguments(std::move(arguments_)) {
+    this->join_location(tok);
+    for (auto &arg : arguments)
+      this->join_location(arg.get());
+  }
+  std::string to_string() const override;
+  AST_NODE_METHODS("PanicExprAST", NodeKind::PanicExprAST)
+};
+
 class DimExprAST : public ExprAST {
 public:
   std::unique_ptr<ExprAST> operand;

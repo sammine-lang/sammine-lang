@@ -1,0 +1,30 @@
+// RUN: (%sammine_jit --file %full 2>&1 >/dev/null; echo "status $?") | %check %full
+// RUN: %sammine --file %full %O
+// RUN: (%T/%base.exe 2>&1 >/dev/null; echo "status $?") | %check %full
+// RUN: (! %T/%base.exe 2>/dev/null) | %check %full --check-prefix OUT
+// panic prints where it is, then its message as printf formats it with the
+// arguments, on stderr, and ends the program with status 1. What ran before
+// it ran.
+// CHECK: {{.*}}panic_message.mn:22:3: panic: 7 is odd (seven, x, 2.5, 1), 100% sure
+// CHECK-NEXT: status 1
+// OUT: half of 4 is 2
+// OUT-NOT: after
+
+import std;
+
+let half(n: i32) -> i32 {
+  if n % 2 == 0 {
+    return n / 2;
+  };
+  let name = "seven";
+  // A string, a char, a float and a bool, besides a number.
+  // %% is a percent sign, as in printf.
+  panic("%d is odd (%s, %c, %.1f, %d), 100%% sure", n, name, 'x', 2.5, true)
+}
+
+let main() -> i32 {
+  std::printf("half of 4 is %d\n", half(4));
+  std::printf("half of 7 is %d\n", half(7));
+  std::printf("after\n");
+  0
+}
