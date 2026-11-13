@@ -1,0 +1,24 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      i32 6238072747940578789 13029008266876403067
+// CHECK-NEXT: u32 13168350753275463132 i64 48217637115032568
+// CHECK-NEXT: char 12609935244270955673 bool 6238072747940578789 0
+// CHECK-NEXT: mix 41
+
+// The prelude hashes the integers, char and bool, mixing every bit of the
+// value into every bit of the hash (splitmix64's finalizer): 1 and 2 land
+// far apart. -1 is hashed as its bits. The mixing function is the
+// prelude's own, so this program's mix is its own too.
+
+import std;
+
+let mix(n: i32) -> i32 { n + 1 }
+
+let main() -> i32 {
+  std::printf("i32 %llu %llu\n", Hash<i32>(1), Hash<i32>(-1));
+  std::printf("u32 %llu i64 %llu\n", Hash<u32>(5u32), Hash<i64>(1099511627776i64));
+  std::printf("char %llu bool %llu %llu\n", Hash<char>('a'), Hash<bool>(true),
+              Hash<bool>(false));
+  std::printf("mix %d\n", mix(40));
+  0
+}

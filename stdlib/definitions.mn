@@ -83,6 +83,38 @@ typeclass Hash<T> {
   Hash(val: T) -> u64;
 }
 
+// splitmix64's finalizer: every bit of x moves every bit of the hash, so
+// keys near each other, as 1, 2, 3, land far apart in a table.
+let mix(x: u64) -> u64 {
+  let x = (x ^ (x >> 30u64)) * 13787848793156543929u64;
+  let x = (x ^ (x >> 27u64)) * 10723151780598845931u64;
+  x ^ (x >> 31u64)
+}
+
+export instance Hash<i32> {
+  let Hash(val: i32) -> u64 { mix(val as u64) }
+}
+
+export instance Hash<i64> {
+  let Hash(val: i64) -> u64 { mix(val as u64) }
+}
+
+export instance Hash<u32> {
+  let Hash(val: u32) -> u64 { mix(val as u64) }
+}
+
+export instance Hash<u64> {
+  let Hash(val: u64) -> u64 { mix(val) }
+}
+
+export instance Hash<char> {
+  let Hash(val: char) -> u64 { mix(val as u64) }
+}
+
+export instance Hash<bool> {
+  let Hash(val: bool) -> u64 { mix(if val { 1u64 } else { 0u64 }) }
+}
+
 // coll[idx], for a coll that is neither an array nor a pointer. The
 // collection is lent, so indexing doesn't use it up.
 // What a value of type T does when it ends, where it goes out of use or at
