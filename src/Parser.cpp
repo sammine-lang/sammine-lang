@@ -1570,9 +1570,11 @@ auto Parser::ParseParenExpr() -> p<ExprAST> {
     return {std::move(tuple), SUCCESS};
   }
 
+  // `()` has no expression inside to locate the error by.
+  auto where = expr ? tok_left->get_location() | expr->get_location()
+                    : tok_left->get_location();
   EXPECT_ERROR_OF(tok_right, TokRightParen,
-                  "Expected ')' to match '(' for the expression",
-                  tok_left->get_location() | expr->get_location(),
+                  "Expected ')' to match '(' for the expression", where,
                   {std::move(expr), FAILED});
 
   if (result == NONCOMMITTED)

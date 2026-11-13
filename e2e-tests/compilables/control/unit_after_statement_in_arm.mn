@@ -1,0 +1,15 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: arm ran
+
+// `()` after a statement, as an arm's value: the parser read past `()`'s
+// missing inner expression to locate an error it didn't have.
+
+import std;
+
+let main() -> i32 {
+  case 1 {
+    1 => { std::printf("arm ran\n"); () },
+    _ => { },
+  };
+  0
+}
