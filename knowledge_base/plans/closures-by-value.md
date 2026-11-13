@@ -1,6 +1,6 @@
 # Plan: closures carry what they bind
 
-Status: stage 1 done. Stage 2 not started.
+Status: stage 1 done. Stage 2 is a TODO (below).
 
 ## Goal
 
@@ -80,13 +80,50 @@ has `k = 0` and is a code pointer.
   fixed point over the call graph; a call through a function value is
   assumed to let its arguments escape.
 
-## Stage 2: specialization (later)
+## Stage 2: specialization (TODO)
 
-Lambda set variables in function types, unified by the type checker, with
-inclusion constraints; higher-order functions copied per lambda set, as
-generics are per type; values become tagged unions and calls switches or
-direct calls. The paper's sections 4 and 5. A performance step: stage 1
-already gives the memory model.
+Not started. Two things it would give:
+
+- **Speed.** Every call through a function value is indirect, through its
+  code pointer, so LLVM can't inline `f` into `fold` or `twice`. With
+  lambda sets a call is a direct call when one function can reach it, a
+  switch of direct calls when a few can, and each higher-order function is
+  copied per lambda set it is called with, so most calls are direct.
+- **Self-binding closures escape.** `twice(add(1))` can't be returned
+  today (`error_reporting/closure_self_type_escapes.mn`): one size per
+  function type can't hold a value of itself. Its lambda set,
+  `{twice[{add[i32]}]}`, holds `add`'s, a different and finite set, so
+  only truly recursive closures (the paper's `μ` sets) would stay in their
+  maker's frame.
+
+How, worked out against the code (2026-11):
+
+- **On MIR, not the type checker.** A partial application is the paper's
+  lambda with explicit captures, `λ[bound](rest). f(bound, rest)`, and MIR
+  has only `cf` branches, so values move between blocks only through block
+  arguments. Annotate each MIR value's type with a lambda set variable per
+  `!sammine.fn` in it (pre-order over pointees, fields, elements, variants
+  and signatures), unify along every op that moves a value (`let`,
+  `copy`/`move`/`store` through places, `field`/`elem`/`through`,
+  `aggregate`/`extract`, `variant`/`payload`, block arguments, `call`,
+  `return`, `call_indirect`), and add each `closure` to its result's set.
+- **Two steps.** First monovariant (one set per flow class across the
+  module, MLton's defunctionalization): values become a tuple of the
+  captures (one function) or an enum of them (several), `call_indirect` a
+  `call` or a `cf.switch` of calls. Then the paper's polymorphism: sets
+  generalized per function (per call-graph SCC, section 6.3) with
+  inclusion constraints, functions cloned per instantiation, as generics.
+- **What stays stage 1.** A class reaching code MIR doesn't see (C, a
+  library's exported function, another module's) or a recursive (`μ`)
+  class keeps the `{code, words}` representation, and so does every class
+  its closures capture, so stage 1's sizes still hold for them.
+- **Types to rebuild.** A struct or enum holding a converted function value
+  gets a new name (its LLVM struct is identified by name), an enum's
+  payload size and `variant`/`payload` offsets are recomputed, and
+  function signatures change with their parameters.
+- **Order.** Inference before `checkViews` (which closures are frame-held
+  decides the escape check), the rewrite after `checkOwnership`, before
+  `sammine-mir-to-llvm`.
 
 ## Threads
 
