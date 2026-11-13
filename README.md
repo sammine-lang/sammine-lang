@@ -66,6 +66,5 @@ to erase the build folder (similar to make clean).
 ### TODO
 
 Optional flags:
-- `-DSAMMINE_SANITIZE=ON` — Enable ASan + UBSan
 - `-DSAMMINE_TRACY=ON` — Enable [Tracy](https://github.com/wolfpld/tracy) profiler instrumentation (uses `TRACY_ON_DEMAND`, no overhead until the Tracy GUI connects)
 

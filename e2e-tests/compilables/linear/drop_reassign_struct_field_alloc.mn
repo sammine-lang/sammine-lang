@@ -1,11 +1,11 @@
-// RUN: %sammine --file %full %O --opt-level 0 && %leakcheck %T/%base.exe | %check %full
-// RUN: %sammine --file %full %O && %leakcheck %T/%base.exe | %check %full
-// REQUIRES: leakcheck
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
 // CHECK: 42
 
 // What the ownership check once reported as left owned here, the compiler
 // now drops where it goes out of use (knowledge_base/plans/drops.md).
-// The leak check (%leakcheck) finds anything left allocated or freed twice.
+// The leak check (%asan) finds anything left allocated or freed twice.
 
 import std;
 

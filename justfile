@@ -27,11 +27,10 @@ llvm:
     cmake --build {{llvm_build_dir}} -j{{jobs}}
 
 # Shared CMake configuration for both build channels
-_configure dir type sanitize *FLAGS:
+_configure dir type *FLAGS:
     cmake -S . -B {{dir}} \
         -G Ninja \
         -DCMAKE_BUILD_TYPE={{type}} \
-        -DSAMMINE_SANITIZE={{sanitize}} \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DLLVM_DIR={{llvm_build_dir}}/lib/cmake/llvm \
         -DMLIR_DIR={{llvm_build_dir}}/lib/cmake/mlir \
@@ -40,17 +39,17 @@ _configure dir type sanitize *FLAGS:
         -DSAMMINE_TEST=ON \
         {{FLAGS}}
 
-# Configure the debug build (ASan + UBSan)
-configure *FLAGS: (_configure build_dir "Debug" "ON" FLAGS)
+# Configure the debug build
+configure *FLAGS: (_configure build_dir "Debug" FLAGS)
 
-# Configure the optimized release build (no sanitizers)
-configure-release *FLAGS: (_configure release_dir "Release" "OFF" FLAGS)
+# Configure the optimized release build
+configure-release *FLAGS: (_configure release_dir "Release" FLAGS)
 
-# Build the debug channel (ASan + UBSan) in build/
+# Build the debug channel in build/
 build: configure
     cmake --build {{build_dir}} -j{{jobs}}
 
-# Build the release channel (optimized, no sanitizers) in build-release/
+# Build the release channel (optimized) in build-release/
 release: configure-release
     cmake --build {{release_dir}} -j{{jobs}}
 

@@ -29,13 +29,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     )
 endif()
 
-if(SAMMINE_SANITIZE)
-    target_compile_options(project_options INTERFACE
-        -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(project_options INTERFACE
-        -fsanitize=address,undefined)
-endif()
-
 if(SAMMINE_TRACY)
     target_link_libraries(project_options INTERFACE TracyClient)
     target_compile_definitions(project_options INTERFACE TRACY_ENABLE TRACY_ON_DEMAND)

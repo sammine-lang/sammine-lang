@@ -19,10 +19,12 @@ config.name = "Sammine Lang end-to-end testsuite"
 if shutil.which("ptxas"):
     config.available_features.add("cuda")
 
-# %leakcheck runs a compiled program with ASan's runtime preloaded: its
-# allocator reports a leak at exit, and a free twice or of what malloc
-# didn't give, in a program nothing instrumented. The programs are built as
-# users build them; the check is the tests'.
+# %asan runs what follows it with ASan's runtime preloaded: its allocator
+# reports a leak at exit, and a free twice or of what malloc didn't give, in
+# code nothing instrumented. No build of the compiler has a sanitizer; a
+# test opts in on its own RUN line. On a compiled program, it checks the
+# drops. On sammine itself, add ASAN_OPTIONS=detect_leaks=0: the linker it
+# runs inherits the preload, and has leaks of its own.
 import subprocess
 asan_runtime = None
 if shutil.which("clang"):
@@ -31,8 +33,8 @@ if shutil.which("clang"):
     if os.path.isabs(path) and os.path.exists(path):
         asan_runtime = path
 if asan_runtime:
-    config.available_features.add("leakcheck")
-    config.substitutions.append(('%leakcheck', 'env LD_PRELOAD=' + asan_runtime))
+    config.available_features.add("asan")
+    config.substitutions.append(('%asan', 'env LD_PRELOAD=' + asan_runtime))
 
 # Direct test output (Output/ dirs, %t temps) into the build tree so the
 # source tree stays clean.  Without this, lit defaults to placing Output/

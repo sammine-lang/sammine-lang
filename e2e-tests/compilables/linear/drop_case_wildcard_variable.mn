@@ -1,6 +1,6 @@
-// RUN: %sammine --file %full %O --opt-level 0 && %leakcheck %T/%base.exe | %check %full
-// RUN: %sammine --file %full %O && %leakcheck %T/%base.exe | %check %full
-// REQUIRES: leakcheck
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
 // CHECK: other
 
 // As for a temporary: m's payload, which the wildcard takes, is dropped on

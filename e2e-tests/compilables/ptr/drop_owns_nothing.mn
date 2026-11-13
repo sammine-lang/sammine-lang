@@ -1,6 +1,6 @@
-// RUN: %sammine --file %full %O --opt-level 0 && %leakcheck %T/%base.exe
-// RUN: %sammine --file %full %O && %leakcheck %T/%base.exe
-// REQUIRES: leakcheck
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe
+// RUN: %sammine --file %full %O && %asan %T/%base.exe
+// REQUIRES: asan
 
 // drop(x) of a value that owns nothing does nothing: generic code drops a
 // T that may be an i32.

@@ -65,5 +65,5 @@
 - Kernel wrappers get `noinline` to preserve LICM (LLVM can hoist calls when ptr args are loop-invariant)
 - `GreenInterner` is NOT movable (pmr limitation) — always `make_unique`
 - CST and AST diverge where parser desugars (pipe, `**` double deref, implicit returns)
-- With `SAMMINE_SANITIZE`, our code has ASan but LLVM doesn't (`LLVM_USE_SANITIZER` empty). LLVM's allocators poison memory only in ASan-built code, so inline copies in our objects and in LLVM's disagree: a tool making an `MLIRContext` hits a false use-after-poison. `sammine-opt` sets `allow_user_poisoning=0` through `__asan_default_options`
+- No build of the compiler has a sanitizer. A test opts in on its own RUN line with `%asan` (lit preloads ASan's runtime): on a compiled program it reports leaks and frees twice; on `sammine` itself, with `ASAN_OPTIONS=detect_leaks=0`, as the linker it runs inherits the preload
 - The dialect's generated headers (`SammineOps.h.inc`, …) are on the `SYSTEM` include path, as MLIR's own are: MLIR's generated code trips our `-Werror` warnings (C-style casts, narrowing), and it isn't ours to fix here. See `upstream/`

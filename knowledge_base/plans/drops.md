@@ -223,8 +223,8 @@ point was the error, which are rewritten to show the drop.
 ## Testing
 
 The compiled programs aren't built with ASan, so a test that a drop
-frees runs the program with ASan's runtime preloaded, `%leakcheck`, a lit
-feature like `cuda` (`REQUIRES: leakcheck`): its allocator reports a leak
+frees runs the program with ASan's runtime preloaded, `%asan`, a lit
+feature like `cuda` (`REQUIRES: asan`): its allocator reports a leak
 at exit, and a free twice, in uninstrumented code. Built at `--opt-level 0`
 and at O2: O2 deletes an allocation nothing reads. (It was valgrind, at
 about 0.2 s a run against 4 ms.)
