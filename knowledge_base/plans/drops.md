@@ -305,6 +305,11 @@ Each a commit, the suite passing after each.
 
 ## Decided
 
+- No borrowing beyond what there is, and no lifetimes: a view, `ptr<T>`, is
+  a parameter or a local, or lent for a call; what outlives that is owned,
+  a linear value moved, returned or dropped. Ownership is the linear
+  types' to carry.
+
 - `'buf<T>` and `alloc_buf<T>(n)`, as spelled above.
 - `alloc<T>(1)` keeps its count for now; a `'ptr` it makes is one value
   whatever the count says, and dropping the count is left for later.
