@@ -8,10 +8,10 @@
 #include "codegen/MLIRLowering.h"
 #include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
+#include "dialect/ElaborateDrops.h"
 #include "dialect/OwnershipCheck.h"
 #include "dialect/SammineDialect.h"
 #include "dialect/ViewCheck.h"
-#include "dialect/ElaborateDrops.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -68,6 +68,7 @@
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/Support/Program.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include <chrono>
@@ -687,32 +688,29 @@ void Compiler::link() {
 
   // GPU: link against MLIR CUDA runtime wrappers (mgpu* functions)
   bool gpu = options_.gpu != GPUMode::NONE;
-  std::string gpu_link_flags;
+  std::string link_flags;
   if (gpu) {
     // libmlir_cuda_runtime.so provides mgpuMemAlloc, mgpuMemcpy, etc.
     // MLIR_LLVM_LIB_DIR is set by cmake from the MLIR_DIR config path.
     std::string lib_dir = MLIR_LLVM_LIB_DIR;
-    gpu_link_flags = fmt::format(" -L{} -lmlir_cuda_runtime -Wl,-rpath,{}",
-                                 lib_dir, lib_dir);
+    link_flags = fmt::format(" -L{} -lmlir_cuda_runtime -Wl,-rpath,{}", lib_dir,
+                             lib_dir);
   }
 
-  auto try_compile_with = [&obj_list, &exe_file,
-                           &gpu_link_flags](const std::string &compiler) {
-    std::string test_command =
-        fmt::format("{} --version", compiler) + " > /dev/null 2>&1";
-    int test_result = std::system(test_command.c_str());
-    if (test_result != 0)
-      return false;
-    std::string command = fmt::format("{} {} -o {}{}", compiler, obj_list,
-                                      exe_file, gpu_link_flags);
-    int result = std::system(command.c_str());
-    return result == 0;
-  };
   if (!has_main)
     return;
-  if (!try_compile_with("clang++") && !try_compile_with("g++"))
+  // Found on PATH without running anything: a probe run costs as much as
+  // the link.
+  auto linker = llvm::sys::findProgramByName("clang++");
+  if (!linker)
+    linker = llvm::sys::findProgramByName("g++");
+  if (!linker)
     sammine_util::abort(
         "Neither clang++ nor g++ is available for final linkage\n");
+  std::string command =
+      fmt::format("{} {} -o {}{}", *linker, obj_list, exe_file, link_flags);
+  if (std::system(command.c_str()) != 0)
+    sammine_util::abort(fmt::format("Linking {} failed\n", exe_file));
 }
 void Compiler::print_timing_table(
     const std::vector<std::pair<const char *, double>> &timings) {

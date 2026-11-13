@@ -1,10 +1,10 @@
-// RUN: %sammine --file %full %O --opt-level 0 && %valgrind %T/%base.exe
-// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
-// REQUIRES: valgrind
+// RUN: %sammine --file %full %O --opt-level 0 && %leakcheck %T/%base.exe
+// RUN: %sammine --file %full %O && %leakcheck %T/%base.exe
+// REQUIRES: leakcheck
 
 // What the ownership check once reported as left owned here, the compiler
 // now drops where it goes out of use (knowledge_base/plans/drops.md).
-// valgrind checks that all of it is freed, and freed once.
+// The leak check (%leakcheck) finds anything left allocated or freed twice.
 
 let main() -> i32 {
   let pp = alloc<'ptr<i32>>(1);

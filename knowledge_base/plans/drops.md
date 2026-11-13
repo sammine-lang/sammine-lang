@@ -217,14 +217,17 @@ variant's payload inline.
 | — | new: calling `Drop` directly |
 
 About 50 tests check the first four today. Each becomes a program that
-runs, checked by its output and by valgrind (below), except those whose
+runs, checked by its output and by the leak check (below), except those whose
 point was the error, which are rewritten to show the drop.
 
 ## Testing
 
 The compiled programs aren't built with ASan, so a test that a drop
-frees runs the program under `valgrind --leak-check=full
---error-exitcode=1`, a lit feature like `cuda` (`REQUIRES: valgrind`).
+frees runs the program with ASan's runtime preloaded, `%leakcheck`, a lit
+feature like `cuda` (`REQUIRES: leakcheck`): its allocator reports a leak
+at exit, and a free twice, in uninstrumented code. Built at `--opt-level 0`
+and at O2: O2 deletes an allocation nothing reads. (It was valgrind, at
+about 0.2 s a run against 4 ms.)
 Each step adds such tests next to the MIR tests of the pass
 (`e2e-tests/mir/dialect/drops_*.mlir`, through `sammine-opt
 -sammine-elaborate-drops`). Drop order is tested with `Drop` instances that
@@ -252,7 +255,7 @@ Each a commit, the suite passing after each.
 6. `sammine-elaborate-drops`, at returns and on edges, for those
    pointers, before the check, which checks what it leaves. The leak tests
    for them become programs that run. (Done. 32 tests became `drop_*`
-   programs run under valgrind; `generic_instance_per_linearity` checks a
+   programs run under the leak check; `generic_instance_per_linearity` checks a
    use after a move instead of a leak. A box what it points at was moved
    out of drops too: its drop is a free.)
 7. (Folded into 6: joins and loop turns are edges.)
