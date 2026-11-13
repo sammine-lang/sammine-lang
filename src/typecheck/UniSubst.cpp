@@ -290,7 +290,7 @@ static bool unify_impl(const Type &pattern_in, const Type &concrete_in,
                                        cs.get_instance_of(), bindings,
                                        both_sides))
       return *unified;
-    if (ps.get_name().mangled() != cs.get_name().mangled())
+    if (ps.get_name() != cs.get_name())
       return false;
     auto &pft = ps.get_field_types();
     auto &cft = cs.get_field_types();
@@ -308,7 +308,7 @@ static bool unify_impl(const Type &pattern_in, const Type &concrete_in,
                                        ce.get_instance_of(), bindings,
                                        both_sides))
       return *unified;
-    if (pe.get_name().mangled() != ce.get_name().mangled())
+    if (pe.get_name() != ce.get_name())
       return false;
     auto &pvs = pe.get_variants();
     auto &cvs = ce.get_variants();

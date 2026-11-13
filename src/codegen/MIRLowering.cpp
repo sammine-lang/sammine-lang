@@ -47,8 +47,9 @@ private:
                  index->array_expr->get_type().type_kind == TypeKind::Array) {
         expr = index->array_expr.get();
       } else {
-        if (auto *var = llvm::dyn_cast<VariableExprAST>(expr))
-          names.insert(var->variableName.mangled());
+        if (auto *var = llvm::dyn_cast<VariableExprAST>(expr);
+            var && !var->variableName.is_qualified())
+          names.insert(var->variableName.get_name());
         return;
       }
     }
@@ -401,7 +402,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   if (auto *vp = props_.variable(var->id()); vp && vp->is_enum_unit_variant)
     return lowerVariant(loc(var), var->get_type(), vp->enum_variant_index, {});
-  auto it = names_.find(var->variableName.mangled());
+  auto it = findLocal(var->variableName);
   if (it == names_.end())
     return lowerFunctionValue(var);
   // A binding of (), no value.

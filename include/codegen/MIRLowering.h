@@ -58,6 +58,12 @@ private:
   /// What each name in the current function stands for: its parameters and
   /// `let`s so far. A later `let` of a name shadows the earlier one.
   llvm::StringMap<mlir::Value> names_;
+  /// The binding `name` names, or names_.end(): a local is one identifier,
+  /// so a name of several parts is none.
+  llvm::StringMap<mlir::Value>::const_iterator
+  findLocal(const sammine_util::QualifiedName &name) const {
+    return name.is_qualified() ? names_.end() : names_.find(name.get_name());
+  }
   /// The bindings of the function being lowered whose address its code
   /// takes: each lives in a slot, and names_ names that place.
   llvm::StringSet<> addressed_;

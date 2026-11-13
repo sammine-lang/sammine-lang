@@ -18,7 +18,7 @@ FuncDefAST *Monomorphizer::try_instantiate_func(FuncDefAST *generic,
   if (instantiated_functions_.contains(key))
     return nullptr;
 
-  auto new_name = key.to_generic_name(generic->Prototype->functionName);
+  auto new_name = key.generic_name();
   auto cloned = clone_func(generic, new_name, bindings);
   auto *ptr = cloned.get();
   instantiated_functions_.insert(key);
@@ -29,7 +29,7 @@ FuncDefAST *Monomorphizer::try_instantiate_func(FuncDefAST *generic,
 EnumDefAST *Monomorphizer::instantiate_enum(EnumDefAST *generic,
                                             const MonomorphizedKey &key,
                                             const TypeBindings &bindings) {
-  auto new_name = key.to_generic_name(generic->enum_name);
+  auto new_name = key.generic_name();
   auto cloned = clone_enum(generic, new_name, bindings);
   cloned->instance_of = std::make_shared<const MonomorphizedKey>(key);
   auto *ptr = cloned.get();
@@ -40,7 +40,7 @@ EnumDefAST *Monomorphizer::instantiate_enum(EnumDefAST *generic,
 StructDefAST *Monomorphizer::instantiate_struct(StructDefAST *generic,
                                                 const MonomorphizedKey &key,
                                                 const TypeBindings &bindings) {
-  auto new_name = key.to_generic_name(generic->struct_name);
+  auto new_name = key.generic_name();
   auto cloned = clone_struct(generic, new_name, bindings);
   cloned->instance_of = std::make_shared<const MonomorphizedKey>(key);
   auto *ptr = cloned.get();
@@ -90,7 +90,10 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   switch (expr->getKind()) {
   case ParseKind::Simple: {
     auto *simple = llvm::cast<SimpleTypeExprAST>(expr);
-    auto it = bindings_->find(simple->name.mangled());
+    // A type parameter is one identifier.
+    auto it = simple->name.is_qualified()
+                  ? bindings_->end()
+                  : bindings_->find(simple->name.get_name());
     if (it != bindings_->end()) {
       // Attach the resolved Type directly — avoids round-tripping compound
       // types (tuples, etc.) through a string that can't be re-parsed.
@@ -99,8 +102,10 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
       node->resolved_type = it->second;
       return node;
     }
-    return std::make_unique<SimpleTypeExprAST>(
-        make_tok(simple->name.mangled()));
+    // The name itself, not its text read back as one identifier.
+    auto node = std::make_unique<SimpleTypeExprAST>(make_tok(""));
+    node->name = simple->name;
+    return node;
   }
   case ParseKind::Pointer: {
     auto *ptr = llvm::cast<PointerTypeExprAST>(expr);

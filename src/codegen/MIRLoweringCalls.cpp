@@ -64,7 +64,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
 
 // `f(a)`, f a binding holding a function value: a call through it.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerIndirectCall(CallExprAST *call) {
-  auto it = names_.find(call->functionName.mangled());
+  auto it = findLocal(call->functionName);
   if (it == names_.end())
     return mlir::failure();
   mlir::Value callee = it->second;
@@ -182,7 +182,7 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                   const MonomorphizedKey &key,
                                   mlir::ValueRange args, const Type &result) {
-  if (key.name == kConvertClass) {
+  if (key.class_name() == kConvertClass) {
     auto to = types_.mirType(key.type_args[1]);
     if (!to || args.size() != 1)
       return mlir::failure();
@@ -190,7 +190,7 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
                                 key.type_args[0].is_unsigned(),
                                 key.type_args[1].is_unsigned());
   }
-  auto op = operator_of_class(key.name);
+  auto op = operator_of_class(key.class_name());
   if (!op || args.size() != 2)
     return mlir::failure();
   return lowerOperator(location, *op, args[0], args[1], key.type_args[0]);

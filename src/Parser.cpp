@@ -1313,7 +1313,8 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
                    prefix_tok->get_location());
       return std::nullopt;
     }
-    // Build type_args string separately from enum_prefix
+    // The types as written, for the message below: the scrutinee decides
+    // the enum's types, and a pattern only says which variant.
     std::string ta = "<";
     for (size_t i = 0; i < type_args.size(); i++) {
       if (i > 0)
@@ -1330,9 +1331,8 @@ auto Parser::parseCasePattern() -> std::optional<CasePattern> {
     EXPECT_ERROR_OF(variant_tok, TokenType::TokID,
                     "Expected variant name after '::'", dcolon->get_location(),
                     std::nullopt);
-    pattern.variant_name = sammine_util::QualifiedName::from_parts(
-        std::vector<sammine_util::QualifiedName::Part>{
-            {enum_prefix, ta}, {variant_tok->lexeme, ""}});
+    pattern.variant_name = sammine_util::QualifiedName::qualified(
+        enum_prefix, variant_tok->lexeme);
     pattern.location = prefix_tok->get_location() | variant_tok->get_location();
   } else {
     // Unified: handles unqualified, 2-segment (Enum::Variant),
@@ -1968,20 +1968,8 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
     tokStream->consume(); // consume ::
     auto member_id = expect(TokID);
     if (member_id) {
-      // Build type_args separately, attach to existing parts
-      std::string type_args_str = "<";
-      for (size_t i = 0; i < parsed_types.size(); i++) {
-        if (i > 0)
-          type_args_str += ", ";
-        type_args_str += parsed_types[i]->to_string();
-      }
-      type_args_str += ">";
-      auto cur_parts = qn.parts();
-      std::vector<sammine_util::QualifiedName::Part> new_parts(
-          cur_parts.begin(), cur_parts.end());
-      new_parts.back().type_args = type_args_str;
-      new_parts.push_back({member_id->lexeme, ""});
-      qn = sammine_util::QualifiedName::from_parts(std::move(new_parts));
+      // The types are returned as written; the name is the path alone.
+      qn = qn.with_appended({member_id->lexeme, {}});
       qn_loc = qn_loc | member_id->get_location();
       tokStream->commit_rollback();
       return std::move(parsed_types);

@@ -311,7 +311,7 @@ BiTypeCheckerVisitor::resolve_generic_signature(PrototypeAST *proto,
   // properly instantiated through resolve_type_expr.
   decltype(typename_to_type)::Guard scope(typename_to_type);
   for (auto &[pname, ptype] : bindings)
-    typename_to_type.registerNameT(pname, ptype);
+    typename_to_type.registerNameT(bare(pname), ptype);
 
   std::vector<Type> expected;
   for (size_t i = 0; i < params.size(); i++) {
@@ -409,11 +409,10 @@ std::optional<Type> BiTypeCheckerVisitor::enum_of_variant(
     return std::nullopt;
 
   // A concrete enum, or an instance named in full: Color, Option<i32>.
-  auto enum_type = get_typename_type(variant.get_qualifier());
+  auto enum_type = get_typename_type(variant.qualifier());
 
   if (!enum_type) {
-    auto *generic_def = monomorphizer.generic_enums.find(
-        variant.strip_type_args().get_qualifier());
+    auto *generic_def = monomorphizer.generic_enums.find(variant.qualifier());
     if (generic_def && type_args.empty())
       enum_type = infer_enum_instance(generic_def, variant, site, payload);
     else if (generic_def &&
@@ -427,7 +426,7 @@ std::optional<Type> BiTypeCheckerVisitor::enum_of_variant(
 
   // A variant of an alias, as IntOption::Some.
   if (!enum_type) {
-    auto vc_it = variant_constructors.find(variant.mangled());
+    auto vc_it = variant_constructors.find(variant);
     if (vc_it != variant_constructors.end())
       enum_type = vc_it->second.first;
   }
@@ -459,7 +458,7 @@ Type BiTypeCheckerVisitor::infer_enum_instance(
   {
     decltype(typename_to_type)::Guard scope(typename_to_type);
     for (auto &tp : def->type_params)
-      typename_to_type.registerNameT(tp, Type::TypeParam(tp));
+      typename_to_type.registerNameT(bare(tp), Type::TypeParam(tp));
     for (auto &pt : variant_def->payload_types) {
       auto pattern = resolve_type_expr(pt.get());
       if (pattern.is_poisoned())
@@ -492,11 +491,10 @@ Type BiTypeCheckerVisitor::infer_enum_instance(
     if (!bindings.contains(tp))
       bindings[tp] = Type::Hole();
 
-  return generic_type_instance(
-      def->enum_name,
-      MonomorphizedKey::from_bindings(def->enum_name.mangled(),
-                                      def->type_params, bindings)
-          .type_args);
+  return generic_type_instance(def->enum_name,
+                               MonomorphizedKey::from_bindings(
+                                   def->enum_name, def->type_params, bindings)
+                                   .type_args);
 }
 
 std::optional<ResolvedCall>
@@ -552,12 +550,12 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   if (ast->functionName.is_qualified()) {
     // Qualified syntax: Add<i32>::add — extract method from last part
     method_name = ast->functionName.get_name();
-    class_name = ast->functionName.strip_type_args().get_qualifier();
+    class_name = ast->functionName.get_qualifier();
   }
 
   if (class_name.empty()) {
     // Unqualified syntax: add<i32>(x, y) — look up method in method_to_class
-    method_name = ast->functionName.mangled();
+    method_name = ast->functionName.get_name();
     auto class_it = method_to_class.find(method_name);
     if (class_it == method_to_class.end())
       return std::nullopt;
@@ -583,7 +581,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
     return ResolvedCall::failure();
   auto &[tc_bindings, tc_type_args] = *resolved_args;
 
-  MonomorphizedKey tc_key{class_name, tc_type_args};
+  auto tc_key = MonomorphizedKey::instance(class_name, tc_type_args);
   if (!has_instance(tc_key)) {
     add_error(ast->get_location(),
               missing_instance(tc_key,
@@ -594,7 +592,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
 
   PrototypeAST *method_proto = nullptr;
   for (auto &p : tc->methods) {
-    if (p->functionName.mangled() == method_name) {
+    if (p->functionName.get_name() == method_name) {
       method_proto = p.get();
       break;
     }
@@ -632,8 +630,7 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
 
 std::optional<ResolvedCall>
 BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
-  auto *generic_def =
-      monomorphizer.generic_funcs.find(ast->functionName.mangled());
+  auto *generic_def = monomorphizer.generic_funcs.find(ast->functionName);
   if (!generic_def)
     return std::nullopt;
   auto generic_type = generic_def->get_type();
@@ -714,10 +711,10 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
     }
   }
 
-  auto key = MonomorphizedKey::from_bindings(ast->functionName.mangled(),
-                                             type_params, bindings);
+  auto key =
+      MonomorphizedKey::from_bindings(ast->functionName, type_params, bindings);
 
-  props_.call(ast->id()).resolved_name = key.to_generic_name(ast->functionName);
+  props_.call(ast->id()).resolved_name = key.generic_name();
   props_.call(ast->id()).type_bindings = bindings;
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
@@ -732,7 +729,7 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
 
 std::optional<ResolvedCall>
 BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
-  auto ty = lookup_type(ast->functionName.mangled());
+  auto ty = lookup_type(ast->functionName);
   if (!ty.has_value()) {
     this->add_error(
         ast->get_location(),
@@ -839,9 +836,9 @@ Type BiTypeCheckerVisitor::synthesize_generic_function_value(
       generic->Prototype.get(), func.get_params_types(), func.get_return_type(),
       bindings);
   // The copy is made as a call to it makes it (instantiate_generic_callee).
-  auto key = MonomorphizedKey::from_bindings(name, type_params, bindings);
-  props_.variable(ast->id()).resolved_function =
-      key.to_generic_name(ast->variableName);
+  auto key =
+      MonomorphizedKey::from_bindings(ast->variableName, type_params, bindings);
+  props_.variable(ast->id()).resolved_function = key.generic_name();
   if (auto *copy = monomorphizer.try_instantiate_func(generic, key, bindings)) {
     TopLevelScopeGuard scope(*this);
     copy->accept_vis(this);
@@ -852,7 +849,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_function_value(
 bool BiTypeCheckerVisitor::check_c_call(CallExprAST *ast,
                                         std::span<const Type> params) {
   auto name = ast->functionName.mangled();
-  if (!takes_c_callback(name))
+  if (!takes_c_callback(ast->functionName))
     return true;
   // A partial application is a closure, which calls C through sammine's
   // calling convention: the function it is given would reach C as one too.
@@ -872,7 +869,7 @@ bool BiTypeCheckerVisitor::check_c_call(CallExprAST *ast,
     // function value is code and an environment, and C has nowhere to put
     // the environment.
     auto *var = llvm::dyn_cast<VariableExprAST>(arg.get());
-    if (var && !names_variable(var->variableName.mangled()) &&
+    if (var && !names_variable(var->variableName) &&
         var->get_type().type_kind == TypeKind::Function)
       continue;
     this->add_error(arg->get_location(),
@@ -1077,7 +1074,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
   // Arithmetic and comparison operators dispatch through typeclasses: + through
   // Add, < through Less. A comparison gives a bool.
   if (auto class_name = class_of_operator(ast->Op->tok_type)) {
-    MonomorphizedKey tc_key{std::string(*class_name), {lhs_type}};
+    auto tc_key = MonomorphizedKey::instance(*class_name, {lhs_type});
     if (!has_instance(tc_key)) {
       // Only numbers, char and the types with a declared instance, as
       // str::String, have one: any other type declares its own.
@@ -1093,7 +1090,7 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
     // A built-in instance is an instruction; any other is called.
     if (!is_builtin_instance(tc_key))
       props_.binary(ast->id()).resolved_op_method =
-          tc_key.to_typeclass_name(tc_key.name);
+          tc_key.to_typeclass_name(tc_key.class_name());
     return ast->set_type(ast->Op->is_comparison() ? Type::Bool() : lhs_type);
   }
 
@@ -1137,11 +1134,10 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->set_type(Type::Char());
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
-  if (auto *generic =
-          monomorphizer.generic_funcs.find(ast->variableName.mangled());
-      generic && !names_variable(ast->variableName.mangled()))
+  if (auto *generic = monomorphizer.generic_funcs.find(ast->variableName);
+      generic && !names_variable(ast->variableName))
     return synthesize_generic_function_value(ast, generic);
-  if (auto ty = lookup_type(ast->variableName.mangled())) {
+  if (auto ty = lookup_type(ast->variableName)) {
     // A function value only carries the declared parameters, so the extra
     // arguments of a variadic C function would be lost.
     if (ty->type_kind == TypeKind::Function &&
@@ -1154,7 +1150,7 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
     }
     // Called through a function value, it would be given closures where C
     // takes pointers to code (check_c_call).
-    if (takes_c_callback(ast->variableName.mangled())) {
+    if (takes_c_callback(ast->variableName)) {
       this->add_error(ast->get_location(),
                       fmt::format("'{}' gives a function to C, so it can't be "
                                   "used as a value; call it directly",
@@ -1173,7 +1169,7 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
     if (!variant_idx) {
       this->add_error(ast->get_location(),
                       fmt::format("Type '{}' has no variant '{}'",
-                                  ast->variableName.get_qualifier(),
+                                  et.get_name().mangled(),
                                   ast->variableName.get_name()));
       return ast->set_type(Type::Poisoned());
     }
@@ -1183,7 +1179,11 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
       this->add_error(
           ast->get_location(),
           fmt::format("Enum variant '{}' expects {} arguments, got 0",
-                      ast->variableName.mangled(), vi.payload_types.size()));
+                      // With its types, once they are known: Option<i32>::Some.
+                      enum_type->is_open()
+                          ? ast->variableName.mangled()
+                          : et.get_name().mangled() + "::" + vi.name,
+                      vi.payload_types.size()));
       return ast->set_type(Type::Poisoned());
     }
     props_.variable(ast->id()).is_enum_unit_variant = true;
@@ -1362,7 +1362,7 @@ bool BiTypeCheckerVisitor::check_addr_of_operand(AddrOfExprAST *ast) {
       "Only variables and memory behind a pointer have an address";
   if (auto *var = llvm::dyn_cast<VariableExprAST>(root)) {
     // A variable has a stack slot; a function or an enum variant does not.
-    if (names_variable(var->variableName.mangled()))
+    if (names_variable(var->variableName))
       return true;
     this->add_error(ast->get_location(),
                     fmt::format("Cannot take the address of '{}'. {}",
@@ -1427,7 +1427,7 @@ Type BiTypeCheckerVisitor::synthesize(CastExprAST *ast) {
     from = settled;
   }
 
-  MonomorphizedKey key{std::string(kConvertClass), {from, to}};
+  auto key = MonomorphizedKey::instance(kConvertClass, {from, to});
   if (!has_instance(key)) {
     add_error(ast->get_location(),
               missing_instance(
@@ -1617,7 +1617,7 @@ BiTypeCheckerVisitor::indexer_instances_for(const Type &coll) const {
       found.push_back(std::move(key));
   };
   for (auto &key : type_class_instances)
-    if (key.name == kIndexerClass && key.type_args.size() == 2 &&
+    if (key.class_name() == kIndexerClass && key.type_args.size() == 2 &&
         key.type_args[0] == coll)
       add(key);
   if (auto it = generic_instances.find(std::string(kIndexerClass));
@@ -1633,7 +1633,7 @@ BiTypeCheckerVisitor::indexer_instances_for(const Type &coll) const {
             return contains_type_param(element, tp);
           }))
         continue;
-      add(MonomorphizedKey{std::string(kIndexerClass), {coll, element}});
+      add(MonomorphizedKey::instance(kIndexerClass, {coll, element}));
     }
   return found;
 }
@@ -1659,7 +1659,8 @@ Type BiTypeCheckerVisitor::synthesize_indexer(IndexExprAST *ast,
   if (keys.size() > 1) {
     std::vector<std::string> names;
     for (auto &key : keys)
-      names.push_back(fmt::format("{}<{}>", key.name, key.type_args_string()));
+      names.push_back(
+          fmt::format("{}<{}>", key.class_name(), key.type_args_string()));
     std::ranges::sort(names);
     this->add_error(ast->get_location(),
                     fmt::format("Indexing '{}' is ambiguous: {} all apply",
@@ -1670,7 +1671,7 @@ Type BiTypeCheckerVisitor::synthesize_indexer(IndexExprAST *ast,
   if (!has_instance(key)) {
     this->add_error(ast->get_location(),
                     missing_instance(key, fmt::format("No instance of {}<{}>",
-                                                      key.name,
+                                                      key.class_name(),
                                                       key.type_args_string())));
     return Type::Poisoned();
   }
@@ -1813,13 +1814,13 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
   for (auto &val : ast->field_values)
     val->accept_vis(this);
 
-  auto type_opt = get_typename_type(ast->struct_name.mangled());
+  auto type_opt = get_typename_type(ast->struct_name);
 
   // If not found and we have explicit type args, try generic struct
   // instantiation
   if (!type_opt.has_value() && !ast->explicit_type_args.empty()) {
     auto base_name = ast->struct_name.mangled();
-    auto *generic_def = monomorphizer.generic_structs.find(base_name);
+    auto *generic_def = monomorphizer.generic_structs.find(ast->struct_name);
     if (generic_def) {
 
       if (ast->explicit_type_args.size() != generic_def->type_params.size()) {
@@ -1836,11 +1837,10 @@ Type BiTypeCheckerVisitor::synthesize(StructLiteralExprAST *ast) {
                                                  generic_def->type_params);
       if (resolved) {
         auto &[bindings, type_args] = *resolved;
-        MonomorphizedKey key{generic_def->struct_name.mangled(), type_args};
+        MonomorphizedKey key{generic_def->struct_name, type_args};
         monomorphizer.instantiate_struct(generic_def, key, bindings)
             ->accept_vis(this);
-        type_opt = get_typename_type(
-            key.to_generic_name(generic_def->struct_name).mangled());
+        type_opt = get_typename_type(key.generic_name());
       }
     }
   }
@@ -2004,12 +2004,9 @@ Type BiTypeCheckerVisitor::synthesize(ForExprAST *ast) {
 
   // Verify that Iterator<Range<element_type>, element_type> instance exists.
   // Declaring that instance is what instantiates Range<element_type>.
-  auto range_type = get_typename_type(
-      MonomorphizedKey{"Range", {resolved}}
-          .to_generic_name(sammine_util::QualifiedName::from_parts({"Range"}))
-          .mangled());
-  if (!range_type ||
-      !has_instance(MonomorphizedKey{"Iterator", {*range_type, resolved}})) {
+  auto range_type = get_typename_type(bare("Range").with_type_args({resolved}));
+  if (!range_type || !has_instance(MonomorphizedKey::instance(
+                         "Iterator", {*range_type, resolved}))) {
     this->add_error(
         ast->get_location(),
         fmt::format("No Iterator instance for Range with element type {}",
@@ -2168,7 +2165,7 @@ std::optional<Type>
 BiTypeCheckerVisitor::lookup_kernel_input_array(const std::string &name,
                                                 const char *op,
                                                 sammine_util::Location loc) {
-  auto input_type = lookup_type(name);
+  auto input_type = lookup_type(bare(name));
   if (!input_type) {
     this->add_error(loc,
                     fmt::format("Unknown variable '{}' in kernel {}", name, op));

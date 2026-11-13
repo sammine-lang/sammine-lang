@@ -9,11 +9,16 @@
 
 namespace sammine_lang::AST {
 
+/// Generic definitions, by name.
 template <typename T> struct GenericRegistry {
-  std::unordered_map<std::string, T *> defs;
-  void register_def(const std::string &mangled, T *def) { defs[mangled] = def; }
-  T *find(const std::string &mangled) const {
-    auto it = defs.find(mangled);
+  std::unordered_map<sammine_util::QualifiedName, T *,
+                     sammine_util::QualifiedNameHash>
+      defs;
+  void register_def(const sammine_util::QualifiedName &name, T *def) {
+    defs[name] = def;
+  }
+  T *find(const sammine_util::QualifiedName &name) const {
+    auto it = defs.find(name);
     return it != defs.end() ? it->second : nullptr;
   }
 };

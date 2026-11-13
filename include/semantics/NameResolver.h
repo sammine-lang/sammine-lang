@@ -97,7 +97,13 @@ private:
     bool exported;
     sammine_util::Location location;
   };
-  std::map<std::string, Definition> definitions;
+  std::unordered_map<sammine_util::QualifiedName, Definition,
+                     sammine_util::QualifiedNameHash>
+      definitions;
+  //! Whether `name`, or what it is a member of (Shape of Shape::Line), is
+  //! a definition: that definition, or null.
+  const std::pair<const sammine_util::QualifiedName, Definition> *
+  definition_of(const sammine_util::QualifiedName &name) const;
   //! Per module, its top-level definitions' names as its code writes them
   //! (f), each to its name (m::f).
   std::map<std::string, std::map<std::string, sammine_util::QualifiedName>>

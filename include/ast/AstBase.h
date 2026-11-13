@@ -280,13 +280,16 @@ public:
 /// Stack of scoped symbol tables with parent-chain lookup.
 /// Each context can see names from its parent scope via recursive queries.
 /// T = value type (e.g. mlir::Value, Type).
-template <class T> class LexicalStack : public std::stack<LexicalContext<T>> {
+template <class T, class K = std::string, class Hash = std::hash<K>>
+class LexicalStack : public std::stack<LexicalContext<T, K, Hash>> {
+  using Context = LexicalContext<T, K, Hash>;
+
 public:
   void push_context() {
     if (this->empty())
-      this->push(LexicalContext<T>());
+      this->push(Context());
     else
-      this->push(LexicalContext<T>(&this->top()));
+      this->push(Context(&this->top()));
   }
   void pop_context() {
     if (this->empty())
@@ -309,34 +312,34 @@ public:
     Guard &operator=(Guard &&) = delete;
   };
 
-  void registerNameT(const std::string &name, T l) {
+  void registerNameT(const K &name, T l) {
     return this->top().registerNameT(name, l);
   }
   /// Register at the root (bottom) scope — survives Guard pops.
   /// Used for type definitions (struct/enum) which are always top-level.
-  void registerNameTAtRoot(const std::string &name, T l) {
+  void registerNameTAtRoot(const K &name, T l) {
     root().registerNameT(name, l);
   }
   /// Push a scope whose parent is the root scope, so lookups from it see
   /// top-level names but skip every scope opened since.
-  void push_context_under_root() { this->push(LexicalContext<T>(&root())); }
+  void push_context_under_root() { this->push(Context(&root())); }
 
   /// The bottom scope, which holds top-level definitions.
-  LexicalContext<T> &root() {
+  Context &root() {
     auto *ctx = &this->top();
     while (ctx->parent_scope)
       ctx = ctx->parent_scope;
     return *ctx;
   }
-  T recursive_get_from_name(const std::string &name) const {
+  T recursive_get_from_name(const K &name) const {
     return this->top().recursive_get_from_name(name);
   }
 
-  std::optional<T> try_get(const std::string &name) const {
+  std::optional<T> try_get(const K &name) const {
     return this->top().try_get(name);
   }
 
-  std::optional<T> recursive_try_get(const std::string &name) const {
+  std::optional<T> recursive_try_get(const K &name) const {
     return this->top().recursive_try_get(name);
   }
 };

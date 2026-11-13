@@ -51,6 +51,7 @@
 
 ### Enums
 - `EnumType`: QualifiedName + VariantInfo vector; nominal equality
+- Names (`sammine_util::QualifiedName`, `util/QualifiedName.h`, its functions at the end of `Types.h`): a path of parts, each with the types it is applied to (`vec::push<i32>` is [vec, push applied to (i32)]; `Drop<Vec<i32>>::Drop` is [Drop applied to (Vec<i32>), Drop]). A name is a key as it is (`==`, `QualifiedNameHash`): the checker's scopes (`id_to_type`, `typename_to_type`), `variant_constructors`, the generic registries, `NameResolver::definitions` and `ASTProperties`' symbols are keyed by it, and struct and enum types are equal when their names are. `mangled()` only shows a name, for a message or as the symbol a definition is linked as; nothing looks a name up by its text. The parser puts no types in a name (they are written as type expressions, kept beside it as `explicit_type_args`); the checker makes applied names from a `MonomorphizedKey` (`generic_name`, `to_typeclass_name`). A local, a type parameter or a built-in type is the name of one identifier (`bare`)
 - Type names are canonical: `NameResolver` names every struct/enum `module::Name` after its `defining_module`, in its own library and in importers alike, so instance symbols like `Area<shapes::Square>::Area` agree across modules. The type checker uses the AST name as the type name. Executables' own types keep bare names
 - `variant_constructors` map: variant_name → (enum_type, index)
 - Construction: qualified path → `get_typename_type(get_qualifier())` → resolve variant

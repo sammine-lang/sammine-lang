@@ -104,10 +104,10 @@ inline bool is_builtin_equality(const Type &t) {
 
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
-  if (key.name == kConvertClass)
+  if (key.class_name() == kConvertClass)
     return key.type_args.size() == 2 &&
            is_builtin_conversion(key.type_args[0], key.type_args[1]);
-  auto op = operator_of_class(key.name);
+  auto op = operator_of_class(key.class_name());
   if (!op || key.type_args.size() != 1)
     return false;
   auto &t = key.type_args[0];

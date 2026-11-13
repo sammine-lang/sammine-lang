@@ -36,7 +36,7 @@ void BiTypeCheckerVisitor::pre_register_function(PrototypeAST *ast) {
   else
     types.push_back(resolve_type_expr(ast->return_type_expr.get()));
   auto fn_type = Type::Function(std::move(types), ast->is_var_arg);
-  register_function(ast->functionName.mangled(), std::move(fn_type));
+  register_function(ast->functionName, std::move(fn_type));
 }
 
 void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
@@ -64,7 +64,7 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   //    (resolve_pending_alias).
   for (auto &def : ast->DefinitionVec)
     if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
-      pending_aliases[ta->alias_name.mangled()] = ta;
+      pending_aliases[ta->alias_name] = ta;
   for (auto &def : ast->DefinitionVec)
     if (auto *ta = llvm::dyn_cast<TypeAliasDefAST>(def.get()))
       ta->accept_vis(this);
@@ -88,15 +88,15 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   for (auto &def : ast->DefinitionVec) {
     if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
       if (fd->Prototype->is_generic())
-        monomorphizer.generic_funcs.register_def(
-            fd->Prototype->functionName.mangled(), fd);
+        monomorphizer.generic_funcs.register_def(fd->Prototype->functionName,
+                                                 fd);
       else
         pre_register_function(fd->Prototype.get());
     } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
       if (!ext->Prototype->is_generic())
         pre_register_function(ext->Prototype.get());
       if (ext->is_c_function)
-        c_bindings.insert(ext->Prototype->functionName.mangled());
+        c_bindings.insert(ext->Prototype->functionName);
     } else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
       // A generic instance's methods are registered with each copy.
       if (!tci->is_generic())
@@ -121,10 +121,10 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
 // instantiate more types, which get theirs too.
 void BiTypeCheckerVisitor::instantiate_drops() {
   auto drop = [&](const sammine_util::QualifiedName &name) {
-    auto type = get_typename_type(name.mangled());
+    auto type = get_typename_type(name);
     if (!type)
       return;
-    MonomorphizedKey key{std::string(kDropClass), {*type}};
+    auto key = MonomorphizedKey::instance(kDropClass, {*type});
     if (!type_class_instances.contains(key))
       instantiate_generic_instance(key);
   };
@@ -152,7 +152,7 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   // Register explicitly-declared type parameters before visiting the prototype
   for (auto &tp_name : ast->Prototype->type_params) {
     auto tp = Type::TypeParam(tp_name);
-    typename_to_type.registerNameT(tp_name, tp);
+    typename_to_type.registerNameT(bare(tp_name), tp);
   }
 
   // Visit prototype (resolves param/return types, registers function name)
@@ -161,8 +161,7 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   ast->accept_synthesis(this);
 
   if (ast->Prototype->is_generic()) {
-    monomorphizer.generic_funcs.register_def(
-        ast->Prototype->functionName.mangled(), ast);
+    monomorphizer.generic_funcs.register_def(ast->Prototype->functionName, ast);
     return;
   }
   ast->Block->accept_vis(this);
@@ -180,7 +179,7 @@ void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
   ast->accept_synthesis(this);
   for (auto &var : ast->parameterVectors)
     var->accept_vis(this);
-  register_function(ast->functionName.mangled(), ast->get_type());
+  register_function(ast->functionName, ast->get_type());
   if (ast->functionName.get_name() == "main") {
     auto fn_type = std::get<FunctionType>(ast->get_type().type_data);
     auto return_type = fn_type.get_return_type();
@@ -260,7 +259,7 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
     check_c_signature(ast);
 }
 
-bool BiTypeCheckerVisitor::takes_c_callback(const std::string &name) const {
+bool BiTypeCheckerVisitor::takes_c_callback(const Name &name) const {
   if (!c_bindings.contains(name) || names_variable(name))
     return false;
   auto type = lookup_type(name);
@@ -330,8 +329,7 @@ void BiTypeCheckerVisitor::visit(StructDefAST *ast) {
   // Generic struct: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      monomorphizer.generic_structs.register_def(ast->struct_name.mangled(),
-                                                 ast);
+      monomorphizer.generic_structs.register_def(ast->struct_name, ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -359,7 +357,7 @@ Type BiTypeCheckerVisitor::declare_struct(StructDefAST *ast) {
     return ast->get_type();
   auto type = Type::DeclaredStruct(ast->struct_name, ast->instance_of);
   ast->set_type(type);
-  typename_to_type.registerNameTAtRoot(ast->struct_name.mangled(), type);
+  typename_to_type.registerNameTAtRoot(ast->struct_name, type);
   return type;
 }
 
@@ -368,7 +366,7 @@ Type BiTypeCheckerVisitor::declare_enum(EnumDefAST *ast) {
     return ast->get_type();
   auto type = Type::DeclaredEnum(ast->enum_name, ast->instance_of);
   ast->set_type(type);
-  typename_to_type.registerNameTAtRoot(ast->enum_name.mangled(), type);
+  typename_to_type.registerNameTAtRoot(ast->enum_name, type);
   return type;
 }
 
@@ -378,7 +376,7 @@ Type BiTypeCheckerVisitor::declare_enum(EnumDefAST *ast) {
 bool BiTypeCheckerVisitor::refers_to_itself(TypeExprAST *where,
                                             const Type &type,
                                             const Type &self) {
-  std::unordered_set<std::string> seen;
+  std::unordered_set<Name, NameHash> seen;
   std::function<bool(const Type &)> reaches = [&](const Type &t) -> bool {
     switch (t.type_kind) {
     case TypeKind::Pointer:
@@ -397,14 +395,14 @@ bool BiTypeCheckerVisitor::refers_to_itself(TypeExprAST *where,
       if (t == self)
         return true;
       auto &st = std::get<StructType>(t.type_data);
-      return seen.insert(st.get_name().mangled()).second &&
+      return seen.insert(st.get_name()).second &&
              llvm::any_of(st.get_field_types(), reaches);
     }
     case TypeKind::Enum: {
       if (t == self)
         return true;
       auto &et = std::get<EnumType>(t.type_data);
-      return seen.insert(et.get_name().mangled()).second &&
+      return seen.insert(et.get_name()).second &&
              llvm::any_of(et.get_variants(), [&](auto &vi) {
                return llvm::any_of(vi.payload_types, reaches);
              });
@@ -426,7 +424,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // Generic enum: register as template, skip concrete registration
   if (!ast->type_params.empty()) {
     if (!ast->get_type().synthesized()) {
-      monomorphizer.generic_enums.register_def(ast->enum_name.mangled(), ast);
+      monomorphizer.generic_enums.register_def(ast->enum_name, ast);
       ast->set_type(Type::Generic()); // mark as visited (not concretely usable)
     }
     return;
@@ -545,7 +543,7 @@ void BiTypeCheckerVisitor::visit(EnumDefAST *ast) {
   // infers which.
   for (size_t i = 0; i < et.variant_count(); i++) {
     auto &vi = et.get_variant(i);
-    auto qualified_key = ast->enum_name.with_appended({vi.name, ""}).mangled();
+    auto qualified_key = ast->enum_name.with_appended({vi.name, {}});
     variant_constructors[qualified_key] = {enum_type, i};
   }
 }
@@ -560,7 +558,7 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   alias_path.push_back(ast);
   auto resolved = resolve_type_expr(ast->type_expr.get());
   alias_path.pop_back();
-  pending_aliases.erase(name);
+  pending_aliases.erase(ast->alias_name);
   // Part of a cycle, already reported.
   if (tap.resolved_type.synthesized())
     return;
@@ -574,11 +572,11 @@ void BiTypeCheckerVisitor::visit(TypeAliasDefAST *ast) {
   }
   tap.resolved_type = resolved;
   ast->set_type(resolved);
-  typename_to_type.registerNameTAtRoot(name, resolved);
+  typename_to_type.registerNameTAtRoot(ast->alias_name, resolved);
 }
 
 std::optional<Type>
-BiTypeCheckerVisitor::resolve_pending_alias(const std::string &name) {
+BiTypeCheckerVisitor::resolve_pending_alias(const Name &name) {
   auto it = pending_aliases.find(name);
   if (it == pending_aliases.end())
     return std::nullopt;
@@ -594,15 +592,14 @@ BiTypeCheckerVisitor::resolve_pending_alias(const std::string &name) {
     this->add_error(
         alias->get_location(),
         through.empty()
-            ? fmt::format("Type alias '{}' refers to itself", name)
-            : fmt::format("Type alias '{}' refers to itself through {}", name,
-                          fmt::join(through, ", ")));
+            ? fmt::format("Type alias '{}' refers to itself", name.mangled())
+            : fmt::format("Type alias '{}' refers to itself through {}",
+                          name.mangled(), fmt::join(through, ", ")));
     // Every alias in the cycle is unresolvable; nothing else reports it.
     for (auto at = start; at != alias_path.end(); ++at) {
       props_.type_alias((*at)->id()).resolved_type = Type::Poisoned();
       (*at)->set_type(Type::Poisoned());
-      typename_to_type.registerNameTAtRoot((*at)->alias_name.mangled(),
-                                           Type::Poisoned());
+      typename_to_type.registerNameTAtRoot((*at)->alias_name, Type::Poisoned());
     }
     return Type::Poisoned();
   }
@@ -617,8 +614,7 @@ void BiTypeCheckerVisitor::register_alias_variants(TypeAliasDefAST *ast) {
     auto &et = std::get<EnumType>(resolved.type_data);
     for (size_t i = 0; i < et.variant_count(); i++) {
       auto &vi = et.get_variant(i);
-      auto qualified_key =
-          ast->alias_name.with_appended({vi.name, ""}).mangled();
+      auto qualified_key = ast->alias_name.with_appended({vi.name, {}});
       variant_constructors[qualified_key] = {resolved, i};
     }
   }
@@ -626,18 +622,18 @@ void BiTypeCheckerVisitor::register_alias_variants(TypeAliasDefAST *ast) {
 
 const std::vector<std::string> *BiTypeCheckerVisitor::generic_type_params(
     const sammine_util::QualifiedName &base) const {
-  if (auto *def = monomorphizer.generic_enums.find(base.mangled()))
+  if (auto *def = monomorphizer.generic_enums.find(base))
     return &def->type_params;
-  if (auto *def = monomorphizer.generic_structs.find(base.mangled()))
+  if (auto *def = monomorphizer.generic_structs.find(base))
     return &def->type_params;
   return nullptr;
 }
 
 Type BiTypeCheckerVisitor::generic_type_instance(
     const sammine_util::QualifiedName &base, std::vector<Type> type_args) {
-  auto *enum_def = monomorphizer.generic_enums.find(base.mangled());
+  auto *enum_def = monomorphizer.generic_enums.find(base);
   auto *struct_def =
-      enum_def ? nullptr : monomorphizer.generic_structs.find(base.mangled());
+      enum_def ? nullptr : monomorphizer.generic_structs.find(base);
   if (!enum_def && !struct_def)
     return Type::Poisoned();
   auto &type_params = enum_def ? enum_def->type_params : struct_def->type_params;
@@ -649,15 +645,15 @@ Type BiTypeCheckerVisitor::generic_type_instance(
       has_unresolved_type_param = true;
     bindings[type_params[i]] = type_args[i];
   }
-  MonomorphizedKey key{base.mangled(), std::move(type_args)};
-  auto mangled = key.to_generic_name(base).mangled();
+  MonomorphizedKey key{base, std::move(type_args)};
+  auto instance = key.generic_name();
 
   // An argument that is still a type parameter, as Vec<T> inside a generic
   // signature, or still open, as in None's Option<_>, can't be instantiated
   // yet: a placeholder with it in its fields stands in, until substitute()
   // or the context decides it.
   if (has_unresolved_type_param) {
-    if (auto existing = get_typename_type(mangled))
+    if (auto existing = get_typename_type(instance))
       return *existing;
 
     auto instance_of = std::make_shared<const MonomorphizedKey>(key);
@@ -666,9 +662,8 @@ Type BiTypeCheckerVisitor::generic_type_instance(
       // The generic's own parameters, as its fields name them.
       decltype(typename_to_type)::Guard scope(typename_to_type);
       for (auto &[pname, ptype] : bindings)
-        typename_to_type.registerNameT(pname, ptype);
+        typename_to_type.registerNameT(bare(pname), ptype);
 
-      auto name = sammine_util::QualifiedName::from_parts({mangled});
       if (struct_def) {
         std::vector<std::string> fnames;
         std::vector<Type> ftypes;
@@ -678,8 +673,8 @@ Type BiTypeCheckerVisitor::generic_type_instance(
                                ? resolve_type_expr(member->type_expr.get())
                                : Type::Poisoned());
         }
-        placeholder = Type::Struct(name, std::move(fnames), std::move(ftypes),
-                                   std::move(instance_of));
+        placeholder = Type::Struct(instance, std::move(fnames),
+                                   std::move(ftypes), std::move(instance_of));
       } else {
         std::vector<EnumType::VariantInfo> variant_infos;
         for (auto &v : enum_def->variants) {
@@ -689,23 +684,23 @@ Type BiTypeCheckerVisitor::generic_type_instance(
           variant_infos.push_back(
               {v.name, std::move(payload), v.discriminant_value});
         }
-        placeholder = Type::Enum(name, std::move(variant_infos), false,
+        placeholder = Type::Enum(instance, std::move(variant_infos), false,
                                  TypeKind::I32_t, std::move(instance_of));
       }
     }
-    typename_to_type.registerNameT(mangled, placeholder);
+    typename_to_type.registerNameT(instance, placeholder);
     return placeholder;
   }
 
   // An instance is registered at the root scope once instantiated.
-  if (auto existing = get_typename_type(mangled))
+  if (auto existing = get_typename_type(instance))
     return *existing;
   if (enum_def)
     monomorphizer.instantiate_enum(enum_def, key, bindings)->accept_vis(this);
   else
     monomorphizer.instantiate_struct(struct_def, key, bindings)
         ->accept_vis(this);
-  auto result = get_typename_type(mangled);
+  auto result = get_typename_type(instance);
   return result.has_value() ? *result : Type::Poisoned();
 }
 
@@ -767,14 +762,12 @@ void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {
       !cp.resolved_name.has_value())
     return;
 
-  auto *generic_def =
-      monomorphizer.generic_funcs.find(ast->functionName.mangled());
+  auto *generic_def = monomorphizer.generic_funcs.find(ast->functionName);
   if (!generic_def)
     return;
 
   auto key = MonomorphizedKey::from_bindings(
-      ast->functionName.mangled(), generic_def->Prototype->type_params,
-      cp.type_bindings);
+      ast->functionName, generic_def->Prototype->type_params, cp.type_bindings);
   if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
                                                         cp.type_bindings)) {
     TopLevelScopeGuard scope(*this);
@@ -852,11 +845,11 @@ void BiTypeCheckerVisitor::register_typeclass_decl(TypeClassDeclAST *ast) {
   {
     ScopeGuard scope(*this);
     for (auto &param : ast->type_params)
-      typename_to_type.registerNameT(param, Type::TypeParam(param));
+      typename_to_type.registerNameT(bare(param), Type::TypeParam(param));
 
     for (auto &proto : ast->methods) {
       proto->accept_synthesis(this);
-      method_to_class[proto->functionName.mangled()] = ast->class_name;
+      method_to_class[proto->functionName.get_name()] = ast->class_name;
     }
   }
 
@@ -868,7 +861,7 @@ BiTypeCheckerVisitor::resolve_instance_types(TypeClassInstanceAST *ast) {
   // A generic instance's parameters are only visible in its own types.
   ScopeGuard scope(*this);
   for (auto &tp : ast->type_params)
-    typename_to_type.registerNameT(tp, Type::TypeParam(tp));
+    typename_to_type.registerNameT(bare(tp), Type::TypeParam(tp));
   std::vector<Type> types;
   for (auto &type_expr : ast->concrete_type_exprs) {
     auto resolved = resolve_type_expr(type_expr.get());
@@ -907,13 +900,15 @@ bool BiTypeCheckerVisitor::overlaps_registered_instance(
         return report(fmt::format(
             "instance<{}> {}<{}>", fmt::join(other.ast->type_params, ", "),
             ast->class_name,
-            MonomorphizedKey{ast->class_name, other.types}.type_args_string()));
+            MonomorphizedKey::instance(ast->class_name, other.types)
+                .type_args_string()));
   if (!ast->is_generic())
     return false;
   for (auto &key : type_class_instances)
-    if (key.name == ast->class_name && unifiable(renamed, key.type_args))
-      return report(
-          fmt::format("instance {}<{}>", key.name, key.type_args_string()));
+    if (key.class_name() == ast->class_name &&
+        unifiable(renamed, key.type_args))
+      return report(fmt::format("instance {}<{}>", key.class_name(),
+                                key.type_args_string()));
   return false;
 }
 
@@ -952,7 +947,7 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
       return;
     }
 
-  MonomorphizedKey tc_key{ast->class_name, *types};
+  auto tc_key = MonomorphizedKey::instance(ast->class_name, *types);
 
   if (!ast->is_generic() && is_builtin_instance(tc_key)) {
     this->add_error(ast->get_location(),
@@ -990,7 +985,7 @@ void BiTypeCheckerVisitor::add_instance(TypeClassInstanceAST *ast,
 
 bool BiTypeCheckerVisitor::instantiate_generic_instance(
     const MonomorphizedKey &key) {
-  auto it = generic_instances.find(key.name);
+  auto it = generic_instances.find(key.class_name());
   if (it == generic_instances.end())
     return false;
   // A copy is only made for types known in full: an untyped literal's or
@@ -1046,14 +1041,15 @@ BiTypeCheckerVisitor::missing_instance(const MonomorphizedKey &key,
   auto it = private_instances.find(key);
   if (it == private_instances.end())
     return otherwise;
-  return fmt::format("{}<{}> is private to module '{}'", key.name,
+  return fmt::format("{}<{}> is private to module '{}'", key.class_name(),
                      key.type_args_string(), it->second);
 }
 
 std::string
 BiTypeCheckerVisitor::instance_template(const MonomorphizedKey &key) const {
   std::vector<std::string> methods;
-  if (auto it = type_class_defs.find(key.name); it != type_class_defs.end()) {
+  if (auto it = type_class_defs.find(key.class_name());
+      it != type_class_defs.end()) {
     auto *tc = it->second;
     TypeBindings bindings;
     for (size_t i = 0; i < tc->type_params.size() && i < key.type_args.size();
@@ -1074,7 +1070,7 @@ BiTypeCheckerVisitor::instance_template(const MonomorphizedKey &key) const {
   }
   auto body = methods.empty() ? std::string("...")
                               : fmt::format("{}", fmt::join(methods, " "));
-  return fmt::format("instance {}<{}> {{ {} }}", key.name,
+  return fmt::format("instance {}<{}> {{ {} }}", key.class_name(),
                      key.type_args_string(), body);
 }
 

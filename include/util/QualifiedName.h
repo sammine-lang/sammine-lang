@@ -1,8 +1,11 @@
 #pragma once
-#include <optional>
+#include <cstddef>
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
+
+struct Type;
 
 // Forward declarations for QualifiedName friends
 namespace sammine_lang {
@@ -19,22 +22,28 @@ struct CasePattern;
 
 namespace sammine_util {
 
+/// What a definition is called: its path, each part with the types it is
+/// applied to. `vec::push<i32>` is [vec, push applied to (i32)], and
+/// `Drop<Vec<i32>>::Drop` is [Drop applied to (Vec<i32>), Drop]. Two names
+/// are the same name when their parts and those types are: a name is a key
+/// as it is (QualifiedNameHash), and `mangled()` only shows it.
+///
+/// Its functions are defined at the end of typecheck/Types.h, where Type is
+/// whole.
 struct QualifiedName {
   struct Part {
     std::string name;
-    std::string type_args; // "<i32>" including brackets, or ""
-    std::string mangled() const { return name + type_args; }
+    std::vector<Type> type_args;
+    /// `name`, then `<A, B>` if it is applied to types.
+    std::string mangled() const;
+    bool operator==(const Part &other) const;
   };
 
 private:
-  std::vector<Part> parts_; // [{math,""}, {Color,""}, {Red,""}]
+  std::vector<Part> parts_; // [{math}, {Color}, {Red}]
 
   // local() is restricted to parsing/AST construction only.
-  static QualifiedName local(std::string name) {
-    QualifiedName qn;
-    qn.parts_ = {{std::move(name), ""}};
-    return qn;
-  }
+  static QualifiedName local(std::string name);
 
   friend class sammine_lang::Parser;
   friend class sammine_lang::AST::SimpleTypeExprAST;
@@ -45,79 +54,49 @@ private:
   friend struct sammine_lang::AST::CasePattern;
 
 public:
-  QualifiedName() : parts_{{"", ""}} {}
+  QualifiedName();
 
-  static QualifiedName qualified(std::string module, std::string name) {
-    QualifiedName qn;
-    qn.parts_ = {{std::move(module), ""}, {std::move(name), ""}};
-    return qn;
-  }
+  static QualifiedName qualified(std::string module, std::string name);
 
   // Convenience: create from plain strings (no type args)
-  static QualifiedName from_parts(std::vector<std::string> names) {
-    QualifiedName qn;
-    qn.parts_.clear();
-    qn.parts_.reserve(names.size());
-    for (auto &n : names)
-      qn.parts_.push_back({std::move(n), ""});
-    return qn;
-  }
+  static QualifiedName from_parts(std::vector<std::string> names);
 
   // Create from structured Parts (with type args)
-  static QualifiedName from_parts(std::vector<Part> parts) {
-    QualifiedName qn;
-    qn.parts_ = std::move(parts);
-    return qn;
-  }
+  static QualifiedName from_parts(std::vector<Part> parts);
 
-  // Return a copy with type_args set on the last part
-  QualifiedName with_type_args(std::string ta) const {
-    auto copy = *this;
-    copy.parts_.back().type_args = std::move(ta);
-    return copy;
-  }
-
-  // Return a copy with all type_args cleared
-  QualifiedName strip_type_args() const {
-    auto copy = *this;
-    for (auto &p : copy.parts_)
-      p.type_args.clear();
-    return copy;
-  }
+  // Return a copy whose last part is applied to `types`
+  QualifiedName with_type_args(std::vector<Type> types) const;
 
   // Return a copy with an additional part appended
-  QualifiedName with_appended(Part part) const {
-    auto copy = *this;
-    copy.parts_.push_back(std::move(part));
-    return copy;
-  }
+  QualifiedName with_appended(Part part) const;
 
   // Accessors
   const std::string &get_name() const { return parts_.back().name; }
-  std::string get_module() const {
-    return parts_.size() > 1 ? parts_.front().name : "";
-  }
-  std::string get_qualifier() const {
-    if (parts_.size() <= 1)
-      return "";
-    std::string result = parts_[0].mangled();
-    for (size_t i = 1; i + 1 < parts_.size(); i++)
-      result += "::" + parts_[i].mangled();
-    return result;
-  }
+  std::string get_module() const;
+  std::string get_qualifier() const;
+  /// What the name is a member of: the name without its last part.
+  QualifiedName qualifier() const;
   const std::vector<Part> &parts() const { return parts_; }
   size_t depth() const { return parts_.size(); }
 
   // Query methods
   bool is_qualified() const { return parts_.size() > 1; }
 
-  // String representation — includes type_args in each part
-  std::string mangled() const {
-    std::string result = parts_[0].mangled();
-    for (size_t i = 1; i < parts_.size(); i++)
-      result += "::" + parts_[i].mangled();
-    return result;
-  }
+  bool operator==(const QualifiedName &other) const;
+
+  /// The name as source writes it, `a::b<T>::c`: for messages, and for the
+  /// symbol a definition is linked as.
+  std::string mangled() const;
+};
+
+/// A name as text, for a message.
+std::string name_text(const QualifiedName &name);
+
+struct QualifiedNameHash {
+  size_t operator()(const QualifiedName &name) const;
 };
 
 } // namespace sammine_util
+
+// A name's parts hold types, so using one needs Type whole.
+#include "typecheck/Types.h"

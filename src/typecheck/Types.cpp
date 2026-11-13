@@ -59,7 +59,7 @@ void StructType::define(std::vector<std::string> field_names_,
   body->defined = true;
 }
 bool StructType::operator==(const StructType &t) const {
-  return name.mangled() == t.name.mangled(); // nominal typing
+  return name == t.name; // nominal typing
 }
 std::optional<size_t>
 StructType::get_field_index(const std::string &field) const {
@@ -92,7 +92,7 @@ void EnumType::define(std::vector<VariantInfo> variants_, bool integer_backed,
   body->defined = true;
 }
 bool EnumType::operator==(const EnumType &t) const {
-  return name.mangled() == t.name.mangled(); // nominal typing
+  return name == t.name; // nominal typing
 }
 std::optional<size_t>
 EnumType::get_variant_index(const std::string &variant_name) const {
@@ -185,13 +185,12 @@ size_t std::hash<Type>::operator()(const Type &t) const {
   }
   // Nominal types: identity is the name
   case TypeKind::Struct:
-    hash_combine(h,
-                 std::hash<std::string>{}(
-                     std::get<StructType>(t.type_data).get_name().mangled()));
+    hash_combine(h, sammine_util::QualifiedNameHash{}(
+                        std::get<StructType>(t.type_data).get_name()));
     break;
   case TypeKind::Enum:
-    hash_combine(h, std::hash<std::string>{}(
-                        std::get<EnumType>(t.type_data).get_name().mangled()));
+    hash_combine(h, sammine_util::QualifiedNameHash{}(
+                        std::get<EnumType>(t.type_data).get_name()));
     break;
   case TypeKind::Function: {
     auto &fn = std::get<FunctionType>(t.type_data);
@@ -289,7 +288,7 @@ std::string open_type_message(const Type &type,
   if (variant && instance_of)
     return fmt::format("Could not infer the type arguments of {}; write them "
                        "out, as in {}<...>::{}",
-                       type.to_string(), instance_of->name, *variant);
+                       type.to_string(), instance_of->name.mangled(), *variant);
   return fmt::format("Could not infer the type arguments of {}",
                      type.to_string());
 }

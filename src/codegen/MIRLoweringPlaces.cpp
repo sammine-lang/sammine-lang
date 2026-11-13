@@ -66,7 +66,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerPlaceRead(ExprAST *expr) {
 // Lowers nothing.
 bool MIRLowering::hasPlace(ExprAST *expr) const {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr)) {
-    auto it = names_.find(var->variableName.mangled());
+    auto it = findLocal(var->variableName);
     return it != names_.end() &&
            mlir::isa<smn::PlaceType>(it->second.getType());
   }
@@ -87,7 +87,7 @@ bool MIRLowering::hasPlace(ExprAST *expr) const {
 // The place `target` names, which hasPlace says it has.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerPlace(ExprAST *target) {
   if (auto *var = llvm::dyn_cast<VariableExprAST>(target)) {
-    auto it = names_.find(var->variableName.mangled());
+    auto it = findLocal(var->variableName);
     if (it == names_.end() || !mlir::isa<smn::PlaceType>(it->second.getType()))
       return mlir::failure();
     return it->second;

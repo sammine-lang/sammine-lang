@@ -13,37 +13,25 @@ NameResolver::qualify(const sammine_util::QualifiedName &name,
   if (name.is_qualified() || module.empty() || (module == kPrelude && exported))
     return name;
   return sammine_util::QualifiedName::from_parts(
-      std::vector<sammine_util::QualifiedName::Part>{{module, ""},
+      std::vector<sammine_util::QualifiedName::Part>{{module, {}},
                                                      name.parts().back()});
 }
-
-namespace {
-/// `name`, written in code, as the definition named `defined` is named,
-/// keeping the type arguments it was written with (m::id<i32>).
-sammine_util::QualifiedName renamed(const sammine_util::QualifiedName &name,
-                                    const sammine_util::QualifiedName &defined) {
-  auto parts = defined.parts();
-  parts.back() = name.parts().back();
-  return sammine_util::QualifiedName::from_parts(std::move(parts));
-}
-} // namespace
 
 void NameResolver::use_program(ProgramAST &program) {
   module_aliases = program.module_aliases;
   auto declare = [&](DefinitionAST &def, sammine_util::QualifiedName &n,
                      sammine_util::Location location) {
     auto &module = def.defining_module;
-    auto written = n.strip_type_args().mangled();
+    auto written = n.get_name();
     n = qualify(n, module, def.is_exported);
     // Defined twice in its module, or, in a program, as the prelude
     // exports it: a program's names and those are both unqualified.
-    auto key = n.strip_type_args().mangled();
-    if (auto it = definitions.find(key); it != definitions.end()) {
+    if (auto it = definitions.find(n); it != definitions.end()) {
       report_redefinition(written, location, it->second.location);
       return;
     }
-    top_levels[module].emplace(written, n.strip_type_args());
-    definitions[key] = {module, def.is_exported, location};
+    top_levels[module].emplace(written, n);
+    definitions[n] = {module, def.is_exported, location};
   };
   for (auto &def : program.DefinitionVec) {
     // An instance's methods are code of its module.
@@ -73,8 +61,8 @@ void NameResolver::use_program(ProgramAST &program) {
       continue;
     for (auto &[written, name] : table)
       if (auto theirs = prelude_export(written))
-        report_redefinition(written, definitions.at(name.mangled()).location,
-                            definitions.at(theirs->mangled()).location);
+        report_redefinition(written, definitions.at(name).location,
+                            definitions.at(*theirs).location);
   }
 }
 
@@ -95,8 +83,7 @@ NameResolver::prelude_export(const std::string &name) const {
   if (prelude == top_levels.end())
     return std::nullopt;
   auto it = prelude->second.find(name);
-  if (it == prelude->second.end() ||
-      !definitions.at(it->second.mangled()).exported)
+  if (it == prelude->second.end() || !definitions.at(it->second).exported)
     return std::nullopt;
   return it->second;
 }
@@ -127,7 +114,7 @@ NameResolver::defined_at(const std::string &name, const ASTContext &where) {
   if (is_local(name))
     return scopes.recursive_get_from_name(name);
   if (auto defined = top_level(where.module, name))
-    return definitions.at(defined->mangled()).location;
+    return definitions.at(*defined).location;
   return std::nullopt;
 }
 
@@ -167,8 +154,8 @@ void NameResolver::resolve_type_name(sammine_util::QualifiedName &name,
   if (llvm::is_contained(where.type_params, name.mangled()) ||
       is_builtin_type_name(name.get_name()))
     return;
-  if (auto defined = top_level(where.module, name.strip_type_args().mangled()))
-    name = renamed(name, *defined);
+  if (auto defined = top_level(where.module, name.get_name()))
+    name = *defined;
   check_visible(name, location, where);
 }
 
@@ -184,17 +171,23 @@ void NameResolver::resolve_variant(sammine_util::QualifiedName &name,
 void NameResolver::check_visible(const sammine_util::QualifiedName &name,
                                  sammine_util::Location location,
                                  const ASTContext &where) {
-  auto plain = name.strip_type_args();
-  for (auto &candidate : {plain.mangled(), plain.get_qualifier()}) {
-    auto it = definitions.find(candidate);
-    if (it == definitions.end())
-      continue;
-    auto &[module, exported, _] = it->second;
-    if (!exported && !module.empty() && module != where.module)
-      reportee.add_error(location, fmt::format("'{}' is private to module '{}'",
-                                               candidate, module));
+  auto *found = definition_of(name);
+  if (!found)
     return;
-  }
+  auto &[module, exported, _] = found->second;
+  if (!exported && !module.empty() && module != where.module)
+    reportee.add_error(location, fmt::format("'{}' is private to module '{}'",
+                                             found->first.mangled(), module));
+}
+
+const std::pair<const sammine_util::QualifiedName, NameResolver::Definition> *
+NameResolver::definition_of(const sammine_util::QualifiedName &name) const {
+  if (auto it = definitions.find(name); it != definitions.end())
+    return &*it;
+  if (name.is_qualified())
+    if (auto it = definitions.find(name.qualifier()); it != definitions.end())
+      return &*it;
+  return nullptr;
 }
 
 void NameResolver::resolve_type(TypeExprAST *type, const ASTContext &where) {
@@ -238,9 +231,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
                                                name.get_module()));
       return;
     }
-    auto plain = name.strip_type_args();
-    if (definitions.contains(plain.mangled()) ||
-        definitions.contains(plain.get_qualifier()))
+    if (definition_of(name))
       return;
     reportee.add_error(
         location, is_call
@@ -255,8 +246,8 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
   auto bare = name.mangled();
   if (is_local(bare))
     return;
-  if (auto defined = top_level(where.module, name.strip_type_args().mangled())) {
-    name = renamed(name, *defined);
+  if (auto defined = top_level(where.module, name.get_name())) {
+    name = *defined;
     check_visible(name, location, where);
     return;
   }
@@ -281,7 +272,7 @@ void NameResolver::resolve_value(sammine_util::QualifiedName &name,
       return;
     }
     if (enums.size() == 1) {
-      name = enums.front().with_appended({bare, ""});
+      name = enums.front().with_appended({bare, {}});
       check_visible(name, location, where);
       return;
     }

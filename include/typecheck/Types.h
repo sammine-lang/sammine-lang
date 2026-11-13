@@ -613,29 +613,27 @@ inline void hash_combine(size_t &seed, size_t h) {
   seed ^= h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
 }
 
-/// Hashes TypeKind + TypeData only, consistent with operator==.
-/// Linearity is intentionally excluded: it is a qualifier on pointers,
-/// not part of type identity. Linear vs non-linear pointers generate
-/// identical code structurally, so e.g. identity<ptr<i32>> and
-/// identity<'ptr<i32>> are the same monomorphization.
+/// Hashes what operator== compares: kind, linearity and data. 'ptr<i32> and
+/// ptr<i32> are two types, so identity<'ptr<i32>> and identity<ptr<i32>> are
+/// two instantiations.
 namespace std {
 template <> struct hash<Type> {
   size_t operator()(const Type &t) const;
 };
 } // namespace std
 
-/// Structured key for maps that associate a name with concrete type arguments.
-/// Used for typeclass instance lookup, monomorphization dedup, etc.
-/// Provides methods to produce strings (for codegen symbols / error messages)
-/// so that all type-to-string formatting goes through one place.
+/// A generic definition or a typeclass applied to types: the key instances
+/// and instantiations are found by, and what names them (generic_name,
+/// to_typeclass_name).
 struct MonomorphizedKey {
-  std::string name;
+  /// What is applied: a generic function, struct or enum, or a typeclass.
+  sammine_util::QualifiedName name;
   std::vector<Type> type_args;
   bool operator==(const MonomorphizedKey &) const = default;
 
   /// Build from type param names + bindings (extracts concrete types in order).
   static MonomorphizedKey
-  from_bindings(const std::string &name,
+  from_bindings(const sammine_util::QualifiedName &name,
                 const std::vector<std::string> &type_params,
                 const std::unordered_map<std::string, Type> &bindings) {
     std::vector<Type> args;
@@ -643,6 +641,16 @@ struct MonomorphizedKey {
       args.push_back(bindings.at(tp));
     return {name, std::move(args)};
   }
+
+  /// The key of the instance of typeclass `cls` for `types`: Add applied
+  /// to (i32).
+  static MonomorphizedKey instance(std::string_view cls,
+                                   std::vector<Type> types) {
+    return {sammine_util::QualifiedName::from_parts({std::string(cls)}),
+            std::move(types)};
+  }
+  /// The typeclass an instance's key is of.
+  const std::string &class_name() const { return name.get_name(); }
 
   /// "i32, f64" — comma-separated, no brackets. For error messages and
   /// QualifiedName construction.
@@ -656,23 +664,24 @@ struct MonomorphizedKey {
     return result;
   }
 
-  /// Produce a QualifiedName for generic functions/enums/structs.
-  sammine_util::QualifiedName
-  to_generic_name(const sammine_util::QualifiedName &base) const {
-    return base.with_type_args("<" + type_args_string() + ">");
+  /// The name of this instance of a generic function, struct or enum:
+  /// vec::push applied to (i32) is vec::push<i32>.
+  sammine_util::QualifiedName generic_name() const {
+    return name.with_type_args(type_args);
   }
 
-  /// Produce a QualifiedName for typeclass instance methods.
+  /// The name of `method` of this instance of a typeclass: Drop applied to
+  /// (Vec<i32>) has Drop<Vec<i32>>::Drop.
   sammine_util::QualifiedName
   to_typeclass_name(const std::string &method) const {
     return sammine_util::QualifiedName::from_parts(
         std::vector<sammine_util::QualifiedName::Part>{
-            {name, "<" + type_args_string() + ">"}, {method, ""}});
+            {name.get_name(), type_args}, {method, {}}});
   }
 };
 struct MonomorphizedKeyHash {
   size_t operator()(const MonomorphizedKey &k) const {
-    size_t h = std::hash<std::string>{}(k.name);
+    size_t h = sammine_util::QualifiedNameHash{}(k.name);
     std::hash<Type> th;
     for (auto &t : k.type_args)
       hash_combine(h, th(t));
@@ -731,3 +740,90 @@ struct TypeMapOrdering {
   /// The caller keeps ownership; the callee only reads through it.
   bool lendable_to_from(const Type &to, const Type &from) const;
 };
+
+// --- sammine_util::QualifiedName, defined here, where Type is whole ---
+
+namespace sammine_util {
+
+inline std::string QualifiedName::Part::mangled() const {
+  if (type_args.empty())
+    return name;
+  std::string result = name + "<";
+  for (size_t i = 0; i < type_args.size(); i++)
+    result += (i ? ", " : "") + type_args[i].to_string();
+  return result + ">";
+}
+inline bool QualifiedName::Part::operator==(const Part &other) const {
+  return name == other.name && type_args == other.type_args;
+}
+
+inline QualifiedName::QualifiedName() : parts_{{"", {}}} {}
+inline QualifiedName QualifiedName::local(std::string name) {
+  return from_parts(std::vector<Part>{{std::move(name), {}}});
+}
+inline QualifiedName QualifiedName::qualified(std::string module,
+                                              std::string name) {
+  return from_parts(
+      std::vector<Part>{{std::move(module), {}}, {std::move(name), {}}});
+}
+inline QualifiedName QualifiedName::from_parts(std::vector<std::string> names) {
+  QualifiedName qn;
+  qn.parts_.clear();
+  qn.parts_.reserve(names.size());
+  for (auto &n : names)
+    qn.parts_.push_back({std::move(n), {}});
+  return qn;
+}
+inline QualifiedName QualifiedName::from_parts(std::vector<Part> parts) {
+  QualifiedName qn;
+  qn.parts_ = std::move(parts);
+  return qn;
+}
+inline QualifiedName
+QualifiedName::with_type_args(std::vector<Type> types) const {
+  auto copy = *this;
+  copy.parts_.back().type_args = std::move(types);
+  return copy;
+}
+inline QualifiedName QualifiedName::with_appended(Part part) const {
+  auto copy = *this;
+  copy.parts_.push_back(std::move(part));
+  return copy;
+}
+inline std::string QualifiedName::get_module() const {
+  return parts_.size() > 1 ? parts_.front().name : "";
+}
+inline std::string QualifiedName::get_qualifier() const {
+  if (parts_.size() <= 1)
+    return "";
+  std::string result = parts_[0].mangled();
+  for (size_t i = 1; i + 1 < parts_.size(); i++)
+    result += "::" + parts_[i].mangled();
+  return result;
+}
+inline QualifiedName QualifiedName::qualifier() const {
+  return from_parts(std::vector<Part>(parts_.begin(), parts_.end() - 1));
+}
+inline bool QualifiedName::operator==(const QualifiedName &other) const {
+  return parts_ == other.parts_;
+}
+inline std::string QualifiedName::mangled() const {
+  std::string result = parts_[0].mangled();
+  for (size_t i = 1; i < parts_.size(); i++)
+    result += "::" + parts_[i].mangled();
+  return result;
+}
+inline std::string name_text(const QualifiedName &name) {
+  return name.mangled();
+}
+inline size_t QualifiedNameHash::operator()(const QualifiedName &name) const {
+  size_t h = 0;
+  for (auto &part : name.parts()) {
+    hash_combine(h, std::hash<std::string>{}(part.name));
+    for (auto &type : part.type_args)
+      hash_combine(h, std::hash<Type>{}(type));
+  }
+  return h;
+}
+
+} // namespace sammine_util

@@ -55,36 +55,47 @@ public:
     bool is_function = false;
   };
 
+  // Every table of names is keyed by the name itself, its parts and the
+  // types they are applied to: a name is shown as text only in a message.
+  using Name = sammine_util::QualifiedName;
+  using NameHash = sammine_util::QualifiedNameHash;
+  template <typename T> using NameMap = std::unordered_map<Name, T, NameHash>;
+  // The name that is one identifier: a local, a type parameter, a built-in
+  // type.
+  static Name bare(const std::string &identifier) {
+    return Name::from_parts({identifier});
+  }
+
   // INFO: x, y, z
-  LexicalStack<Binding> id_to_type;
+  LexicalStack<Binding, Name, NameHash> id_to_type;
 
   void register_variable(const std::string &name, Type type) {
-    id_to_type.registerNameT(name, Binding{std::move(type), false});
+    id_to_type.registerNameT(bare(name), Binding{std::move(type), false});
   }
   // Functions are top-level definitions, so they are bound in the root scope.
-  void register_function(const std::string &name, Type type) {
+  void register_function(const Name &name, Type type) {
     id_to_type.registerNameTAtRoot(name, Binding{std::move(type), true});
   }
-  std::optional<Type> lookup_type(const std::string &name) const {
+  std::optional<Type> lookup_type(const Name &name) const {
     if (auto binding = id_to_type.recursive_try_get(name))
       return binding->type;
     return std::nullopt;
   }
   // Whether `name` is bound to a variable, as opposed to a function, an enum
   // variant (which is not in id_to_type) or nothing.
-  bool names_variable(const std::string &name) const {
+  bool names_variable(const Name &name) const {
     auto binding = id_to_type.recursive_try_get(name);
     return binding && !binding->is_function;
   }
 
   // The functions bound from C (`reuse`). C takes a function as a pointer
   // to its code, with no environment, so what one is given is checked.
-  std::unordered_set<std::string> c_bindings;
+  std::unordered_set<Name, NameHash> c_bindings;
   // Whether `name` is a C binding with a parameter of function type.
-  bool takes_c_callback(const std::string &name) const;
+  bool takes_c_callback(const Name &name) const;
 
   // INFO: i64, f64 bla bla bla
-  LexicalStack<Type> typename_to_type;
+  LexicalStack<Type, Name, NameHash> typename_to_type;
   TypeMapOrdering type_map_ordering;
 
   // Monomorphization state: generic registration, dedup, cloning, output
@@ -113,15 +124,15 @@ public:
     id_to_type.push_context();
     typename_to_type.push_context();
 
-    typename_to_type.registerNameT("i32", Type::I32_t());
-    typename_to_type.registerNameT("i64", Type::I64_t());
-    typename_to_type.registerNameT("u32", Type::U32_t());
-    typename_to_type.registerNameT("u64", Type::U64_t());
-    typename_to_type.registerNameT("f64", Type::F64_t());
-    typename_to_type.registerNameT("f32", Type::F32_t());
-    typename_to_type.registerNameT("bool", Type::Bool());
-    typename_to_type.registerNameT("char", Type::Char());
-    typename_to_type.registerNameT("unit", Type::Unit());
+    typename_to_type.registerNameT(bare("i32"), Type::I32_t());
+    typename_to_type.registerNameT(bare("i64"), Type::I64_t());
+    typename_to_type.registerNameT(bare("u32"), Type::U32_t());
+    typename_to_type.registerNameT(bare("u64"), Type::U64_t());
+    typename_to_type.registerNameT(bare("f64"), Type::F64_t());
+    typename_to_type.registerNameT(bare("f32"), Type::F32_t());
+    typename_to_type.registerNameT(bare("bool"), Type::Bool());
+    typename_to_type.registerNameT(bare("char"), Type::Char());
+    typename_to_type.registerNameT(bare("unit"), Type::Unit());
   }
   virtual void exit_new_scope() override {
     id_to_type.pop();
@@ -133,8 +144,8 @@ public:
     type_map_ordering.populate();
   }
 
-  std::optional<Type> get_typename_type(const std::string &str) const {
-    return typename_to_type.recursive_try_get(str);
+  std::optional<Type> get_typename_type(const Name &name) const {
+    return typename_to_type.recursive_try_get(name);
   }
 
   // visit overrides
@@ -191,7 +202,7 @@ public:
   std::unordered_map<std::string, std::string> method_to_class;
 
   // Enum variant constructors: variant_name → (enum_type, variant_index)
-  std::unordered_map<std::string, std::pair<Type, size_t>> variant_constructors;
+  NameMap<std::pair<Type, size_t>> variant_constructors;
 
   // Pre-register a function signature so later definitions can reference it
   void pre_register_function(PrototypeAST *ast);
@@ -206,12 +217,12 @@ public:
                         const Type &self);
   /// Type aliases not expanded yet, and the ones being expanded, outermost
   /// first.
-  std::unordered_map<std::string, TypeAliasDefAST *> pending_aliases;
+  NameMap<TypeAliasDefAST *> pending_aliases;
   std::vector<TypeAliasDefAST *> alias_path;
   /// Expand the not yet expanded alias `name`, as rustc does when an alias is
   /// first needed. Nullopt if `name` isn't such an alias; poisoned if it
   /// refers to itself, which is reported here.
-  std::optional<Type> resolve_pending_alias(const std::string &name);
+  std::optional<Type> resolve_pending_alias(const Name &name);
   /// Register `Alias::Variant` for each variant of an alias of an enum.
   void register_alias_variants(TypeAliasDefAST *ast);
 
@@ -444,10 +455,9 @@ public:
       return *type_expr->resolved_type;
 
     if (auto *simple = llvm::dyn_cast<SimpleTypeExprAST>(type_expr)) {
-      auto mangled = simple->name.mangled();
-      auto get_type_opt = this->get_typename_type(mangled);
+      auto get_type_opt = this->get_typename_type(simple->name);
       if (!get_type_opt)
-        get_type_opt = resolve_pending_alias(mangled);
+        get_type_opt = resolve_pending_alias(simple->name);
       if (!get_type_opt.has_value()) {
         this->add_error(type_expr->location,
                         fmt::format("Type '{}' not found in the current scope.",

@@ -14,7 +14,7 @@
 - `ParsePrimaryExpr()`: unary/keyword parsers first, then `ParseIdentifierExpr` (handles both calls and variables), then literals. Postfix `[index]` and `.field` via `parsePostfixOps()`
 - `ParseDefinition()`: TypeClassDecl, TypeClassInstance, KernelDef, StructDef, EnumDef, ReuseDef, FuncDef
 - Pipe `|>`: desugared to `f(x)` at parse time (precedence 1, lowest)
-- `parseQualifiedNameTail(first_tok)`: greedy `::ID` chain consumer, used everywhere. Names are kept as written: the parser resolves nothing, `NameResolver` does
+- `parseQualifiedNameTail(first_tok)`: greedy `::ID` chain consumer, used everywhere. Names are kept as written: the parser resolves nothing, `NameResolver` does. A name is its path alone: the types in `Option<i32>::Some` are returned as type expressions (`explicit_type_args`), which the type checker resolves
 
 ### Speculative Parsing
 - `parseExplicitTypeArgsTail()`: tries `<Type, ...>` after a name; rollback if not type args

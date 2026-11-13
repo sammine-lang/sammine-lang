@@ -63,7 +63,9 @@ class ASTProperties {
   std::unordered_map<NodeId, TypeAliasProps> type_alias_props_;
   std::unordered_map<NodeId, ForProps> for_props_;
   std::unordered_map<NodeId, Type> node_types_;
-  std::unordered_map<std::string, std::string> symbols_;
+  std::unordered_map<sammine_util::QualifiedName, std::string,
+                     sammine_util::QualifiedNameHash>
+      symbols_;
 
 public:
   // Mutable accessors — auto-insert a default-constructed entry
@@ -109,14 +111,13 @@ public:
   //! decides: a C binding's is its C name, in every module that binds it
   //! (std::printf and io::printf are both printf).
   void set_symbol(const sammine_util::QualifiedName &name, std::string symbol) {
-    symbols_[name.mangled()] = std::move(symbol);
+    symbols_[name] = std::move(symbol);
   }
   //! The symbol for `name`, a definition's resolved name: its own, unless
   //! NameResolver set another.
   std::string symbol(const sammine_util::QualifiedName &name) const {
-    auto mangled = name.mangled();
-    auto it = symbols_.find(mangled);
-    return it != symbols_.end() ? it->second : mangled;
+    auto it = symbols_.find(name);
+    return it != symbols_.end() ? it->second : name.mangled();
   }
 
   // Type accessors (for future AstBase::type migration)

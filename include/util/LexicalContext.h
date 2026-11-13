@@ -16,54 +16,45 @@ enum NameQueryResult {
   nameNotFound,
 };
 
-//! \brief LexicalContext class
-template <class T> class LexicalContext {
-  std::set<std::string> symbols;
-  std::unordered_map<std::string, T> symbols_to_t;
+/// A name as text, for a message.
+inline const std::string &name_text(const std::string &name) { return name; }
+
+//! \brief A scope: what each name bound in it stands for, and the scope
+//! around it. Names are `K`: a string, or a name that is a key as it is.
+template <class T, class K = std::string, class Hash = std::hash<K>>
+class LexicalContext {
+  std::unordered_map<K, T, Hash> symbols_to_t;
 
 public:
   LexicalContext *parent_scope;
 
-  explicit LexicalContext() : symbols(), symbols_to_t(), parent_scope() {}
+  explicit LexicalContext() : symbols_to_t(), parent_scope() {}
   LexicalContext(LexicalContext *parent_scope_)
-      : symbols(), symbols_to_t(), parent_scope(parent_scope_) {}
+      : symbols_to_t(), parent_scope(parent_scope_) {}
 
-  void registerNameT(const std::string &name, T l) {
-    symbols.insert(name);
-    symbols_to_t[name] = l;
+  void registerNameT(const K &name, T l) { symbols_to_t[name] = l; }
+  NameQueryResult queryName(const K &name) const {
+    return symbols_to_t.contains(name) ? nameFound : nameNotFound;
   }
-  NameQueryResult queryName(const std::string &name) const {
-    return symbols.contains(name) ? nameFound : nameNotFound;
-  }
-  T get_from_name(const std::string &name) const {
-    return symbols_to_t.at(name);
-  }
+  T get_from_name(const K &name) const { return symbols_to_t.at(name); }
 
-  T recursive_get_from_name(const std::string &name) const {
-    if (symbols.find(name) != symbols.end())
-      return symbols_to_t.at(name);
-    else if (parent_scope == nullptr) {
-      sammine_util::abort(fmt::format("name {} not found", name));
-    } else
-      return parent_scope->recursive_get_from_name(name);
+  T recursive_get_from_name(const K &name) const {
+    if (auto found = recursive_try_get(name))
+      return *found;
+    sammine_util::abort(fmt::format("name {} not found", name_text(name)));
   }
 
-  NameQueryResult recursiveQueryName(const std::string &name) const {
-    if (symbols.find(name) != symbols.end())
-      return nameFound;
-    else if (parent_scope == nullptr) {
-      return nameNotFound;
-    } else
-      return parent_scope->recursiveQueryName(name);
+  NameQueryResult recursiveQueryName(const K &name) const {
+    return recursive_try_get(name) ? nameFound : nameNotFound;
   }
 
-  std::optional<T> try_get(const std::string &name) const {
+  std::optional<T> try_get(const K &name) const {
     auto it = symbols_to_t.find(name);
     return it != symbols_to_t.end() ? std::optional<T>(it->second)
                                     : std::nullopt;
   }
 
-  std::optional<T> recursive_try_get(const std::string &name) const {
+  std::optional<T> recursive_try_get(const K &name) const {
     auto it = symbols_to_t.find(name);
     if (it != symbols_to_t.end())
       return it->second;
