@@ -233,23 +233,29 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
   std::string NumStr = {};
 
   if (isdigit(input[i])) {
+    // After a `.` a number is a tuple's index, its digits and no more: in
+    // `t.0.1` and `t.0.x` the next `.` is another field access, not a
+    // fraction, and no suffix follows.
+    bool index = tokStream->ends_with(TokDot);
     do {
       NumStr += input[i];
       i = advance(i);
-    } while (i < input.length() - 1 && isdigit(input[i]));
+    } while (i < input.length() && isdigit(input[i]));
 
-    if (input[i] == '.' && !(i + 1 < input.length() && input[i + 1] == '.')) {
+    if (!index && input[i] == '.' &&
+        !(i + 1 < input.length() && input[i + 1] == '.')) {
       NumStr += input[i];
       i = advance(i);
-      do {
+      // The fraction's digits, if it has any: `1.` is a number too.
+      while (i < input.length() && isdigit(input[i])) {
         NumStr += input[i];
         i = advance(i);
-      } while (i < input.length() - 1 && isdigit(input[i]));
+      }
     }
 
     // Consume any type suffix (e.g., i32, i64, f64)
-    if (i < input.length() - 1 && isalpha(input[i])) {
-      while (i < input.length() - 1 && isalnum(input[i])) {
+    if (!index && i < input.length() && isalpha(input[i])) {
+      while (i < input.length() && isalnum(input[i])) {
         NumStr += input[i];
         i = advance(i);
       }

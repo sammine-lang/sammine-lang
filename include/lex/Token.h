@@ -293,6 +293,12 @@ public:
 
   bool hasErrors() const { return error; }
 
+  /// Whether the token lexed last is a `type`: what the lexer reads next
+  /// can depend on it, as a number after a `.` is a tuple's index.
+  bool ends_with(TokenType type) const {
+    return !TokStream.empty() && TokStream.back()->tok_type == type;
+  }
+
   void push_back(const Token &token) {
     this->push_back(std::make_shared<Token>(token));
   }

@@ -1,0 +1,22 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      7 8
+// CHECK-NEXT: 3 4
+// CHECK-NEXT: 2.500000
+
+// After a `.` a number is a tuple's index, digits and no more: the `.`
+// after it is another field access, not a number's fraction, so `t.0.x` is
+// a field of an element and `n.1.0` an element of an element. A number
+// anywhere else keeps its fraction.
+
+import std;
+
+struct Point { x: i32, y: i32, };
+
+let main() -> i32 {
+  let t = (Point { x: 7, y: 8 }, 1);
+  std::printf("%d %d\n", t.0.x, t.0.y);
+  let n = (1, (3, 4));
+  std::printf("%d %d\n", n.1.0, n.1.1);
+  std::printf("%f\n", 2.5);
+  return 0;
+}

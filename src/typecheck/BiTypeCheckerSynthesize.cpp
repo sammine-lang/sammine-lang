@@ -6,6 +6,7 @@
 #include "typecheck/Types.h"
 #include "typecheck/UniSubst.h"
 #include "llvm/ADT/STLExtras.h"
+#include <charconv>
 
 #define DEBUG_TYPE "typecheck"
 #include "util/Logging.h"
@@ -1901,10 +1902,12 @@ Type BiTypeCheckerVisitor::synthesize(FieldAccessExprAST *ast) {
   // Tuple indexing: t.0, t.1, ...
   if (obj_type.type_kind == TypeKind::Tuple) {
     auto &tup = std::get<TupleType>(obj_type.type_data);
-    size_t idx;
-    try {
-      idx = std::stoul(ast->field_name);
-    } catch (...) {
+    // All of the name is the index: nothing after its digits is dropped.
+    size_t idx = 0;
+    auto *first = ast->field_name.data();
+    auto *last = first + ast->field_name.size();
+    auto parsed = std::from_chars(first, last, idx);
+    if (parsed.ec != std::errc() || parsed.ptr != last) {
       this->add_error(ast->get_location(),
                       fmt::format("Tuple index must be a number, got '{}'",
                                   ast->field_name));

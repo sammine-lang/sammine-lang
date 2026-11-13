@@ -132,7 +132,7 @@ Operator precedence (low to high). `as` binds tighter than all of these:
 
 **unary_expr** ::= `-` **unary_expr** | `*` **unary_expr** | `&` **unary_expr** | **postfix_expr**
 
-**postfix_expr** ::= **primary** (`[` **expr** `]` | `.` ID)*
+**postfix_expr** ::= **primary** (`[` **expr** `]` | `.` ID | `.` DIGITS)*
 
 **primary** ::= INTEGER | FLOAT | STRING | `true` | `false` | CHAR
   | `(` `)`                                   *unit literal*

@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Type mismatch: expression has type i32, but variable declared as bool
+
+// `t.0.x` is the field x of t's first element: an i32, not the element.
+
+struct Point { x: i32, };
+
+let main() -> i32 {
+  let t = (Point { x: 7 }, 1);
+  let b: bool = t.0.x;
+  0
+}

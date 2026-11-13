@@ -170,6 +170,22 @@ TEST_CASE("Complex combination", "[Lexer]") {
     REQUIRE(token->tok_type == sammine_lang::TokFunc);
   }
 
+  SECTION("Tuple index then field") {
+    // After a `.` a number is an index: its digits, then the next `.`.
+    sammine_lang::Lexer lex("t.0.1.x 2.5");
+    const std::pair<sammine_lang::TokenType, std::string> expected[] = {
+        {sammine_lang::TokID, "t"},  {sammine_lang::TokDot, "."},
+        {sammine_lang::TokNum, "0"}, {sammine_lang::TokDot, "."},
+        {sammine_lang::TokNum, "1"}, {sammine_lang::TokDot, "."},
+        {sammine_lang::TokID, "x"},  {sammine_lang::TokNum, "2.5"},
+    };
+    for (auto &[type, lexeme] : expected) {
+      auto token = lex.consume().get();
+      REQUIRE(token->tok_type == type);
+      REQUIRE(token->lexeme == lexeme);
+    }
+  }
+
   SECTION("Identifer and operator") {
     sammine_lang::Lexer lex("x+=2.3");
     auto token = lex.consume().get();
