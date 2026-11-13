@@ -307,6 +307,12 @@ Each a commit, the suite passing after each.
 
 ## Decided
 
+- A wildcard arm takes the payloads of the variants no arm names, and they
+  drop on the way to its body, as `Text(_)` and an unused `Text(p)` drop
+  theirs. No error: the scrutinee is their owner, a binding or what a call
+  took, and its parts end with it. What has no owner, a temporary nothing
+  took, is the error.
+
 - No borrowing beyond what there is, and no lifetimes: a view, `ptr<T>`, is
   a parameter or a local, or lent for a call; what outlives that is owned,
   a linear value moved, returned or dropped. Ownership is the linear
