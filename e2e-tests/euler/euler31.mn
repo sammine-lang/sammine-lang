@@ -1,0 +1,34 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 11 73682
+
+// Project Euler Problem 31: Coin sums
+// There are eight coins: 1p, 2p, 5p, 10p, 20p, 50p, 100p and 200p. 10p can
+// be made 11 ways. How many different ways can 200p be made using any
+// number of coins?
+
+import std;
+import range;
+
+let coins() -> [8]i64 { [1, 2, 5, 10, 20, 50, 100, 200] }
+
+// The ways to make amount from the least `kinds` coins, n of them the
+// largest: the ways to make what the n leave from the coins below it.
+let ways_with(amount: i64, kinds: i64, n: i64) -> i64 {
+  ways(amount - n * coins()[kinds - 1], kinds - 1)
+}
+
+// The ways to make amount from the least `kinds` coins: one for each number
+// of the largest that fits and each way to make the rest. No coins make
+// nothing, one way, and nothing else.
+let ways(amount: i64, kinds: i64) -> i64 {
+  if kinds == 0 {
+    if amount == 0 { 1 } else { 0 }
+  } else {
+    range::sum(0, amount / coins()[kinds - 1] + 1, ways_with(amount, kinds))
+  }
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", ways(10, 8), ways(200, 8));
+  0
+}
