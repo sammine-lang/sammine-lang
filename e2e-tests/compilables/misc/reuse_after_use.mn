@@ -4,7 +4,7 @@
 import std;
 
 // Use the extern BEFORE it's declared — tests forward declaration in codegen
-let use_sqrt() -> f64 {
+let unsafe use_sqrt() -> f64 {
   sqrt(9.0)
 }
 

@@ -10,7 +10,7 @@
 
 import c_struct_args as c;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   c::take_three(9, c::Three { a: 10i64, b: 20i64, c: 30i64 });
   c::take_four_i32(c::FourI32 { a: 1, b: 2, c: 3, d: 4 });
   c::take_three_f32(c::ThreeF32 { x: 0.5f32, y: 1.5f32, z: 2.5f32 });

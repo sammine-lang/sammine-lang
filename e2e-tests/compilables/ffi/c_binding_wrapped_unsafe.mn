@@ -1,0 +1,14 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4 5
+
+// An unsafe function vouches for the C it calls: safe code calls it as it
+// calls any function, and prints without a binding.
+
+reuse abs(x: i32) -> i32;
+
+let unsafe distance(a: i32, b: i32) -> i32 { abs(a - b) }
+
+let main() -> i32 {
+  print("{} {}\n", distance(3, 7), distance(9, 4));
+  0
+}

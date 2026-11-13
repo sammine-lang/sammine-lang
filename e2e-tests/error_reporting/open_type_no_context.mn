@@ -15,7 +15,7 @@ let statement() -> i32 {
   None;
   0
 }
-let variadic() -> i32 {
+let unsafe variadic() -> i32 {
   std::printf("%d", None)
 }
 let loop_body() -> i32 {

@@ -46,7 +46,7 @@
 ### Indexing
 - `arr[i]` → element type; static bounds checking for constant indices
 - Any other `x[i]` goes through `Indexer<T, E>` (`synthesize_indexer`): `indexer_instances_for` finds the instances, concrete or from a generic one, whose collection type is `x`'s, and exactly one must apply. The index must be `i64`, `E` must own nothing, and `IndexProps::indexer_method` names the method. The method takes `ptr<T>`, so `x` is lent to it, and codegen calls the method with `x`'s address (`emitIndexerCall`; a temporary is spilled). `x[i] = v` is rejected in `check_assign_target`. `vec` has `instance<T> Indexer<Vec<T>, T>`
-- `ptr<T>[i]` → `T`; no bounds checking. Only allowed in a `let unsafe` function (`check_unsafe_allowed`, using `ctx().enclosing_function`); `PrototypeAST::is_unsafe` is copied to monomorphized instances. Calling an unsafe function needs no marker. Calling `reuse` is not yet restricted (TODO at `visit(ExternAST *)`, waiting on a printf rework)
+- `ptr<T>[i]` → `T`; no bounds checking. Only allowed in a `let unsafe` function (`check_unsafe_allowed`, using `ctx().enclosing_function`); `PrototypeAST::is_unsafe` is copied to monomorphized instances. Calling an unsafe function needs no marker. Calling a C binding, or naming one as a value, needs one too (`check_c_use`, by `c_bindings`): nothing checks what C does. `print` is why programs needn't: it is built in
 - `len(arr)` → `i32`; `dim(arr)` → tuple of `i32` per nesting level
 
 ### Enums

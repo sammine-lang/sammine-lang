@@ -10,7 +10,7 @@ import std;
 
 struct P { x: i32, };
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p = P { x: 7 };
   std::printf("%d\n", p);
   std::printf("%d\n", (1i32, 2i32));

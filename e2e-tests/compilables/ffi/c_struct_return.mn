@@ -14,7 +14,7 @@
 import c_struct_return as c;
 import std;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let t = c::make_two(5i64);
   print("two {} {}\n", t.a, t.b);
   let th = c::make_three(10i64, 20i64);

@@ -6,7 +6,7 @@
 
 reuse puts(s: ptr<char>) -> i32;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   puts("main ran in the JIT");
   return 0;
 }

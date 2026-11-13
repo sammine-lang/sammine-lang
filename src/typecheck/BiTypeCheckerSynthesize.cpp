@@ -743,6 +743,7 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
   auto func = std::get<FunctionType>(ty->type_data);
   auto params = func.get_params_types();
   auto callee = ast->written_name.mangled();
+  check_c_use(ast->functionName, ast->get_location(), "calling");
 
   // Variadic functions: accept any number of args >= fixed params
   if (func.is_var_arg()) {
@@ -987,6 +988,14 @@ static const ExprAST *write_root(const ExprAST *target) {
   return target;
 }
 
+void BiTypeCheckerVisitor::check_c_use(const Name &name,
+                                       sammine_util::Location loc,
+                                       std::string_view use) {
+  if (c_bindings.contains(name) && !names_variable(name))
+    check_unsafe_allowed(
+        loc, fmt::format("{} the C function '{}'", use, name.get_name()));
+}
+
 void BiTypeCheckerVisitor::check_unsafe_allowed(sammine_util::Location loc,
                                                 std::string_view what) {
   auto *fn = ctx().enclosing_function;
@@ -1156,6 +1165,7 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
                                   ast->variableName.mangled()));
       return ast->set_type(Type::Poisoned());
     }
+    check_c_use(ast->variableName, ast->get_location(), "naming");
     props_.variable(ast->id()).value = bound_reference(ast->variableName);
     ast->set_type(*ty);
   } else if (auto enum_type = enum_of_variant(ast->variableName,

@@ -14,7 +14,7 @@
 import std;
 import greeter;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   print("{}\n", greeter::greet_twice(21));
   0
 }

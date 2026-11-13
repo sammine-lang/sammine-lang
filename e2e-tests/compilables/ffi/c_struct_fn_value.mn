@@ -19,7 +19,7 @@ let call3(f: (i64, i64) -> c::Three, x: i64, y: i64) -> c::Three { f(x, y) }
 let take(f: (a::FourI32) -> unit, v: a::FourI32) -> unit { f(v) }
 let divide(f: (i64, i64) -> LDiv) -> LDiv { f(11i64, 4i64) }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   // In registers, 16 bytes.
   let t = call2(c::make_two, 5i64);
   print("{} {}\n", t.a, t.b);

@@ -12,7 +12,7 @@
 import std;
 import c_struct_stack_args as c;
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   c::after_six_ints(1i64, 2i64, 3i64, 4i64, 5i64, 6i64, c::Two { a: 1i64, b: 2i64 });
   c::after_five_ints(1i64, 2i64, 3i64, 4i64, 5i64, c::Two { a: 3i64, b: 4i64 });
   c::after_eight_doubles(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8,

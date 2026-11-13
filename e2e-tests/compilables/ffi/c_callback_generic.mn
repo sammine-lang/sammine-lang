@@ -16,7 +16,7 @@ let run<T>(arg: i64) -> i64 {
   0
 }
 
-let start<T>(arg: i64) -> unit {
+let unsafe start<T>(arg: i64) -> unit {
   let t = alloc<u64>(1);
   *t = 0u64;
   pthread_create(t, 0i64, run<T>, arg);

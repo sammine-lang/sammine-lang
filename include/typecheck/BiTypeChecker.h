@@ -398,6 +398,11 @@ public:
   std::vector<MonomorphizedKey> indexer_instances_for(const Type &coll) const;
   // Reports `what` unless the enclosing function is declared `let unsafe`.
   void check_unsafe_allowed(sammine_util::Location loc, std::string_view what);
+  /// `use` of `name` at `loc`, "calling" it or "naming" it as a value: if it
+  /// is a C binding, only an unsafe function may, as nothing checks what C
+  /// does with what it is given.
+  void check_c_use(const Name &name, sammine_util::Location loc,
+                   std::string_view use);
   bool check_addr_of_operand(AddrOfExprAST *ast);
   Type synthesize_binary_operator(BinaryExprAST *ast, const Type &lhs_type,
                                   const Type &rhs_type);

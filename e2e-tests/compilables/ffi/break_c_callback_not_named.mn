@@ -16,9 +16,9 @@ reuse apply(f: (i32) -> i32, x: i32) -> i32;
 let add(a: i32, b: i32) -> i32 { a + b }
 let twice(x: i32) -> i32 { x * 2 }
 
-let pass_param(f: (i32) -> i32) -> i32 { apply(f, 1) }
+let unsafe pass_param(f: (i32) -> i32) -> i32 { apply(f, 1) }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   apply(add(1), 2);              // a closure
   let f = twice;
   apply(f, 2);                   // a binding holding a function value

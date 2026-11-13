@@ -1,0 +1,17 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: declare it as 'let unsafe distance' to allow it
+// CHECK: calling the C function 'abs' is only allowed in an unsafe function
+// CHECK: declare it as 'let unsafe main' to allow it
+// CHECK: naming the C function 'abs' is only allowed in an unsafe function
+
+// Nothing checks what C does with what it is given, so a C binding is
+// called, or named as a value, only in an unsafe function.
+
+reuse abs(x: i32) -> i32;
+
+let distance(a: i32, b: i32) -> i32 { abs(a - b) }
+
+let main() -> i32 {
+  let f = abs;
+  0
+}

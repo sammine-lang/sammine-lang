@@ -21,8 +21,8 @@ export let print_f64(n: f64) -> unit { print("{}", n); }
 export let print_char(c: char) -> unit { print("{}", c); }
 export let print_bool(b: bool) -> unit { print("{}", b); }
 
-export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
-export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
+export let unsafe eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
+export let unsafe eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
 // What a read produced: a buffer the caller owns and its length, or Eof when
 // there was nothing to read.
@@ -34,13 +34,13 @@ let to_read_result(buf: 'buf<char>, n: i64) -> ReadResult {
   if n < 0i64 { drop(buf); Eof } else { Line(buf, n) }
 }
 
-export let read_line() -> ReadResult {
+export let unsafe read_line() -> ReadResult {
   let (buf, n) = sammine_io_read_line();
   to_read_result(buf, n)
 }
-export let read_i32() -> i32 { sammine_io_read_i32() }
-export let read_i64() -> i64 { sammine_io_read_i64() }
-export let read_f64() -> f64 { sammine_io_read_f64() }
+export let unsafe read_i32() -> i32 { sammine_io_read_i32() }
+export let unsafe read_i64() -> i64 { sammine_io_read_i64() }
+export let unsafe read_f64() -> f64 { sammine_io_read_f64() }
 
 // An open file: C's FILE *, which close closes. It is a struct of its own,
 // not the pointer, so that its drop closes it: a pointer's would free it.
@@ -50,7 +50,7 @@ export instance Drop<File> {
   let unsafe Drop(f: File) -> unit { sammine_io_close(f.handle) }
 }
 
-export let open(path: ptr<char>, mode: ptr<char>) -> File {
+export let unsafe open(path: ptr<char>, mode: ptr<char>) -> File {
   File { handle: sammine_io_open(path, mode) }
 }
 export let close(f: File) -> unit { drop(f) }
@@ -64,13 +64,13 @@ export let unsafe file_write(f: File, content: ptr<char>, nbytes: i64) -> File {
 }
 
 // Eof if the file cannot be read.
-export let read_file(path: ptr<char>) -> ReadResult {
+export let unsafe read_file(path: ptr<char>) -> ReadResult {
   let (buf, n) = sammine_io_read_file(path);
   to_read_result(buf, n)
 }
-export let write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+export let unsafe write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
   sammine_io_write_file(path, content, nbytes)
 }
-export let append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
+export let unsafe append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32 {
   sammine_io_append_file(path, content, nbytes)
 }

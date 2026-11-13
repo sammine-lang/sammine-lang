@@ -206,8 +206,17 @@ integers go through `...`: no parameter says how a struct, tuple, array or
 enum with payloads would be passed. C passes a callback only numbers, `bool`, `char` and pointers,
 so its parameters and result are limited to those (or `unit` as the result).
 
-Calling a `reuse` function is currently allowed anywhere. It will later need
-an unsafe function, like pointer indexing, once `printf` is reworked.
+Calling a `reuse` function, or naming one as a value, is allowed only in a
+function declared `let unsafe`, like pointer indexing: nothing checks what the
+C code does with what it is given. A module wraps its bindings in unsafe
+functions, which safe code calls as it calls any function:
+
+```sammine
+reuse sqrt(x: f64) -> f64;
+export let unsafe root(x: f64) -> f64 { sqrt(x) }
+```
+
+Printing needs no binding: `print` is built in (see Print).
 
 Imported modules can re-export C bindings with `export reuse`:
 

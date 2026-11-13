@@ -16,7 +16,7 @@ let work(arg: i64) -> i64 {
   0
 }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let t = alloc<u64>(1);
   *t = 0u64;
   pthread_create(t, 0i64, work, 42i64);

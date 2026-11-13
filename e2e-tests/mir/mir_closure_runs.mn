@@ -16,7 +16,7 @@ let peek_plus(p: ptr<i32>, x: i32) -> i32 { *p + x }
 let times(acc: i64, i: i64) -> i64 { acc * i }
 let factorial(n: i64) -> i64 { range::fold(1i64, n + 1i64, 1i64, times) }
 
-let main() -> i32 {
+let unsafe main() -> i32 {
   let p = alloc<i32>(1);
   *p = 40;
   let g = add(10);
