@@ -4,6 +4,7 @@
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 
 #include "llvm/ADT/DenseMap.h"
@@ -71,6 +72,18 @@ mlir::Value placeRoot(mlir::Value place) {
 std::string writtenName(smn::ClosureOp closure) {
   auto name = closure.getCallee().str();
   return name.substr(0, name.find('<'));
+}
+
+/// Adds to `set` each of `items` it hasn't; true if it grew.
+bool addAll(llvm::SmallVectorImpl<unsigned> &set,
+            llvm::ArrayRef<unsigned> items) {
+  bool grew = false;
+  for (auto item : items)
+    if (!llvm::is_contained(set, item)) {
+      set.push_back(item);
+      grew = true;
+    }
+  return grew;
 }
 
 bool isView(mlir::Type type) {
@@ -160,13 +173,14 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
 /// module. A call through a function value lets its arguments escape.
 class ClosureEscapes {
 public:
-  explicit ClosureEscapes(mlir::ModuleOp module) : module_(module) {}
+  explicit ClosureEscapes(mlir::ModuleOp module)
+      : module_(module), symbols_(module) {}
 
   /// Reports each escape; false if there was one.
   bool check() {
     llvm::SmallVector<mlir::func::FuncOp> funcs;
     for (auto func : module_.getOps<mlir::func::FuncOp>())
-      if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+      if (smn::definesMir(func))
         funcs.push_back(func);
     for (bool changed = true; changed;) {
       changed = false;
@@ -192,12 +206,7 @@ private:
         closure = other.closure;
         changed = true;
       }
-      for (auto param : other.params)
-        if (!llvm::is_contained(params, param)) {
-          params.push_back(param);
-          changed = true;
-        }
-      return changed;
+      return addAll(params, other.params) || changed;
     }
   };
   /// What a function does with what its parameters hold.
@@ -206,6 +215,7 @@ private:
   };
 
   mlir::ModuleOp module_;
+  mlir::SymbolTable symbols_;
   llvm::DenseMap<mlir::Operation *, Summary> summaries_;
   bool failed_ = false;
 
@@ -231,8 +241,8 @@ private:
   /// The summary of the function `call` calls, or null for one MIR doesn't
   /// define: C, or another module's, which may let anything escape.
   const Summary *summaryOf(smn::CallOp call) {
-    auto callee = module_.lookupSymbol<mlir::func::FuncOp>(call.getCallee());
-    if (!callee || callee.isDeclaration() || !callee->hasAttr(smn::kMirAttr))
+    auto callee = symbols_.lookup<mlir::func::FuncOp>(call.getCallee());
+    if (!smn::definesMir(callee))
       return nullptr;
     return &summaries_[callee];
   }
@@ -281,7 +291,7 @@ private:
           // A closure of a lambda set that becomes what it binds carries it
           // by value whatever its type's words (LambdaSets).
           if (bindsView(closure) ||
-              (!closure.bindsInline() && !closure->hasAttr(kByValueAttr)))
+              (!closure.bindsInline() && !closure->hasAttr(smn::kByValueAttr)))
             taint.closure = closure;
           changed |= add(closure.getResult(), taint);
         } else if (mlir::isa<smn::AggregateOp, smn::VariantOp, smn::LetOp,
@@ -306,25 +316,21 @@ private:
               changed |= add(result, back);
           }
         } else if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op)) {
-          for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
-            for (auto [operand, arg] : llvm::zip(
-                     branch.getSuccessorOperands(i).getForwardedOperands(),
-                     branch->getSuccessor(i)->getArguments()))
-              changed |= add(arg, taintOf(operand));
+          smn::forEachBranchEdge(
+              branch, [&](mlir::Value operand, mlir::BlockArgument arg) {
+                changed |= add(arg, taintOf(operand));
+              });
         }
       });
     }
 
     Summary summary = summaries_[func];
-    auto grow = [](llvm::SmallVectorImpl<unsigned> &set,
-                   llvm::ArrayRef<unsigned> params) {
-      for (auto param : params)
-        if (!llvm::is_contained(set, param))
-          set.push_back(param);
-    };
+    // What `taint` holds leaves the call at `at`: its parameters go in
+    // `into`, a closure is reported.
     auto leaves = [&](const Taint &taint, mlir::Location at,
-                      llvm::StringRef how, llvm::StringRef when) {
-      grow(summary.escapes, taint.params);
+                      llvm::StringRef how, llvm::StringRef when,
+                      llvm::SmallVectorImpl<unsigned> &into) {
+      addAll(into, taint.params);
       if (report && taint.closure)
         error(at, how.str() + " " + what(taint.closure) + " (may dangle " +
                       when.str() + ")");
@@ -332,16 +338,13 @@ private:
 
     func.walk([&](mlir::Operation *op) {
       if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {
-        auto taint = anyOf(ret.getOperands());
-        grow(summary.returns, taint.params);
-        if (report && taint.closure)
-          error(ret.getLoc(), "Cannot return " + what(taint.closure) +
-                                  " (may dangle after return)");
+        leaves(anyOf(ret.getOperands()), ret.getLoc(), "Cannot return",
+               "after return", summary.returns);
       } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
         if (reachedThrough(store.getPlace()))
           leaves(taintOf(store.getValue()), store.getLoc(),
                  "Cannot store, through a pointer,",
-                 "once the function returns");
+                 "once the function returns", summary.escapes);
       } else if (auto call = mlir::dyn_cast<smn::CallOp>(op)) {
         auto *callee = summaryOf(call);
         for (auto [i, arg] : llvm::enumerate(call.getArgs())) {
@@ -351,14 +354,16 @@ private:
           leaves(taintOf(arg), call.getLoc(),
                  "Cannot pass to '" + call.getCallee().str() + "'",
                  "once this function returns: '" + call.getCallee().str() +
-                     "' keeps it");
+                     "' keeps it",
+                 summary.escapes);
         }
       } else if (auto indirect = mlir::dyn_cast<smn::CallIndirectOp>(op)) {
         for (auto arg : indirect.getArgs())
           leaves(taintOf(arg), indirect.getLoc(),
                  "Cannot pass to a function value",
                  "once this function returns: the function called may keep "
-                 "it");
+                 "it",
+                 summary.escapes);
       }
     });
 
@@ -391,7 +396,7 @@ struct CheckViewsPass
 mlir::LogicalResult checkViews(mlir::ModuleOp module) {
   ViewCheck check;
   for (auto func : module.getOps<mlir::func::FuncOp>())
-    if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+    if (smn::definesMir(func))
       check.check(func);
   bool stays = ClosureEscapes(module).check();
   return mlir::failure(check.failed() || !stays);

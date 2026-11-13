@@ -193,26 +193,20 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   }
 
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
-  if (isGPU(gpuTarget)) {
+  {
     mlir::PassManager pm(context);
     pm.addPass(createSpecializeLambdaSetsPass());
     pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());
     pm.addPass(mlir::createSCFToControlFlowPass());
-    pm.addPass(mlir::createGpuToLLVMConversionPass());
-    pm.addPass(mlir::createReconcileUnrealizedCastsPass());
-    if (mlir::failed(pm.run(cpuModule)))
-      return nullptr;
-  } else {
-    mlir::PassManager pm(context);
-    pm.addPass(createSpecializeLambdaSetsPass());
-    pm.addPass(createLowerLambdaSetsPass());
-    pm.addPass(createMIRToLLVMPass());
-    pm.addPass(mlir::createSCFToControlFlowPass());
-    pm.addPass(mlir::createArithToLLVMConversionPass());
-    pm.addPass(mlir::createConvertControlFlowToLLVMPass());
-    pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
-    pm.addPass(mlir::createConvertFuncToLLVMPass());
+    if (isGPU(gpuTarget)) {
+      pm.addPass(mlir::createGpuToLLVMConversionPass());
+    } else {
+      pm.addPass(mlir::createArithToLLVMConversionPass());
+      pm.addPass(mlir::createConvertControlFlowToLLVMPass());
+      pm.addPass(mlir::createFinalizeMemRefToLLVMConversionPass());
+      pm.addPass(mlir::createConvertFuncToLLVMPass());
+    }
     pm.addPass(mlir::createReconcileUnrealizedCastsPass());
     if (mlir::failed(pm.run(cpuModule)))
       return nullptr;

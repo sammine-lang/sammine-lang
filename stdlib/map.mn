@@ -147,29 +147,22 @@ export let length<K, V>(m: ptr<Map<K, V>>) -> i64 { (*m).size }
 // m without k, and the value k mapped to, or None if it mapped none.
 export let unsafe remove<K, V>(m: Map<K, V>, k: K) -> (Map<K, V>, Option<V>) {
   let i = slot_of<K, V>(&m, k);
-  if i < 0i64 {
-    (Map<K, V> {
-       keys: m.keys,
-       vals: m.vals,
-       slots: m.slots,
-       size: m.size,
-       used: m.used,
-       cap: m.cap,
-     },
-     Option<V>::None)
-  } else {
+  let found = i >= 0i64;
+  let v = if found {
     m.slots[i] = 'r';
-    let v = m.vals[i];
-    (Map<K, V> {
-       keys: m.keys,
-       vals: m.vals,
-       slots: m.slots,
-       size: m.size - 1i64,
-       used: m.used,
-       cap: m.cap,
-     },
-     Option<V>::Some(v))
-  }
+    Option<V>::Some(m.vals[i])
+  } else {
+    Option<V>::None
+  };
+  (Map<K, V> {
+     keys: m.keys,
+     vals: m.vals,
+     slots: m.slots,
+     size: if found { m.size - 1i64 } else { m.size },
+     used: m.used,
+     cap: m.cap,
+   },
+   v)
 }
 
 // A map's drop drops the values it holds, then its buffers: a buffer's own
@@ -181,9 +174,7 @@ export instance<K, V> Drop<Map<K, V>> {
         drop(m.vals[i]);
       };
     };
-    drop(m.keys);
-    drop(m.vals);
-    drop(m.slots)
+    free_buffers<K, V>(m)
   }
 }
 

@@ -247,8 +247,7 @@ public:
     layouts_.addClosure(
         ast->get_type(),
         std::vector<Type>(params.begin(),
-                          params.begin() + static_cast<std::ptrdiff_t>(given)),
-        ast->get_location());
+                          params.begin() + static_cast<std::ptrdiff_t>(given)));
   }
 
 private:

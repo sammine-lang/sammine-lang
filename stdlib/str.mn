@@ -60,25 +60,30 @@ let room(cap: i64, need: i64) -> i64 {
   }
 }
 
+// s with room for need characters and the terminator.
+let unsafe reserve(s: String, need: i64) -> String {
+  let cap = room(s.cap, need);
+  let data = if cap == s.cap { s.data } else { grow(s.data, s.length, cap) };
+  String { data: data, length: s.length, cap: cap }
+}
+
 // s with c after its characters.
 export let unsafe push(s: String, c: char) -> String {
-  let cap = room(s.cap, s.length + 1i64);
-  let data = if cap == s.cap { s.data } else { grow(s.data, s.length, cap) };
-  data[s.length] = c;
-  data[s.length + 1i64] = '\0';
-  String { data: data, length: s.length + 1i64, cap: cap }
+  let s = reserve(s, s.length + 1i64);
+  s.data[s.length] = c;
+  s.data[s.length + 1i64] = '\0';
+  String { data: s.data, length: s.length + 1i64, cap: s.cap }
 }
 
 // s with the characters of t after its own.
 export let unsafe append(s: String, t: ptr<char>) -> String {
   let n = strlen(t);
-  let cap = room(s.cap, s.length + n);
-  let data = if cap == s.cap { s.data } else { grow(s.data, s.length, cap) };
+  let s = reserve(s, s.length + n);
   // t's terminator too.
   for i in 0i64..n + 1i64 {
-    data[s.length + i] = t[i];
+    s.data[s.length + i] = t[i];
   };
-  String { data: data, length: s.length + n, cap: cap }
+  String { data: s.data, length: s.length + n, cap: s.cap }
 }
 
 // s[i]: byte i of the first s.length, the terminator not among them. An

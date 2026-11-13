@@ -31,14 +31,13 @@ public:
   /// returning () returns nothing.
   std::optional<mlir::FunctionType>
   mirFunctionType(const FunctionType &fn) const;
+  /// The MIR types of `types`, in order, if MIR has one for each.
+  std::optional<llvm::SmallVector<mlir::Type>>
+  mirTypes(llvm::ArrayRef<Type> types) const;
 
 private:
   mlir::MLIRContext *ctx_;
   const ClosureLayouts *layouts_ = nullptr;
-
-  /// The MIR types of `types`, in order, if MIR has one for each.
-  std::optional<llvm::SmallVector<mlir::Type>>
-  mirTypes(llvm::ArrayRef<Type> types) const;
 };
 
 } // namespace sammine_lang

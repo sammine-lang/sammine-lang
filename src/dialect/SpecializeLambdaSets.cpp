@@ -154,12 +154,9 @@ private:
   int64_t budget_ = kCopyBudget;
   unsigned numbered_ = 0;
 
-  static bool defined(Func func) {
-    return func && !func.isDeclaration() && func->hasAttr(smn::kMirAttr);
-  }
   Func lookup(mlir::FlatSymbolRefAttr name) {
     auto func = symbols_.lookup<Func>(name.getValue());
-    return defined(func) ? func : Func();
+    return smn::definesMir(func) ? func : Func();
   }
 
   /// The calls and closures in `func` naming a function MIR defines.
@@ -243,7 +240,7 @@ void Specializer::findSccs() {
     copies_.push_back({scc});
   };
   for (auto func : module_.getOps<Func>())
-    if (defined(func) && !index.count(func))
+    if (smn::definesMir(func) && !index.count(func))
       visit(func);
 }
 

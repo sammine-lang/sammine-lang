@@ -398,7 +398,7 @@ struct ElaborateDropsPass
 
 void elaborateDrops(mlir::ModuleOp module) {
   for (auto func : module.getOps<mlir::func::FuncOp>())
-    if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+    if (smn::definesMir(func))
       Elaboration(func).run();
 }
 

@@ -1231,10 +1231,8 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
 
   // A last expression followed by `;` is a statement, its value dropped, as
   // a function body's is (FuncDefAST::body_value).
-  auto &last = ast->Statements.back();
-  if (last->is_statement)
-    return ast->set_type(Type::Unit());
-  return ast->set_type(last->get_type());
+  auto *value = ast->value();
+  return ast->set_type(value ? value->get_type() : Type::Unit());
 }
 Type BiTypeCheckerVisitor::synthesize(UnitExprAST *ast) {
   if (ast->synthesized())

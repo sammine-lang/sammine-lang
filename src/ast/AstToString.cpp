@@ -90,13 +90,7 @@ std::string BlockAST::to_string() const {
   std::string result;
   for (size_t i = 0; i < Statements.size(); i++) {
     auto &stmt = Statements[i];
-    if (llvm::isa<ReturnStmtAST>(stmt.get())) {
-      result += stmt->to_string() + ";";
-    } else if (stmt->is_statement) {
-      result += stmt->to_string() + ";";
-    } else {
-      result += stmt->to_string();
-    }
+    result += stmt->to_string() + (stmt->is_statement ? ";" : "");
     if (i + 1 < Statements.size())
       result += "\n";
   }

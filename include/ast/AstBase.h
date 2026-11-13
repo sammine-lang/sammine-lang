@@ -328,17 +328,6 @@ public:
       ctx = ctx->parent_scope;
     return *ctx;
   }
-  NameQueryResult recursiveQueryName(const std::string &name) const {
-    return this->top().recursiveQueryName(name);
-  }
-
-  T get_from_name(const std::string &name) const {
-    return this->top().get_from_name(name);
-  }
-  NameQueryResult queryName(const std::string &name) const {
-    return this->top().queryName(name);
-  }
-
   T recursive_get_from_name(const std::string &name) const {
     return this->top().recursive_get_from_name(name);
   }
@@ -350,11 +339,6 @@ public:
   std::optional<T> recursive_try_get(const std::string &name) const {
     return this->top().recursive_try_get(name);
   }
-
-  const LexicalContext<T> *parent_scope() const {
-    return this->top().parent_scope;
-  }
-  LexicalContext<T> *parent_scope() { return this->top().parent_scope; }
 };
 
 /// Visitor that manages scope enter/exit around function bodies.

@@ -26,16 +26,8 @@
 
 namespace sammine_lang {
 
-/// The attribute on a `sammine.closure` whose value will carry what it binds
-/// as a tuple or enum, whatever its type's words are: one that binds a
-/// closure of its own function type needn't stay in its maker's frame.
-constexpr llvm::StringLiteral kByValueAttr = "sammine.by_value";
-
-/// The attribute on a `sammine.aggregate` or `sammine.variant` holding a
-/// closure's captures, which may hold views lent to the closure.
-constexpr llvm::StringLiteral kCapturesAttr = "sammine.captures";
-
-/// Marks each closure whose set becomes a tuple or an enum (kByValueAttr).
+/// Marks each closure whose set becomes a tuple or an enum
+/// (smn::kByValueAttr).
 /// Run before the checks, which read it.
 void markLambdaSets(mlir::ModuleOp module);
 

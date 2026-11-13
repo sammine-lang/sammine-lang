@@ -107,6 +107,13 @@ private:
   //! `module`'s code: one of the module's own, or one the prelude exports.
   std::optional<sammine_util::QualifiedName>
   top_level(const std::string &module, const std::string &name) const;
+  //! The name of what the prelude exports as `name`, if it does.
+  std::optional<sammine_util::QualifiedName>
+  prelude_export(const std::string &name) const;
+  //! Reports `written` defined at `here` when it was already, at `before`.
+  void report_redefinition(const std::string &written,
+                           sammine_util::Location here,
+                           sammine_util::Location before);
   //! Whether `name` is a local: a parameter or a variable, not a top-level
   //! definition.
   bool is_local(const std::string &name) const;

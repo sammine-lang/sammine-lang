@@ -39,13 +39,7 @@ void NameResolver::use_program(ProgramAST &program) {
     // exports it: a program's names and those are both unqualified.
     auto key = n.strip_type_args().mangled();
     if (auto it = definitions.find(key); it != definitions.end()) {
-      reportee.add_error(
-          location,
-          fmt::format("[SCOPE]: The name `{}` has been introduced before",
-                      written));
-      reportee.add_error(
-          it->second.location,
-          fmt::format("[SCOPE]: Most recently defined `{}` is here", written));
+      report_redefinition(written, location, it->second.location);
       return;
     }
     top_levels[module].emplace(written, n.strip_type_args());
@@ -74,28 +68,37 @@ void NameResolver::use_program(ProgramAST &program) {
   }
   // The prelude's names are in every module's scope: a library may not
   // take one it exports for its own either.
-  auto prelude = top_levels.find(std::string(kPrelude));
-  if (prelude == top_levels.end())
-    return;
   for (auto &[module, table] : top_levels) {
     if (module == kPrelude)
       continue;
-    for (auto &[written, name] : table) {
-      auto it = prelude->second.find(written);
-      if (it == prelude->second.end())
-        continue;
-      auto &theirs = definitions.at(it->second.mangled());
-      if (!theirs.exported)
-        continue;
-      reportee.add_error(
-          definitions.at(name.mangled()).location,
-          fmt::format("[SCOPE]: The name `{}` has been introduced before",
-                      written));
-      reportee.add_error(
-          theirs.location,
-          fmt::format("[SCOPE]: Most recently defined `{}` is here", written));
-    }
+    for (auto &[written, name] : table)
+      if (auto theirs = prelude_export(written))
+        report_redefinition(written, definitions.at(name.mangled()).location,
+                            definitions.at(theirs->mangled()).location);
   }
+}
+
+void NameResolver::report_redefinition(const std::string &written,
+                                       sammine_util::Location here,
+                                       sammine_util::Location before) {
+  reportee.add_error(
+      here, fmt::format("[SCOPE]: The name `{}` has been introduced before",
+                        written));
+  reportee.add_error(
+      before,
+      fmt::format("[SCOPE]: Most recently defined `{}` is here", written));
+}
+
+std::optional<sammine_util::QualifiedName>
+NameResolver::prelude_export(const std::string &name) const {
+  auto prelude = top_levels.find(std::string(kPrelude));
+  if (prelude == top_levels.end())
+    return std::nullopt;
+  auto it = prelude->second.find(name);
+  if (it == prelude->second.end() ||
+      !definitions.at(it->second.mangled()).exported)
+    return std::nullopt;
+  return it->second;
 }
 
 std::optional<sammine_util::QualifiedName>
@@ -107,14 +110,7 @@ NameResolver::top_level(const std::string &module,
       return it->second;
   if (module == kPrelude)
     return std::nullopt;
-  auto prelude = top_levels.find(std::string(kPrelude));
-  if (prelude == top_levels.end())
-    return std::nullopt;
-  auto it = prelude->second.find(name);
-  if (it == prelude->second.end() ||
-      !definitions.at(it->second.mangled()).exported)
-    return std::nullopt;
-  return it->second;
+  return prelude_export(name);
 }
 
 bool NameResolver::is_local(const std::string &name) const {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "typecheck/Types.h"
-#include "util/Utilities.h"
 
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/Types.h"
@@ -27,9 +26,8 @@ public:
   ~ClosureLayouts();
 
   /// A closure the unit makes, of function type `closure`, binding values of
-  /// the types `bound`: a partial application, at `where`.
-  void addClosure(const Type &closure, std::vector<Type> bound,
-                  sammine_util::Location where);
+  /// the types `bound`: a partial application.
+  void addClosure(const Type &closure, std::vector<Type> bound);
 
   /// The words a value of the function type `fn` carries, the MIR types of
   /// what closures bind given by `types`. A closure that binds a value of
@@ -40,16 +38,13 @@ public:
   std::optional<int64_t> words(const Type &fn, const MIRTypes &types) const;
 
 private:
-  struct Closure {
-    std::vector<Type> bound;
-    sammine_util::Location where;
-  };
   /// What identifies a function type: its MIR type with every function
   /// type in it carrying no words, so finding it needs no other type's.
   mlir::Type shapeOf(const Type &fn) const;
 
   std::unique_ptr<MIRTypes> shapes_;
-  llvm::DenseMap<mlir::Type, std::vector<Closure>> closures_;
+  /// Per shape: what each of its closures binds.
+  llvm::DenseMap<mlir::Type, std::vector<std::vector<Type>>> closures_;
   mutable llvm::DenseMap<mlir::Type, int64_t> words_;
   mutable llvm::DenseSet<mlir::Type> sizing_;
 };

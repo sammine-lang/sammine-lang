@@ -377,6 +377,14 @@ class BlockAST : public AstBase, public Printable {
 public:
   BlockAST() : AstBase(NodeKind::BlockAST) {}
   std::vector<std::unique_ptr<ExprAST>> Statements;
+  /// The expression whose value the block gives: its last, unless that is a
+  /// statement (a `let`, a `return`, or one followed by `;`). Null if the
+  /// block gives (), ending in a statement or empty.
+  ExprAST *value() const {
+    if (Statements.empty() || Statements.back()->is_statement)
+      return nullptr;
+    return Statements.back().get();
+  }
   std::string to_string() const;
   AST_NODE_METHODS("BlockAST", NodeKind::BlockAST)
 };
@@ -407,11 +415,10 @@ public:
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
 
-  /// What the body returns when it runs off its end: its last expression,
-  /// when the function writes its return type and that expression is a
-  /// value rather than a statement or a return. Null otherwise: a function
-  /// that writes no return type returns (), and one ending in a statement
-  /// returns () too.
+  /// What the body returns when it runs off its end: its block's value
+  /// (BlockAST::value), when the function writes its return type. Null
+  /// otherwise: a function that writes no return type returns (), and one
+  /// ending in a statement returns () too.
   ExprAST *body_value() const;
 
   std::string to_string() const;

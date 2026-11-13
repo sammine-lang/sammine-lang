@@ -226,10 +226,11 @@ void Resolver::inject_definitions(
     def->defining_module = name;
 
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      if (!fd->Prototype->is_generic() &&
-          signatureHoldsFunction(fd->Prototype.get(), holders)) {
+      if (fd->Prototype->is_generic()) {
+        // Its body comes, to be compiled here.
+      } else if (signatureHoldsFunction(fd->Prototype.get(), holders)) {
         fd->is_import_copy = true;
-      } else if (!fd->Prototype->is_generic()) {
+      } else {
         auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
         ext->is_exported = fd->is_exported;
         ext->defining_module = fd->defining_module;

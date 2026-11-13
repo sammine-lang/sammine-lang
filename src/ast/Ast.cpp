@@ -289,12 +289,9 @@ void ScopedASTVisitor::visit(FuncDefAST *ast) {
 
 TypeCheckerVisitor::~TypeCheckerVisitor() {}
 ExprAST *FuncDefAST::body_value() const {
-  if (returnsUnit() || !Block || Block->Statements.empty())
+  if (returnsUnit() || !Block)
     return nullptr;
-  auto *last = Block->Statements.back().get();
-  if (last->is_statement || llvm::isa<ReturnStmtAST>(last))
-    return nullptr;
-  return last;
+  return Block->value();
 }
 
 } // namespace sammine_lang::AST

@@ -345,7 +345,7 @@ struct CheckOwnershipPass
 mlir::LogicalResult checkOwnership(mlir::ModuleOp module) {
   bool failed = false;
   for (auto func : module.getOps<mlir::func::FuncOp>())
-    if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+    if (smn::definesMir(func))
       failed |= checkFunction(func);
   return mlir::failure(failed);
 }

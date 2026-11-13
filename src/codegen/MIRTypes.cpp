@@ -68,19 +68,15 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
           backing == TypeKind::I64_t || backing == TypeKind::U64_t ? 64 : 32);
     }
     llvm::SmallVector<mlir::Type> variants;
-    int64_t payloadSize = 0;
+    llvm::SmallVector<mlir::StringAttr> names;
     for (auto &variant : et.get_variants()) {
       auto fields = mirTypes(variant.payload_types);
       if (!fields)
         return std::nullopt;
       variants.push_back(smn::TupleType::get(ctx_, *fields));
-      payloadSize = std::max(payloadSize, smn::payloadSize(*fields));
-    }
-    llvm::SmallVector<mlir::StringAttr> names;
-    for (auto &variant : et.get_variants())
       names.push_back(mlir::StringAttr::get(ctx_, variant.name));
-    return smn::EnumType::get(ctx_, et.get_name().mangled(), payloadSize,
-                              names, variants);
+    }
+    return smn::makeEnum(ctx_, et.get_name().mangled(), names, variants);
   }
   case TypeKind::Function: {
     auto &fn = std::get<FunctionType>(type.type_data);

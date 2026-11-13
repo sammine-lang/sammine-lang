@@ -150,6 +150,34 @@ int64_t payloadSize(llvm::ArrayRef<mlir::Type> fields) {
   return payloadOffsets(fields).back() + sizeOf(fields.back());
 }
 
+EnumType makeEnum(mlir::MLIRContext *ctx, llvm::StringRef name,
+                  llvm::ArrayRef<mlir::StringAttr> variantNames,
+                  llvm::ArrayRef<mlir::Type> variants) {
+  int64_t payload = 0;
+  for (auto variant : variants)
+    payload = std::max(
+        payload, payloadSize(mlir::cast<TupleType>(variant).getElements()));
+  return EnumType::get(ctx, name, payload, variantNames, variants);
+}
+
+llvm::ArrayRef<mlir::Type> variantFields(EnumType en, uint64_t i) {
+  return mlir::cast<TupleType>(en.getVariants()[i]).getElements();
+}
+
+void forEachBranchEdge(
+    mlir::BranchOpInterface branch,
+    llvm::function_ref<void(mlir::Value, mlir::BlockArgument)> fn) {
+  for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
+    for (auto [operand, arg] :
+         llvm::zip(branch.getSuccessorOperands(i).getForwardedOperands(),
+                   branch->getSuccessor(i)->getArguments()))
+      fn(operand, arg);
+}
+
+bool definesMir(mlir::FunctionOpInterface func) {
+  return func && !func.isExternal() && func->hasAttr(kMirAttr);
+}
+
 mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type) {
   llvm::StringRef name;
   if (auto st = mlir::dyn_cast<StructType>(type))
@@ -357,8 +385,7 @@ mlir::LogicalResult LendOp::verify() {
   // A closure of a lambda set lowered to what it binds holds its captures
   // in an aggregate or a variant (LambdaSets).
   for (auto *user : getResult().getUsers())
-    if (!mlir::isa<CallOp, ClosureOp>(user) &&
-        !user->hasAttr("sammine.captures"))
+    if (!mlir::isa<CallOp, ClosureOp>(user) && !user->hasAttr(kCapturesAttr))
       return emitOpError("is a view lent to a call or a closure, so only "
                          "sammine.call or sammine.closure can use it, not ")
              << user->getName();

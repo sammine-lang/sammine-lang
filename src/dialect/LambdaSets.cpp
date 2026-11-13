@@ -12,6 +12,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 
 #include <functional>
@@ -75,6 +76,16 @@ unsigned partOffset(mlir::Type type, unsigned i) {
   return offset;
 }
 
+/// Calls `fn(i, part, first)` for each part of `type`, with where its
+/// variables start if `type`'s start at `first`.
+template <typename Fn> void forEachPart(mlir::Type type, int first, Fn fn) {
+  int at = first + (mlir::isa<smn::FnType>(type) ? 1 : 0);
+  for (auto [i, part] : llvm::enumerate(partsOf(type))) {
+    fn(static_cast<unsigned>(i), part, at);
+    at += static_cast<int>(fnCount(part));
+  }
+}
+
 /// Where a variable starts in `type`, and what it counts there.
 struct Span {
   int first = -1;
@@ -95,8 +106,10 @@ public:
                       const llvm::StringSet<> *opaque = nullptr)
       : module_(module), opaque_(opaque) {
     for (auto func : module.getOps<mlir::func::FuncOp>())
-      if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+      if (smn::definesMir(func)) {
         funcs_.push_back(func);
+        byName_[func.getName()] = func;
+      }
     // Every signature first: a body may call a function defined after it.
     for (auto func : funcs_)
       declare(func);
@@ -124,12 +137,8 @@ public:
   /// are one variant.
   llvm::ArrayRef<smn::ClosureOp> closures(int var);
   unsigned variantOf(smn::ClosureOp closure) {
-    auto all = closures(varOf(closure.getResult()));
-    auto mine = describe(closure);
-    return static_cast<unsigned>(
-        llvm::find_if(all,
-                      [&](smn::ClosureOp c) { return describe(c) == mine; }) -
-        all.begin());
+    (void)closures(varOf(closure.getResult()));
+    return variants_.lookup(closure);
   }
   /// What a value of `var`'s set is. Sets of one description are one type.
   mlir::Type representation(int var);
@@ -154,6 +163,8 @@ private:
     return opaque_ && opaque_->contains(name);
   }
   llvm::SmallVector<mlir::func::FuncOp> funcs_;
+  /// The functions MIR defines, by name.
+  llvm::StringMap<mlir::func::FuncOp> byName_;
 
   /// A variable as an index into the per-variable vectors.
   static size_t at(int v) { return static_cast<size_t>(v); }
@@ -171,13 +182,16 @@ private:
   std::map<int, mlir::Type> representations_;
   /// Per set, by its root: its closures, one per description, in order.
   std::map<int, llvm::SmallVector<smn::ClosureOp>> distinct_;
+  /// Per closure: its variant, its index in its set's distinct_.
+  llvm::DenseMap<mlir::Operation *, unsigned> variants_;
   llvm::DenseMap<mlir::Operation *, std::string> closureDescriptions_;
   /// Per set description: its number, which names its enum and stands for
   /// it in the descriptions of others.
   std::map<std::string, unsigned> setNames_;
   std::map<int, unsigned> setNumbers_;
   unsigned setNumber(int var);
-  std::map<std::pair<std::string, std::string>, std::string> renamed_;
+  /// Per struct or enum name and the fields it is rebuilt with: its new name.
+  llvm::DenseMap<std::pair<mlir::StringAttr, mlir::Type>, std::string> renamed_;
 
   int find(int v) {
     while (parent_[at(v)] != v)
@@ -203,26 +217,31 @@ private:
     for (unsigned k = 0; k < std::min(a.count, b.count); ++k)
       join(a.first + static_cast<int>(k), b.first + static_cast<int>(k));
   }
-  void stay(Span span) {
-    for (unsigned k = 0; k < span.count; ++k)
-      stays_[at(find(span.first + static_cast<int>(k)))] = true;
+  /// Makes `span`'s sets stay; true if one didn't already.
+  bool stay(Span span) {
+    bool changed = false;
+    for (unsigned k = 0; k < span.count; ++k) {
+      auto root = at(find(span.first + static_cast<int>(k)));
+      changed |= !stays_[root];
+      stays_[root] = true;
+    }
+    return changed;
   }
 
   /// Fresh variables for `type`.
   Span fresh(mlir::Type type) {
     Span span{static_cast<int>(parent_.size()), fnCount(type)};
-    std::function<void(mlir::Type)> add = [&](mlir::Type t) {
-      int v = static_cast<int>(parent_.size());
-      if (mlir::isa<smn::FnType>(t)) {
-        parent_.push_back(v);
-        stays_.push_back(false);
-        signature_.push_back(fnCount(t) - 1);
-      }
-      for (auto part : partsOf(t))
-        add(part);
-    };
-    add(type);
+    addVariables(type);
     return span;
+  }
+  void addVariables(mlir::Type type) {
+    if (mlir::isa<smn::FnType>(type)) {
+      parent_.push_back(static_cast<int>(parent_.size()));
+      stays_.push_back(false);
+      signature_.push_back(fnCount(type) - 1);
+    }
+    for (auto part : partsOf(type))
+      addVariables(part);
   }
   Span spanOf(mlir::Value value) {
     auto it = spans_.find(value);
@@ -233,10 +252,7 @@ private:
     return span;
   }
   mlir::func::FuncOp defined(mlir::StringRef name) {
-    auto func = module_.lookupSymbol<mlir::func::FuncOp>(name);
-    return func && !func.isDeclaration() && func->hasAttr(smn::kMirAttr)
-               ? func
-               : mlir::func::FuncOp();
+    return byName_.lookup(name);
   }
 
   void declare(mlir::func::FuncOp func);
@@ -318,11 +334,7 @@ void LambdaSets::collect(mlir::Operation *op, mlir::func::FuncOp func) {
     for (auto [i, value] : llvm::enumerate(ret.getOperands()))
       unify(spanOf(value), results_[func][i]);
   } else if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op)) {
-    for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
-      for (auto [operand, arg] :
-           llvm::zip(branch.getSuccessorOperands(i).getForwardedOperands(),
-                     branch->getSuccessor(i)->getArguments()))
-        whole(operand, arg);
+    smn::forEachBranchEdge(branch, whole);
   } else if (auto let = mlir::dyn_cast<smn::LetOp>(op)) {
     whole(let.getResult(), let.getValue());
   } else if (mlir::isa<smn::CopyOp, smn::MoveOp>(op)) {
@@ -388,33 +400,19 @@ void LambdaSets::solve() {
   // giving values of its types as they are, and a stage-1 closure carries
   // what it binds in words sized for those types.
   auto spread = [&]() {
-    bool changed = true, any = false;
-    while (changed) {
+    for (bool changed = true; changed;) {
       changed = false;
-      for (int v = 0; v < static_cast<int>(parent_.size()); ++v) {
-        if (!stays_[at(find(v))])
-          continue;
-        for (unsigned k = 1; k <= signature_[at(v)]; ++k)
-          if (!stays_[at(find(v + static_cast<int>(k)))]) {
-            stays_[at(find(v + static_cast<int>(k)))] = true;
-            changed = any = true;
-          }
-      }
+      for (int v = 0; v < static_cast<int>(parent_.size()); ++v)
+        if (stays_[at(find(v))])
+          changed |= stay({v + 1, signature_[at(v)]});
       for (auto &[root, closures] : closures_) {
         if (!stays_[at(find(root))])
           continue;
         for (auto closure : closures)
-          for (auto bound : closure.getBound()) {
-            auto span = spanOf(bound);
-            for (unsigned k = 0; k < span.count; ++k)
-              if (!stays_[at(find(span.first + static_cast<int>(k)))]) {
-                stays_[at(find(span.first + static_cast<int>(k)))] = true;
-                changed = any = true;
-              }
-          }
+          for (auto bound : closure.getBound())
+            changed |= stay(spanOf(bound));
       }
     }
-    return any;
   };
   spread();
 
@@ -435,9 +433,9 @@ void LambdaSets::solve() {
               holds[find(root)].push_back(find(first));
               return;
             }
-            auto parts = partsOf(t);
-            for (unsigned i = 0; i < parts.size(); ++i)
-              walk(parts[i], first + static_cast<int>(partOffset(t, i)));
+            forEachPart(t, first, [&](unsigned, mlir::Type part, int start) {
+              walk(part, start);
+            });
           };
           walk(bound.getType(), spanOf(bound).first);
         }
@@ -469,12 +467,15 @@ llvm::ArrayRef<smn::ClosureOp> LambdaSets::closures(int var) {
   int root = find(var);
   if (auto it = distinct_.find(root); it != distinct_.end())
     return it->second;
-  std::map<std::string, smn::ClosureOp> byDescription;
+  std::map<std::string, llvm::SmallVector<smn::ClosureOp>> byDescription;
   for (auto closure : closures_[root])
-    byDescription.try_emplace(describe(closure), closure);
+    byDescription[describe(closure)].push_back(closure);
   auto &out = distinct_[root];
-  for (auto &[_, closure] : byDescription)
-    out.push_back(closure);
+  for (auto &[_, alike] : byDescription) {
+    for (auto closure : alike)
+      variants_[closure] = static_cast<unsigned>(out.size());
+    out.push_back(alike.front());
+  }
   return out;
 }
 
@@ -525,10 +526,9 @@ std::string LambdaSets::describe(mlir::Type type, int first) {
     return out;
   }
   os << type << " with (";
-  auto parts = partsOf(type);
-  for (unsigned i = 0; i < parts.size(); ++i)
-    os << (i ? ", " : "")
-       << describe(parts[i], first + static_cast<int>(partOffset(type, i)));
+  forEachPart(type, first, [&](unsigned i, mlir::Type part, int start) {
+    os << (i ? ", " : "") << describe(part, start);
+  });
   os << ")";
   return out;
 }
@@ -560,19 +560,14 @@ mlir::Type LambdaSets::representation(int var) {
   if (variants.size() <= 1) {
     type = variants.empty() ? smn::TupleType::get(ctx, {}) : variants.front();
   } else {
-    int64_t payload = 0;
     llvm::SmallVector<mlir::StringAttr> names;
-    for (auto [i, variant] : llvm::enumerate(variants)) {
-      payload = std::max(
-          payload,
-          smn::payloadSize(mlir::cast<smn::TupleType>(variant).getElements()));
+    for (unsigned i = 0; i < variants.size(); ++i)
       names.push_back(
           mlir::StringAttr::get(ctx, "closure" + std::to_string(i)));
-    }
     // Named by what it holds: sets alike are one type, as a function
     // specialized for one passes it to another.
-    type = smn::EnumType::get(ctx, "lambdas" + std::to_string(setNumber(root)),
-                              payload, names, variants);
+    type = smn::makeEnum(ctx, "lambdas" + std::to_string(setNumber(root)),
+                         names, variants);
   }
   representations_[root] = type;
   return type;
@@ -586,20 +581,17 @@ mlir::Type LambdaSets::rebuild(mlir::Type type, int first) {
     return byValue(first) ? representation(first) : type;
   auto parts = partsOf(type);
   llvm::SmallVector<mlir::Type> rebuilt;
-  for (unsigned i = 0; i < parts.size(); ++i)
-    rebuilt.push_back(
-        rebuild(parts[i], first + static_cast<int>(partOffset(type, i))));
+  forEachPart(type, first, [&](unsigned, mlir::Type part, int start) {
+    rebuilt.push_back(rebuild(part, start));
+  });
   if (llvm::equal(parts, rebuilt))
     return type;
   // A struct's or enum's LLVM type is identified by its name: one holding
   // other function values is another type, named apart. Its Drop instance
   // is found by what comes before the `#`.
   auto rename = [&](llvm::StringRef name) {
-    std::string key;
-    llvm::raw_string_ostream os(key);
-    for (auto t : rebuilt)
-      os << t << ";";
-    auto &slot = renamed_[{name.str(), key}];
+    auto &slot = renamed_[{mlir::StringAttr::get(ctx, name),
+                           smn::TupleType::get(ctx, rebuilt)}];
     if (slot.empty())
       slot = (name + "#" + std::to_string(renamed_.size())).str();
     return slot;
@@ -615,15 +607,9 @@ mlir::Type LambdaSets::rebuild(mlir::Type type, int first) {
     return smn::TupleType::get(ctx, rebuilt);
   if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
     return smn::ArrayType::get(ctx, array.getSize(), rebuilt[0]);
-  if (auto en = mlir::dyn_cast<smn::EnumType>(type)) {
-    int64_t payload = 0;
-    for (auto variant : rebuilt)
-      payload = std::max(
-          payload,
-          smn::payloadSize(mlir::cast<smn::TupleType>(variant).getElements()));
-    return smn::EnumType::get(ctx, rename(en.getName()), payload,
-                              en.getVariantNames(), rebuilt);
-  }
+  if (auto en = mlir::dyn_cast<smn::EnumType>(type))
+    return smn::makeEnum(ctx, rename(en.getName()), en.getVariantNames(),
+                         rebuilt);
   return type;
 }
 
@@ -639,8 +625,7 @@ void lowerClosure(smn::ClosureOp closure, unsigned variant) {
   auto type = result.getType();
   mlir::Operation *value;
   if (auto en = mlir::dyn_cast<smn::EnumType>(type)) {
-    auto fields =
-        mlir::cast<smn::TupleType>(en.getVariants()[variant]).getElements();
+    auto fields = smn::variantFields(en, variant);
     value = smn::VariantOp::create(
         builder, closure.getLoc(), en, static_cast<uint64_t>(variant),
         smn::payloadOffsets(fields), closure.getBound());
@@ -648,7 +633,7 @@ void lowerClosure(smn::ClosureOp closure, unsigned variant) {
     value = smn::AggregateOp::create(builder, closure.getLoc(), type,
                                      closure.getBound());
   }
-  value->setAttr(kCapturesAttr, builder.getUnitAttr());
+  value->setAttr(smn::kCapturesAttr, builder.getUnitAttr());
   result.replaceAllUsesWith(value->getResult(0));
   closure.erase();
 }
@@ -697,8 +682,7 @@ void lowerCall(smn::CallIndirectOp call,
       auto *dest = new mlir::Block();
       region->getBlocks().insert(after->getIterator(), dest);
       mlir::OpBuilder b(dest, dest->end());
-      auto fields =
-          mlir::cast<smn::TupleType>(en.getVariants()[i]).getElements();
+      auto fields = smn::variantFields(en, i);
       auto offsets = smn::payloadOffsets(fields);
       llvm::SmallVector<mlir::Value> bound;
       for (auto [j, field] : llvm::enumerate(fields))
@@ -750,15 +734,11 @@ void retype(LambdaSets &sets, mlir::func::FuncOp func) {
       func.getContext(), func.front().getArgumentTypes(), results));
   func.walk([&](mlir::Operation *op) {
     if (auto variant = mlir::dyn_cast<smn::VariantOp>(op)) {
-      auto fields = mlir::cast<smn::TupleType>(
-                        variant.getType().getVariants()[variant.getIndex()])
-                        .getElements();
-      variant.setOffsets(smn::payloadOffsets(fields));
+      variant.setOffsets(smn::payloadOffsets(
+          smn::variantFields(variant.getType(), variant.getIndex())));
     } else if (auto payload = mlir::dyn_cast<smn::PayloadOp>(op)) {
-      auto fields =
-          mlir::cast<smn::TupleType>(
-              payload.getValue().getType().getVariants()[payload.getVariant()])
-              .getElements();
+      auto fields = smn::variantFields(payload.getValue().getType(),
+                                       payload.getVariant());
       payload.setOffset(static_cast<uint64_t>(
           smn::payloadOffsets(fields)[payload.getField()]));
     }
@@ -801,7 +781,7 @@ void markLambdaSets(mlir::ModuleOp module) {
   for (auto func : sets.funcs())
     func.walk([&](smn::ClosureOp closure) {
       if (sets.byValue(sets.varOf(closure.getResult())))
-        closure->setAttr(kByValueAttr,
+        closure->setAttr(smn::kByValueAttr,
                          mlir::UnitAttr::get(module.getContext()));
     });
 }

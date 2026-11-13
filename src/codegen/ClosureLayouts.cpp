@@ -14,10 +14,9 @@ mlir::Type ClosureLayouts::shapeOf(const Type &fn) const {
   return shape ? *shape : mlir::Type();
 }
 
-void ClosureLayouts::addClosure(const Type &closure, std::vector<Type> bound,
-                                sammine_util::Location where) {
+void ClosureLayouts::addClosure(const Type &closure, std::vector<Type> bound) {
   if (auto shape = shapeOf(closure))
-    closures_[shape].push_back({std::move(bound), where});
+    closures_[shape].push_back(std::move(bound));
 }
 
 std::optional<int64_t> ClosureLayouts::words(const Type &fn,
@@ -37,22 +36,12 @@ std::optional<int64_t> ClosureLayouts::words(const Type &fn,
     return std::nullopt;
 
   int64_t most = 0;
-  for (auto &closure : closures->second) {
-    llvm::SmallVector<mlir::Type> bound;
-    bool sized = true;
-    for (auto &type : closure.bound) {
-      auto mir = types.mirType(type);
-      if (!mir) {
-        sized = false;
-        break;
-      }
-      bound.push_back(*mir);
-    }
+  for (auto &bound : closures->second) {
     // In its maker's frame, the closure carries a pointer to what it binds.
-    auto words =
-        sized ? smn::wordsFor(smn::TupleType::get(shape.getContext(), bound))
-              : 1;
-    most = std::max(most, words);
+    auto mir = types.mirTypes(bound);
+    most = std::max(
+        most,
+        mir ? smn::wordsFor(smn::TupleType::get(shape.getContext(), *mir)) : 1);
   }
   sizing_.erase(shape);
   words_[shape] = most;

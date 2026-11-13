@@ -23,14 +23,20 @@ mlir::LLVM::LLVMPointerType llvmPtr(mlir::MLIRContext *ctx) {
   return mlir::LLVM::LLVMPointerType::get(ctx);
 }
 
+/// The words a value of `fn` carries what it binds in, if it has any.
+mlir::Type wordsType(smn::FnType fn) {
+  return mlir::LLVM::LLVMArrayType::get(
+      mlir::IntegerType::get(fn.getContext(), 64),
+      static_cast<unsigned>(fn.getWords()));
+}
+
 /// A function value: the code to call, then the words of what it binds,
 /// which the code is passed a pointer to first. With no words, the code.
 mlir::LLVM::LLVMStructType closureType(smn::FnType fn) {
   auto *ctx = fn.getContext();
   llvm::SmallVector<mlir::Type, 2> fields{llvmPtr(ctx)};
   if (fn.getWords() > 0)
-    fields.push_back(mlir::LLVM::LLVMArrayType::get(
-        mlir::IntegerType::get(ctx, 64), static_cast<unsigned>(fn.getWords())));
+    fields.push_back(wordsType(fn));
   return mlir::LLVM::LLVMStructType::getLiteral(ctx, fields);
 }
 
@@ -39,9 +45,18 @@ mlir::LLVM::LLVMStructType closureType(smn::FnType fn) {
 /// the code (LLVM wouldn't make a tail call of the caller's own then), or a
 /// null pointer when it has none.
 mlir::Type wordsParam(smn::FnType fn) {
-  auto closure = closureType(fn);
-  return closure.getBody().size() > 1 ? closure.getBody()[1]
-                                      : mlir::Type(llvmPtr(fn.getContext()));
+  return fn.getWords() > 0 ? wordsType(fn)
+                           : mlir::Type(llvmPtr(fn.getContext()));
+}
+
+/// Where field `index` of the aggregate of `type` at `base` is.
+mlir::Value fieldPtr(mlir::OpBuilder &builder, mlir::Location loc,
+                     mlir::Type type, mlir::Value base,
+                     mlir::LLVM::GEPArg index) {
+  return mlir::LLVM::GEPOp::create(builder, loc, llvmPtr(builder.getContext()),
+                                   type, base,
+                                   llvm::ArrayRef<mlir::LLVM::GEPArg>{0, index},
+                                   mlir::LLVM::GEPNoWrapFlags::inbounds);
 }
 
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
@@ -126,19 +141,26 @@ void declareCFunction(mlir::ModuleOp module, mlir::OpBuilder &builder,
   mlir::LLVM::LLVMFuncOp::create(builder, module.getLoc(), name, type);
 }
 
-/// A stack slot for one `type`, at the top of the function `op` is in, where
-/// LLVM's mem2reg can remove it.
-mlir::Value entrySlot(mlir::ConversionPatternRewriter &rewriter,
-                      mlir::Operation *op, mlir::Type type) {
-  mlir::OpBuilder::InsertionGuard guard(rewriter);
-  auto &entry = op->getParentOfType<mlir::FunctionOpInterface>()
-                    .getFunctionBody()
-                    .front();
-  rewriter.setInsertionPointToStart(&entry);
-  auto one = mlir::arith::ConstantIntOp::create(rewriter, op->getLoc(),
-                                                rewriter.getI64Type(), 1);
-  return mlir::LLVM::AllocaOp::create(rewriter, op->getLoc(),
-                                      llvmPtr(op->getContext()), type, one);
+/// A stack slot for one `type`, at the top of `entry`, where LLVM's mem2reg
+/// can remove it.
+mlir::Value entrySlot(mlir::OpBuilder &builder, mlir::Block &entry,
+                      mlir::Location loc, mlir::Type type) {
+  mlir::OpBuilder::InsertionGuard guard(builder);
+  builder.setInsertionPointToStart(&entry);
+  auto one =
+      mlir::arith::ConstantIntOp::create(builder, loc, builder.getI64Type(), 1);
+  return mlir::LLVM::AllocaOp::create(builder, loc,
+                                      llvmPtr(builder.getContext()), type, one);
+}
+
+/// A stack slot for one `type`, at the top of the function `op` is in.
+mlir::Value entrySlot(mlir::OpBuilder &builder, mlir::Operation *op,
+                      mlir::Type type) {
+  return entrySlot(builder,
+                   op->getParentOfType<mlir::FunctionOpInterface>()
+                       .getFunctionBody()
+                       .front(),
+                   op->getLoc(), type);
 }
 
 // alloc<T>(n): malloc(sizeof(T) * n), n widened to i64.
@@ -339,13 +361,8 @@ defineForwarder(mlir::ConversionPatternRewriter &rewriter, mlir::Location loc,
   if (auto cFunc =
           module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee.getValue())) {
     // A slot for C's struct passing, at the top of the forwarder.
-    auto slot = [&](mlir::Type slotType) -> mlir::Value {
-      mlir::OpBuilder::InsertionGuard top(rewriter);
-      rewriter.setInsertionPointToStart(entry);
-      auto one = mlir::arith::ConstantIntOp::create(rewriter, loc,
-                                                    rewriter.getI64Type(), 1);
-      return mlir::LLVM::AllocaOp::create(
-          rewriter, loc, llvmPtr(loc.getContext()), slotType, one);
+    auto slot = [&](mlir::Type slotType) {
+      return entrySlot(rewriter, *entry, loc, slotType);
     };
     auto value =
         cabi::callC(rewriter, loc, cFunc, args,
@@ -600,10 +617,7 @@ mlir::Value payloadField(mlir::ConversionPatternRewriter &rewriter,
                          mlir::Location loc, mlir::Type enumType,
                          mlir::Value slot, int64_t offset) {
   auto ptrTy = llvmPtr(rewriter.getContext());
-  mlir::Value payload =
-      mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, enumType, slot,
-                                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
-                                mlir::LLVM::GEPNoWrapFlags::inbounds);
+  auto payload = fieldPtr(rewriter, loc, enumType, slot, 1);
   if (offset == 0)
     return payload;
   return mlir::LLVM::GEPOp::create(
@@ -627,11 +641,8 @@ struct VariantLowering : public mlir::OpConversionPattern<smn::VariantOp> {
     auto tag =
         mlir::arith::ConstantIntOp::create(rewriter, loc, rewriter.getI32Type(),
                                            static_cast<int64_t>(op.getIndex()));
-    auto tagPtr = mlir::LLVM::GEPOp::create(
-        rewriter, loc, llvmPtr(op.getContext()), enumType, slot,
-        llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
-        mlir::LLVM::GEPNoWrapFlags::inbounds);
-    mlir::LLVM::StoreOp::create(rewriter, loc, tag, tagPtr);
+    mlir::LLVM::StoreOp::create(rewriter, loc, tag,
+                                fieldPtr(rewriter, loc, enumType, slot, 0));
     // A field of no size, such as a closure binding nothing, has no bytes
     // to write; an enum of only such has no payload at all.
     for (auto [field, mirField, offset] : llvm::zip(
@@ -784,22 +795,16 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
           mlir::Value env;
           if (!bound.empty()) {
             auto words = entry->getArgument(0);
-            auto one = mlir::arith::ConstantIntOp::create(
-                rewriter, loc, rewriter.getI64Type(), 1);
-            env = mlir::LLVM::AllocaOp::create(rewriter, loc, ptrTy,
-                                               words.getType(), one);
+            env = entrySlot(rewriter, *entry, loc, words.getType());
             mlir::LLVM::StoreOp::create(rewriter, loc, words, env);
             if (!inline_)
               env = mlir::LLVM::LoadOp::create(rewriter, loc, ptrTy, env);
           }
           for (auto [i, value] : llvm::enumerate(bound))
-            args.push_back(mlir::LLVM::LoadOp::create(
-                rewriter, loc, value.getType(),
-                mlir::LLVM::GEPOp::create(
-                    rewriter, loc, ptrTy, envType, env,
-                    llvm::ArrayRef<mlir::LLVM::GEPArg>{0,
-                                                       static_cast<int32_t>(i)},
-                    mlir::LLVM::GEPNoWrapFlags::inbounds)));
+            args.push_back(
+                mlir::LLVM::LoadOp::create(rewriter, loc, value.getType(),
+                                           fieldPtr(rewriter, loc, envType, env,
+                                                    static_cast<int32_t>(i))));
         });
 
     // The closure carries what it binds in its words: built in a slot,
@@ -818,15 +823,9 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
       return op.emitError("the compiler sized '")
              << op.getType() << "' without this closure, which binds values";
     auto slot = entrySlot(rewriter, op, closure);
-    mlir::LLVM::StoreOp::create(
-        rewriter, loc, code,
-        mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, closure, slot,
-                                  llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
-                                  mlir::LLVM::GEPNoWrapFlags::inbounds));
-    auto words =
-        mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, closure, slot,
-                                  llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
-                                  mlir::LLVM::GEPNoWrapFlags::inbounds);
+    mlir::LLVM::StoreOp::create(rewriter, loc, code,
+                                fieldPtr(rewriter, loc, closure, slot, 0));
+    auto words = fieldPtr(rewriter, loc, closure, slot, 1);
     mlir::Value env = words;
     if (!inline_) {
       env = entrySlot(rewriter, op, envType);
@@ -835,10 +834,7 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
     for (auto [i, value] : llvm::enumerate(bound))
       mlir::LLVM::StoreOp::create(
           rewriter, loc, value,
-          mlir::LLVM::GEPOp::create(
-              rewriter, loc, ptrTy, envType, env,
-              llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
-              mlir::LLVM::GEPNoWrapFlags::inbounds));
+          fieldPtr(rewriter, loc, envType, env, static_cast<int32_t>(i)));
     rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, closure, slot);
     return mlir::success();
   }
@@ -865,15 +861,15 @@ struct CallIndirectLowering
         rewriter, loc, ptrTy, adaptor.getCallee(), llvm::ArrayRef<int64_t>{0});
     // The code is passed the closure's words, by value (wordsParam).
     auto fn = op.getCallee().getType();
-    auto wordsType = wordsParam(fn);
+    auto words = wordsParam(fn);
     mlir::Value env;
-    if (wordsType == mlir::Type(ptrTy))
+    if (fn.getWords() == 0)
       env = mlir::LLVM::ZeroOp::create(rewriter, loc, ptrTy);
     else
-      env = mlir::LLVM::ExtractValueOp::create(rewriter, loc, wordsType,
+      env = mlir::LLVM::ExtractValueOp::create(rewriter, loc, words,
                                                adaptor.getCallee(),
                                                llvm::ArrayRef<int64_t>{1});
-    llvm::SmallVector<mlir::Type> params{wordsType};
+    llvm::SmallVector<mlir::Type> params{words};
     llvm::SmallVector<mlir::Value> operands{code, env};
     for (auto arg : adaptor.getArgs()) {
       params.push_back(arg.getType());
