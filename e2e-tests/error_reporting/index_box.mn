@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: index_box.mn:10:2
+// CHECK: ╰─ Cannot index 'ptr<i32>: it holds one value, *p; a 'buf<T> holds many
+
+// A 'ptr<T> holds one value, which the ownership check follows and its drop
+// drops: past it there is nothing. A buffer, 'buf<T>, holds many.
+
+let unsafe main() -> i32 {
+  let p = alloc<i32>(1);
+  p[0] = 1;
+  0
+}

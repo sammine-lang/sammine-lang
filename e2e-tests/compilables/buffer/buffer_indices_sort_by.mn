@@ -13,7 +13,7 @@ let unsafe value_after(values: ptr<i64>, a: i64, b: i64) -> bool {
 let unsafe main() -> i32 {
   let order = buffer::indices(4i64);
   std::printf("%ld %ld %ld %ld\n", order[0], order[1], order[2], order[3]);
-  let values = alloc<i64>(4i64);
+  let values = alloc_buf<i64>(4i64);
   values[0] = 20i64;
   values[1] = 40i64;
   values[2] = 30i64;

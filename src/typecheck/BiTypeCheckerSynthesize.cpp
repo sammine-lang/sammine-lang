@@ -1457,8 +1457,16 @@ Type BiTypeCheckerVisitor::synthesize(IndexExprAST *ast) {
   }
 
   // Pointer indexing: ptr<T>[i] -> T. Nothing checks which element `i` names
-  // or that it is in bounds, so only an unsafe function may do it.
+  // or that it is in bounds, so only an unsafe function may do it. A 'ptr<T>
+  // holds one value: a buffer, 'buf<T>, or a view of one holds many.
   if (arr_type.type_kind == TypeKind::Pointer) {
+    if (arr_type.is_linear_v() && !arr_type.is_buffer()) {
+      this->add_error(ast->get_location(),
+                      fmt::format("Cannot index {}: it holds one value, *p; "
+                                  "a 'buf<T> holds many",
+                                  arr_type.to_string()));
+      return ast->set_type(Type::Poisoned());
+    }
     check_unsafe_allowed(ast->get_location(), "indexing a pointer");
     auto &ptr_data = std::get<PointerType>(arr_type.type_data);
     return ast->set_type(ptr_data.get_pointee());

@@ -298,7 +298,8 @@ Each a commit, the suite passing after each.
     becomes "owning" in the diagnostics that stay; docs. (Moving a part out
     of a value with a `Drop` instance is an error but in unsafe code, as
     E0509: such a value never leaks in part, so a leak report is left for
-    the check run alone, or a bug in elaboration.)
+    the check run alone, or a bug in elaboration. Indexing a `'ptr` is an
+    error: 20 tests' pointers were buffers, and are `'buf` now.)
 
 ## Decided
 

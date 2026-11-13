@@ -10,7 +10,7 @@
 let read(p: ptr<i64>) -> i64 { p[0] }
 
 let main() -> i32 {
-  let p = alloc<i64>(1);
+  let p = alloc_buf<i64>(1);
   p[0] = 3i64;
   drop(p);
   return 0;

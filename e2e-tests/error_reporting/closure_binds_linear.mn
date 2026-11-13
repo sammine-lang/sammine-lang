@@ -11,7 +11,7 @@
 // each call would hand p on again, and two calls would free it twice.
 
 let unsafe set_to(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
-  p[0] = v;
+  *p = v;
   p
 }
 

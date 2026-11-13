@@ -2,7 +2,7 @@
 // CHECK: Cannot index 'p' — it was already dropped previously
 
 let main() -> i32 {
-  let p : 'ptr<i32> = alloc<i32>(3);
+  let p : 'buf<i32> = alloc_buf<i32>(3);
   p[0] = 10;
   drop(p);
   p[1] = 20;

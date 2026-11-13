@@ -85,7 +85,7 @@
 - Limitations: generic functions and enums only (not structs directly). No const generics.
 
 ## Linear values
-- `'buf<T>` (`Type::Buffer`, a `PointerType` with `is_buffer()`) is a linear buffer from `alloc_buf<T>(n)`: a different type from `'ptr<T>`, lent to `ptr<T>` like it (`structurally_compatible`, `unify`), indexed in unsafe functions, never dereferenced; MIR doesn't follow its values
+- `'buf<T>` (`Type::Buffer`, a `PointerType` with `is_buffer()`) is a linear buffer from `alloc_buf<T>(n)`: a different type from `'ptr<T>`, lent to `ptr<T>` like it (`structurally_compatible`, `unify`), indexed in unsafe functions, never dereferenced (a `'ptr<T>` is dereferenced, never indexed: it holds one value); MIR doesn't follow its values
 - That every `'ptr<T>`, and every value holding one, is consumed exactly once is checked on MIR: see `codegen.md`, "The ownership check"
 - `Drop<T>` (prelude): what a value does when it ends; the instance takes the value and must use up what it owns. `instantiate_drops`, at the end of checking, copies a generic `Drop` instance for each struct or enum a generic instantiated (no source calls it: the drops MIR inserts do). `drop(x)` takes any type, a no-op for one that owns nothing
 - `OpenTypeCheck` (after BiTypeChecker, once the generic copies are in) reports each type argument nothing decided, at the variant it starts from (`None` with nothing to say what `T` is): MIR has no type for one. BiTypeChecker reports it itself only where it needs the type to choose (`report_open_type`: an operator's instance, a case's patterns)

@@ -7,9 +7,9 @@ struct Inner { a: [2]i32, t: (i32, i32), };
 struct Outer { n: i32, inner: Inner, };
 
 let unsafe main() -> i32 {
-  let p = alloc<Outer>(2);
+  let p = alloc_buf<Outer>(2);
   p[1] = Outer { n: 0, inner: Inner { a: [0, 0], t: (0, 0) } };
-  (*p).n = 1;
+  p[0].n = 1;
   p[1].n = 2;
   p[1].inner.a[1] = 3;
   p[1].inner.t.1 = 4;
@@ -18,7 +18,7 @@ let unsafe main() -> i32 {
   *q = [[0, 0], [0, 0]];
   (*q)[1][0] = 5;
 
-  std::printf("%d %d %d %d %d\n", (*p).n, p[1].n, p[1].inner.a[1],
+  std::printf("%d %d %d %d %d\n", p[0].n, p[1].n, p[1].inner.a[1],
               p[1].inner.t.1, (*q)[1][0]);
   drop(p);
   drop(q);

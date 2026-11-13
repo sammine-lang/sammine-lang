@@ -915,12 +915,13 @@ could outlive a `drop`.
 
 ### Pointer Indexing
 
-Heap-allocated buffers can be indexed like arrays, but only inside a function
-declared `let unsafe`:
+Buffers can be indexed like arrays, but only inside a function declared
+`let unsafe`. A `'ptr<T>` holds one value, reached as `*p`, and isn't indexed;
+a `'buf<T>` holds many, and a view of either can be:
 
 ```sammine
 let unsafe main() -> i32 {
-  let p: 'ptr<i32> = alloc<i32>(3);
+  let p: 'buf<i32> = alloc_buf<i32>(3);
   p[0] = 10;
   p[1] = 20;
   p[2] = 42;
@@ -935,7 +936,7 @@ The compiler checks neither which element `p[i]` names nor whether it is in
 bounds, so the linearity of owned elements reached through `p[i]` is not
 checked either. `let unsafe` marks the functions where that is up to the
 author: when a program crashes, look at its unsafe functions first. This holds
-for every pointer, owned or a view, including string literals (`"hi"[0]`).
+for every buffer and view, including string literals (`"hi"[0]`).
 Fixed arrays are bounds-checked and can be indexed anywhere.
 
 ### Buffers
@@ -966,13 +967,13 @@ An unsafe function is called like any other function. Callers need no marker,
 so `vec::push` is unsafe inside but used from safe code:
 
 ```sammine
-let unsafe put(p: 'ptr<i64>, i: i64, v: i64) -> 'ptr<i64> {
+let unsafe put(p: 'buf<i64>, i: i64, v: i64) -> 'buf<i64> {
   p[i] = v;
   p
 }
 
 let main() -> i32 {
-  let p = put(alloc<i64>(1), 0i64, 7i64);
+  let p = put(alloc_buf<i64>(1), 0i64, 7i64);
   drop(p);
   return 0;
 }

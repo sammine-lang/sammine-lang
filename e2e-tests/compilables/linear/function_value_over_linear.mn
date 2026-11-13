@@ -6,18 +6,18 @@
 
 import std;
 
-let unsafe set(p: 'ptr<i64>, v: i64) -> 'ptr<i64> {
+let unsafe set(p: 'buf<i64>, v: i64) -> 'buf<i64> {
   p[0] = v;
   p
 }
 
-let twice(step: ('ptr<i64>, i64) -> 'ptr<i64>, p: 'ptr<i64>) -> 'ptr<i64> {
+let twice(step: ('buf<i64>, i64) -> 'buf<i64>, p: 'buf<i64>) -> 'buf<i64> {
   let q = step(p, 40i64);
   step(q, 42i64)
 }
 
 let unsafe main() -> i32 {
-  let p = twice(set, alloc<i64>(1));
+  let p = twice(set, alloc_buf<i64>(1));
   std::printf("%ld\n", p[0]);
   drop(p);
   0

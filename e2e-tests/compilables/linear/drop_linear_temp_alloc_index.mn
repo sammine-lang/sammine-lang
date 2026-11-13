@@ -6,7 +6,7 @@
 // now drops where it goes out of use (knowledge_base/plans/drops.md).
 // The leak check (%asan) finds anything left allocated or freed twice.
 
-let a1() -> 'ptr<i32> { alloc<i32>(1) }
+let a1() -> 'buf<i32> { alloc_buf<i32>(1) }
 
 let unsafe main() -> i32 {
   let x = a1()[0];

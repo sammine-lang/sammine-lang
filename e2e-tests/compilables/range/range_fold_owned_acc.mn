@@ -5,13 +5,13 @@ import std;
 import range;
 
 // The accumulator owns a buffer, handed from one step to the next.
-let unsafe set_double(xs: 'ptr<i64>, i: i64) -> 'ptr<i64> {
+let unsafe set_double(xs: 'buf<i64>, i: i64) -> 'buf<i64> {
   xs[i] = 2i64 * i;
   xs
 }
 
 let unsafe main() -> i32 {
-  let xs = range::fold(0i64, 5i64, alloc<i64>(5i64), set_double);
+  let xs = range::fold(0i64, 5i64, alloc_buf<i64>(5i64), set_double);
   std::printf("%ld %ld %ld %ld %ld\n", xs[0], xs[1], xs[2], xs[3], xs[4]);
   drop(xs);
   0

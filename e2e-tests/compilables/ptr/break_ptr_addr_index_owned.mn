@@ -2,7 +2,7 @@
 // CHECK: Cannot take the address of memory owned by a linear pointer
 
 let unsafe main() -> i32 {
-  let p = alloc<i32>(1);
+  let p = alloc_buf<i32>(1);
   let q = &p[0];
   drop(p);
   return 0;

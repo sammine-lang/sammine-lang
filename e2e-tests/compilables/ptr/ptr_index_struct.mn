@@ -10,7 +10,7 @@ struct Point {
 };
 
 let unsafe main() -> i32 {
-  let p : 'ptr<Point> = alloc<Point>(2);
+  let p : 'buf<Point> = alloc_buf<Point>(2);
   p[0] = Point { x: 10, y: 11 };
   p[1] = Point { x: 20, y: 21 };
   std::printf("%d\n", p[0].x);

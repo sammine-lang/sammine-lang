@@ -1,7 +1,7 @@
 // RUN: %sammine_jit --file %full | %check %full
 // CHECK: 42
 
-// A generic parameter of type T takes ownership when T is linear: pass<'ptr<i64>>
+// A generic parameter of type T takes ownership when T is linear: pass<'buf<i64>>
 // is given p, and main frees what it hands back.
 
 import std;
@@ -9,9 +9,9 @@ import std;
 let pass<T>(x: T) -> T { x }
 
 let unsafe main() -> i32 {
-  let p = alloc<i64>(1);
+  let p = alloc_buf<i64>(1);
   p[0] = 42i64;
-  let q = pass<'ptr<i64>>(p);
+  let q = pass<'buf<i64>>(p);
   std::printf("%ld\n", q[0]);
   drop(q);
   0
