@@ -337,8 +337,10 @@ indexing, automatic drops.
 
 1. MIR goes in the existing `sammine` dialect.
 2. Each sammine type kind gets a full MLIR type, so MIR is parsable.
-3. Consuming an outer value inside a loop is reported as a use after move on
-   the next iteration, so consuming and then leaving the loop is accepted.
+3. A loop's body is checked as one turn, which may not run, as the AST's
+   checker did: consuming an outer value inside it is reported there, and the
+   value is still owned after the loop. (First decided as a use after move on
+   the next turn; changed to keep the diagnostics the tests expect.)
 4. MIR is printed with `--emit mlir` (its functions are marked
    `sammine.mir`). `sammine-opt`
    parses and prints MIR and runs passes on it, for small hand-written tests;
@@ -348,9 +350,9 @@ indexing, automatic drops.
    analysis that makes every constant unknown, so `DeadCodeAnalysis` keeps
    every branch successor (without one it keeps none past the entry).
 
-7. A value consumed in some branches only is reported at its binding, with
-   a note where it was consumed; a use after it is reported at the use. A
-   value consumed in a loop is reported where the next turn uses it.
+7. A value consumed in some branches only is reported at the branch that
+   splits the paths (the `if`, `case` or `&&`), as the AST's checker did, and
+   is consumed after them; a use after that is reported at the use.
 8. The ownership check took over in one step, once it covered every
    construct the suite exercises, rather than running beside
    `LinearTypeChecker` and comparing.

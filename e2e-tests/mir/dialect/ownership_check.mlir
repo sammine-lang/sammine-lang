@@ -116,13 +116,13 @@ func.func @branch_returns(%c: i1, %n: i32) -> i32 attributes {sammine.mir} {
 
 // -----
 
+// Reported where the paths split.
 func.func @one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   cf.cond_br %c, ^a, ^done
 ^a:
-  // expected-note @+1 {{'p' was freed here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
@@ -131,16 +131,18 @@ func.func @one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
 
 // -----
 
+// Moved on any path is moved after the paths meet.
 func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   cf.cond_br %c, ^a, ^done
 ^a:
   // expected-note @+1 {{'p' was freed here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
-  // expected-error @+1 {{Cannot use linear variable 'p' — it was freed in some branches}}
+  // expected-error @+1 {{Cannot use linear variable 'p' — it was already freed previously}}
   sammine.free %p : !sammine.ptr<i32, owned>
   return
 }
@@ -151,11 +153,10 @@ func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
 func.func @constant_condition(%n: i32) attributes {sammine.mir} {
   %false = arith.constant false
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   cf.cond_br %false, ^a, ^done
 ^a:
-  // expected-note @+1 {{'p' was freed here}}
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
@@ -187,15 +188,17 @@ func.func @joined(%c: i1, %n: i32) attributes {sammine.mir} {
 
 func.func private @consume(!sammine.ptr<i32, owned>)
 
-// The loop's next turn would use what this one moved.
+// A loop's body is one turn, which may not run: what it moves from outside
+// is reported, and after the loop that is still owned.
 func.func @moved_in_loop(%c: i1, %n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  // expected-error @+1 {{Linear variable 'p' must be consumed before scope exit (use free() to deallocate)}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.br ^head
 ^head:
   cf.cond_br %c, ^body, ^exit
 ^body:
-  // expected-error @+1 {{Cannot use linear variable 'p' — it was passed to function in an earlier turn of the loop}}
+  // expected-error @+1 {{Cannot consume linear variable 'p' inside a loop (defined outside the loop)}}
   sammine.call @consume(%p) : (!sammine.ptr<i32, owned>) -> ()
   cf.br ^head
 ^exit:

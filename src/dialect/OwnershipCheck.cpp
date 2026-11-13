@@ -8,6 +8,7 @@
 #include "mlir/Analysis/DataFlowFramework.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/IR/Dominance.h"
 #include "mlir/Interfaces/ControlFlowInterfaces.h"
 
 #include "llvm/ADT/DenseMap.h"
@@ -87,11 +88,11 @@ struct Owner {
   enum Kind : uint8_t {
     /// It owns its memory.
     Live,
-    /// It was moved on every path here; with no reason, it never held
-    /// anything (what alloc gives points at nothing yet).
+    /// It was moved, on some path here: where paths meet, a part moved on
+    /// any of them is gone, as a mismatch there is reported where the paths
+    /// split. With no reason, it never held anything (what alloc gives
+    /// points at nothing yet).
     Moved,
-    /// Moved on some paths here only.
-    MaybeMoved,
   };
   Kind kind = Live;
   /// Where it got what it holds: its binding, or the store that filled it.
@@ -118,22 +119,16 @@ bool before(mlir::LocationAttr a, mlir::LocationAttr b) {
          std::pair(rb.getStartLine(), rb.getStartColumn());
 }
 
-/// Where two paths meet: moved on one and not the other is moved on some.
-/// Moved on both, it keeps the move that comes first in the source, which a
-/// message points at.
+/// Where paths meet: a part moved on any of them is moved, by the move that
+/// comes first in the source, which a message points at.
 Owner join(const Owner &a, const Owner &b) {
-  if (a.kind == Owner::Live && b.kind == Owner::Live)
+  if (b.kind == Owner::Live)
     return a;
-  if (a.kind == Owner::Live || b.kind == Owner::Live) {
-    Owner moved = a.kind == Owner::Live ? b : a;
-    moved.kind = Owner::MaybeMoved;
-    return moved;
-  }
-  Owner first = before(b.movedAt, a.movedAt) ? b : a;
-  first.kind = a.kind == Owner::Moved && b.kind == Owner::Moved
-                   ? Owner::Moved
-                   : Owner::MaybeMoved;
-  return first;
+  if (a.kind == Owner::Live)
+    return b;
+  if (a.isEmpty() != b.isEmpty())
+    return a.isEmpty() ? b : a;
+  return before(b.movedAt, a.movedAt) ? b : a;
 }
 
 /// Each tracked part at a point. A part with no entry isn't defined on any
@@ -405,13 +400,6 @@ public:
   }
   bool failed() const { return failed_; }
 
-  /// Whether the blocks of `a` and `b` lie on one cycle, so control can go
-  /// from one to the other and back: a loop holding both.
-  bool onOneCycle(mlir::Operation *a, mlir::Operation *b) {
-    return reaches(a->getBlock(), b->getBlock()) &&
-           reaches(b->getBlock(), a->getBlock());
-  }
-
   /// Whether nothing about `path` was reported yet: one report per
   /// mistake. A value reported once, at a use or as still owned, isn't
   /// reported again, nor is any part of it, as what a freed pointer pointed
@@ -427,26 +415,6 @@ public:
 private:
   bool failed_ = false;
   std::set<Path> reported_;
-  llvm::DenseMap<mlir::Block *, llvm::DenseSet<mlir::Block *>> reach_;
-
-  /// Whether control can go from `from` to `to` through at least one edge.
-  bool reaches(mlir::Block *from, mlir::Block *to) {
-    auto it = reach_.find(from);
-    if (it == reach_.end()) {
-      llvm::DenseSet<mlir::Block *> seen;
-      llvm::SmallVector<mlir::Block *> work(from->getSuccessors().begin(),
-                                            from->getSuccessors().end());
-      while (!work.empty()) {
-        auto *block = work.pop_back_val();
-        if (!seen.insert(block).second)
-          continue;
-        work.append(block->getSuccessors().begin(),
-                    block->getSuccessors().end());
-      }
-      it = reach_.try_emplace(from, std::move(seen)).first;
-    }
-    return it->second.contains(to);
-  }
 };
 
 // --- The transfer function ------------------------------------------------
@@ -487,6 +455,12 @@ public:
   /// into the block's arguments, and a switch on an enum's tag leaves only
   /// the payloads of the variants the edge is for.
   void edge(mlir::BranchOpInterface branch, unsigned index);
+  /// Along a loop's back edge, whose state this is, into a header whose
+  /// state is `header`. A loop's body is checked as one turn, which may not
+  /// run: nothing goes back round, so after the loop what was outside it is
+  /// as it was. A value from outside the loop moved in the body is
+  /// reported, and what the body bound and still owns, where the turn ends.
+  void backEdge(const Owners &header);
 
 private:
   Owners &owners_;
@@ -553,22 +527,10 @@ private:
                       prefix + "no owned value is known to be stored there");
       return false;
     }
-    std::string when;
-    bool loop = false;
-    if (owner->kind == Owner::Moved) {
-      when = "it was already " + owner->reason.str() + " previously";
-    } else if (owner->movedBy && reports_->onOneCycle(owner->movedBy, op)) {
-      loop = true;
-      when =
-          "it was " + owner->reason.str() + " in an earlier turn of the loop";
-    } else {
-      when = "it was " + owner->reason.str() + " in some branches";
-    }
-    auto diag = reports_->error(op->getLoc(), prefix + when);
-    // Moved by this very op on an earlier turn: the error shows where.
-    if (!loop || owner->movedBy != op)
-      diag.attachNote(mlir::Location(owner->movedAt))
-          << name << " was " << owner->reason << " here";
+    reports_->error(op->getLoc(), prefix + "it was already " +
+                                      owner->reason.str() + " previously")
+            .attachNote(mlir::Location(owner->movedAt))
+        << name << " was " << owner->reason << " here";
     return false;
   }
 
@@ -631,10 +593,6 @@ private:
     auto *owner = lookup(path);
     if (!owner || owner->isEmpty())
       return;
-    if (owner->kind == Owner::MaybeMoved) {
-      out.push_back(path);
-      return;
-    }
     auto type = typeOf(path);
     auto parts = partsOf(type);
     bool hasParts =
@@ -658,12 +616,6 @@ private:
       reports_->error(definedAt(path.root),
                       "Temporary owning memory must not be discarded (bind "
                       "it with 'let' first)");
-    } else if (owner.kind == Owner::MaybeMoved) {
-      reports_->error(mlir::Location(owner.definedAt),
-                      "Linear variable '" + name +
-                          "' is consumed in some branches but not others")
-              .attachNote(mlir::Location(owner.movedAt))
-          << "'" << name << "' was " << owner.reason << " here";
     } else {
       reports_->error(mlir::Location(owner.definedAt),
                       "Linear variable '" + name +
@@ -886,6 +838,36 @@ void Transfer::apply(mlir::Operation *op) {
   }
 }
 
+void Transfer::backEdge(const Owners &header) {
+  if (!reports_)
+    return;
+  llvm::SmallVector<Path> consumed;
+  for (auto &[path, owner] : header) {
+    auto *turn = lookup(path);
+    if (owner.kind != Owner::Live || !turn || turn->kind == Owner::Live ||
+        turn->isEmpty() ||
+        llvm::any_of(consumed, [&](const Path &p) { return p.contains(path); }))
+      continue;
+    // Still owned after the loop, if it doesn't run: that is reported where
+    // the value is, so this doesn't count as the value's report.
+    consumed.push_back(path);
+    reports_->error(mlir::Location(turn->movedAt),
+                    "Cannot consume linear variable '" + nameOf(path) +
+                        "' inside a loop (defined outside the loop)");
+  }
+  for (auto &[path, owner] : Owners(owners_)) {
+    if (!path.steps.empty() || header.count(path))
+      continue;
+    llvm::SmallVector<Path> live;
+    liveOwners(path, live);
+    if (!live.empty() && !bindingName(path.root))
+      reportLeak(path);
+    else
+      for (auto &part : live)
+        reportLeak(part);
+  }
+}
+
 void Transfer::edge(mlir::BranchOpInterface branch, unsigned index) {
   auto *op = branch.getOperation();
   auto *block = branch->getSuccessor(index);
@@ -960,7 +942,9 @@ class OwnershipAnalysis
     : public df::DenseForwardDataFlowAnalysis<OwnershipState> {
 public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(OwnershipAnalysis)
-  using DenseForwardDataFlowAnalysis::DenseForwardDataFlowAnalysis;
+  OwnershipAnalysis(mlir::DataFlowSolver &solver,
+                    const mlir::DominanceInfo &dominance)
+      : DenseForwardDataFlowAnalysis(solver), dominance_(dominance) {}
 
   mlir::LogicalResult visitOperation(mlir::Operation *op,
                                      const OwnershipState &before,
@@ -975,6 +959,10 @@ public:
                           mlir::Block *predecessor,
                           const OwnershipState &before,
                           OwnershipState *after) override {
+    // A loop's body is one turn, which may not run: nothing goes back round
+    // to its header (Transfer::backEdge).
+    if (dominance_.dominates(block, predecessor))
+      return;
     auto owners = before.owners();
     if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(
             predecessor->getTerminator()))
@@ -996,42 +984,121 @@ public:
           fresh(owners, Path{arg, {}}, arg.getLoc());
     propagateIfChanged(lattice, lattice->join(owners));
   }
+
+private:
+  const mlir::DominanceInfo &dominance_;
 };
 
+/// Where forward edges meet at `block`: a part that was owned where the
+/// paths split, and is moved on some of them but not others, is reported at
+/// the branch that split them, the `if`, `case` or `&&`.
+void checkJoin(mlir::Block *block, llvm::ArrayRef<Owners> edges,
+               const Owners &split, mlir::Operation *branch, Reports &reports) {
+  if (edges.size() < 2)
+    return;
+  // A whole reported takes its parts with it. A later use of what the
+  // branches moved is another mistake, reported on its own.
+  llvm::SmallVector<Path> reported;
+  for (auto &[path, owner] : split) {
+    if (owner.kind != Owner::Live ||
+        llvm::any_of(reported, [&](const Path &p) { return p.contains(path); }))
+      continue;
+    bool live = false, moved = false;
+    for (auto &edge : edges) {
+      auto it = edge.find(path);
+      if (it == edge.end())
+        continue;
+      if (it->second.kind == Owner::Live)
+        live = true;
+      else if (!it->second.isEmpty())
+        moved = true;
+    }
+    auto name = nameOf(path);
+    if (!live || !moved || name.empty())
+      continue;
+    reported.push_back(path);
+    reports.error(branch->getLoc(), "Linear variable '" + name +
+                                        "' is consumed in some branches but "
+                                        "not others");
+  }
+}
+
 bool checkFunction(mlir::func::FuncOp func) {
+  mlir::DominanceInfo dominance(func);
   mlir::DataFlowSolver solver(mlir::DataFlowConfig().setInterprocedural(false));
   solver.load<df::DeadCodeAnalysis>();
   solver.load<UnknownConstants>();
-  solver.load<OwnershipAnalysis>();
+  solver.load<OwnershipAnalysis>(dominance);
   if (mlir::failed(solver.initializeAndRun(func))) {
     func.emitError("the ownership check could not analyze this function");
     return true;
   }
+  auto live = [&](mlir::Block *block) {
+    auto *executable =
+        solver.lookupState<df::Executable>(solver.getProgramPointBefore(block));
+    return executable && executable->isLive();
+  };
+  auto stateAt = [&](mlir::ProgramPoint *point) -> const Owners * {
+    auto *state = solver.lookupState<OwnershipState>(point);
+    return state ? &state->owners() : nullptr;
+  };
+
   Reports reports;
   func.walk([&](mlir::Operation *op) {
-    auto *executable = solver.lookupState<df::Executable>(
-        solver.getProgramPointBefore(op->getBlock()));
-    if (!executable || !executable->isLive())
+    if (!live(op->getBlock()))
       return;
-    auto *state =
-        solver.lookupState<OwnershipState>(solver.getProgramPointBefore(op));
-    if (!state)
+    auto *before = stateAt(solver.getProgramPointBefore(op));
+    if (!before)
       return;
-    auto owners = state->owners();
-    if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op)) {
-      // Each value a branch passes is checked once, on its first edge.
-      llvm::DenseSet<mlir::Value> checked;
-      for (unsigned i = 0; i < branch->getNumSuccessors(); ++i) {
-        auto edge = owners;
-        bool fresh = llvm::any_of(
-            branch.getSuccessorOperands(i).getForwardedOperands(),
-            [&](mlir::Value v) { return checked.insert(v).second; });
-        Transfer(edge, fresh ? &reports : nullptr).edge(branch, i);
-      }
+    auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op);
+    if (!branch) {
+      auto owners = *before;
+      Transfer(owners, &reports).apply(op);
       return;
     }
-    Transfer(owners, &reports).apply(op);
+    // Each value a branch passes is checked once, on its first edge.
+    llvm::DenseSet<mlir::Value> checked;
+    for (unsigned i = 0; i < branch->getNumSuccessors(); ++i) {
+      auto edge = *before;
+      bool fresh =
+          llvm::any_of(branch.getSuccessorOperands(i).getForwardedOperands(),
+                       [&](mlir::Value v) { return checked.insert(v).second; });
+      Transfer transfer(edge, fresh ? &reports : nullptr);
+      transfer.edge(branch, i);
+      auto *header = branch->getSuccessor(i);
+      if (dominance.dominates(header, op->getBlock()))
+        if (auto *headerState = stateAt(solver.getProgramPointBefore(header)))
+          Transfer(edge, &reports).backEdge(*headerState);
+    }
   });
+
+  // Where forward edges meet, what they disagree on.
+  for (auto &block : func.getBody()) {
+    if (!live(&block) || block.hasNoPredecessors())
+      continue;
+    llvm::SmallVector<Owners> edges;
+    for (auto *pred : llvm::make_early_inc_range(block.getPredecessors())) {
+      if (!live(pred) || dominance.dominates(&block, pred))
+        continue;
+      auto branch =
+          mlir::dyn_cast<mlir::BranchOpInterface>(pred->getTerminator());
+      auto *after = stateAt(solver.getProgramPointAfter(pred->getTerminator()));
+      if (!branch || !after)
+        continue;
+      for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
+        if (branch->getSuccessor(i) == &block) {
+          auto edge = *after;
+          Transfer(edge, nullptr).edge(branch, i);
+          edges.push_back(std::move(edge));
+        }
+    }
+    auto *idom = dominance.getNode(&block)->getIDom();
+    if (!idom || !idom->getBlock())
+      continue;
+    auto *split = idom->getBlock()->getTerminator();
+    if (auto *splitState = stateAt(solver.getProgramPointBefore(split)))
+      checkJoin(&block, edges, *splitState, split, reports);
+  }
   return reports.failed();
 }
 

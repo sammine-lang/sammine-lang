@@ -1,12 +1,16 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |linear_for_outer.mn:17:4
-// CHECK-NEXT:   15|  let p = alloc<i32>(1);
-// CHECK-NEXT:   16|  for i in 0..3 {
-// CHECK-NEXT:   17|    free(p);
+// CHECK:          |linear_for_outer.mn
+// CHECK-NEXT:   17|
+// CHECK-NEXT:   18|let main() -> i32 {
+// CHECK-NEXT:   19|  let p = alloc<i32>(1);
+// CHECK-NEXT:     |  ───────────────────┬
+// CHECK-NEXT:     |                     ╰─ Linear variable 'p' must be consumed before scope exit (use free() to deallocate)
+// CHECK-NEXT:   20|  for i in 0..3 {
+// CHECK-NEXT:   21|    free(p);
 // CHECK-NEXT:     |    ─────┬
-// CHECK-NEXT:     |         ╰─ Cannot use linear variable 'p' — it was freed in an earlier turn of the loop
-// CHECK-NEXT:   18|  };
-// CHECK-NEXT:   19|  return 0;
+// CHECK-NEXT:     |         ╰─ Cannot consume linear variable 'p' inside a loop (defined outside the loop)
+// CHECK-NEXT:   22|  };
+// CHECK-NEXT:   23|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
