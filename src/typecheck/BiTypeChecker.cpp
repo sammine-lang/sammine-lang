@@ -942,6 +942,20 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
                                 tc_key.type_args_string()));
     return;
   }
+  // An instance is its class's module's to write, or the module's of one
+  // of the types it is for: were any module free to, two could each write
+  // the one instance, and no program could use both.
+  if (!owns_instance(ast->defining_module, tc_key)) {
+    this->add_error(
+        ast->get_location(),
+        fmt::format("{}<{}> can't be written here: an instance belongs to "
+                    "the module of its class or of one of its types, so no "
+                    "two modules write the same one. Wrap the type in a "
+                    "struct of your own to give it an instance",
+                    tc_key.class_name(), tc_key.type_args_string()));
+    return;
+  }
+
   if (!ast->is_generic() && type_class_instances.contains(tc_key)) {
     this->add_error(ast->get_location(),
                     fmt::format("Duplicate instance of {}<{}>",
@@ -957,6 +971,28 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
     return;
   }
   add_instance(ast, tc_key);
+}
+
+// The module a type is defined in: a struct's or an enum's, reached through
+// any pointers to it, as an instance for an owning type is written for a
+// view of it. None for a type no module defines: a number, a string, a
+// tuple, an array, a function.
+static std::optional<std::string> module_of(const Type &type) {
+  if (auto *pointer = std::get_if<PointerType>(&type.type_data))
+    return module_of(pointer->get_pointee());
+  if (auto *st = std::get_if<StructType>(&type.type_data))
+    return st->get_name().get_module();
+  if (auto *en = std::get_if<EnumType>(&type.type_data))
+    return en->get_name().get_module();
+  return std::nullopt;
+}
+
+bool BiTypeCheckerVisitor::owns_instance(const std::string &module,
+                                         const MonomorphizedKey &key) {
+  return key.name.get_module() == module ||
+         llvm::any_of(key.type_args, [&](const Type &type) {
+           return module_of(type) == module;
+         });
 }
 
 Reference

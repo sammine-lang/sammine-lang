@@ -905,11 +905,28 @@ instance's types.
 
 Two instances may not overlap: if some types would match both, which one
 runs would be ambiguous, so it is an error. That holds for two generic
-instances (`instance<T> Indexer<Box<T>, T>` and `instance<U> Indexer<U, i32>`
+instances (`instance<T> Indexer<Box<T>, T>` and `instance<U> Indexer<Box<i32>, U>`
 both match `Indexer<Box<i32>, i32>`) and for a generic and a concrete one
 (`instance Indexer<Box<i32>, i32>` beside the first). The built-in instances
 for numbers, `char` and pointers are the exception: they are always used for
 those types.
+
+An instance is written in the module of its class, or of one of the types it
+is for. A program has one instance for a class and its types, so were any
+module free to write it, two libraries could each write the same one, and no
+program could use both. A type counts through pointers to it
+(`Format<ptr<Point>>` is `Point`'s module's to write), and a type no module
+defines, a number, a string, a tuple or an array, is no module's: only the
+class's module writes an instance for those alone.
+
+```sammine
+import vec;
+
+instance Format<ptr<vec::Vec<bool>>> { ... }   // error: Format is the prelude's, Vec is vec's
+
+struct Flags { bits: vec::Vec<bool>, };        // a type of this module's
+instance Format<ptr<Flags>> { ... }            // its instance to write
+```
 
 ### Multi-Parameter Typeclasses
 

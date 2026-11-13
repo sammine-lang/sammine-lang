@@ -1,12 +1,13 @@
-// RUN: %sammine --file %dir/Inputs/hashes_prelude_range.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
-// CHECK: 7 99
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// CHECK:      0
+// CHECK-NEXT: 1
+// CHECK-NEXT: 7
+// IR: @"definitions::Hash<::Range<i32>>::Hash"
 
-// Two types written alike are two types: this program's Range and the
-// prelude's each have a Hash instance, and each instance its own symbol,
-// which spells the type by its whole name.
-
-import hashes_prelude_range;
-import std;
+// Two types written alike are two types: this program's Range has a Hash
+// instance of its own, whose symbol spells the type by its whole name,
+// beside the prelude's Range, which `for` loops over.
 
 struct Range<T> { a: T, b: T, c: T, };
 
@@ -15,8 +16,10 @@ instance Hash<Range<i32>> {
 }
 
 let main() -> i32 {
+  for i in 0..2 {
+    print("{}\n", i);
+  };
   let r = Range<i32> { a: 1, b: 2, c: 3 };
-  print("{} {}\n", Hash<Range<i32>>(r),
-              hashes_prelude_range::hash_of_range(1));
+  print("{}\n", Hash<Range<i32>>(r));
   return 0;
 }

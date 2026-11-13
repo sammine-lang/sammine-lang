@@ -1,0 +1,54 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Hash<Range<i32>> can't be written here: an instance belongs to the module of its class or of one of its types, so no two modules write the same one. Wrap the type in a struct of your own to give it an instance
+// CHECK: Format<ptr<vec::Vec<bool>>> can't be written here
+// CHECK: Hash<(i32, i32)> can't be written here
+// CHECK-NOT: can't be written here
+
+// An instance is written in the module of its class, or of one of the
+// types it is for. Hash and Format are the prelude's, as Range is, and Vec
+// is vec's: were any module free to write these, two could, and a program
+// using both would have the one instance twice. A type no module defines,
+// as a tuple, is no module's either.
+
+import vec;
+
+instance Hash<Range<i32>> {
+  let Hash(r: Range<i32>) -> u64 { 1u64 }
+}
+
+instance Format<ptr<vec::Vec<bool>>> {
+  let Format(v: ptr<vec::Vec<bool>>, f: Formatter) -> unit { write(f, "bools") }
+}
+
+instance Hash<(i32, i32)> {
+  let Hash(t: (i32, i32)) -> u64 { 2u64 }
+}
+
+// A type of this module's has the instances it writes: itself, through a
+// view, or with another's type beside it.
+struct Pair { a: i32, b: i32, };
+
+instance Hash<Pair> {
+  let Hash(p: Pair) -> u64 { Hash<i32>(p.a) ^ Hash<i32>(p.b) }
+}
+
+instance Format<ptr<Pair>> {
+  let Format(p: ptr<Pair>, f: Formatter) -> unit { write(f, "pair") }
+}
+
+instance Convert<Pair, vec::Vec<i32>> {
+  let Convert(p: Pair) -> vec::Vec<i32> { vec::push(vec::push(vec::new<i32>(2i64), p.a), p.b) }
+}
+
+// A class of this module's has an instance for any type.
+typeclass Named<T> { Named(x: T) -> string; }
+
+instance Named<i32> {
+  let Named(x: i32) -> string { "i32" }
+}
+
+instance Named<vec::Vec<i32>> {
+  let Named(v: vec::Vec<i32>) -> string { drop(v); "a Vec" }
+}
+
+let main() -> i32 { 0 }
