@@ -19,12 +19,10 @@ config.name = "Sammine Lang end-to-end testsuite"
 if shutil.which("ptxas"):
     config.available_features.add("cuda")
 
-# %asan runs what follows it with ASan's runtime preloaded: its allocator
-# reports a leak at exit, and a free twice or of what malloc didn't give, in
-# code nothing instrumented. No build of the compiler has a sanitizer; a
-# test opts in on its own RUN line. On a compiled program, it checks the
-# drops. On sammine itself, add ASAN_OPTIONS=detect_leaks=0: the linker it
-# runs inherits the preload, and has leaks of its own.
+# %asan runs a program a test compiled with ASan's runtime preloaded: its
+# allocator reports a leak at exit, and a free twice or of what malloc
+# didn't give, in code nothing instrumented. The program is built as users
+# build it; a test opts in on its own RUN line.
 import subprocess
 asan_runtime = None
 if shutil.which("clang"):

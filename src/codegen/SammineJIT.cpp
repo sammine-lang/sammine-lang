@@ -110,9 +110,7 @@ int SammineJIT::execute_main(std::unique_ptr<llvm::Module> module,
   }
 
   // Let the executor call main, with argv as the program name followed by the
-  // --jit-args. Calling the JIT's code through a function pointer from this
-  // file instead makes UBSan's function check read the bytes before main,
-  // which aren't mapped when main starts a page.
+  // --jit-args.
   std::vector<std::string> args{"sammine"};
   args.insert(args.end(), jit_args.begin(), jit_args.end());
   auto result = ES->getExecutorProcessControl().runAsMain(
