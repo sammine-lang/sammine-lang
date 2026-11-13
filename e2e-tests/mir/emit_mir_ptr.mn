@@ -11,10 +11,10 @@
 // CHECK-SAME: sammine.mir
 // CHECK-LABEL: func.func @main
 // CHECK-SAME: sammine.mir
-// CHECK: %5 = sammine.local "x" : <i64>
-// CHECK-NEXT: sammine.store %c3_i64, %5 : <i64>
-// CHECK: sammine.addr %5 : <i64>
-// CHECK-NEXT: sammine.addr %5 : <i64>
+// CHECK: %[[X:[0-9]+]] = sammine.local "x" : <i64>
+// CHECK-NEXT: sammine.store %c3_i64, %[[X]] : <i64>
+// CHECK: sammine.addr %[[X]] : <i64>
+// CHECK-NEXT: sammine.addr %[[X]] : <i64>
 // CHECK-NEXT: sammine.call @pick(
 let pass(p: 'ptr<i32>) -> 'ptr<i32> { p }
 let pick(a: ptr<i64>, b: ptr<i64>) -> i32 { 7 }

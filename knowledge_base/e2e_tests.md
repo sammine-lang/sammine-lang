@@ -9,6 +9,10 @@ LLVM `lit` framework. Config: `e2e-tests/lit.cfg.py`. Run: `cmake --build build 
 | `%full` / `%dir` / `%base` | Full .mn path / directory / basename without .mn |
 | `%O` / `%I` / `%T` | `-O %T` / `-I %T` / per-test temp dir |
 
+## Checks
+- `SammineCheck` takes `CHECK`, `CHECK-NEXT`, `CHECK-SAME`, `CHECK-NOT`, `CHECK-LABEL`. A pattern matches its text, `{{regex}}` a regex, `[[NAME:regex]]` a regex whose match it keeps as NAME, and `[[NAME]]` that match again, as FileCheck's variables do
+- `tools/update-checks.sh FILE` rewrites a test's CHECK lines from its output; run it twice, since the new lines shift the source lines the first run recorded
+
 ## Test Patterns
 - **Success**: `# RUN: %sammine --file %full %O && %T/%base.exe | %check %full`
 - **Error**: `# RUN: ! %sammine --file %full %O 2>&1 | %check %full`

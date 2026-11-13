@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -19,6 +20,9 @@ struct Check {
 };
 
 class FileChecker {
+    // What each [[NAME:regex]] matched, for later [[NAME]]s.
+    std::map<std::string, std::string> variables_;
+
 public:
     FileChecker(const std::string &check_prefix = "CHECK")
         : check_prefix_(check_prefix), verbose_(false) {}
@@ -463,36 +467,66 @@ private:
         }
     }
 
-    bool match_pattern(const std::string &line, const std::string &pattern) {
-        // Simple substring match for now
-        // Pattern can contain {{regex}} for regex matching
+    // Escapes `text` to match itself in a regex.
+    static std::string escape_regex(const std::string &text) {
+        std::string escaped;
+        for (char c : text) {
+            if (c == '.' || c == '*' || c == '+' || c == '?' || c == '[' || c == ']' ||
+                c == '(' || c == ')' || c == '{' || c == '}' || c == '|' || c == '^' ||
+                c == '$' || c == '\\') {
+                escaped += '\\';
+            }
+            escaped += c;
+        }
+        return escaped;
+    }
 
+    // Whether `line` matches `pattern`: text matches itself, `{{regex}}` a
+    // regex, `[[NAME:regex]]` a regex whose match is kept as NAME, and
+    // `[[NAME]]` what NAME matched earlier, as FileCheck's variables do.
+    bool match_pattern(const std::string &line, const std::string &pattern) {
         std::string regex_pattern;
+        std::vector<std::string> defined; // NAME of each capture group, in order
         size_t i = 0;
         while (i < pattern.length()) {
-            if (i + 1 < pattern.length() && pattern[i] == '{' && pattern[i + 1] == '{') {
-                // Find closing }}
+            if (pattern.compare(i, 2, "{{") == 0) {
                 size_t end = pattern.find("}}", i + 2);
                 if (end != std::string::npos) {
-                    regex_pattern += pattern.substr(i + 2, end - i - 2);
+                    regex_pattern += "(?:" + pattern.substr(i + 2, end - i - 2) + ")";
                     i = end + 2;
                     continue;
                 }
             }
-            // Escape regex special chars for literal matching
-            char c = pattern[i];
-            if (c == '.' || c == '*' || c == '+' || c == '?' || c == '[' || c == ']' ||
-                c == '(' || c == ')' || c == '{' || c == '}' || c == '|' || c == '^' ||
-                c == '$' || c == '\\') {
-                regex_pattern += '\\';
+            if (pattern.compare(i, 2, "[[") == 0) {
+                size_t end = pattern.find("]]", i + 2);
+                if (end != std::string::npos) {
+                    auto inner = pattern.substr(i + 2, end - i - 2);
+                    auto colon = inner.find(':');
+                    if (colon != std::string::npos) {
+                        defined.push_back(inner.substr(0, colon));
+                        regex_pattern += "(" + inner.substr(colon + 1) + ")";
+                    } else {
+                        auto it = variables_.find(inner);
+                        if (it == variables_.end())
+                            return false; // used before any line defined it
+                        regex_pattern += escape_regex(it->second);
+                    }
+                    i = end + 2;
+                    continue;
+                }
             }
-            regex_pattern += c;
+            regex_pattern += escape_regex(std::string(1, pattern[i]));
             i++;
         }
 
         try {
             std::regex re(regex_pattern);
-            return std::regex_search(line, re);
+            std::smatch match;
+            if (!std::regex_search(line, match, re))
+                return false;
+            for (size_t g = 0; g < defined.size(); g++)
+                variables_[defined[g]] = match[g + 1].str();
+            return true;
         } catch (const std::regex_error &) {
             // Fall back to simple substring match
             return line.find(pattern) != std::string::npos;
@@ -530,7 +564,8 @@ void print_usage(const char *prog) {
     std::cerr << "  CHECK-NOT: <pattern>   Pattern must NOT appear before next match\n";
     std::cerr << "  CHECK-LABEL: <pattern> Like CHECK, but resets search position\n";
     std::cerr << "\n";
-    std::cerr << "Patterns can contain {{regex}} for regex matching.\n";
+    std::cerr << "Patterns can contain {{regex}} for regex matching, [[NAME:regex]] to\n"
+                 "keep what it matches and [[NAME]] to match it again.\n";
 }
 
 int main(int argc, char *argv[]) {
