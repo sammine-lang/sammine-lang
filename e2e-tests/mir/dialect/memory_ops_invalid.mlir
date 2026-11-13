@@ -39,7 +39,7 @@ func.func @lend_owned(%p: !sammine.ptr<i32, owned>) {
 // A view lasts as long as the call it is passed to: it can't outlive it.
 func.func @lend_returned(%p: !sammine.ptr<i32, owned>) -> !sammine.ptr<i32, view> {
   %place = sammine.deref %p : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{'sammine.lend' op is a view for the length of a call, so only sammine.call can use it, not func.return}}
+  // expected-error @+1 {{'sammine.lend' op is a view lent to a call or a closure, so only sammine.call or sammine.closure can use it, not func.return}}
   %v = sammine.lend %place : !sammine.place<i32>
   return %v : !sammine.ptr<i32, view>
 }

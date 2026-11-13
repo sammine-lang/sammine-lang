@@ -97,7 +97,7 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
     return mlir::failure();
   llvm::SmallVector<mlir::Value, 4> bound;
   for (auto [arg, param] : llvm::zip(call->arguments, type.getInputs())) {
-    auto value = lowerArgument(arg.get(), param, ViewLasts::Place);
+    auto value = lowerArgument(arg.get(), param);
     if (mlir::failed(value))
       return mlir::failure();
     bound.push_back(*value);
@@ -107,11 +107,10 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
 }
 
 // An argument for a parameter of type `param`. An owned pointer passed to a
-// ptr<T> is lent: the callee gets a view of what it points at, and the caller
-// keeps it. `view` says how long the view lasts: the call, or, for an
-// argument a partial application binds, as long as what it points at.
+// ptr<T> is lent: the callee, or the closure a partial application makes,
+// gets a view of what it points at, and the caller keeps it.
 mlir::FailureOr<mlir::Value>
-MIRLowering::lowerArgument(ExprAST *arg, mlir::Type param, ViewLasts view) {
+MIRLowering::lowerArgument(ExprAST *arg, mlir::Type param) {
   auto type = types_.mirType(arg->get_type());
   auto ptr = type ? mlir::dyn_cast<smn::PtrType>(*type) : smn::PtrType();
   if (!ptr || !ptr.isOwned() || param != viewOf(ptr.getPointee())) {
@@ -123,7 +122,7 @@ MIRLowering::lowerArgument(ExprAST *arg, mlir::Type param, ViewLasts view) {
   auto place = lowerPointee(arg, loc(arg));
   if (mlir::failed(place))
     return mlir::failure();
-  return lend(*place, loc(arg), view);
+  return lend(*place, loc(arg));
 }
 
 // An argument passed through a C function's `...`. Nothing declares its
@@ -135,17 +134,14 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
     auto place = lowerPointee(arg, loc(arg));
     if (mlir::failed(place))
       return mlir::failure();
-    return lend(*place, loc(arg), ViewLasts::Call);
+    return lend(*place, loc(arg));
   }
   return lowerValue(arg);
 }
 
-mlir::Value MIRLowering::lend(mlir::Value place, mlir::Location loc,
-                              ViewLasts view) {
+mlir::Value MIRLowering::lend(mlir::Value place, mlir::Location loc) {
   auto type =
       viewOf(mlir::cast<smn::PlaceType>(place.getType()).getValueType());
-  if (view == ViewLasts::Place)
-    return smn::AddrOp::create(builder_, loc, type, place).getResult();
   return smn::LendOp::create(builder_, loc, type, place).getResult();
 }
 

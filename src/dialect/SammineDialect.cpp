@@ -278,9 +278,9 @@ mlir::LogicalResult MoveOp::verify() {
 
 mlir::LogicalResult LendOp::verify() {
   for (auto *user : getResult().getUsers())
-    if (!mlir::isa<CallOp>(user))
-      return emitOpError("is a view for the length of a call, so only "
-                         "sammine.call can use it, not ")
+    if (!mlir::isa<CallOp, ClosureOp>(user))
+      return emitOpError("is a view lent to a call or a closure, so only "
+                         "sammine.call or sammine.closure can use it, not ")
              << user->getName();
   return mlir::success();
 }

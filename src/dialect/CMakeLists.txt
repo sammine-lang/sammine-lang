@@ -44,6 +44,7 @@ add_library(SammineDialectTransforms STATIC
   ${CMAKE_CURRENT_LIST_DIR}/OwnershipPaths.cpp
   ${CMAKE_CURRENT_LIST_DIR}/OwnershipAnalysis.cpp
   ${CMAKE_CURRENT_LIST_DIR}/OwnershipCheck.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/ViewCheck.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRToLLVM.cpp
   ${CMAKE_CURRENT_LIST_DIR}/LowerSammineOps.cpp
 )

@@ -1,18 +1,20 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: lateral_escape_deref_direct.mn:21:2
-// CHECK-NEXT:    19|let bad(p: ptr<ptr<i32>>) -> i32 {
-// CHECK-NEXT:    20|  let x : i32 = 42;
-// CHECK-NEXT:   21|  *p = &x;
-// CHECK-NEXT:     |  ──────┬
-// CHECK-NEXT:     |        ╰─ Cannot store non-linear ptr<i32> through pointer dereference — may dangle after scope exit
-// CHECK-NEXT:   22|  return 0;
-// CHECK-NEXT:   23|}
+// CHECK: lateral_escape_deref_direct.mn:23:2
+// CHECK-NEXT:    21|let bad(p: ptr<ptr<i32>>) -> i32 {
+// CHECK-NEXT:    22|  let x : i32 = 42;
+// CHECK-NEXT:   23|  *p = &x;
+// CHECK-NEXT:     |  ─┬
+// CHECK-NEXT:     |   ╰─ Cannot write through non-owning pointer — only an owned pointer can be written
+// CHECK-NEXT:   24|  return 0;
+// CHECK-NEXT:   25|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
 
 // Test: storing a non-linear pointer directly through *p = &local
-// must be rejected — p may point to a longer-lived location.
+// must be rejected — p may point to a longer-lived location. p is a view,
+// and nothing is written through a view; a 'ptr can't hold a view, so
+// this is the only way to write one through a pointer.
 
 import std;
 

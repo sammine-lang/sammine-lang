@@ -9,6 +9,7 @@
 #include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
 #include "dialect/OwnershipCheck.h"
+#include "dialect/ViewCheck.h"
 #include "dialect/SammineDialect.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
@@ -448,6 +449,7 @@ void Compiler::mir() {
         add(note.getLocation(), note.str());
       return mlir::success();
     });
+    (void)checkViews(*modules_.cpuModule);
     (void)checkOwnership(*modules_.cpuModule);
   }
   reporter.report(ownership);

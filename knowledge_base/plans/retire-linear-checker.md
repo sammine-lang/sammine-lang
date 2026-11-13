@@ -1,6 +1,6 @@
 # Plan: retire the AST linear checker
 
-Status: in progress. Steps 1 and 2 done.
+Status: in progress. Steps 1 to 3 done.
 
 `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`, 791 lines) is
 what's left of the AST ownership checking: rules that don't depend on
@@ -88,7 +88,13 @@ Each a commit, the suite passing after each.
    (Done: `OpenTypeCheck`, run in the type-check stage.)
 2. View placement: in the type checker. (Done: `ViewPlacementCheck`.)
 3. `ViewCheck`: writes through a view, `&` of owned memory and of owning
-   values; the lateral-escape test reports the write.
+   values; the lateral-escape test reports the write. (Done. A partial
+   application's view of owned memory is a `sammine.lend` to the closure,
+   so `sammine.addr` is only ever a `&`. `&` of an owning value means of an
+   owned pointer, as the AST rule had it: `&s` of a struct holding one is
+   how `str::compare` is called. Two tests passed only because the error
+   snippet echoed their CHECK line: they index a pointer outside an unsafe
+   function; now they are unsafe and test the rule.)
 4. Closures in `ViewCheck`: binding an owning value, a view-capturing
    closure escaping.
 5. The temporary and wildcard tests take MIR's messages.

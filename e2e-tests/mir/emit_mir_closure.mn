@@ -1,8 +1,8 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
 // A function value is !sammine.fn. A function named as a value is
 // sammine.closure binding nothing; a partial application binds the
-// arguments it gives, a view of an owned pointer for as long as it points
-// (sammine.addr), as the closure keeps it. A call through a value is
+// arguments it gives, an owned pointer lent to the closure as to a call
+// (sammine.lend). A call through a value is
 // sammine.call_indirect.
 // CHECK-LABEL: func.func private @apply(
 // CHECK-SAME: !sammine.fn<(i32) -> i32>
@@ -16,7 +16,7 @@
 // CHECK-NEXT: sammine.closure @add(%arg0) : (i32) -> !sammine.fn<(i32) -> i32>
 // CHECK-LABEL: func.func private @peek_into(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.addr
+// CHECK: sammine.lend
 // CHECK-NEXT: sammine.closure @peek_plus(
 let inc(a: i32) -> i32 { a + 1 }
 let add(a: i32, b: i32) -> i32 { a + b }

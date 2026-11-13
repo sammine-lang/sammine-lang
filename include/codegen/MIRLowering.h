@@ -125,16 +125,12 @@ private:
   mlir::FailureOr<mlir::Value> lowerNegation(AST::UnaryNegExprAST *neg);
   mlir::FailureOr<mlir::Value> lowerLen(AST::LenExprAST *len);
   mlir::FailureOr<mlir::Value> lowerCall(AST::CallExprAST *call);
-  /// How long a view of what an owned pointer points at lasts: a call
-  /// (sammine.lend), or as long as what it points at (sammine.addr), as a
-  /// view a partial application binds does.
-  enum class ViewLasts { Call, Place };
   mlir::FailureOr<mlir::Value> lowerArgument(AST::ExprAST *arg,
-                                             mlir::Type param,
-                                             ViewLasts view = ViewLasts::Call);
+                                             mlir::Type param);
   mlir::FailureOr<mlir::Value> lowerVariadicArgument(AST::ExprAST *arg);
-  /// A view of `place`, what an owned pointer points at.
-  mlir::Value lend(mlir::Value place, mlir::Location loc, ViewLasts view);
+  /// A view of `place`, what an owned pointer points at, lent to a call or
+  /// a closure.
+  mlir::Value lend(mlir::Value place, mlir::Location loc);
   /// The place what `pointer` names points at: through a pointer value, or
   /// through one held in a place, which stays there.
   mlir::FailureOr<mlir::Value> lowerPointee(AST::ExprAST *pointer,

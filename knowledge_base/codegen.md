@@ -12,7 +12,7 @@
 ### Values and places
 - Bindings are the values they name (`names_`), except one whose address the code takes: `AddressedBindings`, a visitor over the body, finds the variable at the root of `&x`, `&x.f`, `&a[i]` or of `x[i]` through an Indexer; `bind` gives it a slot, `sammine.local`, holding its value. Bindings are immutable and nothing writes through a view, so the slot keeps it
 - Places (`!sammine.place<T>`): a slotted binding, `*p` (`sammine.deref` of a pointer value, `sammine.through` of a pointer held in a place, which stays there: `**pp`), `p[i]` in an unsafe function (`sammine.ptr_elem`, elements past `*p`), and fields (`sammine.field`) or checked elements (`sammine.elem`) of a place; `hasPlace`/`lowerPlace` name them. A place is read with `sammine.copy` (owns nothing) or `sammine.move` (owns memory, `smn::ownsMemory`), written with `sammine.store`. A field or element of a place is read from it, so only it is copied or moved
-- `&x` is `sammine.addr`, a view of a place for as long as it lives (`let p = &x`). An owned pointer passed to a `ptr<T>` is lent for the call: `sammine.lend` of its pointee, which only `sammine.call` may use; one a partial application binds lasts as the closure does, so it is `sammine.addr` (`lowerArgument`'s `ViewLasts`)
+- `&x` is `sammine.addr`, a view of a place for as long as it lives (`let p = &x`). An owned pointer passed to a `ptr<T>` is lent for the call: `sammine.lend` of its pointee, which only `sammine.call` may use, or `sammine.closure`, for one a partial application binds. `sammine.addr` is only ever a `&` the program wrote
 
 ### Types (MIR → LLVM)
 | sammine | MIR | LLVM |
@@ -49,6 +49,12 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 
 ### Memory
 - `sammine.alloc`/`sammine.free` lower to `malloc` (size from the data layout, count widened to i64) and `free`; a place is its pointer, a view lent or taken of it the same pointer; `sammine.local`, and what calls to C or kernels pass through memory, are stack slots at the top of the function (`entrySlot`)
+
+### The view check (`src/dialect/ViewCheck.cpp`)
+- Runs in the `mir` stage before the ownership check, reporting the same way; `sammine-check-views` in `sammine-opt`. Op by op: a `store` or an `addr` is judged by the nearest pointer its place is reached through (`deref`, or `through` of a pointer held in a slot, past `field`, `elem` and `ptr_elem`)
+- Nothing is written through a view: a `store` reached through a `ptr<T, view>` is reported at the `deref`. `*p = &x`, a view stored through a pointer, is this too: a `'ptr` can't hold a view (`ViewPlacementCheck`)
+- `&` (`addr`) of a place holding an owned pointer would alias its one owner; of a place reached through an owned pointer it could outlive the owner's drop. A `lend` is not a `&`
+- MIR names a view only if it is in a slot (`sammine.let` names values that own memory), so a message names the pointer only then; the error underlines it
 
 ### The ownership check (`src/dialect/Ownership*.cpp`)
 - Three files: `OwnershipPaths` (paths into values and places, their names), `OwnershipAnalysis` (the lattice, the transfer function `applyOp`/`applyEdge`, the solver run `OwnershipFlow`; what it finds wrong goes to an `OwnershipObserver`), `OwnershipCheck` (the observer that reports, in the source's words, and the pass). The analysis knows no message: a client such as the drops pass uses it without reporting

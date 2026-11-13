@@ -162,16 +162,13 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     own_all(llvm::cast<TupleLiteralExprAST>(expr)->elements);
     break;
   case NK::DerefExprAST:
-    check_through_pointer(llvm::cast<DerefExprAST>(expr)->operand.get(), use,
-                          loc);
+    read(llvm::cast<DerefExprAST>(expr)->operand.get());
     break;
   case NK::IndexExprAST: {
     auto *index = llvm::cast<IndexExprAST>(expr);
     auto *base = index->array_expr.get();
     auto base_kind = base->get_type().type_kind;
-    if (base_kind == TypeKind::Pointer)
-      check_through_pointer(base, use, loc);
-    else if (base_kind == TypeKind::Array)
+    if (base_kind == TypeKind::Array)
       check_expr(base, toward_place);
     else
       // Through an Indexer instance, which is lent the collection.
@@ -180,7 +177,8 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     break;
   }
   case NK::AddrOfExprAST:
-    check_addr_of(llvm::cast<AddrOfExprAST>(expr));
+    check_expr(llvm::cast<AddrOfExprAST>(expr)->operand.get(),
+               Use::TakeAddress);
     break;
   case NK::RangeExprAST: {
     auto *range = llvm::cast<RangeExprAST>(expr);
@@ -229,24 +227,6 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::KernelReduceExprAST:
     break;
   }
-}
-
-void LinearTypeChecker::check_through_pointer(ExprAST *pointer, Use use,
-                                              sammine_util::Location loc) {
-  bool is_owned = pointer->get_type().linearity == Linearity::Linear;
-  if (use == Use::Write && !is_owned) {
-    this->add_error(loc, fmt::format("Cannot write through non-owning pointer "
-                                     "'{}' — only an owned pointer can be "
-                                     "written",
-                                     pointer->get_type().to_string()));
-    return;
-  }
-  if (use == Use::TakeAddress && is_owned) {
-    this->add_error(loc, "Cannot take the address of memory owned by a linear "
-                         "pointer — it could dangle after drop");
-    return;
-  }
-  check_expr(pointer);
 }
 
 // ── Bindings ────────────────────────────────────────────────────────
@@ -380,35 +360,9 @@ static std::optional<std::string> find_nonlinear_pointer_path(const Type &t) {
   }
 }
 
-// ── Lateral escape detection ────────────────────────────────────────
-
-// Returns true if the expression involves a pointer dereference in its
-// access chain.  Used to detect assignments like (*p).field = &local
-// where a non-linear pointer could escape through indirection.
-static bool involves_deref(ExprAST *expr) {
-  if (llvm::isa<DerefExprAST>(expr))
-    return true;
-  if (auto *fa = llvm::dyn_cast<FieldAccessExprAST>(expr))
-    return involves_deref(fa->object_expr.get());
-  if (auto *idx = llvm::dyn_cast<IndexExprAST>(expr))
-    return involves_deref(idx->array_expr.get());
-  return false;
-}
-
 // ── Stores ──────────────────────────────────────────────────────────
 
 void LinearTypeChecker::check_store(BinaryExprAST *ast) {
-  // Lateral escape: storing a non-linear pointer through a pointer
-  // dereference allows it to outlive the current scope.
-  if (involves_deref(ast->LHS.get())) {
-    if (auto path = find_nonlinear_pointer_path(ast->RHS->get_type())) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Cannot store {} through pointer "
-                                  "dereference — may dangle after scope exit",
-                                  *path));
-      return;
-    }
-  }
   check_expr(ast->LHS.get(), Use::Write);
   check_expr(ast->RHS.get(), Use::Own);
 }
@@ -459,18 +413,6 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
     }
     check_expr(arg, takes_ownership ? Use::Own : Use::Read);
   }
-}
-
-void LinearTypeChecker::check_addr_of(AddrOfExprAST *ast) {
-  // Taking the address of a linear value would give a pointer that aliases
-  // its single owner.
-  if (ast->operand->get_type().linearity == Linearity::Linear) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Cannot take address of a linear value — "
-                                "linear values cannot be aliased"));
-    return;
-  }
-  check_expr(ast->operand.get(), Use::TakeAddress);
 }
 
 // ── Closure capture tracking ─────────────────────────────────────────

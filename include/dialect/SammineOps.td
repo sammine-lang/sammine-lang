@@ -133,7 +133,7 @@ def ElemOp : Sammine_Op<"elem", [Pure]> {
 def AddrOp : Sammine_Op<"addr", [Pure,
     TypesMatchWith<"the result is a view of what the place holds",
                    "place", "result", ViewOfPlace>]> {
-  let summary = "a view of a place, `&x`, for as long as the place lives";
+  let summary = "a view of a place the program takes, `&x`, for as long as the place lives";
   let description = [{
     Unlike sammine.lend, the view may outlive a call: `let p = &x` keeps it.
     Nothing writes through a view, so the place keeps its value.
@@ -190,12 +190,13 @@ def AddressOp : Sammine_Op<"address", [Pure]> {
 def LendOp : Sammine_Op<"lend", [Pure,
     TypesMatchWith<"the result is a view of what the place holds",
                    "place", "result", ViewOfPlace>]> {
-  let summary = "a view of a place, for the length of a call";
+  let summary = "a view of a place, lent to a call or a closure";
   let description = [{
     What passing an owned `'ptr<T>` to a `ptr<T>` parameter does to `*p`:
     the callee looks at the place through the view, and the place keeps its
-    value and its owner. The view lasts as long as the call, so it is only
-    passed to `sammine.call`.
+    value and its owner. It is only passed to `sammine.call`, or bound by
+    `sammine.closure`, a partial application. `sammine.addr` is a view the
+    program takes with `&`.
   }];
   let arguments = (ins Sammine_PlaceType:$place);
   let results = (outs Sammine_PtrType:$result);
