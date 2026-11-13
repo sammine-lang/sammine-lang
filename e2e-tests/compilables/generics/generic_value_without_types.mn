@@ -1,0 +1,18 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: 'id' is generic, so it is used as a value with its types given, as 'id<T>'
+// CHECK: 'pair' is generic, so it is used as a value with its types given, as 'pair<A, B>'
+// CHECK: Expected 1 type argument(s) for 'id', got 2
+
+// A value has no arguments to infer a generic function's types from: they
+// are given, as id<i32>.
+
+let id<T>(x: T) -> T { x }
+let pair<A, B>(a: A, b: B) -> A { a }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+
+let main() -> i32 {
+  apply(id, 5);
+  let g: (i64) -> i64 = pair;
+  let h = id<i32, f64>;
+  0
+}

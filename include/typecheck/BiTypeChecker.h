@@ -306,6 +306,10 @@ public:
   std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_normal_call(CallExprAST *ast);
+  /// `id<i32>`: the generic function `generic` named with its types, as a
+  /// value, the function of its copy for them.
+  Type synthesize_generic_function_value(VariableExprAST *ast,
+                                         FuncDefAST *generic);
   /// A call to a C binding: each function it is given must be named, as C
   /// calls it through a pointer to its code. Returns false if one isn't
   /// (reported here).

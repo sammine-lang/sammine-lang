@@ -145,11 +145,14 @@ mlir::Value MIRLowering::lend(mlir::Value place, mlir::Location loc) {
   return smn::LendOp::create(builder_, loc, type, place).getResult();
 }
 
-// A function named as a value, `apply(f, x)`: f binding nothing.
+// A function named as a value, `apply(f, x)`: f binding nothing. A
+// generic one, `id<i32>`, is its copy for the types given.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerFunctionValue(VariableExprAST *var) {
   auto type = types_.mirType(var->get_type());
-  auto name = props_.symbol(var->variableName);
+  auto *vp = props_.variable(var->id());
+  auto name = props_.symbol(vp && vp->resolved_function ? *vp->resolved_function
+                                                        : var->variableName);
   if (!type || !mlir::isa<smn::FnType>(*type) ||
       !module_.lookupSymbol<mlir::FunctionOpInterface>(name))
     return mlir::failure();

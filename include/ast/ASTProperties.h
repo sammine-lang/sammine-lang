@@ -26,6 +26,9 @@ struct CallProps {
 struct VariableProps {
   bool is_enum_unit_variant = false;
   size_t enum_variant_index = 0;
+  /// For a generic function named with its types, `id<i32>`: the copy for
+  /// them, the function the value is.
+  std::optional<sammine_util::QualifiedName> resolved_function;
 };
 
 struct BinaryProps {

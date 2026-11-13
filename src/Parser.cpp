@@ -1174,7 +1174,8 @@ auto Parser::ParseIdentifierExpr() -> p<ExprAST> {
   if (result == NONCOMMITTED) {
     // A qualified name without parentheses names a value, e.g. a function
     // `std::printf` or a variant `Color::Red` or `Option<i32>::None`.
-    if (qn.is_qualified()) {
+    // So does a name given type arguments, the generic function `id<i32>`.
+    if (qn.is_qualified() || !explicit_type_args.empty()) {
       auto var = std::make_unique<VariableExprAST>(qn, qn_loc);
       var->explicit_type_args = std::move(explicit_type_args);
       return {std::move(var), SUCCESS};
@@ -1910,6 +1911,22 @@ auto Parser::parseQualifiedNameTail(std::shared_ptr<Token> first_tok)
 // turns out to be a comparison rather than generic type args. Disambiguated by
 // what follows the closing `>`: `(` = call, `{` = struct literal, `::` =
 // qualified member.
+// Whether `type` ends the expression before it: what follows `f<i32>`
+// used as a value.
+static bool ends_value(TokenType type) {
+  switch (type) {
+  case TokComma:
+  case TokRightParen:
+  case TokRightBracket:
+  case TokRightCurly:
+  case TokSemiColon:
+  case TokPipe:
+    return true;
+  default:
+    return false;
+  }
+}
+
 auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
                                        sammine_util::Location &qn_loc)
     -> std::vector<std::unique_ptr<TypeExprAST>> {
@@ -1955,6 +1972,11 @@ auto Parser::parseExplicitTypeArgsTail(sammine_util::QualifiedName &qn,
     return std::move(parsed_types);
   } else if (speculative_ok && tokStream->peek()->tok_type == TokLeftParen) {
     // Name<Types>(args) — generic function call
+    tokStream->commit_rollback();
+    return std::move(parsed_types);
+  } else if (speculative_ok && ends_value(tokStream->peek()->tok_type)) {
+    // Name<Types> as a value, `apply(id<i32>, 5)`: a comparison's `>` is
+    // never followed by what ends an expression.
     tokStream->commit_rollback();
     return std::move(parsed_types);
   } else {

@@ -636,6 +636,26 @@ let a = identity<i32>(42);
 let b = identity<f64>(3.14);
 ```
 
+### Generic Functions as Values
+
+A generic function named with its types, without calling it, is a function
+value: the copy for those types. It can be bound, passed, piped into, or
+given to C, which takes it as a pointer to that copy's code:
+
+```sammine
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+let apply_to<T>(f: (T) -> T, x: T) -> T { f(x) }
+
+let f = identity<i32>;              // (i32) -> i32
+apply(identity<i32>, 5);            // 5
+let same<T>(x: T) -> T { apply_to(identity<T>, x) }  // the caller's T
+```
+
+A value has no arguments to infer the types from, so they are always given:
+`apply(identity, 5)` is an error. A `>` followed by `,`, `)`, `]`, `}`, `;`
+or `|>` closes type arguments; followed by anything else, it is a
+comparison, as in `f(a < b, c > d)`.
+
 ### Generic Functions Calling Generic Functions
 
 ```sammine

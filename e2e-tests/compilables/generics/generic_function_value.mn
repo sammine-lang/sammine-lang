@@ -1,0 +1,31 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      let 5
+// CHECK-NEXT: apply 6
+// CHECK-NEXT: pipe 7
+// CHECK-NEXT: inside a generic 8 2.5
+// CHECK-NEXT: compare 1 0
+
+// A generic function named with its types is a value: the function of its
+// copy for them.
+
+import std;
+
+let id<T>(x: T) -> T { x }
+let inc_i32(x: i32) -> i32 { x + 1 }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+let apply_to<T>(f: (T) -> T, x: T) -> T { f(x) }
+// T is the caller's: each copy of twice names id's copy for its own T.
+let twice<T>(x: T) -> T { apply_to(id<T>, apply_to(id<T>, x)) }
+let compare(a: bool, b: bool) -> unit { std::printf("compare %d %d\n", a, b); }
+
+let main() -> i32 {
+  let f = id<i32>;
+  std::printf("let %d\n", f(5));
+  std::printf("apply %d\n", apply(id<i32>, inc_i32(5)));
+  std::printf("pipe %d\n", 7 |> id<i32>);
+  std::printf("inside a generic %d %.1f\n", twice(8), twice(2.5));
+  // A `>` followed by a value is a comparison, as before.
+  let (a, b, c, d) = (1, 2, 3, 4);
+  compare(a < b, c > d);
+  0
+}

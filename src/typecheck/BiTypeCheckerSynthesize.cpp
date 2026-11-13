@@ -795,6 +795,47 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
   return applied_call(ast, callee, params, func.get_return_type(), ty);
 }
 
+Type BiTypeCheckerVisitor::synthesize_generic_function_value(
+    VariableExprAST *ast, FuncDefAST *generic) {
+  auto name = ast->variableName.mangled();
+  auto &type_params = generic->Prototype->type_params;
+  // Nothing says what its types are: a value has no arguments to infer them
+  // from, and one copy of the function is made per set of types.
+  if (ast->explicit_type_args.empty()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("'{}' is generic, so it is used as a value "
+                                "with its types given, as '{}<{}>'",
+                                name, name, fmt::join(type_params, ", ")));
+    return ast->set_type(Type::Poisoned());
+  }
+  if (ast->explicit_type_args.size() != type_params.size()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Expected {} type argument(s) for '{}', got {}",
+                                type_params.size(), name,
+                                ast->explicit_type_args.size()));
+    return ast->set_type(Type::Poisoned());
+  }
+  auto resolved =
+      resolve_explicit_type_args(ast->explicit_type_args, type_params);
+  if (!resolved)
+    return ast->set_type(Type::Poisoned());
+  auto &bindings = resolved->first;
+
+  auto func = std::get<FunctionType>(generic->get_type().type_data);
+  auto [params, result] = resolve_generic_signature(
+      generic->Prototype.get(), func.get_params_types(), func.get_return_type(),
+      bindings);
+  // The copy is made as a call to it makes it (instantiate_generic_callee).
+  auto key = MonomorphizedKey::from_bindings(name, type_params, bindings);
+  props_.variable(ast->id()).resolved_function =
+      key.to_generic_name(ast->variableName);
+  if (auto *copy = monomorphizer.try_instantiate_func(generic, key, bindings)) {
+    TopLevelScopeGuard scope(*this);
+    copy->accept_vis(this);
+  }
+  return ast->set_type(signature_of(params, result));
+}
+
 bool BiTypeCheckerVisitor::check_c_call(CallExprAST *ast,
                                         std::span<const Type> params) {
   auto name = ast->functionName.mangled();
@@ -819,7 +860,7 @@ bool BiTypeCheckerVisitor::check_c_call(CallExprAST *ast,
     // the environment.
     auto *var = llvm::dyn_cast<VariableExprAST>(arg.get());
     if (var && !names_variable(var->variableName.mangled()) &&
-        lookup_type(var->variableName.mangled()))
+        var->get_type().type_kind == TypeKind::Function)
       continue;
     this->add_error(arg->get_location(),
                     fmt::format("'{}' gives this function to C, which calls "
@@ -1083,6 +1124,10 @@ Type BiTypeCheckerVisitor::synthesize(CharExprAST *ast) {
   return ast->set_type(Type::Char());
 }
 Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
+  if (auto *generic =
+          monomorphizer.generic_funcs.find(ast->variableName.mangled());
+      generic && !names_variable(ast->variableName.mangled()))
+    return synthesize_generic_function_value(ast, generic);
   if (auto ty = lookup_type(ast->variableName.mangled())) {
     // A function value only carries the declared parameters, so the extra
     // arguments of a variadic C function would be lost.
