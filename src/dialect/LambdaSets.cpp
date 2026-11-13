@@ -12,6 +12,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringSet.h"
 
 #include <functional>
 #include <map>
@@ -88,7 +89,11 @@ struct Span {
 
 class LambdaSets {
 public:
-  explicit LambdaSets(mlir::ModuleOp module) : module_(module) {
+  /// `opaque` names functions whose calls and closures are followed no
+  /// further than what they are given: what they do with it isn't known.
+  explicit LambdaSets(mlir::ModuleOp module,
+                      const llvm::StringSet<> *opaque = nullptr)
+      : module_(module), opaque_(opaque) {
     for (auto func : module.getOps<mlir::func::FuncOp>())
       if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
         funcs_.push_back(func);
@@ -114,16 +119,28 @@ public:
     return rebuild(value.getType(), spanOf(value).first);
   }
 
-  /// The closures of `var`'s set, each to its variant.
-  llvm::ArrayRef<smn::ClosureOp> closures(int var) {
-    return closures_[find(var)];
-  }
+  /// The closures of `var`'s set, one per description, each to its
+  /// variant: two closures calling one function with alike bound values
+  /// are one variant.
+  llvm::ArrayRef<smn::ClosureOp> closures(int var);
   unsigned variantOf(smn::ClosureOp closure) {
-    auto &all = closures_[find(varOf(closure.getResult()))];
-    return static_cast<unsigned>(llvm::find(all, closure) - all.begin());
+    auto all = closures(varOf(closure.getResult()));
+    auto mine = describe(closure);
+    return static_cast<unsigned>(
+        llvm::find_if(all,
+                      [&](smn::ClosureOp c) { return describe(c) == mine; }) -
+        all.begin());
   }
-  /// What a value of `var`'s set is.
+  /// What a value of `var`'s set is. Sets of one description are one type.
   mlir::Type representation(int var);
+
+  /// What the function values of `type`, `value`'s or a part of it whose
+  /// variables start at `first`, may be: by the functions their closures
+  /// call and what those bind. Values of alike descriptions are made alike.
+  std::string describe(mlir::Type type, int first);
+  std::string describe(smn::ClosureOp closure);
+  /// What `func`'s signature takes and gives, described.
+  std::string describe(mlir::func::FuncOp func);
 
   llvm::ArrayRef<mlir::func::FuncOp> funcs() const { return funcs_; }
   Span resultSpan(mlir::func::FuncOp func, unsigned i) {
@@ -132,6 +149,10 @@ public:
 
 private:
   mlir::ModuleOp module_;
+  const llvm::StringSet<> *opaque_;
+  bool opaque(llvm::StringRef name) const {
+    return opaque_ && opaque_->contains(name);
+  }
   llvm::SmallVector<mlir::func::FuncOp> funcs_;
 
   /// A variable as an index into the per-variable vectors.
@@ -148,6 +169,14 @@ private:
   /// Per set, by its root: its closures.
   std::map<int, llvm::SmallVector<smn::ClosureOp>> closures_;
   std::map<int, mlir::Type> representations_;
+  /// Per set, by its root: its closures, one per description, in order.
+  std::map<int, llvm::SmallVector<smn::ClosureOp>> distinct_;
+  llvm::DenseMap<mlir::Operation *, std::string> closureDescriptions_;
+  /// Per set description: its number, which names its enum and stands for
+  /// it in the descriptions of others.
+  std::map<std::string, unsigned> setNames_;
+  std::map<int, unsigned> setNumbers_;
+  unsigned setNumber(int var);
   std::map<std::pair<std::string, std::string>, std::string> renamed_;
 
   int find(int v) {
@@ -237,6 +266,10 @@ void LambdaSets::collect(mlir::Operation *op, mlir::func::FuncOp func) {
   };
   if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op)) {
     auto result = spanOf(closure.getResult());
+    if (opaque(closure.getCallee())) {
+      closures_[find(result.first)].push_back(closure);
+      return;
+    }
     auto fnType = closure.getType();
     auto callee = defined(closure.getCallee());
     if (!callee) {
@@ -267,6 +300,8 @@ void LambdaSets::collect(mlir::Operation *op, mlir::func::FuncOp func) {
       unify(spanOf(result),
             callee.part(fnType, static_cast<unsigned>(inputs + i)));
   } else if (auto direct = mlir::dyn_cast<smn::CallOp>(op)) {
+    if (opaque(direct.getCallee()))
+      return;
     if (auto callee = defined(direct.getCallee())) {
       for (auto [arg, param] :
            llvm::zip(direct.getArgs(), callee.getArguments()))
@@ -430,13 +465,92 @@ void LambdaSets::solve() {
   }
 }
 
+llvm::ArrayRef<smn::ClosureOp> LambdaSets::closures(int var) {
+  int root = find(var);
+  if (auto it = distinct_.find(root); it != distinct_.end())
+    return it->second;
+  std::map<std::string, smn::ClosureOp> byDescription;
+  for (auto closure : closures_[root])
+    byDescription.try_emplace(describe(closure), closure);
+  auto &out = distinct_[root];
+  for (auto &[_, closure] : byDescription)
+    out.push_back(closure);
+  return out;
+}
+
+std::string LambdaSets::describe(smn::ClosureOp closure) {
+  if (auto it = closureDescriptions_.find(closure);
+      it != closureDescriptions_.end())
+    return it->second;
+  std::string out = closure.getCallee().str() + "(";
+  for (auto [i, bound] : llvm::enumerate(closure.getBound()))
+    out += (i ? ", " : "") + describe(bound.getType(), spanOf(bound).first);
+  out += ")";
+  closureDescriptions_[closure] = out;
+  return out;
+}
+
+unsigned LambdaSets::setNumber(int var) {
+  int root = find(var);
+  if (auto it = setNumbers_.find(root); it != setNumbers_.end())
+    return it->second;
+  // A set's closures don't reach it again: one that would stays. What they
+  // bind is described by the numbers of its sets, so a description is as
+  // long as its closures, however deep they nest (the paper's 6.1).
+  std::string description = "{";
+  for (auto [i, closure] : llvm::enumerate(closures(root)))
+    description += (i ? ", " : "") + describe(closure);
+  description += "}";
+  auto number =
+      setNames_
+          .try_emplace(description, static_cast<unsigned>(setNames_.size()))
+          .first->second;
+  setNumbers_[root] = number;
+  return number;
+}
+
+std::string LambdaSets::describe(mlir::Type type, int first) {
+  std::string out;
+  llvm::raw_string_ostream os(out);
+  if (fnCount(type) == 0) {
+    os << type;
+    return out;
+  }
+  if (mlir::isa<smn::FnType>(type)) {
+    if (!byValue(first)) {
+      os << "stays " << type;
+      return out;
+    }
+    os << "set" << setNumber(first);
+    return out;
+  }
+  os << type << " with (";
+  auto parts = partsOf(type);
+  for (unsigned i = 0; i < parts.size(); ++i)
+    os << (i ? ", " : "")
+       << describe(parts[i], first + static_cast<int>(partOffset(type, i)));
+  os << ")";
+  return out;
+}
+
+std::string LambdaSets::describe(mlir::func::FuncOp func) {
+  std::string out = "(";
+  for (auto [i, arg] : llvm::enumerate(func.getArguments()))
+    out += (i ? ", " : "") + describe(arg.getType(), spanOf(arg).first);
+  out += ") -> (";
+  for (auto [i, type] : llvm::enumerate(func.getFunctionType().getResults()))
+    out += (i ? ", " : "") +
+           describe(type, results_[func][static_cast<unsigned>(i)].first);
+  return out + ")";
+}
+
 mlir::Type LambdaSets::representation(int var) {
   int root = find(var);
   if (auto it = representations_.find(root); it != representations_.end())
     return it->second;
   auto *ctx = module_.getContext();
   llvm::SmallVector<mlir::Type> variants;
-  for (auto closure : closures_[root]) {
+  for (auto closure : closures(root)) {
     llvm::SmallVector<mlir::Type> bound;
     for (auto value : closure.getBound())
       bound.push_back(rebuild(value));
@@ -455,8 +569,10 @@ mlir::Type LambdaSets::representation(int var) {
       names.push_back(
           mlir::StringAttr::get(ctx, "closure" + std::to_string(i)));
     }
-    type = smn::EnumType::get(ctx, "lambdas" + std::to_string(root), payload,
-                              names, variants);
+    // Named by what it holds: sets alike are one type, as a function
+    // specialized for one passes it to another.
+    type = smn::EnumType::get(ctx, "lambdas" + std::to_string(setNumber(root)),
+                              payload, names, variants);
   }
   representations_[root] = type;
   return type;
@@ -668,6 +784,17 @@ struct LowerLambdaSetsPass
 };
 
 } // namespace
+
+bool holdsFunctionValue(mlir::Type type) { return fnCount(type) > 0; }
+
+std::map<mlir::Operation *, std::string>
+describeSignatures(mlir::ModuleOp module, const llvm::StringSet<> &opaque) {
+  LambdaSets sets(module, &opaque);
+  std::map<mlir::Operation *, std::string> out;
+  for (auto func : sets.funcs())
+    out[func] = sets.describe(func);
+  return out;
+}
 
 void markLambdaSets(mlir::ModuleOp module) {
   LambdaSets sets(module);

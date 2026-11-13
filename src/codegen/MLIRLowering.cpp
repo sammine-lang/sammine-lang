@@ -195,6 +195,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
   if (isGPU(gpuTarget)) {
     mlir::PassManager pm(context);
+    pm.addPass(createSpecializeLambdaSetsPass());
     pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());
     pm.addPass(mlir::createSCFToControlFlowPass());
@@ -204,6 +205,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       return nullptr;
   } else {
     mlir::PassManager pm(context);
+    pm.addPass(createSpecializeLambdaSetsPass());
     pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());
     pm.addPass(mlir::createSCFToControlFlowPass());

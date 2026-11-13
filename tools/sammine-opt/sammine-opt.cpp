@@ -18,6 +18,7 @@
 
 int main(int argc, char **argv) {
   sammine_lang::registerMIRToLLVMPass();
+  sammine_lang::registerSpecializeLambdaSetsPass();
   sammine_lang::registerLowerLambdaSetsPass();
   sammine_lang::registerCheckOwnershipPass();
   sammine_lang::registerCheckViewsPass();

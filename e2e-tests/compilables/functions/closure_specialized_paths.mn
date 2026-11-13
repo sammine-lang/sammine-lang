@@ -1,0 +1,38 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// CHECK: 65536 64
+
+// Each level calls the next twice, so there are 2^16 paths to h0. Copies
+// are merged per set as each function's turn comes, not once per path:
+// one h per level, and a second of each h that mul reaches.
+// IR-NOT: switch i32
+// IR: define internal i32 @h0(
+// IR: define internal i32 @h0.spec{{[0-9]+}}(
+// IR-NOT: define internal i32 @h0.spec
+
+import std;
+
+let add(a: i32, b: i32) -> i32 { a + b }
+let mul(a: i32, b: i32) -> i32 { a * b }
+let h0(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+let h1(f: (i32) -> i32, x: i32) -> i32 { h0(f, h0(f, x)) }
+let h2(f: (i32) -> i32, x: i32) -> i32 { h1(f, h1(f, x)) }
+let h3(f: (i32) -> i32, x: i32) -> i32 { h2(f, h2(f, x)) }
+let h4(f: (i32) -> i32, x: i32) -> i32 { h3(f, h3(f, x)) }
+let h5(f: (i32) -> i32, x: i32) -> i32 { h4(f, h4(f, x)) }
+let h6(f: (i32) -> i32, x: i32) -> i32 { h5(f, h5(f, x)) }
+let h7(f: (i32) -> i32, x: i32) -> i32 { h6(f, h6(f, x)) }
+let h8(f: (i32) -> i32, x: i32) -> i32 { h7(f, h7(f, x)) }
+let h9(f: (i32) -> i32, x: i32) -> i32 { h8(f, h8(f, x)) }
+let h10(f: (i32) -> i32, x: i32) -> i32 { h9(f, h9(f, x)) }
+let h11(f: (i32) -> i32, x: i32) -> i32 { h10(f, h10(f, x)) }
+let h12(f: (i32) -> i32, x: i32) -> i32 { h11(f, h11(f, x)) }
+let h13(f: (i32) -> i32, x: i32) -> i32 { h12(f, h12(f, x)) }
+let h14(f: (i32) -> i32, x: i32) -> i32 { h13(f, h13(f, x)) }
+let h15(f: (i32) -> i32, x: i32) -> i32 { h14(f, h14(f, x)) }
+let h16(f: (i32) -> i32, x: i32) -> i32 { h15(f, h15(f, x)) }
+
+let main() -> i32 {
+  std::printf("%d %d\n", h16(add(1), 0), h2(mul(2), 4));
+  0
+}

@@ -1,0 +1,52 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// CHECK:      apply 6 10 7
+// CHECK-NEXT: twice 7 20
+// CHECK-NEXT: made 9 16
+// CHECK-NEXT: fold 15 120
+// CHECK-NEXT: returned 13 26
+
+// A higher-order function is copied per lambda set it is used with, so
+// each copy calls its one closure's function directly: before optimizing,
+// no function here switches on which closure it was given. Places using it
+// with alike sets share a copy: apply(add(1)) and apply(add(2)) do.
+// IR-NOT: switch i32
+// IR-LABEL: define internal i32 @apply(
+// IR-NOT: switch i32
+// IR-LABEL: define internal i32 @apply.spec{{[0-9]+}}(
+// IR-NOT: switch i32
+// IR-NOT: define internal i32 @apply.spec
+
+import std;
+
+let add(a: i32, b: i32) -> i32 { a + b }
+let mul(a: i32, b: i32) -> i32 { a * b }
+
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+
+// Calls another higher-order function: copied with it.
+let twice(f: (i32) -> i32, x: i32) -> i32 { apply(f, apply(f, x)) }
+
+// Recursion stays in its copy.
+let fold(f: (i32, i32) -> i32, acc: i32, n: i32) -> i32 {
+  if n == 0 { acc } else { fold(f, f(acc, n), n - 1) }
+}
+
+// Gives back a closure of a higher-order function: each place that makes
+// one makes its own.
+let wrap(f: (i32) -> i32) -> (i32) -> i32 { apply(f) }
+
+let main() -> i32 {
+  std::printf("apply %d %d %d\n", apply(add(1), 5), apply(mul(2), 5),
+              apply(add(2), 5));
+  std::printf("twice %d %d\n", twice(add(1), 5), twice(mul(2), 5));
+  let p = apply(add(4));
+  let q = apply(mul(4));
+  std::printf("made %d %d\n", p(5), q(4));
+  std::printf("fold %d %d\n", fold(add, 0, 5), fold(mul, 1, 5));
+  let r = wrap(add(10));
+  let s = wrap(mul(13));
+  std::printf("returned %d %d\n", r(3), s(2));
+  0
+}

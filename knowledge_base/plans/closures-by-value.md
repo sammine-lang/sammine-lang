@@ -1,7 +1,7 @@
 # Plan: closures carry what they bind
 
 Status: stage 1 done; stage 2a (monovariant lambda sets) done; stage 2b
-(per-call-site specialization) is a TODO (below).
+(specialization per lambda set) done, except for SCCs of several functions.
 
 ## Goal
 
@@ -111,42 +111,84 @@ and an enum's payload size and the offsets of its `variant`s and
 `payload`s are recomputed. A value of no size, a closure binding nothing,
 is neither written to nor read from a payload.
 
-## Stage 2b: specialization (TODO)
+## Stage 2b: specialization (done)
 
-The paper's own step: sets generalized per function (per call-graph SCC,
-section 6.3) with inclusion constraints, and each function copied per set
-it is called with, as generics are per type. Today a higher-order function
-called with `add` in one place and `mul` in another switches between them
-inside one copy; specialized, each copy calls one directly.
+`src/dialect/SpecializeLambdaSets.cpp`, run just before stage 2a's
+rewrite. A higher-order function is copied per lambda set it is used
+with, as generics are per type: `apply(add(1))` and `apply(mul(2))` call
+two copies, each calling its one closure's function directly.
 
-How, worked out against the code (2026-11):
+- **Copy per place, callers first.** Over the SCCs of the call graph
+  (calls and closures), callers before callees, each place naming a
+  private function that takes or gives function values gets its own copy;
+  the first keeps the function. A copy's own places are copied in turn
+  when the callee's turn comes, and a function calling itself calls its
+  own copy.
+- **Merge per set.** When a function's turn comes, all its callers are
+  done: its copies whose signatures are described alike
+  (`describeSignatures`: per function value, the functions its closures
+  call and what those bind) are merged before their places are copied.
+  Functions whose turn hasn't come are opaque to that description: their
+  places all name one function still, which would mix every place's sets.
+  Without this, copies grew with the paths to a function, 2^n for n
+  levels each calling the next twice
+  (`functions/closure_specialized_paths.mn`). Once all are taken, copies
+  are merged again with every call followed, until none are alike.
+- **Alike sets are one type.** A set's enum is named by its description
+  and its variants are ordered by it, and two closures calling one
+  function with alike bound values are one variant: copies merged from
+  places in different callers pass the same type, and no switch picks
+  between closures that do the same.
+- **Not copied:** a public function (another unit calls it with values as
+  they are), a Drop instance (found by its name), a function named other
+  than by a call or a closure, and an SCC of several functions, which
+  shares its sets as in stage 2a. The paper generalizes per SCC; copying
+  an SCC whole per place is left for when a program needs it.
+- **Bounded.** Copies may add at most `kCopyBudget` ops; past it, places
+  share a function, as without this step.
 
-- **On MIR, not the type checker.** A partial application is the paper's
-  lambda with explicit captures, `λ[bound](rest). f(bound, rest)`, and MIR
-  has only `cf` branches, so values move between blocks only through block
-  arguments. Annotate each MIR value's type with a lambda set variable per
-  `!sammine.fn` in it (pre-order over pointees, fields, elements, variants
-  and signatures), unify along every op that moves a value (`let`,
-  `copy`/`move`/`store` through places, `field`/`elem`/`through`,
-  `aggregate`/`extract`, `variant`/`payload`, block arguments, `call`,
-  `return`, `call_indirect`), and add each `closure` to its result's set.
-- **Two steps.** First monovariant (one set per flow class across the
-  module, MLton's defunctionalization): values become a tuple of the
-  captures (one function) or an enum of them (several), `call_indirect` a
-  `call` or a `cf.switch` of calls. Then the paper's polymorphism: sets
-  generalized per function (per call-graph SCC, section 6.3) with
-  inclusion constraints, functions cloned per instantiation, as generics.
-- **What stays stage 1.** A class reaching code MIR doesn't see (C, a
-  library's exported function, another module's) or a recursive (`μ`)
-  class keeps the `{code, words}` representation, and so does every class
-  its closures capture, so stage 1's sizes still hold for them.
-- **Types to rebuild.** A struct or enum holding a converted function value
-  gets a new name (its LLVM struct is identified by name), an enum's
-  payload size and `variant`/`payload` offsets are recomputed, and
-  function signatures change with their parameters.
-- **Order.** Inference before `checkViews` (which closures are frame-held
-  decides the escape check), the rewrite after `checkOwnership`, before
-  `sammine-mir-to-llvm`.
+### Why not in the type checker
+
+The paper infers lambda sets with Hindley–Milner: a set variable rides on
+each function type, and let-generalization of a function's scheme, per
+SCC, is what makes them polymorphic; instantiating it per call is what
+specializes. sammine's checker is bidirectional, and by MIR every type is
+known and every generic is monomorphized, so only the sets are left to
+infer. That is the same unification, done on MIR after typing, and the
+polymorphism comes from copying per place and merging per set rather than
+from generalized schemes: the same instances, for SCCs of one function.
+
+### Against the paper
+
+Section numbers are the paper's (`3591260.pdf`).
+
+- **Same.** Lambda sets are found by unification (4.2.1); the unit of
+  specialization is a top-level function, the paper's `def`; sammine has
+  no lambdas, only partial applications of named functions, which are
+  exactly its `λ[captures](args)` with explicit captures. Specialization
+  goes from callers to callees, one copy per distinct set among the uses
+  already specialized (5.1, Fig. 9's inner loop). Lowering makes a
+  function type a sum of what each closure captures, a closure an
+  injection and a call a match (5.2), with one closure a tuple and a
+  direct call. Set descriptions are shared by number, not nested, so they
+  stay linear (6.1).
+- **Different: how instances are found.** The paper infers each `def`
+  once, generalizing the set variables of its signature with inclusion
+  constraints and internalizing the rest (4.2.2), then instantiates the
+  scheme per use. sammine copies per place and unifies over the whole
+  program, describing a function's copies with the functions not yet
+  specialized left opaque. That is an approximation: a later function
+  that unifies a parameter with a closure of its own adds to its caller's
+  set, which the opaque description misses, so two copies may merge that
+  the paper keeps apart. It stays sound; the merged copy switches.
+- **Different: recursive sets.** The paper solves a set that holds itself
+  as `μa.σ` (4.2.2, 5.1.1) and lowers it to a recursive sum. sammine keeps
+  such a set stage 1, `{code, words}`, its self-binding closures in their
+  maker's frame.
+- **Not done: SCCs of several functions** (6.3): copied whole per place in
+  the paper, shared here.
+- **Not needed: delayed substitution** (6.2): nothing is substituted;
+  copies are re-analysed, once per function with copies.
 
 ## Threads
 
