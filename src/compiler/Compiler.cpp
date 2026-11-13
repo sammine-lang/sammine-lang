@@ -8,6 +8,7 @@
 #include "codegen/MLIRLowering.h"
 #include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
+#include "dialect/OwnershipCheck.h"
 #include "dialect/SammineDialect.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
@@ -45,6 +46,7 @@
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
+#include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/InitAllExtensions.h"
 #include "mlir/Target/LLVM/NVVM/Target.h"
@@ -319,16 +321,21 @@ void Compiler::codegen() {
   codegen_mlir();
 }
 
-// MLIR codegen: registers dialects (Arith, Func, LLVM, SCF, CF), generates MLIR
-// from AST via generateModules(), then lowers MLIR→LLVM IR. Transfers data
-// layout/triple from the template LLVMRes module to the newly lowered module.
-void Compiler::codegen_mlir() {
+// Stage 8: MIR. Builds the program's MLIR, each function's body in MIR, and
+// checks ownership on it: each value that owns memory is used once on every
+// path and none is still owned where its function returns. The check's
+// diagnostics are reported as any stage's are.
+void Compiler::mir() {
+  SAMMINE_ZONE_NAMED("mir");
+  if (has_error())
+    return;
   // Check if any kernel definitions exist in the AST.
   bool has_kernel_defs = std::any_of(
       programAST->DefinitionVec.begin(), programAST->DefinitionVec.end(),
       [](const auto &def) { return llvm::isa<AST::KernelDefAST>(def.get()); });
 
-  mlir::MLIRContext mlirCtx;
+  mlirCtx_ = std::make_unique<mlir::MLIRContext>();
+  auto &mlirCtx = *mlirCtx_;
 
   // GPU: register all LLVM conversion extensions BEFORE loading any dialects.
   // This ensures ConvertToLLVMPatternInterface is available when dialects load.
@@ -400,18 +407,44 @@ void Compiler::codegen_mlir() {
   }
   mlirCtx.appendDialectRegistry(registry);
 
-  std::string moduleName = library_name();
-
-  auto mlirResult =
-      generateModules(mlirCtx, programAST.get(), moduleName, options_.file_arg,
-                      options_.str_arg, props_, options_.gpu);
-  if (!mlirResult.cpuModule) {
+  locator_ =
+      std::make_unique<SourceLocator>(options_.file_arg, options_.str_arg);
+  modules_ = generateModules(mlirCtx, programAST.get(), library_name(),
+                             *locator_, options_.file_arg, options_.str_arg,
+                             props_, options_.gpu);
+  if (!modules_.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");
     set_error();
     return;
   }
 
+  sammine_util::Reportee ownership;
+  {
+    // Each diagnostic, and each of its notes, where the source has it.
+    mlir::ScopedDiagnosticHandler handler(&mlirCtx, [&](mlir::Diagnostic &d) {
+      auto add = [&](mlir::Location loc, std::string msg) {
+        ownership.add_error(locator_->location(loc).value_or(
+                                sammine_util::Location::NonPrintable()),
+                            std::move(msg));
+      };
+      add(d.getLocation(), d.str());
+      for (auto &note : d.getNotes())
+        add(note.getLocation(), note.str());
+      return mlir::success();
+    });
+    (void)checkOwnership(*modules_.cpuModule);
+  }
+  reporter.report(ownership);
+  if (ownership.has_errors())
+    set_error();
+}
+
+// MLIR codegen: lowers the modules the mir stage built to LLVM IR. Transfers
+// data layout/triple from the template LLVMRes module to the newly lowered
+// module.
+void Compiler::codegen_mlir() {
+  auto &mlirResult = modules_;
   if (options_.emit == EmitKind::Mlir) {
     mlir::OpPrintingFlags flags;
     flags.enableDebugInfo(/*enable=*/true, /*prettyForm=*/true);
@@ -708,6 +741,7 @@ int Compiler::start() {
       {"typecheck", &Compiler::typecheck},
       {"linear_check", &Compiler::linear_check},
       {"dump_ast", &Compiler::dump_ast},
+      {"mir", &Compiler::mir},
       {"codegen", &Compiler::codegen},
       {"optimize", &Compiler::optimize},
       {"jit_execute", &Compiler::jit_execute},

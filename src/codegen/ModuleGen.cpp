@@ -80,12 +80,12 @@ void markCExtensions(FuncOp funcOp, AST::PrototypeAST *proto,
 class ModuleGen {
 public:
   ModuleGen(mlir::MLIRContext &context, const std::string &moduleName,
-            const std::string &fileName, const std::string &sourceText,
-            const AST::ASTProperties &props, GPUMode gpuMode)
-      : builder_(&context), library_(!moduleName.empty()),
-        locator_(fileName, sourceText), reporter_(fileName, sourceText, 3),
-        props_(props), types_(&context), mir_(builder_, props, locator_),
-        gpuMode_(gpuMode) {}
+            const SourceLocator &locator, const std::string &fileName,
+            const std::string &sourceText, const AST::ASTProperties &props,
+            GPUMode gpuMode)
+      : builder_(&context), library_(!moduleName.empty()), locator_(locator),
+        reporter_(fileName, sourceText, 3), props_(props), types_(&context),
+        mir_(builder_, props, locator_), gpuMode_(gpuMode) {}
 
   /// The CPU module, or null if a module doesn't verify.
   mlir::ModuleOp generate(AST::ProgramAST *program);
@@ -98,7 +98,7 @@ private:
   mlir::ModuleOp module_;
   /// Whether this is a library's module, whose functions other modules call.
   bool library_;
-  SourceLocator locator_;
+  const SourceLocator &locator_;
   sammine_util::Reporter reporter_;
   const AST::ASTProperties &props_;
   /// Each sammine type's MIR type, what the module declares functions in.
@@ -425,10 +425,11 @@ void ModuleGen::setLinkage(AST::FuncDefAST *ast, Linkage linkage) {
 
 GeneratedModules
 generateModules(mlir::MLIRContext &context, AST::ProgramAST *program,
-                const std::string &moduleName, const std::string &fileName,
-                const std::string &sourceText, const AST::ASTProperties &props,
-                GPUMode gpuMode) {
-  ModuleGen gen(context, moduleName, fileName, sourceText, props, gpuMode);
+                const std::string &moduleName, const SourceLocator &locator,
+                const std::string &fileName, const std::string &sourceText,
+                const AST::ASTProperties &props, GPUMode gpuMode) {
+  ModuleGen gen(context, moduleName, locator, fileName, sourceText, props,
+                gpuMode);
   auto cpuModule = gen.generate(program);
   if (!cpuModule)
     return {};

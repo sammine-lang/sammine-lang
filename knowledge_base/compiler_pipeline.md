@@ -2,14 +2,16 @@
 
 ## Stages
 ```
-lex → parse → imports → semantics → typecheck → linear_check → dump_ast → codegen → optimize → emit_obj → emit_library → link
+lex → parse → imports → semantics → typecheck → linear_check → dump_ast → mir → codegen → optimize → emit_obj → emit_library → link
 ```
 - Orchestrated by `Compiler::start()`. Error in any stage → `should_stop()` → skip rest.
-- `--check` sets state to `Finished` (exit 0) before codegen — skips codegen/optimize/emit/link
+- `--check` sets state to `Finished` (exit 0) before codegen — skips codegen/optimize/emit/link, after the `mir` stage has checked ownership
 - `imports`: every module implicitly imports the prelude `definitions` (except definitions.mn itself), then its own imports
 - `semantics`: ScopeGenerator → GeneralSemantics (two sub-passes)
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec
-- `codegen`: init 10 MLIR dialects (Arith, Func, LLVM, SCF, CF, MemRef, Linalg, Tensor, Bufferization, Affine) + bufferization interfaces → `generateModules()` → `lowerMLIRToLLVMIR()`
+- `linear_check`: the rules on pointers and linear values that don't depend on control flow
+- `mir`: init the MLIR dialects (Arith, Func, LLVM, SCF, CF, sammine; MemRef, Linalg, Tensor, Bufferization, Affine for kernels) + bufferization interfaces → `generateModules()` → `checkOwnership()`, its diagnostics reported through a `Reportee`
+- `codegen`: `lowerMLIRToLLVMIR()` on the modules the `mir` stage built
 - `optimize`: LLVM PassBuilder with O2
 - `emit_library`: writes the `.so`/`.a`
 - `link`: `clang++` (fallback `g++`) with `io_runtime.o`

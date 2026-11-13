@@ -85,50 +85,9 @@
 - **Invariant**: `resolve_type_expr` with concrete bindings must be used (not just `substitute()`) for generic struct returns — triggers proper instantiation
 - Limitations: generic functions and enums only (not structs directly). No const generics.
 
-## Linear Type Checker (separate pass after BiTypeChecker)
-- Enforces `'ptr<T>` consumed exactly once
-
-### Consumption
-- `free(p)`, `let q = p` (move), `return p`, passing as linear param, moving into struct/array/tuple field
-- NOT consumption: `*p` (deref), comparison, field access
-
-### Wrapper Types (structs/tuples/arrays with linear fields)
-- Tracked via `VarInfo::children` (per-field recursive tracking)
-- `containsLinear()` recursively checks for linear sub-components
-- `check_children_consumed()` at scope exit for each wrapper
-
-### Uses (`check_expr(expr, Use)`)
-- Every child is visited with what its parent does: `Own`, `Read`, `Write`, `TakeAddress`
-- A linear temporary (anything not a place or statement) is only legal where it is owned
-- Writing through a non-linear `ptr`, or taking the address of owned memory, is decided in `check_through_pointer`
-- Lending: a `'ptr` argument to a `ptr` parameter is a `Read`; lending and moving the same value in one call is an error
-
-### Pointer Placement
-- A non-linear `ptr<T>` may only be the whole type of a parameter or local (a view of a view is fine)
-- Checked in `check_placement` for prototypes, externs, struct/enum defs, locals and literals
-
-### Branch Consistency
-- All branches of if/case must agree — either all consume a linear var or none do
-- Must check children, not just top-level vars
-- A branch or arm that returns is left out (`diverged_`): it never reaches the code after the if/case. If all of them return, so does the if/case
-
-### Returns
-- `check_return` checks the returned value, then reports every owner still live in any scope (the same "must be consumed before scope exit" leak), and sets `diverged_`. Scope exits after it (`pop_scope_and_check`) report nothing, so the implicit return at a function's end reports leaks exactly once. A loop resets `diverged_`, since it may run zero times
-
-### Loop Restriction
-- Outer linear vars cannot be consumed inside loops
-
-### Known Limitations
-- Array elements: one `"[*]"` child for every element, not per-element; `free(a[i])` does not consume it
-
-### Places and Parts
-- A place is a variable, a field of a place (`e.f`) or what a place points at (`*e`); `find_tracked` resolves any of them to its `VarInfo`, at any depth. `free`, stores, moves and reads all go through it
-- Registration builds the whole tree for a type: fields, tuple elements, payloads, array elements (`"[*]"`) and pointees (`"*"`). Recursive types are rejected, so it is finite
-- An entry is an **owner** (an owned `'ptr`, which must itself be consumed) or an **aggregate** (done once all its parts are). `collect_live_owners` is the one walk behind scope exit, `free` (the pointee must hold nothing) and stores (the target must hold nothing)
-- A pointee starts **unset**: consumed with no reason, reported as "no owned value is known to be stored there". A store, or `let x = place`, takes the stored place's states; any other value is live with unset pointees (so a parameter's pointee is unset)
-- Moving a whole value (`move_whole`) is rejected if a part was already consumed (pointees excepted), and marks every part consumed; `free` does the same after checking the pointee
-- A `*e` reached through a consumed pointer is reported once, at the pointer (`pointer_consumed`)
-- Branch reconciliation recurses into parts while the whole stays live; a whole consumed on any branch takes its parts with it
+## Linear values
+- That every `'ptr<T>`, and every value holding one, is consumed exactly once is checked on MIR: see `codegen.md`, "The ownership check"
+- `LinearTypeChecker` (a pass after BiTypeChecker) keeps the rules that don't depend on control flow: a non-linear `ptr<T>` only as the whole type of a parameter or local (`check_placement`, a view of a view is fine); no writing through a `ptr<T>`, no address of memory a `'ptr` owns (`check_through_pointer`); no `&` of a linear value; no storing a view through a deref; no binding a linear value into a partial application; no wildcard arm over a variant with a linear payload; no returning a view, or a closure that captured one; and an open type argument its context never decided
 
 ## Incompatibility Hints
 - `incompatibility_hint(expected, actual)` returns note explaining why types don't match

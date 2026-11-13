@@ -1,9 +1,10 @@
 # Plan: a mid-level IR (MIR) as an MLIR dialect
 
 Status: MIR is the only path to codegen for function bodies, and for
-kernels' scalar code; the AST codegen for them is deleted. The migration
-below is done. What remains is the ownership check on MIR (below), then the
-rest of the cleanup.
+kernels' scalar code; the AST codegen for them is deleted. The ownership
+check runs on MIR (`src/dialect/OwnershipCheck.cpp`, the `mir` stage) and
+the flow parts of `LinearTypeChecker` are deleted. What remains is the rest
+of the cleanup.
 
 ## Why
 
@@ -293,21 +294,19 @@ sret. Then the fallback went: a function MIR can't lower is an error.
 - `sammine-opt` (parses MIR, runs passes, prints it) came with the first MIR
   type, `!sammine.ptr`, whose round trip and errors it tests; the check's
   passes are tested through it on small hand-written inputs.
-- The MIR check runs only on functions that went through MIR, next to
-  `LinearTypeChecker`, which stays in charge. Disagreements on the suite are
-  printed (60 test files check linear diagnostics today).
-- It covers constructs as MIR does: moves of locals first, then fields and
-  partial moves, pointees, `free`, branches and loops.
-- When every function goes through MIR and the checks agree, apart from the
-  agreed changes (each noted in its commit), the MIR check takes over.
+- It was built as a pass first, on hand-written MIR
+  (`e2e-tests/mir/dialect/ownership_*.mlir`), covering owned values, then
+  parts, pointees, places, `free`, branches, loops and `case`. Then it took
+  over in one commit, with the flow parts of `LinearTypeChecker` deleted;
+  the messages that changed (branch mismatches, loops) are noted there.
 
 ### Cleanup
 
 Done: the AST codegen for function bodies (`MLIRGenExpr.cpp` and the
 statement, call and closure code of `MLIRGen.cpp` and
-`MLIRGenFunction.cpp`, ~2,500 lines). Left: the flow parts of
-`LinearTypeChecker` (~1,400 lines), once the ownership check on MIR takes
-over, the side tables MIR replaces, and the implicit-return rewrite.
+`MLIRGenFunction.cpp`, ~2,500 lines). The flow parts of `LinearTypeChecker`, which
+the ownership check on MIR replaced. Left: the side tables MIR replaces,
+and the implicit-return rewrite.
 
 ### Review checkpoints
 
@@ -345,10 +344,13 @@ indexing, automatic drops.
    parses and prints MIR and runs passes on it, for small hand-written tests;
    it came with the first MIR type.
 6. Migration by vertical slices with a per-function fallback (above).
-5. The ownership check uses MLIR's dataflow framework (above).
+5. The ownership check uses MLIR's dataflow framework (above), with an
+   analysis that makes every constant unknown, so `DeadCodeAnalysis` keeps
+   every branch successor (without one it keeps none past the entry).
 
-## Open questions
-
-- Where a branch mismatch is reported: where the value is next used (or at the
-  return), as the dataflow state gives it, or still at the `if`. To be
-  discussed before the ownership check covers branches.
+7. A value consumed in some branches only is reported at its binding, with
+   a note where it was consumed; a use after it is reported at the use. A
+   value consumed in a loop is reported where the next turn uses it.
+8. The ownership check took over in one step, once it covered every
+   construct the suite exercises, rather than running beside
+   `LinearTypeChecker` and comparing.

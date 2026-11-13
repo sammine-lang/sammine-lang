@@ -48,7 +48,7 @@
 ## Bug Patterns (from Vec<T> implementation)
 - **Generic struct returns**: `resolve_type_expr` on `GenericTypeExprAST` with unresolved TypeParams must build placeholder StructType, not return Poisoned — `substitute()` alone can't trigger struct instantiation
 - **Monomorphizer must preserve `is_linear`**: all type expression clones must carry linearity flag
-- **Linear checker branch consistency must check children**: wrapper types (structs with linear fields) have consumption tracked in `VarInfo::children` at every depth, not just the parent — `reconcile` recurses
+- **The ownership check follows parts**: a struct's fields, payloads, pointees are paths of their own; moving a whole moves its parts, and a branch join agrees each part
 - **Linear checker must skip generic templates**: template AST node IDs have no ASTProperties entries; only monomorphized copies have proper CallProps
 - **FieldAccessExprAST in struct/array/tuple literals**: must handle `v.data` as consumption of child, not just `VariableExprAST`
 

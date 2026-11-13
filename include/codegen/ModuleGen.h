@@ -2,6 +2,7 @@
 
 #include "ast/ASTProperties.h"
 #include "ast/Ast.h"
+#include "codegen/SourceLocator.h"
 #include "compiler/Options.h"
 
 #include "mlir/IR/BuiltinOps.h"
@@ -24,11 +25,12 @@ struct GeneratedModules {
 };
 
 /// The MLIR for `program`, or an empty result if a module doesn't verify.
-/// `moduleName` is the library's name, empty for an executable.
+/// `moduleName` is the library's name, empty for an executable. Ops are
+/// located by `locator`.
 GeneratedModules
 generateModules(mlir::MLIRContext &context, AST::ProgramAST *program,
-                const std::string &moduleName, const std::string &fileName,
-                const std::string &sourceText, const AST::ASTProperties &props,
-                GPUMode gpuMode);
+                const std::string &moduleName, const SourceLocator &locator,
+                const std::string &fileName, const std::string &sourceText,
+                const AST::ASTProperties &props, GPUMode gpuMode);
 
 } // namespace sammine_lang

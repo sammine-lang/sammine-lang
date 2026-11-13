@@ -5,6 +5,8 @@
 #pragma once
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
+#include "codegen/ModuleGen.h"
+#include "codegen/SourceLocator.h"
 #include "compiler/Options.h"
 #include "lex/Lexer.h"
 #include "lex/Token.h"
@@ -134,6 +136,10 @@ class Compiler {
   /// The library's name (its file's stem), or empty for an executable.
   std::string library_name() const;
   int jit_exit_code_ = 0;
+  /// What the mir stage builds and codegen lowers.
+  std::unique_ptr<mlir::MLIRContext> mlirCtx_;
+  std::unique_ptr<SourceLocator> locator_;
+  GeneratedModules modules_;
 
   void lex();
   void parse();
@@ -142,6 +148,7 @@ class Compiler {
   void typecheck();
   void linear_check();
   void dump_ast();
+  void mir();
   void codegen();
   void codegen_mlir();
   void optimize();
