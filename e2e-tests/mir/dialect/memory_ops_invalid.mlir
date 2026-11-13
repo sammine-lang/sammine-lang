@@ -19,7 +19,7 @@ func.func @move_plain(%p: !sammine.ptr<i32, view>) {
 // -----
 
 func.func @drop_view(%p: !sammine.ptr<i32, view>) {
-  // expected-error @+1 {{owned pointer}}
+  // expected-error @+1 {{drops only a value that owns memory}}
   sammine.drop %p : !sammine.ptr<i32, view>
   return
 }

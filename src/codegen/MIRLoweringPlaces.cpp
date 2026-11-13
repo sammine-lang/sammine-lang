@@ -19,10 +19,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDrop(DropExprAST *drop) {
-  auto value = lowerValue(drop->operand.get());
+  auto value = lowerExpr(drop->operand.get());
   if (mlir::failed(value))
     return mlir::failure();
-  smn::DropOp::create(builder_, loc(drop), *value);
+  // A value that owns nothing has nothing to end.
+  if (*value && smn::ownsMemory(value->getType()))
+    smn::DropOp::create(builder_, loc(drop), *value);
   return mlir::Value();
 }
 

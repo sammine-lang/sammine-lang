@@ -831,7 +831,7 @@ sammine-lang has two pointer kinds: **linear** (`'ptr<T>`) for heap-allocated me
 
 ### Heap Allocation (Linear Pointers)
 
-`alloc<T>(count)` allocates memory on the heap and returns a linear `'ptr<T>`. Linear pointers must be consumed exactly once -- via `drop()`, a move, or a return:
+`alloc<T>(count)` allocates memory on the heap and returns a linear `'ptr<T>`. A linear pointer is used at most once -- by `drop()`, a move, or a return -- and dropped where it goes out of use if nothing took it:
 
 ```sammine
 let p: 'ptr<i32> = alloc<i32>(1);    // allocate 1 element
@@ -845,13 +845,28 @@ Assignment only writes through a pointer: `*p`, `p[i]`, and any field or
 element reached from them, such as `(*p).x`, `p[i].x` or `(*p)[i][j]`. Variables,
 array values and struct values can't be assigned to.
 
-Failing to drop a linear pointer is a compile-time error:
+A value that owns memory and goes out of use with nothing taking it is
+dropped there: at a return, at the end of the arm or loop turn that made
+it, or, where one branch moved it and another didn't, on the other branch.
+Dropping a `'ptr<T>` drops what it points at, then frees it; a `'buf<T>` is
+freed; a struct or tuple drops field by field. Using a value after it moved
+is still an error:
 
 ```sammine
 let p = alloc<i32>(1);
 *p = 42;
-return 0;
-// Error: Linear variable 'p' must be consumed before scope exit (use drop() to deallocate)
+let q = p;           // p moves to q
+drop(p);             // Error: Cannot use linear variable 'p' — it was already moved previously
+```
+
+A type says what its end does with a `Drop` instance, which takes the value
+and must use up what it owns; nothing else is dropped after it. `Vec<T>`'s
+drops each value it holds, then its buffer; `io::File`'s closes the file:
+
+```sammine
+instance Drop<File> {
+  let Drop(f: File) -> unit { sammine_io_close(f.handle) }
+}
 ```
 
 ### Address-Of (Non-Linear Pointers)

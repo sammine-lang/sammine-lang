@@ -85,6 +85,13 @@ typeclass Hash<T> {
 
 // coll[idx], for a coll that is neither an array nor a pointer. The
 // collection is lent, so indexing doesn't use it up.
+// What a value of type T does when it ends, where it goes out of use or at
+// drop(x): it is given the value, and must use up what it owns. A type with
+// no instance drops part by part.
+typeclass Drop<T> {
+  Drop(x: T) -> unit;
+}
+
 typeclass Indexer<T, E> {
   Indexer(coll: ptr<T>, idx: i64) -> E;
 }

@@ -1,0 +1,20 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: dropped ok
+
+// An io::File nothing closes is closed where it goes out of use, by its
+// Drop instance: its handle is closed, not freed. So is the line it read.
+
+import io;
+import std;
+
+let main() -> i32 {
+  io::write_file("/tmp/sammine_test_file_dropped.txt", "dropped ok\n", 11);
+  let f = io::open("/tmp/sammine_test_file_dropped.txt", "r");
+  let (f, line) = io::file_read_line(f);
+  case line {
+    Line(buf, n) => { std::printf("%s", buf); () },
+    Eof => { },
+  };
+  0
+}

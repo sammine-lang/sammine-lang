@@ -52,7 +52,8 @@ struct Owner {
   bool operator==(const Owner &) const = default;
 };
 
-/// Whether `op` is a drop the compiler inserted, not one the program wrote.
+/// Whether `op` is a drop the compiler inserted, not one the program wrote,
+/// or what takes the part such a drop drops out of what holds it.
 bool isImplicitDrop(mlir::Operation *op);
 
 /// Each tracked part at a point. A part with no entry isn't defined on any

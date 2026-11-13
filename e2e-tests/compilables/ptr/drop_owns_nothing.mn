@@ -1,0 +1,11 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// drop(x) of a value that owns nothing does nothing: generic code drops a
+// T that may be an i32.
+
+let main() -> i32 {
+  let x : i32 = 42;
+  drop(x);
+  return 0;
+}

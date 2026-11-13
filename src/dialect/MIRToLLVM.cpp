@@ -1,6 +1,7 @@
 #include "dialect/MIRToLLVM.h"
 #include "cabi/CABI.h"
 #include "cabi/KernelABI.h"
+#include "dialect/ElaborateDrops.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -782,6 +783,8 @@ struct MIRToLLVMPass
   void runOnOperation() override {
     auto &context = getContext();
     MIRTypeConverter converter;
+    // A struct's drop is its Drop instance's call or its fields' drops.
+    expandDrops(getOperation());
 
     mlir::RewritePatternSet patterns(&context);
     mlir::populateCallOpTypeConversionPattern(patterns, converter);

@@ -359,9 +359,10 @@ void Transfer::apply(mlir::Operation *op) {
   }
   if (auto drop = mlir::dyn_cast<smn::DropOp>(op)) {
     auto path = pathOf(drop.getValue());
-    if (path && lookup(*path) && lookup(*path)->kind == Owner::Live)
+    if (path && lookup(*path) && lookup(*path)->kind == Owner::Live &&
+        isOwnedPtr(drop.getValue().getType()))
       // Dropping an owner frees only its own memory: what it points at must
-      // hold nothing by now.
+      // hold nothing by now. (A struct's drop takes all of it.)
       for (auto step : partsOf(typeOf(*path)))
         checkOwned(path->child(step), op);
     take(drop.getValue(), op);
@@ -606,6 +607,10 @@ void liveOwners(const Owners &owners, const Path &path,
 }
 
 bool isImplicitDrop(mlir::Operation *op) {
+  // A part is taken out of what holds it, then dropped.
+  if (mlir::isa<smn::MoveOp, smn::ExtractOp>(op) &&
+      op->getResult(0).hasOneUse())
+    op = *op->getResult(0).getUsers().begin();
   auto drop = mlir::dyn_cast<smn::DropOp>(op);
   return drop && drop.getImplicit();
 }

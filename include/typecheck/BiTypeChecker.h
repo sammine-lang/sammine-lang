@@ -335,6 +335,10 @@ public:
   bool check_assign_target(BinaryExprAST *ast);
   // x[i] for an x that is neither an array nor a pointer.
   static constexpr std::string_view kIndexerClass = "Indexer";
+  static constexpr std::string_view kDropClass = "Drop";
+  /// Instantiates the generic Drop instance, if any, of each type a generic
+  /// instantiated.
+  void instantiate_drops();
   Type synthesize_indexer(IndexExprAST *ast, const Type &coll);
   /// The Indexer instances, concrete or from a generic one, whose collection
   /// type is `coll`.

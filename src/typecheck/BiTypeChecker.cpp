@@ -110,6 +110,30 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
   // Third pass: full type checking of everything
   for (auto &def : ast->DefinitionVec)
     def->accept_vis(this);
+
+  instantiate_drops();
+}
+
+// Each type a generic instantiates gets its Drop, if a generic instance
+// gives it one: no source calls it, the drops MIR inserts do. The copies may
+// instantiate more types, which get theirs too.
+void BiTypeCheckerVisitor::instantiate_drops() {
+  auto drop = [&](const sammine_util::QualifiedName &name) {
+    auto type = get_typename_type(name.mangled());
+    if (!type)
+      return;
+    MonomorphizedKey key{std::string(kDropClass), {*type}};
+    if (!type_class_instances.contains(key))
+      instantiate_generic_instance(key);
+  };
+  for (size_t s = 0, e = 0;
+       s < monomorphizer.monomorphized_struct_defs.size() ||
+       e < monomorphizer.monomorphized_enum_defs.size();) {
+    if (s < monomorphizer.monomorphized_struct_defs.size())
+      drop(monomorphizer.monomorphized_struct_defs[s++]->struct_name);
+    else
+      drop(monomorphizer.monomorphized_enum_defs[e++]->enum_name);
+  }
 }
 
 void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {

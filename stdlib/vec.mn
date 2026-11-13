@@ -45,6 +45,15 @@ export let unsafe push<T>(v: Vec<T>, val: T) -> Vec<T> {
   }
 }
 
+// A Vec's drop drops the values it holds, then its buffer: the buffer's
+// own drop only frees it.
+export instance<T> Drop<Vec<T>> {
+  let unsafe Drop(v: Vec<T>) -> unit {
+    for i in 0i64..v.length { drop(v.data[i]); };
+    drop(v.data)
+  }
+}
+
 export let delete<T>(v: Vec<T>) -> unit {
-  drop(v.data)
+  drop(v)
 }

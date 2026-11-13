@@ -92,11 +92,14 @@ func.func @slot(%n: i32) attributes {sammine.mir} {
 
 // -----
 
-// A box whose pointee owns memory isn't dropped yet: its drop isn't a
-// free. Once what it points at is moved out, it is.
+// A box drops what it points at first, then is freed; once what it points
+// at is moved out, it is only freed.
 // CHECK-LABEL: func.func @box_of_owner(
-// CHECK-NOT: implicit
-// CHECK: return
+// CHECK-NEXT: %[[AT:[0-9]+]] = sammine.deref %arg0
+// CHECK-NEXT: %[[IN:[0-9]+]] = sammine.move %[[AT]]
+// CHECK-NEXT: sammine.drop %[[IN]] implicit : !sammine.ptr<i32, owned>
+// CHECK-NEXT: sammine.drop %arg0 implicit
+// CHECK-NEXT: return
 // CHECK-LABEL: func.func @box_emptied(
 // CHECK: sammine.drop %arg0 implicit : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
 func.func @box_of_owner(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
@@ -106,5 +109,37 @@ func.func @box_emptied(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attri
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
   %p = sammine.move %place : <!sammine.ptr<i32, owned>>
   sammine.drop %p : !sammine.ptr<i32, owned>
+  return
+}
+
+// -----
+
+// A struct without a Drop instance drops field by field, and only what is
+// still there.
+// CHECK-LABEL: func.func @fields(
+// CHECK: %[[B:[0-9]+]] = sammine.extract %arg0[1]
+// CHECK-NEXT: sammine.drop %[[B]] implicit
+// CHECK-NOT: sammine.drop
+// CHECK: return
+func.func private @take(!sammine.ptr<i32, owned>)
+func.func @fields(%s: !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+  %a = sammine.extract %s[0] : !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)> -> !sammine.ptr<i32, owned>
+  sammine.call @take(%a) : (!sammine.ptr<i32, owned>) -> ()
+  return
+}
+
+// -----
+
+// One with a Drop instance drops whole, through it, but not in its own
+// Drop, which would call itself: there, field by field.
+// CHECK-LABEL: func.func @"Drop<Res>::Drop"(
+// CHECK: sammine.extract %arg0[0]
+// CHECK: sammine.drop %{{[0-9]+}} implicit : !sammine.ptr<i32, owned>
+// CHECK-LABEL: func.func @whole(
+// CHECK-NEXT: sammine.drop %arg0 implicit : !sammine.struct<"Res"
+func.func @"Drop<Res>::Drop"(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+  return
+}
+func.func @whole(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
   return
 }

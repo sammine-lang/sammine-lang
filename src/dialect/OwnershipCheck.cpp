@@ -113,11 +113,7 @@ public:
     auto why = reasonFor(owner.movedBy).str();
     std::string when;
     bool loop = false;
-    // Moved by the program on some paths and only dropped, out of use, on
-    // the others is moved on some, as the program reads.
-    bool onSome = owner.kind == Owner::MaybeMoved ||
-                  (owner.droppedOnSomePath && !isImplicitDrop(owner.movedBy));
-    if (!onSome) {
+    if (!onSomePaths(owner)) {
       when = "it was already " + why + " previously";
     } else if (onOneLoop(owner.movedBy, op)) {
       loop = true;
@@ -155,14 +151,17 @@ public:
                                 : quoted(pointee) + " holds";
       error(op->getLoc(),
             msg + holds +
-                (owner.isEmpty() ? " nothing yet"
-                                 : " a value in some branches only"));
+                // Held on a path and dropped where the paths join, it held
+                // a value in some branches.
+                (owner.isEmpty() && !owner.droppedOnSomePath
+                     ? " nothing yet"
+                     : " a value in some branches only"));
       return;
     }
     auto why = reasonFor(owner.movedBy).str();
     error(op->getLoc(),
           msg + quoted(pointee) + " was " + why +
-              (owner.kind == Owner::MaybeMoved ? " in some branches" : ""))
+              (onSomePaths(owner) ? " in some branches" : ""))
             .attachNote(owner.movedBy->getLoc())
         << quoted(pointee) << " was " << why << " here";
   }
@@ -195,6 +194,14 @@ private:
   std::set<Path> reported_;
   std::unique_ptr<mlir::DominanceInfo> dominance_;
   std::unique_ptr<mlir::CFGLoopInfo> loops_;
+
+  /// Whether `owner` was moved on some paths here only, as the program
+  /// reads: moved by it on some, and on the others not, or only dropped
+  /// where it went out of use.
+  static bool onSomePaths(const Owner &owner) {
+    return owner.kind == Owner::MaybeMoved ||
+           (owner.droppedOnSomePath && !isImplicitDrop(owner.movedBy));
+  }
 
   mlir::InFlightDiagnostic error(mlir::Location at, const std::string &msg) {
     failed_ = true;

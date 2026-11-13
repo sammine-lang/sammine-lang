@@ -14,10 +14,42 @@
 
 namespace sammine_lang {
 
-bool dropsOnItsOwn(mlir::Type type) {
-  auto ptr = mlir::dyn_cast<smn::PtrType>(type);
-  return ptr && ptr.isOwned() &&
-         (!ptr.isBox() || !smn::ownsMemory(ptr.getPointee()));
+mlir::func::FuncOp dropFunction(mlir::ModuleOp module, mlir::Type type) {
+  llvm::StringRef name;
+  if (auto st = mlir::dyn_cast<smn::StructType>(type))
+    name = st.getName();
+  else if (auto en = mlir::dyn_cast<smn::EnumType>(type))
+    name = en.getName();
+  else
+    return {};
+  return module.lookupSymbol<mlir::func::FuncOp>(
+      ("Drop<" + name + ">::Drop").str());
+}
+
+void expandDrops(mlir::ModuleOp module) {
+  llvm::SmallVector<smn::DropOp> work;
+  module.walk([&](smn::DropOp drop) { work.push_back(drop); });
+  while (!work.empty()) {
+    auto drop = work.pop_back_val();
+    auto value = drop.getValue();
+    auto type = value.getType();
+    auto loc = drop.getLoc();
+    mlir::OpBuilder builder(drop);
+    if (auto fn = dropFunction(module, type)) {
+      smn::CallOp::create(builder, loc, mlir::TypeRange{}, fn.getName(),
+                          value);
+    } else if (auto fields = smn::fieldTypes(type)) {
+      for (auto [i, field] : llvm::enumerate(*fields))
+        if (smn::ownsMemory(field))
+          work.push_back(smn::DropOp::create(
+              builder, loc,
+              smn::ExtractOp::create(builder, loc, field, value, i),
+              drop.getImplicitAttr()));
+    } else {
+      continue;
+    }
+    drop.erase();
+  }
 }
 
 namespace {
@@ -27,7 +59,8 @@ using namespace ownership;
 class Elaboration {
 public:
   explicit Elaboration(mlir::func::FuncOp func)
-      : func_(func), flow_(func), dominance_(func) {}
+      : func_(func), module_(func->getParentOfType<mlir::ModuleOp>()),
+        flow_(func), dominance_(func) {}
 
   void run() {
     if (mlir::failed(flow_.run()))
@@ -51,6 +84,7 @@ private:
   };
 
   mlir::func::FuncOp func_;
+  mlir::ModuleOp module_;
   OwnershipFlow flow_;
   mlir::DominanceInfo dominance_;
   /// Each value in the order the function defines it: drops go in reverse.
@@ -70,22 +104,19 @@ private:
     });
   }
 
-  /// The parts of `owners` live at `at`, that elaboration drops, those
-  /// `keep` accepts, last bound first. Only of values defined on every path
-  /// to `at`: a state keeps a value defined on one side of a join past it,
-  /// where nothing could drop it.
+  /// The parts of `owners` live at `at` to drop, those `keep` accepts,
+  /// last bound first, a pointee before its box. Only of values defined on
+  /// every path to `at`: a state keeps a value defined on one side of a
+  /// join past it, where nothing could drop it.
   llvm::SmallVector<Path>
   droppable(const Owners &owners, mlir::Operation *at,
             llvm::function_ref<bool(const Path &)> keep) {
-    llvm::SmallVector<Path> roots, live, paths;
+    llvm::SmallVector<Path> live, paths;
     for (auto &[path, owner] : owners)
-      if (path.steps.empty())
-        roots.push_back(path);
-    for (auto &root : roots)
-      liveOwners(owners, root, live);
+      if (path.steps.empty() && dominance_.dominates(path.root, at))
+        collect(owners, path, live);
     for (auto &path : live)
-      if (owners.at(path).kind == Owner::Live && drops(owners, path) &&
-          dominance_.dominates(path.root, at) && keep(path))
+      if (keep(path))
         paths.push_back(path);
     llvm::sort(paths, [&](const Path &a, const Path &b) {
       if (a.root != b.root)
@@ -95,22 +126,39 @@ private:
     return paths;
   }
 
-  /// Whether elaboration drops `path` in `owners`: a whole value, not a
-  /// part of one, whose type drops on its own, or a box what it points at
-  /// was moved out of, whose drop is a free. Not a part: a struct's drop is
-  /// its own, a field at a time or through its Drop instance (steps 8 and
-  /// 9), and an io::File's handle is closed, not freed.
-  static bool drops(const Owners &owners, const Path &path) {
-    if (!path.steps.empty())
-      return false;
+  /// What of `path` is live in `owners` and is dropped, as its type drops:
+  /// a pointer, after what a box points at; a value with a Drop instance,
+  /// whole, if all of it is there; any other struct or tuple, field by
+  /// field. Inside T's own Drop, a T is dropped field by field, or it would
+  /// call itself. An enum or an array isn't dropped yet.
+  void collect(const Owners &owners, const Path &path,
+               llvm::SmallVectorImpl<Path> &out) {
+    auto it = owners.find(path);
+    if (it == owners.end() || it->second.kind != Owner::Live)
+      return;
     auto type = typeOf(path);
-    if (dropsOnItsOwn(type))
-      return true;
-    auto ptr = mlir::dyn_cast<smn::PtrType>(type);
-    if (!ptr || !ptr.isBox())
-      return false;
-    auto pointee = owners.find(path.child({Step::Pointee}));
-    return pointee == owners.end() || pointee->second.kind == Owner::Moved;
+    if (auto ptr = mlir::dyn_cast<smn::PtrType>(type)) {
+      if (ptr.isBox())
+        collect(owners, path.child({Step::Pointee}), out);
+      out.push_back(path);
+      return;
+    }
+    if (auto drop = dropFunction(module_, type); drop && drop != func_) {
+      if (allLive(owners, path))
+        out.push_back(path);
+      return;
+    }
+    if (!smn::fieldTypes(type))
+      return;
+    for (auto step : partsOf(type))
+      collect(owners, path.child(step), out);
+  }
+
+  static bool allLive(const Owners &owners, const Path &path) {
+    for (auto &[part, owner] : owners)
+      if (path.contains(part) && owner.kind != Owner::Live)
+        return false;
+    return true;
   }
 
   /// What is still owned at each return, once it has taken what it

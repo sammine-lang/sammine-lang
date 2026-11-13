@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Pass/Pass.h"
 
@@ -16,10 +17,14 @@
 
 namespace sammine_lang {
 
-/// Whether elaboration drops a value of MIR type `type` where it goes out
-/// of use. So far: an owned pointer whose drop only frees its memory, a
-/// buffer, or a box of a value that owns nothing.
-bool dropsOnItsOwn(mlir::Type type);
+/// The function that drops a value of `type`, its Drop instance's method
+/// (`Drop<T>::Drop`) in `module`, or null if it has none.
+mlir::func::FuncOp dropFunction(mlir::ModuleOp module, mlir::Type type);
+
+/// Each drop of a struct or tuple becomes a call of its type's Drop
+/// instance, or, with none, the drops of its fields: what is left drops
+/// pointers, which lower to free. Run before lowering to LLVM.
+void expandDrops(mlir::ModuleOp module);
 
 /// Elaborates the drops of every function MIR defines (marked
 /// `sammine.mir`) in `module`.

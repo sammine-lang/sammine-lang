@@ -1,0 +1,16 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md).
+// valgrind checks that all of it is freed, and freed once.
+
+struct In { a: 'ptr<i32> };
+struct Out { i: In };
+
+let main() -> i32 {
+  let o = Out { i: In { a: alloc<i32>(1) } };
+  let c = 1 > 0;
+  if c { drop(o.i.a); } else { };
+  0
+}

@@ -45,13 +45,17 @@ export let read_i64() -> i64 { sammine_io_read_i64() }
 export let read_f64() -> f64 { sammine_io_read_f64() }
 
 // An open file: C's FILE *, which close closes. It is a struct of its own,
-// not the pointer, so that nothing drops it as a pointer it would free.
+// not the pointer, so that its drop closes it: a pointer's would free it.
 export struct File { handle: 'ptr<char>, };
+
+export instance Drop<File> {
+  let Drop(f: File) -> unit { sammine_io_close(f.handle) }
+}
 
 export let open(path: ptr<char>, mode: ptr<char>) -> File {
   File { handle: sammine_io_open(path, mode) }
 }
-export let close(f: File) -> unit { sammine_io_close(f.handle) }
+export let close(f: File) -> unit { drop(f) }
 // Returns the file back with the next line.
 export let file_read_line(f: File) -> (File, ReadResult) {
   let (handle, buf, n) = sammine_io_file_read_line(f.handle);

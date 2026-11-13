@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 6 are done.
+Status: in progress. Steps 1 to 9 are done, and 11 for inserted drops.
 
 ## Goal
 
@@ -261,10 +261,26 @@ Each a commit, the suite passing after each.
    closes, `Vec<T>`'s and `String`'s replace their `delete`; the
    Monomorphizer copies a generic instance for each type instantiated.
    Before struct drops, so no `File` or `Vec` drops field by field.
+   (Done, with 9, differently: `Drop(x: T)` takes the value, not a view,
+   and must use up what it owns; nothing is dropped after it. A view
+   can't move `File`'s handle out to `close`, and the field drop after
+   would free the `FILE *`: Rust's file holds a raw descriptor, with no
+   drop, which sammine has no field type for. Inside `T`'s own `Drop`, a
+   `T` drops field by field, or it would call itself. Calling `Drop` is
+   no error: it uses the value up, as `drop(x)` does. `instantiate_drops`
+   copies a generic instance for each instantiated type, after checking.
+   `delete` stays, as `drop`.)
 9. Structs, tuples, arrays: generated drop functions; partial moves;
-   `drop(x)` of any type, a no-op for one that owns nothing.
+   `drop(x)` of any type, a no-op for one that owns nothing. (Done for
+   structs and tuples: no generated functions, `expandDrops` turns a
+   struct's drop into its instance's call or its fields' drops before
+   LLVM. Elaboration drops what of a partly moved one is left. A value
+   with an instance moved in part isn't dropped: the check reports what
+   is left. Arrays come with enums.)
 10. Enums: by tag, or by the variant a case arm knows.
-11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free.
+11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done for the
+    drops elaboration inserts. `drop(p)` the program writes still wants
+    `*p` gone first.)
 12. Stores, shadowing, temporaries, and a wildcard arm's unnamed payloads.
 13. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
     becomes "owning" in the diagnostics that stay; docs.

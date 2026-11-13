@@ -274,6 +274,13 @@ mlir::LogicalResult MoveOp::verify() {
   return mlir::success();
 }
 
+mlir::LogicalResult DropOp::verify() {
+  if (!ownsMemory(getValue().getType()))
+    return emitOpError("drops only a value that owns memory, not ")
+           << getValue().getType();
+  return mlir::success();
+}
+
 mlir::LogicalResult LendOp::verify() {
   for (auto *user : getResult().getUsers())
     if (!mlir::isa<CallOp, ClosureOp>(user))

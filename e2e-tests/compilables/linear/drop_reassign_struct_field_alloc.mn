@@ -1,0 +1,24 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: 42
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md).
+// valgrind checks that all of it is freed, and freed once.
+
+import std;
+
+struct Box {
+  data: 'ptr<i32>,
+  tag: i32,
+};
+
+let main() -> i32 {
+  let p = alloc<i32>(1);
+  *p = 42;
+  let b : Box = Box { data: p, tag: 1 };
+  let v : i32 = *(b.data);
+  std::printf("%d
+", v);
+  return 0;
+}
