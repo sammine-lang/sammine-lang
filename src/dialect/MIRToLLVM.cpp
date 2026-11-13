@@ -4,6 +4,7 @@
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/ControlFlow/Transforms/StructuralTypeConversions.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -271,34 +272,6 @@ struct StoreLowering : public mlir::OpConversionPattern<smn::StoreOp> {
                   mlir::ConversionPatternRewriter &rewriter) const override {
     rewriter.replaceOpWithNewOp<mlir::LLVM::StoreOp>(op, adaptor.getValue(),
                                                      adaptor.getPlace());
-    return mlir::success();
-  }
-};
-
-// A function's signature and the arguments of every block in it: an if's
-// merge block takes MIR types too. MLIR's own pattern for function types
-// (populateFunctionOpInterfaceTypeConversionPattern) converts only the entry
-// block.
-struct FuncLowering : public mlir::OpConversionPattern<mlir::func::FuncOp> {
-  using OpConversionPattern::OpConversionPattern;
-  mlir::LogicalResult
-  matchAndRewrite(mlir::func::FuncOp func, OpAdaptor adaptor,
-                  mlir::ConversionPatternRewriter &rewriter) const override {
-    auto type = func.getFunctionType();
-    auto &converter = *getTypeConverter();
-    mlir::TypeConverter::SignatureConversion inputs(type.getNumInputs());
-    llvm::SmallVector<mlir::Type, 1> results;
-    if (mlir::failed(
-            converter.convertSignatureArgs(type.getInputs(), inputs)) ||
-        mlir::failed(converter.convertTypes(type.getResults(), results)))
-      return mlir::failure();
-    if (!func.isExternal() && mlir::failed(rewriter.convertRegionTypes(
-                                  &func.getBody(), converter, &inputs)))
-      return mlir::failure();
-    rewriter.modifyOpInPlace(func, [&] {
-      func.setType(
-          rewriter.getFunctionType(inputs.getConvertedTypes(), results));
-    });
     return mlir::success();
   }
 };
@@ -789,16 +762,17 @@ struct MIRToLLVMPass
     mlir::RewritePatternSet patterns(&context);
     mlir::populateCallOpTypeConversionPattern(patterns, converter);
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);
-    mlir::populateBranchOpInterfaceTypeConversionPattern(patterns, converter);
-    patterns.add<
-        FuncLowering, AllocLowering, FreeLowering,
-        SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
-        SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
-        ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-        StoreLowering, CallLowering, ExtractLowering, VariantLowering,
-        TagLowering, PayloadLowering, ElementLowering, UnreachableLowering,
-        LocalLowering, CallIndirectLowering, AddressLowering>(converter,
-                                                              &context);
+    mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
+        patterns, converter);
+    patterns
+        .add<AllocLowering, FreeLowering, SameAddressLowering<smn::DerefOp>,
+             SameAddressLowering<smn::LendOp>, SameAddressLowering<smn::AddrOp>,
+             PtrElemLowering, FieldLowering, ElemLowering,
+             ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
+             StoreLowering, CallLowering, ExtractLowering, VariantLowering,
+             TagLowering, PayloadLowering, ElementLowering, UnreachableLowering,
+             LocalLowering, CallIndirectLowering, AddressLowering>(converter,
+                                                                   &context);
     unsigned partials = 0;
     patterns.add<ClosureLowering>(converter, &context, partials);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;
@@ -809,10 +783,13 @@ struct MIRToLLVMPass
     mlir::ConversionTarget target(context);
     target.addDynamicallyLegalOp<mlir::func::FuncOp>(
         [&](mlir::func::FuncOp func) {
-          return converter.isSignatureLegal(func.getFunctionType()) &&
-                 converter.isLegal(&func.getBody());
+          return converter.isSignatureLegal(func.getFunctionType());
         });
     target.addLegalOp<mlir::UnrealizedConversionCastOp>();
+    // The function's pattern converts only its entry block; each cf branch
+    // converts the blocks it jumps to, e.g. an if's merge block.
+    mlir::cf::populateCFStructuralTypeConversionsAndLegality(converter,
+                                                             patterns, target);
     // Every MIR op is lowered here. to_device and to_host aren't MIR: the
     // kernel wrappers' ops, which lower-sammine-ops lowers before this pass.
     target.addIllegalDialect<smn::SammineDialect>();
