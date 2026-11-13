@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: Cannot use linear variable 'p'
+// CHECK: Cannot use 'p'
 
 let a1() -> 'ptr<i32> { alloc<i32>(1) }
 

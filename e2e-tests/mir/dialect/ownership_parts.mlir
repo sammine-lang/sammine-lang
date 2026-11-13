@@ -17,7 +17,7 @@ func.func @part_then_whole(%b0: !sammine.struct<"Box", (p: !sammine.ptr<i32, own
 // -----
 
 func.func @part_left(%b0: !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
-  // expected-error @+1 {{Linear variable 'b.q' must be consumed before scope exit (use drop() to deallocate)}}
+  // expected-error @+1 {{'b.q' is still owned where it goes out of use}}
   %b = sammine.let "b" %b0 : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)>
   %p = sammine.extract %b[0] : !sammine.struct<"Box", (p: !sammine.ptr<i32, owned>, q: !sammine.ptr<i32, owned>)> -> !sammine.ptr<i32, owned>
   sammine.drop %p : !sammine.ptr<i32, owned>
@@ -31,7 +31,7 @@ func.func @nothing_stored(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
-  // expected-error @+1 {{Cannot use linear variable '*pp' — no owned value is known to be stored there}}
+  // expected-error @+1 {{Cannot use '*pp' — no owned value is known to be stored there}}
   %inner = sammine.move %place : <!sammine.ptr<i32, owned>>
   sammine.drop %inner : !sammine.ptr<i32, owned>
   sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
@@ -63,7 +63,7 @@ func.func @store_over_live(%n: i32) attributes {sammine.mir} {
   %2 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
   sammine.store %1, %place : <!sammine.ptr<i32, owned>>
-  // expected-error @+1 {{Reassigning linear variable '*pp' without consuming its previous value}}
+  // expected-error @+1 {{Storing into '*pp' while it still owns a value}}
   sammine.store %2, %place : <!sammine.ptr<i32, owned>>
   %inner = sammine.move %place : <!sammine.ptr<i32, owned>>
   sammine.drop %inner : !sammine.ptr<i32, owned>
@@ -79,7 +79,7 @@ func.func @free_with_live_pointee(%n: i32) attributes {sammine.mir} {
   %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %1 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
-  // expected-error @+1 {{Linear variable '*pp' must be consumed before scope exit (use drop() to deallocate)}}
+  // expected-error @+1 {{'*pp' is still owned where it goes out of use}}
   sammine.store %1, %place : <!sammine.ptr<i32, owned>>
   sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
@@ -139,7 +139,7 @@ func.func @case_twice(%e0: !sammine.enum<"Opt", 8, (Some: !sammine.tuple<!sammin
 ^none:
   cf.br ^done
 ^done:
-  // expected-error @+1 {{Cannot use linear variable 'e' — it was already matched in case previously}}
+  // expected-error @+1 {{Cannot use 'e' — it was already matched in case previously}}
   %t2 = sammine.tag %e : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
   return
 }
@@ -171,7 +171,7 @@ func.func @through_held_pointer(%n: i32) attributes {sammine.mir} {
   %2 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %again = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
   %inner = sammine.through %again : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>> -> <!sammine.ptr<i32, owned>>
-  // expected-error @+1 {{Linear variable '**pp' must be consumed before scope exit (use drop() to deallocate)}}
+  // expected-error @+1 {{'**pp' is still owned where it goes out of use}}
   sammine.store %2, %inner : <!sammine.ptr<i32, owned>>
   %last = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
   %taken = sammine.move %last : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>>
@@ -200,7 +200,7 @@ func.func @free_buffer_of_owners(%n: i32) attributes {sammine.mir} {
 // A parameter's pointee holds a value: its caller put one there. Freeing
 // only the outer pointer leaks it.
 func.func @param_pointee_live(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
-  // expected-error @-1 {{Temporary owning memory must not be discarded (bind it with 'let' first)}}
+  // expected-error @-1 {{Temporary owning memory is still owned where it goes out of use}}
   sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
 }

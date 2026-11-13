@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |                           ╰─ 'b.data' was moved here
 // CHECK-NEXT:   32|  let r : 'ptr<i32> = b.data;
 // CHECK-NEXT:     |  ─────────────────────────┬
-// CHECK-NEXT:     |                           ╰─ Cannot use linear variable 'b.data' — it was already moved previously
+// CHECK-NEXT:     |                           ╰─ Cannot use 'b.data' — it was already moved previously
 // CHECK-NEXT:   33|  let v : i32 = *q;
 // CHECK-NEXT:   34|  drop(q);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

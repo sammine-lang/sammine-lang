@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: Cannot use linear variable 'p'
+// CHECK: Cannot use 'p'
 
 type M = L('ptr<i32>) | E;
 let mk() -> M { L(alloc<i32>(1)) }

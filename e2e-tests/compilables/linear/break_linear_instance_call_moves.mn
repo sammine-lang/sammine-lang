@@ -3,7 +3,7 @@
 // after.
 // CHECK: break_linear_instance_call_moves.mn
 // CHECK: 'b' was passed to function here
-// CHECK: Cannot use linear variable 'b' — it was already passed to function previously
+// CHECK: Cannot use 'b' — it was already passed to function previously
 
 typeclass Take<T> {
   Take(p: 'ptr<T>) -> T;

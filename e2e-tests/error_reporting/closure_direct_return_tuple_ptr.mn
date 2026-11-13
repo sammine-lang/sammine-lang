@@ -4,7 +4,7 @@
 // CHECK-NEXT:   25|  let t = (42, true);
 // CHECK-NEXT:   26|  return get_fst(&t);
 // CHECK-NEXT:     |  ────────────────┬
-// CHECK-NEXT:     |                  ╰─ Cannot return a partial application of 'get_fst' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |                  ╰─ Cannot return a partial application of 'get_fst' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   27|}
 // CHECK-NEXT:   28|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

@@ -856,7 +856,7 @@ is still an error:
 let p = alloc<i32>(1);
 *p = 42;
 let q = p;           // p moves to q
-drop(p);             // Error: Cannot use linear variable 'p' — it was already moved previously
+drop(p);             // Error: Cannot use 'p' — it was already moved previously
 ```
 
 A type says what its end does with a `Drop` instance, which takes the value

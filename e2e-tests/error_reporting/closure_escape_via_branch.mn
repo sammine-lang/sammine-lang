@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
+// CHECK: ╰─ Cannot return a partial application of 'deref_add' that captured a view (ptr<T>) (may dangle after return)
 
 // A closure that bound a view of a local is followed through the if that
 // picks it, not only through names and literals.

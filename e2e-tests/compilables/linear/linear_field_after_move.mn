@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK:      ╰─ 'p.a' was passed to function here
-// CHECK:      ╰─ Cannot use linear variable 'p.a' — it was already passed to function previously
+// CHECK:      ╰─ Cannot use 'p.a' — it was already passed to function previously
 
 // Moving p moves p.a with it, so main no longer owns p.a.
 

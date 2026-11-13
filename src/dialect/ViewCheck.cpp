@@ -121,14 +121,15 @@ private:
   void checkAddr(smn::AddrOp addr) {
     auto place = addr.getPlace();
     if (ownership::isOwnedPtr(place.getType().getValueType())) {
-      error(addr.getLoc(), "Cannot take address of a linear value — linear "
-                           "values cannot be aliased");
+      error(addr.getLoc(), "Cannot take the address of an owned pointer: it "
+                           "would alias its one owner");
       return;
     }
     auto *through = reachedThrough(place);
     if (through && pointerOf(through).isOwned())
-      error(through->getLoc(), "Cannot take the address of memory owned by a "
-                               "linear pointer — it could dangle after drop");
+      error(through->getLoc(), "Cannot take the address of memory an owned "
+                               "pointer holds: it could dangle once that is "
+                               "dropped");
   }
 };
 
@@ -202,8 +203,7 @@ void ViewCheck::checkEscapes(mlir::func::FuncOp func) {
   auto message = [](llvm::StringRef what, smn::ClosureOp closure,
                     llvm::StringRef when) {
     return what.str() + " a partial application of '" + writtenName(closure) +
-           "' that captured a non-linear pointer (may dangle " + when.str() +
-           ")";
+           "' that captured a view (ptr<T>) (may dangle " + when.str() + ")";
   };
   func.walk([&](mlir::Operation *op) {
     if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {

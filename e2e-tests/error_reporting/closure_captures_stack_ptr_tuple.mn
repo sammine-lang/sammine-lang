@@ -4,7 +4,7 @@
 // CHECK-NEXT:   46|  let f : (i32) -> i32 = get_fst(p);
 // CHECK-NEXT:   47|  return f;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'get_fst' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'get_fst' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   48|}
 // CHECK-NEXT:   49|
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 // CHECK-NEXT:   53|  let f : (i32) -> i32 = get_snd_as_int(p);
 // CHECK-NEXT:   54|  return f;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'get_snd_as_int' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'get_snd_as_int' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   55|}
 // CHECK-NEXT:   56|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

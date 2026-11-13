@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: Cannot take the address of memory owned by a linear pointer
+// CHECK: Cannot take the address of memory an owned pointer holds
 
 let main() -> i32 {
   let p = alloc<i32>(1);

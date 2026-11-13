@@ -51,7 +51,7 @@ func.func @fine(%n: i32) attributes {sammine.mir} {
 func.func @addr_of_owned_memory(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Cannot take the address of memory owned by a linear pointer — it could dangle after drop}}
+  // expected-error @+1 {{Cannot take the address of memory an owned pointer holds: it could dangle once that is dropped}}
   %at = sammine.deref %p : <i32, owned>
   %view = sammine.addr %at : <i32>
   sammine.drop %p : !sammine.ptr<i32, owned>
@@ -65,7 +65,7 @@ func.func @addr_of_owner(%n: i32) attributes {sammine.mir} {
   %slot = sammine.local "a" : <!sammine.ptr<i32, owned>>
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   sammine.store %0, %slot : <!sammine.ptr<i32, owned>>
-  // expected-error @+1 {{Cannot take address of a linear value — linear values cannot be aliased}}
+  // expected-error @+1 {{Cannot take the address of an owned pointer: it would alias its one owner}}
   %view = sammine.addr %slot : <!sammine.ptr<i32, owned>>
   return
 }
@@ -92,7 +92,7 @@ func.func @escapes(%c: i1, %v: !sammine.ptr<i32, view>) -> !sammine.tuple<!sammi
   cf.br ^bb1(%f : !sammine.fn<(i32) -> i32>)
 ^bb1(%g: !sammine.fn<(i32) -> i32>):
   %t = sammine.aggregate(%g) : (!sammine.fn<(i32) -> i32>) -> !sammine.tuple<!sammine.fn<(i32) -> i32>>
-  // expected-error @+1 {{Cannot return a partial application of 'peek' that captured a non-linear pointer (may dangle after return)}}
+  // expected-error @+1 {{Cannot return a partial application of 'peek' that captured a view (ptr<T>) (may dangle after return)}}
   return %t : !sammine.tuple<!sammine.fn<(i32) -> i32>>
 }
 

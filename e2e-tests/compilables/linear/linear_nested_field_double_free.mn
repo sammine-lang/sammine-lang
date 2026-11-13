@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK:      ╰─ 'o.i.a' was dropped here
-// CHECK:      ╰─ Cannot use linear variable 'o.i.a' — it was already dropped previously
+// CHECK:      ╰─ Cannot use 'o.i.a' — it was already dropped previously
 // CHECK-NOT:  must be consumed before scope exit
 
 struct In { a: 'ptr<i32> };

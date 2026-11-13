@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |                                    ╰─ 'p' was moved into struct here
 // CHECK-NEXT:   26|  drop(p);
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already moved into struct previously
+// CHECK-NEXT:     |       ╰─ Cannot use 'p' — it was already moved into struct previously
 // CHECK-NEXT:   27|  return 0;
 // CHECK-NEXT:   28|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

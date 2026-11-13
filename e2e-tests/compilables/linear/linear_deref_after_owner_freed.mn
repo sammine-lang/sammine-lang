@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK:     ╰─ Cannot dereference 'pp' — it was already dropped previously
-// CHECK-NOT: Cannot use linear variable '*pp'
+// CHECK-NOT: Cannot use '*pp'
 
 // One mistake, reported once: pp was freed, and *pp went with it.
 

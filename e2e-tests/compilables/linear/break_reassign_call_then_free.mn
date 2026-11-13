@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |                            ╰─ 'p' was passed to function here
 // CHECK-NEXT:   32|  drop(p);
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already passed to function previously
+// CHECK-NEXT:     |       ╰─ Cannot use 'p' — it was already passed to function previously
 // CHECK-NEXT:   33|  std::printf("%d
 // CHECK-NEXT:   34|", v);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

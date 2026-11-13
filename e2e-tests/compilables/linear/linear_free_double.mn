@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |       ╰─ 'p' was dropped here
 // CHECK-NEXT:    20|  drop(p);
 // CHECK-NEXT:     |  ─────┬
-// CHECK-NEXT:     |       ╰─ Cannot use linear variable 'p' — it was already dropped previously
+// CHECK-NEXT:     |       ╰─ Cannot use 'p' — it was already dropped previously
 // CHECK-NEXT:    21|  return 0;
 // CHECK-NEXT:    22|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

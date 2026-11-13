@@ -1,5 +1,5 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:     ╰─ Cannot use linear variable '*p' — no owned value is known to be stored there
+// CHECK:     ╰─ Cannot use '*p' — no owned value is known to be stored there
 // CHECK-NOT: was  here
 
 // alloc leaves *p unset, so there is no inner pointer to free yet.

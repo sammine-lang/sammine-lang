@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: ╰─ 'b' was dropped here
-// CHECK: ╰─ Cannot use linear variable 'b' — it was already dropped previously
+// CHECK: ╰─ Cannot use 'b' — it was already dropped previously
 
 let main() -> i32 {
   let b = alloc_buf<i32>(2);

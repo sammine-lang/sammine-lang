@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: ╰─ '*p.a' was dropped here
-// CHECK: ╰─ Cannot use linear variable '*p.a' — it was already dropped previously
+// CHECK: ╰─ Cannot use '*p.a' — it was already dropped previously
 
 struct S { a: 'ptr<i32> };
 let main() -> i32 {

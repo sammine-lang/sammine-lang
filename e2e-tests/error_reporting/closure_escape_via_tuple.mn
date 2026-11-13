@@ -4,7 +4,7 @@
 // CHECK-NEXT:   35|  let t = (f, 0);
 // CHECK-NEXT:   36|  return t;
 // CHECK-NEXT:     |  ───────┬
-// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |         ╰─ Cannot return a partial application of 'deref_add' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   37|}
 // CHECK-NEXT:   38|
 // CHECK-NEXT: --------------------------------------------------------------------------
@@ -13,7 +13,7 @@
 // CHECK-NEXT:   41|  let f : (i32) -> i32 = deref_add(&x);
 // CHECK-NEXT:   42|  return (f, 0);
 // CHECK-NEXT:     |  ────────────┬
-// CHECK-NEXT:     |              ╰─ Cannot return a partial application of 'deref_add' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |              ╰─ Cannot return a partial application of 'deref_add' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   43|}
 // CHECK-NEXT:   44|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

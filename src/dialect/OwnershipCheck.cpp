@@ -58,7 +58,7 @@ llvm::StringRef reasonFor(mlir::Operation *op) {
 /// What `op` does with a value it uses: takes it, or reaches through it.
 llvm::StringRef verbFor(mlir::Operation *op, bool takes) {
   if (takes)
-    return "use linear variable";
+    return "use";
   if (mlir::isa<smn::AddrOp>(op))
     return "take the address of";
   if (!mlir::isa<smn::DerefOp, smn::ThroughOp>(op))
@@ -179,8 +179,8 @@ public:
   }
 
   void overwritten(const Path &target, mlir::Operation *store) override {
-    error(store->getLoc(), "Reassigning linear variable '" + nameOf(target) +
-                               "' without consuming its previous value");
+    error(store->getLoc(),
+          "Storing into '" + nameOf(target) + "' while it still owns a value");
   }
 
   void movedOutOfArray(const Path &element, mlir::Location at) override {
@@ -267,23 +267,22 @@ private:
     if (name.empty()) {
       // The error underlines the temporary; its type isn't spelled, as MIR's
       // integers carry no sign to spell u32 by.
-      error(definedAt(path.root), "Temporary owning memory must not be "
-                                  "discarded (bind it with 'let' first)");
+      error(definedAt(path.root),
+            "Temporary owning memory is still owned where it goes out of use");
     } else if (owner.isPartlyFilled()) {
-      error(owner.definedAt, "Linear variable '" + name +
-                                 "' must be consumed before scope exit: it "
-                                 "is stored in some branches");
+      error(owner.definedAt, "'" + name +
+                                 "' is still owned where it goes out of use: "
+                                 "it is stored in some branches");
     } else if (owner.kind == Owner::MaybeMoved) {
       auto why = reasonFor(owner.movedBy).str();
-      error(owner.definedAt, "Linear variable '" + name +
-                                 "' is consumed in some branches but not "
-                                 "others")
+      error(owner.definedAt, "'" + name +
+                                 "' is moved in some branches and still "
+                                 "owned in others")
               .attachNote(owner.movedBy->getLoc())
           << "'" << name << "' was " << why << " here";
     } else {
-      error(owner.definedAt, "Linear variable '" + name +
-                                 "' must be consumed before scope exit (use "
-                                 "drop() to deallocate)");
+      error(owner.definedAt,
+            "'" + name + "' is still owned where it goes out of use");
     }
   }
 };

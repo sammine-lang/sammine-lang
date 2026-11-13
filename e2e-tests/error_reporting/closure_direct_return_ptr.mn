@@ -4,7 +4,7 @@
 // CHECK-NEXT:   24|  let x : i32 = 42;
 // CHECK-NEXT:   25|  return deref_and_add(&x);
 // CHECK-NEXT:     |  ──────────────────────┬
-// CHECK-NEXT:     |                        ╰─ Cannot return a partial application of 'deref_and_add' that captured a non-linear pointer (may dangle after return)
+// CHECK-NEXT:     |                        ╰─ Cannot return a partial application of 'deref_and_add' that captured a view (ptr<T>) (may dangle after return)
 // CHECK-NEXT:   26|}
 // CHECK-NEXT:   27|
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]

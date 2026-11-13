@@ -7,7 +7,7 @@
 // CHECK-NEXT:     |                       ╰─ 'b' was converted here
 // CHECK-NEXT:   26|  let second = b as Plain;
 // CHECK-NEXT:     |               ─────────┬
-// CHECK-NEXT:     |                        ╰─ Cannot use linear variable 'b' — it was already converted previously
+// CHECK-NEXT:     |                        ╰─ Cannot use 'b' — it was already converted previously
 
 struct Boxed { p: 'ptr<i32>, };
 struct Plain { n: i32, };
