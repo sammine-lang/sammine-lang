@@ -3,7 +3,8 @@
 // read with a copy, written with a store, as *p is.
 // CHECK-LABEL: func.func private @fill(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.ptr_elem %arg0[%arg1] : <i64, owned>, i64
+// CHECK: %0 = sammine.let "xs" %arg0 : !sammine.ptr<i64, owned>
+// CHECK-NEXT: sammine.ptr_elem %0[%arg1] : <i64, owned>, i64
 // CHECK-NEXT: sammine.store
 // CHECK-LABEL: func.func private @second(
 // CHECK-SAME: sammine.mir

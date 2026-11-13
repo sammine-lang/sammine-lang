@@ -86,6 +86,46 @@ bool ownsMemory(mlir::Type type) {
   return false;
 }
 
+std::string spelling(mlir::Type type) {
+  auto list = [](llvm::ArrayRef<mlir::Type> types) {
+    std::string s;
+    for (auto [i, t] : llvm::enumerate(types))
+      s += (i ? ", " : "") + spelling(t);
+    return s;
+  };
+  if (auto ptr = mlir::dyn_cast<PtrType>(type))
+    return (ptr.isOwned() ? "'ptr<" : "ptr<") + spelling(ptr.getPointee()) +
+           ">";
+  if (auto st = mlir::dyn_cast<StructType>(type))
+    return st.getName().str();
+  if (auto en = mlir::dyn_cast<EnumType>(type))
+    return en.getName().str();
+  if (auto tuple = mlir::dyn_cast<TupleType>(type))
+    return "(" + list(tuple.getElements()) + ")";
+  if (auto array = mlir::dyn_cast<ArrayType>(type))
+    return "[" + std::to_string(array.getSize()) + "]" +
+           spelling(array.getElement());
+  if (auto fn = mlir::dyn_cast<FnType>(type)) {
+    auto sig = fn.getSignature();
+    return "(" + list(sig.getInputs()) + ") -> " +
+           (sig.getNumResults() ? spelling(sig.getResult(0)) : "()");
+  }
+  if (type.isInteger(1))
+    return "bool";
+  if (type.isInteger(8))
+    return "char";
+  if (auto integer = mlir::dyn_cast<mlir::IntegerType>(type))
+    return "i" + std::to_string(integer.getWidth());
+  if (type.isF32())
+    return "f32";
+  if (type.isF64())
+    return "f64";
+  std::string s;
+  llvm::raw_string_ostream os(s);
+  type.print(os);
+  return s;
+}
+
 mlir::LogicalResult FieldOp::verify() {
   auto base = getBase().getType().getValueType();
   auto fields = fieldTypes(base);

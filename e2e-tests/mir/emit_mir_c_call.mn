@@ -9,10 +9,11 @@
 // CHECK-NEXT: %0 = sammine.call @printf(%arg0, %arg1, %arg2, %arg3, %arg4) : (!sammine.ptr<i8, view>, i32, i8, i1, f32) -> i32
 // CHECK-LABEL: func.func private @show_text(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: %0 = sammine.deref %arg1 : <i8, owned>
-// CHECK-NEXT: %1 = sammine.lend %0 : <i8>
-// CHECK-NEXT: %2 = sammine.call @printf(%arg0, %1) : (!sammine.ptr<i8, view>, !sammine.ptr<i8, view>) -> i32
-// CHECK-NEXT: return %arg1
+// CHECK-NEXT: %0 = sammine.let "text" %arg1 : !sammine.ptr<i8, owned>
+// CHECK-NEXT: %1 = sammine.deref %0 : <i8, owned>
+// CHECK-NEXT: %2 = sammine.lend %1 : <i8>
+// CHECK-NEXT: %3 = sammine.call @printf(%arg0, %2) : (!sammine.ptr<i8, view>, !sammine.ptr<i8, view>) -> i32
+// CHECK-NEXT: return %0
 // CHECK-LABEL: func.func private @distance(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.call @abs(%{{[0-9]+}}) : (i32) -> i32

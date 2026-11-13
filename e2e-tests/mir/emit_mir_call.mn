@@ -15,13 +15,15 @@
 // CHECK-NEXT: sammine.call @pos(%arg0) : (i32) -> i32
 // CHECK-LABEL: func.func private @set5(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.call @clamp(%arg0, %{{.*}}) : (!sammine.ptr<i32, owned>, i32) -> !sammine.ptr<i32, owned>
+// CHECK: %0 = sammine.let "p" %arg0
+// CHECK: sammine.call @clamp(%0, %{{.*}}) : (!sammine.ptr<i32, owned>, i32) -> !sammine.ptr<i32, owned>
 // CHECK-LABEL: func.func private @down(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.call @fact(%arg0) : (i64) -> i64
 // CHECK-LABEL: func.func private @done(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.call @release(%arg0) : (!sammine.ptr<i32, owned>) -> ()
+// CHECK-NEXT: %0 = sammine.let "p" %arg0
+// CHECK-NEXT: sammine.call @release(%0) : (!sammine.ptr<i32, owned>) -> ()
 // CHECK-NEXT: return
 
 let sq(a: i64) -> i64 { a * a }

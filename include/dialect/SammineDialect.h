@@ -6,6 +6,8 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
+#include <string>
+
 #include "SammineDialect.h.inc"
 
 #include "SammineEnums.h.inc"
@@ -26,6 +28,10 @@ constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);
+
+/// `type` as sammine writes it, for messages: `'ptr<i32>`, `vec::Vec<i32>`.
+/// MIR's integers have no sign, so `u32` reads as `i32`.
+std::string spelling(mlir::Type type);
 } // namespace sammine_lang::smn
 
 #define GET_OP_CLASSES

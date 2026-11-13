@@ -46,6 +46,18 @@ def AllocOp : Sammine_Op<"alloc", [MemoryEffects<[MemAlloc]>]> {
   let assemblyFormat = "$count attr-dict `:` type($count) `->` type($result)";
 }
 
+def LetOp : Sammine_Op<"let", [Pure, AllTypesMatch<["value", "result"]>]> {
+  let summary = "a value that owns memory, bound to a name, `let x = v`";
+  let description = [{
+    The result is the value, under the binding's name and where it is bound:
+    what the ownership check reports a binding by. Binding moves the value.
+    Lowering to LLVM leaves just the value.
+  }];
+  let arguments = (ins StrAttr:$name, AnyType:$value);
+  let results = (outs AnyType:$result);
+  let assemblyFormat = "$name $value attr-dict `:` type($value)";
+}
+
 def FreeOp : Sammine_Op<"free", [MemoryEffects<[MemFree]>]> {
   let summary = "give back the memory an owned pointer holds";
   let arguments = (ins Sammine_OwnedPtr:$ptr);

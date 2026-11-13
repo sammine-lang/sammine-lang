@@ -194,6 +194,17 @@ struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
   }
 };
 
+// A binding is the value it names.
+struct LetLowering : public mlir::OpConversionPattern<smn::LetOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::LetOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOp(op, adaptor.getValue());
+    return mlir::success();
+  }
+};
+
 // An element past a pointer: a GEP over its pointee's type.
 struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -764,15 +775,15 @@ struct MIRToLLVMPass
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
         patterns, converter);
-    patterns
-        .add<AllocLowering, FreeLowering, SameAddressLowering<smn::DerefOp>,
-             SameAddressLowering<smn::LendOp>, SameAddressLowering<smn::AddrOp>,
-             PtrElemLowering, FieldLowering, ElemLowering,
-             ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
-             StoreLowering, CallLowering, ExtractLowering, VariantLowering,
-             TagLowering, PayloadLowering, ElementLowering, UnreachableLowering,
-             LocalLowering, CallIndirectLowering, AddressLowering>(converter,
-                                                                   &context);
+    patterns.add<
+        AllocLowering, FreeLowering, LetLowering,
+        SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
+        SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
+        ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
+        StoreLowering, CallLowering, ExtractLowering, VariantLowering,
+        TagLowering, PayloadLowering, ElementLowering, UnreachableLowering,
+        LocalLowering, CallIndirectLowering, AddressLowering>(converter,
+                                                              &context);
     unsigned partials = 0;
     patterns.add<ClosureLowering>(converter, &context, partials);
     llvm::StringMap<mlir::LLVM::GlobalOp> strings;

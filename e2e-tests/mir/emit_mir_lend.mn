@@ -5,12 +5,13 @@
 // method; the pointee may itself own memory.
 // CHECK-LABEL: func.func private @peek(%arg0: !sammine.ptr<i32, owned>
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: %0 = sammine.deref %arg0 : <i32, owned>
-// CHECK-NEXT: %1 = sammine.lend %0 : <i32>
-// CHECK-NEXT: %2 = sammine.call @look(%1) : (!sammine.ptr<i32, view>) -> i32
-// CHECK-NEXT: %3 = sammine.deref %arg0 : <i32, owned>
-// CHECK-NEXT: %4 = sammine.lend %3 : <i32>
-// CHECK-NEXT: %5 = sammine.call @sign(%4) : (!sammine.ptr<i32, view>) -> i32
+// CHECK-NEXT: %0 = sammine.let "p" %arg0 : !sammine.ptr<i32, owned>
+// CHECK-NEXT: %1 = sammine.deref %0 : <i32, owned>
+// CHECK-NEXT: %2 = sammine.lend %1 : <i32>
+// CHECK-NEXT: %3 = sammine.call @look(%2) : (!sammine.ptr<i32, view>) -> i32
+// CHECK-NEXT: %4 = sammine.deref %0 : <i32, owned>
+// CHECK-NEXT: %5 = sammine.lend %4 : <i32>
+// CHECK-NEXT: %6 = sammine.call @sign(%5) : (!sammine.ptr<i32, view>) -> i32
 // CHECK-LABEL: func.func private @both(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.lend

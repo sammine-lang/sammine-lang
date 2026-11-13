@@ -229,6 +229,10 @@ mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
 void MIRLowering::bind(llvm::StringRef name, mlir::Value value,
                        mlir::Location location) {
   if (!addressed_.contains(name)) {
+    // A value that owns memory carries its name, for the ownership check.
+    if (smn::ownsMemory(value.getType()))
+      value = smn::LetOp::create(builder_, location, value.getType(),
+                                 builder_.getStringAttr(name), value);
     names_[name] = value;
     return;
   }

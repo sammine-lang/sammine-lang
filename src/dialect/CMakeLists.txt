@@ -38,14 +38,15 @@ target_link_libraries(SammineDialect PUBLIC
   MLIRIR MLIRSupport MLIRFunctionInterfaces MLIRLLVMDialect
 )
 
-# Passes on the dialect: MIR to the LLVM dialect, and the GPU transfer ops to
-# the gpu dialect.
+# Passes on the dialect: the ownership check, MIR to the LLVM dialect, and
+# the GPU transfer ops to the gpu dialect.
 add_library(SammineDialectTransforms STATIC
+  ${CMAKE_CURRENT_LIST_DIR}/OwnershipCheck.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRToLLVM.cpp
   ${CMAKE_CURRENT_LIST_DIR}/LowerSammineOps.cpp
 )
 target_link_libraries(SammineDialectTransforms PRIVATE project_options)
 target_link_libraries(SammineDialectTransforms PUBLIC
   SammineDialect SammineCABI MLIRArithDialect MLIRFuncDialect MLIRFuncTransforms MLIRControlFlowTransforms MLIRLLVMDialect MLIRDataLayoutInterfaces
-  MLIRGPUDialect MLIRMemRefDialect MLIRTransformUtils MLIRPass
+  MLIRGPUDialect MLIRMemRefDialect MLIRTransformUtils MLIRPass MLIRAnalysis
 )

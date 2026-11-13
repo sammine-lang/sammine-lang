@@ -5,15 +5,16 @@
 // each time.
 // CHECK-LABEL: func.func private @pass(%arg0: !sammine.ptr<i32, owned>{{.*}}) -> !sammine.ptr<i32, owned>
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: return %arg0 : !sammine.ptr<i32, owned>
+// CHECK-NEXT: %0 = sammine.let "p" %arg0 : !sammine.ptr<i32, owned>
+// CHECK-NEXT: return %0 : !sammine.ptr<i32, owned>
 // CHECK-LABEL: func.func private @pick(%arg0: !sammine.ptr<i64, view>{{.*}}, %arg1: !sammine.ptr<i64, view>{{.*}}) -> i32
 // CHECK-SAME: sammine.mir
 // CHECK-LABEL: func.func @main
 // CHECK-SAME: sammine.mir
-// CHECK: %3 = sammine.local "x" : <i64>
-// CHECK-NEXT: sammine.store %c3_i64, %3 : <i64>
-// CHECK: sammine.addr %3 : <i64>
-// CHECK-NEXT: sammine.addr %3 : <i64>
+// CHECK: %5 = sammine.local "x" : <i64>
+// CHECK-NEXT: sammine.store %c3_i64, %5 : <i64>
+// CHECK: sammine.addr %5 : <i64>
+// CHECK-NEXT: sammine.addr %5 : <i64>
 // CHECK-NEXT: sammine.call @pick(
 let pass(p: 'ptr<i32>) -> 'ptr<i32> { p }
 let pick(a: ptr<i64>, b: ptr<i64>) -> i32 { 7 }
