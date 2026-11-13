@@ -1,0 +1,53 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 15 9183
+
+// Project Euler Problem 29: Distinct powers
+// For 2 <= a <= 5 and 2 <= b <= 5, a^b takes 15 distinct values. How many
+// distinct terms are in the sequence of a^b for 2 <= a <= 100 and
+// 2 <= b <= 100?
+// Each a is r^k for its least root r, so a^b is r^(kb): two powers are
+// equal when they share a root and kb. No power is ever computed.
+
+import std;
+import range;
+
+// Whether n is a power of s: dividing out s leaves 1.
+let power_of(n: i64, s: i64) -> bool {
+  n == 1 || (n % s == 0 && power_of(n / s, s))
+}
+
+// Whether r is s^k for some smaller s and k >= 2, so not a root.
+let is_perfect_power(r: i64) -> bool { range::any(2, r, power_of(r)) }
+
+// The most times r can be multiplied into 1 staying at most limit: the
+// largest m with r^m <= limit.
+let max_exponent(r: i64, limit: i64) -> i64 {
+  if limit < r { 0 } else { 1 + max_exponent(r, limit / r) }
+}
+
+// Whether e is k * b for some b from 2 to limit.
+let splits(limit: i64, e: i64, k: i64) -> bool {
+  e % k == 0 && e / k >= 2 && e / k <= limit
+}
+
+// Whether e is k * b for some k from 1 to m and b from 2 to limit.
+let reachable(m: i64, limit: i64, e: i64) -> bool {
+  range::any(1, m + 1, splits(limit, e))
+}
+
+// The distinct powers with root r: r^(kb), one for each distinct kb.
+let powers_of_root(limit: i64, r: i64) -> i64 {
+  if is_perfect_power(r) { 0 } else {
+    let m = max_exponent(r, limit);
+    range::count(2, m * limit + 1, reachable(m, limit))
+  }
+}
+
+let distinct_powers(limit: i64) -> i64 {
+  range::sum(2, limit + 1, powers_of_root(limit))
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", distinct_powers(5), distinct_powers(100));
+  0
+}
