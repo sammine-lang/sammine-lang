@@ -55,7 +55,7 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     llvm::SmallVector<mlir::StringAttr> names;
     for (auto &field : st.get_field_names())
       names.push_back(mlir::StringAttr::get(ctx_, field));
-    return smn::StructType::get(ctx_, st.get_name().mangled(), names, *fields);
+    return smn::StructType::get(ctx_, st.get_name().symbol(), names, *fields);
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);
@@ -75,7 +75,7 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
       variants.push_back(smn::TupleType::get(ctx_, *fields));
       names.push_back(mlir::StringAttr::get(ctx_, variant.name));
     }
-    return smn::makeEnum(ctx_, et.get_name().mangled(), names, variants);
+    return smn::makeEnum(ctx_, et.get_name().symbol(), names, variants);
   }
   case TypeKind::Function: {
     auto &fn = std::get<FunctionType>(type.type_data);

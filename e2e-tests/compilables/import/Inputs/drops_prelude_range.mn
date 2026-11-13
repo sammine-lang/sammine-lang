@@ -1,0 +1,6 @@
+// A generic function that makes one of the prelude's Range and lets it go
+// out of use, for a program with a Range of its own to instantiate.
+
+export let make_and_drop<T>(x: T, y: T) {
+  let r = Range<T> { current: x, end_val: y };
+}

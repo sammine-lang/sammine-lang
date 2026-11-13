@@ -97,8 +97,9 @@ public:
   virtual void movedOutOfArray(const Path &element, mlir::Location at) = 0;
   /// `part` of `whole`, whose type has a Drop instance, read at `at`, is
   /// taken outside an unsafe function: such a value drops whole, through
-  /// its instance, which counts on all of it.
+  /// its instance's `drop`, which counts on all of it.
   virtual void movedOutOfDropValue(const Path &part, const Path &whole,
+                                   mlir::FunctionOpInterface drop,
                                    mlir::Location at) = 0;
 };
 

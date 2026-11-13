@@ -19,7 +19,7 @@
 |---|---|---|
 | integers, floats, bool, char | `i32`/`i64`/`f32`/`f64`/`i1`/`i8` | same |
 | `'ptr<T>` / `'buf<T>` / `ptr<T>` | `!sammine.ptr<T, owned/buffer/view>` | `!llvm.ptr` |
-| struct | `!sammine.struct<"name", (field: T, ...)>`, its fields named | identified `sammine.struct.<name>` |
+| struct | `!sammine.struct<"name", (field: T, ...)>`, its fields named; the name is the whole one (`QualifiedName::symbol`: `::Point`, `definitions::Range<i32>`), so types written alike in two modules differ, and each finds its own `Drop` | identified `sammine.struct.<name>` |
 | tuple | `!sammine.tuple<...>` | literal struct |
 | `[N]T` | `!sammine.array<N, T>` | `!llvm.array<N x T>` |
 | enum with payloads | `!sammine.enum<"name", N, (Variant: payload tuple, ...)>`, its variants named | identified `sammine.enum.<name>`, `{i32 tag, [N x i8]}` |

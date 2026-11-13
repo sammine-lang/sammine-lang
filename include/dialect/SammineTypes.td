@@ -55,8 +55,9 @@ def Sammine_PlaceType : Sammine_Type<"Place", "place"> {
 def Sammine_StructType : Sammine_Type<"Struct", "struct"> {
   let summary = "a struct: its name and its fields' names and types, in order";
   let description = [{
-    `!sammine.struct<"Point", (x: i32, y: i32)>`. The name is the struct's, as
-    NameResolver gives it (`shapes::Point`, `Range<i32>`): lowered to LLVM
+    `!sammine.struct<"::Point", (x: i32, y: i32)>`. The name is the struct's, as
+    NameResolver gives it whole (`shapes::Point`, a program's own `::Point`,
+    `definitions::Range<i32>`), so two structs written alike are two types: lowered to LLVM
     it is the identified struct `sammine.struct.<name>`, the very type the
     module's other code, and its declarations, use for it.
   }];
@@ -102,7 +103,7 @@ def Sammine_FnType : Sammine_Type<"Fn", "fn"> {
 def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
   let summary = "an enum: its name, its payload's size, and each variant's payload";
   let description = [{
-    `!sammine.enum<"Option<i64>", 8, (!sammine.tuple<i64>, !sammine.tuple<>)>`:
+    `!sammine.enum<"definitions::Option<i64>", 8, (!sammine.tuple<i64>, !sammine.tuple<>)>`:
     variant k's payload is the k-th tuple's elements. Lowered to LLVM it is
     the identified struct `sammine.enum.<name>`, an i32 tag then the payload
     bytes, which declarations of functions taking or giving one use too:

@@ -248,8 +248,8 @@ private:
     auto module = op->getParentOfType<mlir::ModuleOp>();
     Path whole{path.root, {}};
     for (auto step : path.steps) {
-      if (smn::dropFunction(module, typeOf(whole))) {
-        observer_->movedOutOfDropValue(path, whole, at);
+      if (auto drop = smn::dropFunction(module, typeOf(whole))) {
+        observer_->movedOutOfDropValue(path, whole, drop, at);
         return;
       }
       whole = whole.child(step);

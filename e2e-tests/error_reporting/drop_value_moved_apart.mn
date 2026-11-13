@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: drop_value_moved_apart.mn:15:10
-// CHECK: ╰─ Cannot move 'f.handle' out of 'f': 'io::File' has a Drop instance, so it drops whole; take it apart in an unsafe function
+// CHECK: ╰─ Cannot move 'f.handle' out of 'f': it drops whole, through 'Drop<io::File>::Drop'; take it apart in an unsafe function
 
 // A File's Drop closes its handle: taken out, the handle would drop as a
 // pointer, freed, not closed, and the File not at all. A value whose type

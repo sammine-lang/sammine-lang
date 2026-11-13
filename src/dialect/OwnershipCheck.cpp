@@ -196,18 +196,15 @@ public:
   }
 
   void movedOutOfDropValue(const Path &part, const Path &whole,
+                           mlir::FunctionOpInterface drop,
                            mlir::Location at) override {
     if (!first(part))
       return;
-    llvm::StringRef type;
-    if (auto st = mlir::dyn_cast<smn::StructType>(typeOf(whole)))
-      type = st.getName();
-    else if (auto en = mlir::dyn_cast<smn::EnumType>(typeOf(whole)))
-      type = en.getName();
+    // The instance says the type as source writes it: a MIR type's name is
+    // its whole one.
     error(at, "Cannot move " + quoted(part) + " out of " + quoted(whole) +
-                  ": '" + type.str() +
-                  "' has a Drop instance, so it drops whole; take it apart "
-                  "in an unsafe function");
+                  ": it drops whole, through '" + smn::sourceName(drop) +
+                  "'; take it apart in an unsafe function");
   }
 
   void lentAndMoved(const Path &lent, mlir::Operation *call) override {

@@ -1,0 +1,38 @@
+// RUN: %sammine --file %dir/Inputs/drops_prelude_range.mn %O && %sammine --file %full %O %I -I %dir/Inputs && %T/%base.exe | %check %full
+// CHECK:      start
+// CHECK-NEXT: done
+// CHECK-NEXT: own drop
+
+// Two types written alike are two types: this program's Range has a Drop
+// instance, the prelude's has none. The prelude's Range the library's
+// function makes drops field by field, and only this program's own runs
+// its instance.
+
+import drops_prelude_range;
+import std;
+
+struct Range<T> { current: T, end_val: T, };
+
+instance Drop<Range<'ptr<i32>>> {
+  let unsafe Drop(r: Range<'ptr<i32>>) -> unit {
+    std::printf("own drop\n");
+    drop(r.current);
+    drop(r.end_val);
+  }
+}
+
+let main() -> i32 {
+  std::printf("start\n");
+  let a = alloc<i32>(1);
+  *a = 1;
+  let b = alloc<i32>(1);
+  *b = 2;
+  drops_prelude_range::make_and_drop<'ptr<i32>>(a, b);
+  std::printf("done\n");
+  let c = alloc<i32>(1);
+  *c = 3;
+  let d = alloc<i32>(1);
+  *d = 4;
+  let mine = Range<'ptr<i32>> { current: c, end_val: d };
+  return 0;
+}
