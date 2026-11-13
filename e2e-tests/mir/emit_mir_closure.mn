@@ -1,19 +1,21 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
-// A function value is !sammine.fn. A function named as a value is
+// A function value is !sammine.fn, with the words it carries: the most any
+// closure of its type binds, one i32 or one view here. A function named as a
+// value is
 // sammine.closure binding nothing; a partial application binds the
 // arguments it gives, an owned pointer lent to the closure as to a call
 // (sammine.lend). A call through a value is
 // sammine.call_indirect.
 // CHECK-LABEL: func.func private @apply(
-// CHECK-SAME: !sammine.fn<(i32) -> i32>
+// CHECK-SAME: !sammine.fn<(i32) -> i32, 1>
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.call_indirect %arg0(%arg1) : <(i32) -> i32>, (i32) -> i32
+// CHECK-NEXT: sammine.call_indirect %arg0(%arg1) : <(i32) -> i32, 1>, (i32) -> i32
 // CHECK-LABEL: func.func private @use_inc(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @inc() : () -> !sammine.fn<(i32) -> i32>
+// CHECK-NEXT: sammine.closure @inc() : () -> !sammine.fn<(i32) -> i32, 1>
 // CHECK-LABEL: func.func private @add_to(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @add(%arg0) : (i32) -> !sammine.fn<(i32) -> i32>
+// CHECK-NEXT: sammine.closure @add(%arg0) : (i32) -> !sammine.fn<(i32) -> i32, 1>
 // CHECK-LABEL: func.func private @peek_into(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.lend

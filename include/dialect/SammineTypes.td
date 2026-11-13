@@ -86,12 +86,17 @@ def Sammine_ArrayType : Sammine_Type<"Array", "array"> {
 def Sammine_FnType : Sammine_Type<"Fn", "fn"> {
   let summary = "a function value, `(A) -> R`: a function and what it binds";
   let description = [{
-    `!sammine.fn<(i32) -> i64>`. Lowered to LLVM it is a closure, the
-    identified struct `sammine.closure` of the code to call and an
-    environment the code is passed first.
+    `!sammine.fn<(i32) -> i64>`, or `!sammine.fn<(i32) -> i64, 2>` when a
+    closure of the type binds values. `words` is how many 8-byte words the
+    largest set of values any closure of the type binds takes: a closure
+    carries them, by value. Lowered to LLVM it is the code to call, which is
+    passed a pointer to the words first, then the words:
+    `{ ptr, [words x i64] }`, or `{ ptr }` with none. See
+    knowledge_base/plans/closures-by-value.md.
   }];
-  let parameters = (ins "::mlir::FunctionType":$signature);
-  let assemblyFormat = "`<` $signature `>`";
+  let parameters = (ins "::mlir::FunctionType":$signature,
+                        DefaultValuedParameter<"int64_t", "0">:$words);
+  let assemblyFormat = "`<` $signature (`,` $words^)? `>`";
 }
 
 def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {

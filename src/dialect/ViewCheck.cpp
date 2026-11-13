@@ -90,7 +90,6 @@ public:
       else if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op))
         checkBound(closure);
     });
-    checkEscapes(func);
   }
 
 private:
@@ -114,7 +113,6 @@ private:
   }
 
   void checkBound(smn::ClosureOp closure);
-  void checkEscapes(mlir::func::FuncOp func);
 
   /// `&` of an owned pointer would alias its one owner; of what one points
   /// at, it could outlive the owner's drop.
@@ -151,72 +149,222 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
   }
 }
 
-/// Every value and slot holding a closure that bound a view, followed from
-/// each such closure through what is built of it, block arguments and
-/// slots, to where it would leave the function: a return, or a store
-/// through a pointer. Each is reported with the closure it came from.
-void ViewCheck::checkEscapes(mlir::func::FuncOp func) {
-  llvm::DenseMap<mlir::Value, smn::ClosureOp> from;
-  auto taint = [&](mlir::Value value, smn::ClosureOp closure, bool &changed) {
-    if (closure && from.try_emplace(value, closure).second)
-      changed = true;
+/// Where closures that must stay in the call that made them go: one that
+/// bound a view, or one that keeps what it binds in its maker's frame
+/// (smn::ClosureOp::bindsInline). Each is followed from where it is made,
+/// through what is built of it, block arguments, slots and calls, to where
+/// it would leave the call: a return, a store through a pointer, or a call
+/// that lets it go. Across functions it goes by summaries: which parameters
+/// a function lets escape and which it returns, to a fixed point over the
+/// module. A call through a function value lets its arguments escape.
+class ClosureEscapes {
+public:
+  explicit ClosureEscapes(mlir::ModuleOp module) : module_(module) {}
+
+  /// Reports each escape; false if there was one.
+  bool check() {
+    llvm::SmallVector<mlir::func::FuncOp> funcs;
+    for (auto func : module_.getOps<mlir::func::FuncOp>())
+      if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
+        funcs.push_back(func);
+    for (bool changed = true; changed;) {
+      changed = false;
+      for (auto func : funcs)
+        changed |= analyze(func, /*report=*/false);
+    }
+    for (auto func : funcs)
+      analyze(func, /*report=*/true);
+    return !failed_;
+  }
+
+private:
+  /// What a value may hold that must not leave the call: a closure made in
+  /// this function, or what the function's parameters hold.
+  struct Taint {
+    smn::ClosureOp closure;
+    llvm::SmallVector<unsigned, 2> params;
+
+    bool empty() const { return !closure && params.empty(); }
+    bool join(const Taint &other) {
+      bool changed = false;
+      if (!closure && other.closure) {
+        closure = other.closure;
+        changed = true;
+      }
+      for (auto param : other.params)
+        if (!llvm::is_contained(params, param)) {
+          params.push_back(param);
+          changed = true;
+        }
+      return changed;
+    }
   };
-  auto taintedBy = [&](mlir::Value value) -> smn::ClosureOp {
-    auto it = from.find(value);
-    return it == from.end() ? smn::ClosureOp() : it->second;
+  /// What a function does with what its parameters hold.
+  struct Summary {
+    llvm::SmallVector<unsigned, 2> escapes, returns;
   };
-  auto anyOf = [&](mlir::ValueRange values) -> smn::ClosureOp {
-    for (auto value : values)
-      if (auto closure = taintedBy(value))
-        return closure;
-    return {};
-  };
-  for (bool changed = true; changed;) {
-    changed = false;
+
+  mlir::ModuleOp module_;
+  llvm::DenseMap<mlir::Operation *, Summary> summaries_;
+  bool failed_ = false;
+
+  static bool holdsFunction(mlir::Type type) {
+    if (mlir::isa<smn::FnType>(type))
+      return true;
+    if (auto st = mlir::dyn_cast<smn::StructType>(type))
+      return llvm::any_of(st.getFields(), holdsFunction);
+    if (auto tuple = mlir::dyn_cast<smn::TupleType>(type))
+      return llvm::any_of(tuple.getElements(), holdsFunction);
+    if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
+      return holdsFunction(array.getElement());
+    if (auto en = mlir::dyn_cast<smn::EnumType>(type))
+      return llvm::any_of(en.getVariants(), holdsFunction);
+    return false;
+  }
+
+  static bool bindsView(smn::ClosureOp closure) {
+    return llvm::any_of(closure.getBound(),
+                        [](mlir::Value v) { return isView(v.getType()); });
+  }
+
+  /// The summary of the function `call` calls, or null for one MIR doesn't
+  /// define: C, or another module's, which may let anything escape.
+  const Summary *summaryOf(smn::CallOp call) {
+    auto callee = module_.lookupSymbol<mlir::func::FuncOp>(call.getCallee());
+    if (!callee || callee.isDeclaration() || !callee->hasAttr(smn::kMirAttr))
+      return nullptr;
+    return &summaries_[callee];
+  }
+
+  static std::string what(smn::ClosureOp closure) {
+    return "a partial application of '" + writtenName(closure) + "' that " +
+           (bindsView(closure) ? "captured a view (ptr<T>)"
+                               : "binds a closure of its own type, so keeps "
+                                 "what it binds in this call's frame");
+  }
+
+  void error(mlir::Location at, const std::string &msg) {
+    failed_ = true;
+    mlir::emitError(at, msg);
+  }
+
+  /// Taints the function's values, then finds where they leave it. With
+  /// `report`, each closure made here that leaves is an error; either way,
+  /// the parameters whose closures leave go in its summary. True if the
+  /// summary grew.
+  bool analyze(mlir::func::FuncOp func, bool report) {
+    llvm::DenseMap<mlir::Value, Taint> taints;
+    auto taintOf = [&](mlir::Value value) -> Taint {
+      auto it = taints.find(value);
+      return it == taints.end() ? Taint() : it->second;
+    };
+    auto add = [&](mlir::Value value, const Taint &taint) {
+      return !taint.empty() && taints[value].join(taint);
+    };
+    auto anyOf = [&](mlir::ValueRange values) {
+      Taint all;
+      for (auto value : values)
+        all.join(taintOf(value));
+      return all;
+    };
+
+    for (auto [i, arg] : llvm::enumerate(func.getArguments()))
+      if (holdsFunction(arg.getType()))
+        add(arg, Taint{{}, {static_cast<unsigned>(i)}});
+
+    for (bool changed = true; changed;) {
+      changed = false;
+      func.walk([&](mlir::Operation *op) {
+        if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op)) {
+          auto taint = anyOf(op->getOperands());
+          if (bindsView(closure) || !closure.bindsInline())
+            taint.closure = closure;
+          changed |= add(closure.getResult(), taint);
+        } else if (mlir::isa<smn::AggregateOp, smn::VariantOp, smn::LetOp,
+                             smn::ExtractOp, smn::PayloadOp, smn::ElementOp>(
+                       op)) {
+          for (auto result : op->getResults())
+            changed |= add(result, anyOf(op->getOperands()));
+        } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
+          changed |=
+              add(placeRoot(store.getPlace()), taintOf(store.getValue()));
+        } else if (mlir::isa<smn::CopyOp, smn::MoveOp>(op)) {
+          changed |=
+              add(op->getResult(0), taintOf(placeRoot(op->getOperand(0))));
+        } else if (auto call = mlir::dyn_cast<smn::CallOp>(op)) {
+          // What the callee returns of what it was given comes back.
+          if (auto *summary = summaryOf(call)) {
+            Taint back;
+            for (auto i : summary->returns)
+              if (i < call.getArgs().size())
+                back.join(taintOf(call.getArgs()[i]));
+            for (auto result : call.getResults())
+              changed |= add(result, back);
+          }
+        } else if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op)) {
+          for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
+            for (auto [operand, arg] : llvm::zip(
+                     branch.getSuccessorOperands(i).getForwardedOperands(),
+                     branch->getSuccessor(i)->getArguments()))
+              changed |= add(arg, taintOf(operand));
+        }
+      });
+    }
+
+    Summary summary = summaries_[func];
+    auto grow = [](llvm::SmallVectorImpl<unsigned> &set,
+                   llvm::ArrayRef<unsigned> params) {
+      for (auto param : params)
+        if (!llvm::is_contained(set, param))
+          set.push_back(param);
+    };
+    auto leaves = [&](const Taint &taint, mlir::Location at,
+                      llvm::StringRef how, llvm::StringRef when) {
+      grow(summary.escapes, taint.params);
+      if (report && taint.closure)
+        error(at, how.str() + " " + what(taint.closure) + " (may dangle " +
+                      when.str() + ")");
+    };
+
     func.walk([&](mlir::Operation *op) {
-      if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op)) {
-        bool bindsView = llvm::any_of(closure.getBound(), [](mlir::Value v) {
-          return isView(v.getType());
-        });
-        taint(closure.getResult(),
-              bindsView ? closure : anyOf(op->getOperands()), changed);
-      } else if (mlir::isa<smn::AggregateOp, smn::VariantOp, smn::LetOp,
-                           smn::ExtractOp, smn::PayloadOp, smn::ElementOp>(
-                     op)) {
-        for (auto result : op->getResults())
-          taint(result, anyOf(op->getOperands()), changed);
+      if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {
+        auto taint = anyOf(ret.getOperands());
+        grow(summary.returns, taint.params);
+        if (report && taint.closure)
+          error(ret.getLoc(), "Cannot return " + what(taint.closure) +
+                                  " (may dangle after return)");
       } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
-        taint(placeRoot(store.getPlace()), taintedBy(store.getValue()),
-              changed);
-      } else if (mlir::isa<smn::CopyOp, smn::MoveOp>(op)) {
-        taint(op->getResult(0), taintedBy(placeRoot(op->getOperand(0))),
-              changed);
-      } else if (auto branch = mlir::dyn_cast<mlir::BranchOpInterface>(op)) {
-        for (unsigned i = 0; i < branch->getNumSuccessors(); ++i)
-          for (auto [operand, arg] :
-               llvm::zip(branch.getSuccessorOperands(i).getForwardedOperands(),
-                         branch->getSuccessor(i)->getArguments()))
-            taint(arg, taintedBy(operand), changed);
+        if (reachedThrough(store.getPlace()))
+          leaves(taintOf(store.getValue()), store.getLoc(),
+                 "Cannot store, through a pointer,",
+                 "once the function returns");
+      } else if (auto call = mlir::dyn_cast<smn::CallOp>(op)) {
+        auto *callee = summaryOf(call);
+        for (auto [i, arg] : llvm::enumerate(call.getArgs())) {
+          if (callee &&
+              !llvm::is_contained(callee->escapes, static_cast<unsigned>(i)))
+            continue;
+          leaves(taintOf(arg), call.getLoc(),
+                 "Cannot pass to '" + call.getCallee().str() + "'",
+                 "once this function returns: '" + call.getCallee().str() +
+                     "' keeps it");
+        }
+      } else if (auto indirect = mlir::dyn_cast<smn::CallIndirectOp>(op)) {
+        for (auto arg : indirect.getArgs())
+          leaves(taintOf(arg), indirect.getLoc(),
+                 "Cannot pass to a function value",
+                 "once this function returns: the function called may keep "
+                 "it");
       }
     });
+
+    auto &old = summaries_[func];
+    bool grew = summary.escapes.size() != old.escapes.size() ||
+                summary.returns.size() != old.returns.size();
+    old = summary;
+    return grew;
   }
-  auto message = [](llvm::StringRef what, smn::ClosureOp closure,
-                    llvm::StringRef when) {
-    return what.str() + " a partial application of '" + writtenName(closure) +
-           "' that captured a view (ptr<T>) (may dangle " + when.str() + ")";
-  };
-  func.walk([&](mlir::Operation *op) {
-    if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {
-      if (auto closure = anyOf(ret.getOperands()))
-        error(ret.getLoc(), message("Cannot return", closure, "after return"));
-    } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
-      if (auto closure = taintedBy(store.getValue());
-          closure && reachedThrough(store.getPlace()))
-        error(store.getLoc(), message("Cannot store, through a pointer,",
-                                      closure, "once the function returns"));
-    }
-  });
-}
+};
 
 struct CheckViewsPass
     : public mlir::PassWrapper<CheckViewsPass,
@@ -241,7 +389,8 @@ mlir::LogicalResult checkViews(mlir::ModuleOp module) {
   for (auto func : module.getOps<mlir::func::FuncOp>())
     if (!func.isDeclaration() && func->hasAttr(smn::kMirAttr))
       check.check(func);
-  return mlir::failure(check.failed());
+  bool stays = ClosureEscapes(module).check();
+  return mlir::failure(check.failed() || !stays);
 }
 
 std::unique_ptr<mlir::Pass> createCheckViewsPass() {

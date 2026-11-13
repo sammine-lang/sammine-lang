@@ -10,6 +10,7 @@ add_library(MLIRBackend OBJECT
   ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringOperators.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRLoweringPlaces.cpp
   ${CMAKE_CURRENT_LIST_DIR}/MIRTypes.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/ClosureLayouts.cpp
   ${CMAKE_CURRENT_LIST_DIR}/RangeIteration.cpp
   ${CMAKE_CURRENT_LIST_DIR}/ScalarOps.cpp
   ${CMAKE_CURRENT_LIST_DIR}/KernelGen.cpp

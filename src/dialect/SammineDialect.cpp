@@ -118,8 +118,8 @@ int64_t sizeOf(mlir::Type type) {
     return flt.getWidth() / 8;
   if (mlir::isa<PtrType>(type))
     return 8;
-  if (mlir::isa<FnType>(type))
-    return 16; // a closure: its function and what it binds
+  if (auto fn = mlir::dyn_cast<FnType>(type))
+    return 8 + 8 * fn.getWords(); // its code, then the words it binds
   if (auto array = mlir::dyn_cast<ArrayType>(type))
     return sizeOf(array.getElement()) * array.getSize();
   if (auto st = mlir::dyn_cast<StructType>(type))
@@ -130,6 +130,8 @@ int64_t sizeOf(mlir::Type type) {
     return 4 + en.getPayloadSize(); // the i32 tag, then the payload
   return 0;
 }
+
+int64_t wordsFor(mlir::Type type) { return (sizeOf(type) + 7) / 8; }
 
 llvm::SmallVector<int64_t> payloadOffsets(llvm::ArrayRef<mlir::Type> fields) {
   llvm::SmallVector<int64_t> offsets;
@@ -375,6 +377,15 @@ sammineSignature(mlir::FunctionOpInterface callee) {
       cFunc.getArgAttr(0, mlir::LLVM::LLVMDialect::getStructRetAttrName()))
     return {params.drop_front(), 1};
   return {params, results};
+}
+
+bool ClosureOp::bindsInline() {
+  auto bound = getBound();
+  if (bound.empty())
+    return true;
+  auto carried =
+      TupleType::get(getContext(), llvm::to_vector(bound.getTypes()));
+  return wordsFor(carried) <= getType().getWords();
 }
 
 mlir::LogicalResult

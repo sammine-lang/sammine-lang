@@ -1,0 +1,21 @@
+// A module making closures, keeping them in its own struct, and running
+// them: each function here takes or gives a function value, so it is
+// compiled into the module that imports it, which sizes its closures.
+
+let add(a: i64, b: i64) -> i64 { a + b }
+let scale3(k: i64, x: i64, y: i64, z: i64) -> i64 { k * (x + y + z) }
+
+export struct Step { f: (i64) -> i64, times: i64, };
+
+export let adder(n: i64) -> (i64) -> i64 { add(n) }
+export let step(f: (i64) -> i64, times: i64) -> Step { Step { f: f, times: times } }
+
+let apply_n(f: (i64) -> i64, n: i64, x: i64) -> i64 {
+  if n == 0i64 { x } else { apply_n(f, n - 1i64, f(x)) }
+}
+export let run(s: Step, x: i64) -> i64 { apply_n(s.f, s.times, x) }
+// A partial application binding a closure, made here: it takes the times
+// and the start.
+export let repeat(s: Step) -> (i64, i64) -> i64 { apply_n(s.f) }
+// The library's own use, sized by the library alone.
+export let own() -> i64 { let f = add(5i64); f(1i64) }

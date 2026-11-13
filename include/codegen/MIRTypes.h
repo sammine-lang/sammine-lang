@@ -13,9 +13,15 @@
 
 namespace sammine_lang {
 
+class ClosureLayouts;
+
 class MIRTypes {
 public:
   explicit MIRTypes(mlir::MLIRContext *ctx) : ctx_(ctx) {}
+
+  /// Function types carry as many words as `layouts` says a closure of
+  /// theirs binds. Without layouts they carry none: the type's shape.
+  void setClosureLayouts(const ClosureLayouts *layouts) { layouts_ = layouts; }
 
   /// The MIR type of `type`, or nullopt for one MIR has none for: (), a
   /// type parameter, a C function's `...`.
@@ -28,6 +34,7 @@ public:
 
 private:
   mlir::MLIRContext *ctx_;
+  const ClosureLayouts *layouts_ = nullptr;
 
   /// The MIR types of `types`, in order, if MIR has one for each.
   std::optional<llvm::SmallVector<mlir::Type>>

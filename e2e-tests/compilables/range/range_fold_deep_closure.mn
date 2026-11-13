@@ -1,0 +1,19 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 4000002000000
+
+// fold calls itself last, and LLVM makes that a loop: two million steps
+// through a closure carrying what it binds. A call through a closure passes
+// it its words by value, so no address of the caller's stack reaches the
+// callee, which would keep LLVM from making the call a jump and run the
+// stack out.
+
+import std;
+import range;
+
+let weigh(k: i64, bias: i64, i: i64) -> i64 { k * i + bias }
+
+let main() -> i32 {
+  std::printf("%ld\n", range::sum(0i64, 2000001i64, weigh(2i64, 0i64)));
+  0
+}

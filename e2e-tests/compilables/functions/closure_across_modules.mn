@@ -1,0 +1,27 @@
+// RUN: %sammine --file %dir/Inputs/closure_lib.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// RUN: %sammine --file %dir/Inputs/closure_lib.mn %O && %sammine --file %full %I -I %dir/Inputs %O && %T/%base.exe | %check %full
+// CHECK:      adder 12
+// CHECK-NEXT: run 25
+// CHECK-NEXT: repeat 1006
+// CHECK-NEXT: own 6
+
+// Closures made by another module, kept in its struct and handed back. This
+// module binds more into (i64) -> i64 than the library does, so a value of
+// it is bigger here: the library's functions that hold one are compiled
+// here, at this module's size.
+
+import std;
+import closure_lib as lib;
+
+let mix(a: i64, b: i64, c: i64, x: i64) -> i64 { a * x + b * c }
+
+let main() -> i32 {
+  let f = lib::adder(10i64);
+  std::printf("adder %ld\n", f(2i64));
+  let s = lib::step(mix(2i64, 3i64, 1i64), 2i64);
+  std::printf("run %ld\n", lib::run(s, 4i64) - 0i64);
+  let r = lib::repeat(lib::step(lib::adder(2i64), 3i64));
+  std::printf("repeat %ld\n", r(3i64, 1000i64));
+  std::printf("own %ld\n", lib::own());
+  0
+}

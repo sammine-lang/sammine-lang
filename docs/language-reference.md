@@ -1146,7 +1146,24 @@ let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 std::printf("%d\n", apply(add(10), 32));    // 42
 ```
 
-Note: Closures created by partial application are stack-allocated and cannot escape their defining scope.
+A closure carries what it binds, by value, so it can go anywhere a value
+can: returned, stored in a struct, an array or an enum, put behind an owned
+pointer. Nothing is allocated for it:
+
+```sammine
+let make(n: i32) -> (i32) -> i32 { add(n) }
+
+let add5 = make(5);
+std::printf("%d\n", add5(3));         // 8
+```
+
+Two kinds of closure stay in the call that made them, as a view (`ptr<T>`)
+does: one that bound a view, and one that binds a value of its own function
+type, directly or through other closures, such as `twice(add(1))` for
+`twice(f: (i32) -> i32, x: i32)`: it would have to carry itself, so it
+keeps what it binds in the frame of the call that made it. Either can be
+called and passed to a function that only calls it; returning it, storing
+it, or passing it to a function that keeps it is an error.
 
 ---
 

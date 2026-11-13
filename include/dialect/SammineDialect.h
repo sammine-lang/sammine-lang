@@ -33,6 +33,8 @@ std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type);
 /// own size, in the bytes `sizeOf` gives it. VariantOp and PayloadOp carry
 /// the offsets; an enum's type, the size of its largest payload.
 int64_t sizeOf(mlir::Type type);
+/// The 8-byte words a closure needs to carry a value of `type`.
+int64_t wordsFor(mlir::Type type);
 /// Where each of `fields` goes in a payload, in order.
 llvm::SmallVector<int64_t> payloadOffsets(llvm::ArrayRef<mlir::Type> fields);
 /// The bytes a payload of `fields` takes.

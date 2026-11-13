@@ -1,5 +1,6 @@
 #include "codegen/ModuleGen.h"
 #include "cabi/CABI.h"
+#include "codegen/ClosureLayouts.h"
 #include "codegen/KernelGen.h"
 #include "codegen/MIRLowering.h"
 #include "codegen/MIRTypes.h"
@@ -85,7 +86,11 @@ public:
             GPUMode gpuMode)
       : builder_(&context), library_(!moduleName.empty()), locator_(locator),
         reporter_(fileName, sourceText, 3), props_(props), types_(&context),
-        mir_(builder_, props, locator_), gpuMode_(gpuMode) {}
+        mir_(builder_, props, locator_), gpuMode_(gpuMode),
+        closures_(&context) {
+    types_.setClosureLayouts(&closures_);
+    mir_.setClosureLayouts(&closures_);
+  }
 
   /// The CPU module, or null if the program asks for what can't be
   /// generated (reported()) or a module doesn't verify.
@@ -109,6 +114,8 @@ private:
   MIRLowering mir_;
   GPUMode gpuMode_;
   std::unique_ptr<KernelGen> kernels_;
+  /// What each function type's closures bind: how big a value of it is.
+  ClosureLayouts closures_;
   bool reported_ = false;
 
   /// Who a function is for.
@@ -148,6 +155,8 @@ private:
   /// declaration, which has to be in LLVM's types already.
   mlir::Type llvmType(const Type &type);
 
+  /// Finds every closure the unit makes, which size each function type.
+  void sizeClosures(AST::ProgramAST *program);
   void declareRuntime();
   void declareFunction(AST::PrototypeAST *proto);
   void declareCBinding(AST::ExternAST *ast);
@@ -164,6 +173,9 @@ private:
 // function its linkage.
 mlir::ModuleOp ModuleGen::generate(AST::ProgramAST *program) {
   module_ = mlir::ModuleOp::create(builder_.getUnknownLoc());
+  // A function type's MIR type says how big its values are, so every
+  // closure is found before any type is made.
+  sizeClosures(program);
   kernels_ = std::make_unique<KernelGen>(
       builder_, module_, mir_, props_, locator_, reporter_, gpuMode_, library_);
   declareRuntime();
@@ -213,6 +225,45 @@ mlir::ModuleOp ModuleGen::generate(AST::ProgramAST *program) {
 }
 
 // --- Types ---
+
+namespace {
+
+// Each partial application in the bodies it visits, told to `layouts` with
+// the types it binds: the callee's parameters, so an owned pointer lent to a
+// view parameter binds the view.
+class ClosureFinder : public AST::ASTVisitor {
+public:
+  ClosureFinder(const AST::ASTProperties &props, ClosureLayouts &layouts)
+      : props_(props), layouts_(layouts) {}
+
+  void preorder_walk(AST::CallExprAST *ast) override {
+    auto *cp = props_.call(ast->id());
+    if (!cp || !cp->is_partial || !cp->callee_func_type ||
+        cp->callee_func_type->type_kind != TypeKind::Function)
+      return;
+    auto params = std::get<FunctionType>(cp->callee_func_type->type_data)
+                      .get_params_types();
+    auto given = std::min(ast->arguments.size(), params.size());
+    layouts_.addClosure(
+        ast->get_type(),
+        std::vector<Type>(params.begin(),
+                          params.begin() + static_cast<std::ptrdiff_t>(given)),
+        ast->get_location());
+  }
+
+private:
+  const AST::ASTProperties &props_;
+  ClosureLayouts &layouts_;
+};
+
+} // namespace
+
+void ModuleGen::sizeClosures(AST::ProgramAST *program) {
+  ClosureFinder finder(props_, closures_);
+  for (auto &def : program->DefinitionVec)
+    for (auto *fd : functionBodies(def.get()))
+      fd->accept_vis(&finder);
+}
 
 mlir::FunctionType ModuleGen::mirFunctionType(AST::PrototypeAST *proto) {
   auto protoType = proto->get_type();
@@ -414,8 +465,11 @@ ModuleGen::Linkage ModuleGen::linkage(AST::DefinitionAST *def) const {
            : !library_ || tci->is_instantiation ? Linkage::Internal
                                                 : Linkage::Global;
   auto *fd = llvm::cast<AST::FuncDefAST>(def);
-  return library_ && !fd->is_instantiation ? Linkage::Global
-                                           : Linkage::Internal;
+  // A copy of another module's function is this module's own, as a generic
+  // copy is: the module it comes from has its own.
+  return library_ && !fd->is_instantiation && !fd->is_import_copy
+             ? Linkage::Global
+             : Linkage::Internal;
 }
 
 void ModuleGen::setLinkage(AST::FuncDefAST *ast, Linkage linkage) {

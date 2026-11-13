@@ -386,6 +386,9 @@ public:
   /// A copy of a generic function for concrete types, compiled in each module
   /// that uses it.
   bool is_instantiation = false;
+  /// Another module's function compiled in this one, as it takes or gives a
+  /// value holding a function value (Resolver::inject_definitions).
+  bool is_import_copy = false;
 
   FuncDefAST(std::unique_ptr<PrototypeAST> Prototype_,
              std::unique_ptr<BlockAST> Block_)

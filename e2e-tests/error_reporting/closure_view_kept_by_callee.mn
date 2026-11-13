@@ -1,0 +1,55 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: kept(b: 'ptr<i32>) -> Job {
+// CHECK: Cannot return a partial application of 'look' that captured a view (ptr<T>) (may dangle after return)
+// CHECK: Cannot pass to 'stash' a partial application of 'look' that captured a view (ptr<T>) (may dangle once this function returns: 'stash' keeps it)
+// CHECK: returned(b: 'ptr<i32>) -> (i32) -> i32 {
+// CHECK: Cannot return a partial application of 'look' that captured a view (ptr<T>) (may dangle after return)
+// CHECK: Cannot pass to a function value a partial application of 'look' that captured a view (ptr<T>) (may dangle once this function returns: the function called may keep it)
+
+// A closure that bound a view can be called and passed down, but not to a
+// function that keeps it, and what a function hands back of it holds the
+// view still: the view would outlive what it looks at. Each function's
+// summary says which parameters it keeps and which it returns.
+
+struct Job { f: (i32) -> i32, };
+
+let look(p: ptr<i32>, x: i32) -> i32 { *p + x }
+let keep(f: (i32) -> i32) -> Job { Job { f: f } }
+let same(f: (i32) -> i32) -> (i32) -> i32 { f }
+let only_calls(f: (i32) -> i32) -> i32 { f(1) }
+let stash(f: (i32) -> i32, out: 'ptr<(i32) -> i32>) -> 'ptr<(i32) -> i32> {
+  *out = f;                      // into memory that outlives the call
+  out
+}
+
+let kept(b: 'ptr<i32>) -> Job {
+  let j = keep(look(b));         // keep puts it in the Job it returns
+  drop(b);
+  j                              // so the Job holds the view
+}
+
+let stashed(b: 'ptr<i32>, out: 'ptr<(i32) -> i32>) -> 'ptr<(i32) -> i32> {
+  let o = stash(look(b), out);   // stash stores it where it outlives this
+  drop(b);
+  o
+}
+
+let returned(b: 'ptr<i32>) -> (i32) -> i32 {
+  let f = same(look(b));         // same hands it back: f holds the view
+  drop(b);
+  f
+}
+
+let through_value(g: ((i32) -> i32) -> i32, b: 'ptr<i32>) -> i32 {
+  let n = g(look(b));            // nothing says what g does with it
+  drop(b);
+  n
+}
+
+let fine(b: 'ptr<i32>) -> i32 {
+  let n = only_calls(look(b));   // only called: fine
+  drop(b);
+  n
+}
+
+let main() -> i32 { 0 }

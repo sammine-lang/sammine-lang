@@ -1,0 +1,76 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      returned 3
+// CHECK-NEXT: two frames up 15
+// CHECK-NEXT: in a struct 12 7
+// CHECK-NEXT: in an array 11 22
+// CHECK-NEXT: in an enum 42
+// CHECK-NEXT: behind a pointer 103
+// CHECK-NEXT: bigger and smaller 9 7.5
+// CHECK-NEXT: binding a closure 21
+
+// A closure carries what it binds, by value, so it can leave the function
+// that made it: returned, stored, put in an array, an enum or owned memory.
+
+import std;
+
+let add(a: i32, b: i32) -> i32 { a + b }
+let mul(a: i32, b: i32) -> i32 { a * b }
+
+let make() -> (i32) -> i32 { add(1) }
+let make_far(n: i32) -> (i32) -> i32 { let f = add(n * 2); f }
+let make_far2(n: i32) -> (i32) -> i32 { make_far(n + 1) }
+
+struct Job { f: (i32) -> i32, x: i32, };
+let job(n: i32) -> Job { Job { f: mul(n), x: 7 } }
+let run(j: Job) -> i32 { let g = j.f; g(j.x) }
+
+let pair(a: i32, b: i32) -> [2](i32) -> i32 { [add(a), mul(b)] }
+
+type Maybe = Has((i32) -> i32) | Nothing;
+let maybe(n: i32) -> Maybe { Has(add(n)) }
+let call_or(m: Maybe, x: i32) -> i32 {
+  case m { Has(f) => f(x), Nothing => 0 }
+}
+
+let boxed(n: i32) -> 'ptr<(i32) -> i32> {
+  let p = alloc<(i32) -> i32>(1);
+  *p = add(n);
+  p
+}
+
+// Two closures of one type binding different amounts: (f64) -> f64 carries
+// the larger of an f64 and three i64s.
+let scale(k: f64, x: f64) -> f64 { k * x }
+let sum3(a: i64, b: i64, c: i64, x: f64) -> f64 { (a + b + c) as f64 + x }
+let pick(big: bool) -> (f64) -> f64 {
+  if big { sum3(2i64, 3i64, 4i64) } else { scale(2.5) }
+}
+
+// A closure binding a closure of another type carries it whole.
+let addl(a: i64, b: i64) -> i64 { a + b }
+let via(f: (i64) -> i64, x: i32) -> i32 { f(x as i64) as i32 }
+let chain(n: i32) -> (i32) -> i32 { via(addl(n as i64 * 10i64)) }
+
+let main() -> i32 {
+  let f = make();
+  std::printf("returned %d\n", f(2));
+  let g = make_far2(6);
+  std::printf("two frames up %d\n", g(1));
+  std::printf("in a struct %d %d\n", run(job(2)) - 2, job(1).x);
+  let fs = pair(10, 11);
+  let a = fs[0];
+  let b = fs[1];
+  std::printf("in an array %d %d\n", a(1), b(2));
+  std::printf("in an enum %d\n", call_or(maybe(40), 2));
+  let p = boxed(100);
+  let h = *p;
+  std::printf("behind a pointer %d\n", h(3));
+  drop(p);
+  let big = pick(true);
+  let small = pick(false);
+  std::printf("bigger and smaller %.0f %.1f\n", big(0.0), small(3.0));
+  let c = chain(2);
+  std::printf("binding a closure %d\n", c(1));
+  0
+}

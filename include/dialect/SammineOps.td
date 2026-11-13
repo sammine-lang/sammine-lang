@@ -87,11 +87,18 @@ def ClosureOp : Sammine_Op<"closure",
   let summary = "a function value: `callee` with its first arguments bound";
   let description = [{
     `f` as a value binds none; `add(1)`, a partial application, binds `1`.
-    The value takes the arguments not bound. What is bound lives in the
-    function that makes the value.
+    The value takes the arguments not bound, and carries what is bound in
+    its type's words (see bindsInline).
   }];
   let arguments = (ins FlatSymbolRefAttr:$callee, Variadic<AnyType>:$bound);
   let results = (outs Sammine_FnType:$result);
+  let extraClassDeclaration = [{
+    /// Whether the closure carries what it binds in its type's words. One
+    /// that binds a value of its own type, directly or through others,
+    /// can't: it carries a pointer to them in the frame of the function
+    /// that makes it, and must not outlive that call, as a view.
+    bool bindsInline();
+  }];
   let assemblyFormat = [{
     $callee `(` $bound `)` attr-dict `:` functional-type($bound, $result)
   }];

@@ -23,15 +23,25 @@ mlir::LLVM::LLVMPointerType llvmPtr(mlir::MLIRContext *ctx) {
   return mlir::LLVM::LLVMPointerType::get(ctx);
 }
 
-/// A function value: the code to call, which takes
-/// the environment first, and the environment.
-mlir::LLVM::LLVMStructType closureType(mlir::MLIRContext *ctx) {
-  auto type = mlir::LLVM::LLVMStructType::getIdentified(ctx, "sammine.closure");
-  if (!type.isInitialized()) {
-    auto ptr = llvmPtr(ctx);
-    (void)type.setBody({ptr, ptr}, /*isPacked=*/false);
-  }
-  return type;
+/// A function value: the code to call, then the words of what it binds,
+/// which the code is passed a pointer to first. With no words, the code.
+mlir::LLVM::LLVMStructType closureType(smn::FnType fn) {
+  auto *ctx = fn.getContext();
+  llvm::SmallVector<mlir::Type, 2> fields{llvmPtr(ctx)};
+  if (fn.getWords() > 0)
+    fields.push_back(mlir::LLVM::LLVMArrayType::get(
+        mlir::IntegerType::get(ctx, 64), static_cast<unsigned>(fn.getWords())));
+  return mlir::LLVM::LLVMStructType::getLiteral(ctx, fields);
+}
+
+/// How the code of a value of `fn` takes its words, first: by value, so
+/// a call through a closure leaves no address of the caller's stack to
+/// the code (LLVM wouldn't make a tail call of the caller's own then), or a
+/// null pointer when it has none.
+mlir::Type wordsParam(smn::FnType fn) {
+  auto closure = closureType(fn);
+  return closure.getBody().size() > 1 ? closure.getBody()[1]
+                                      : mlir::Type(llvmPtr(fn.getContext()));
 }
 
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
@@ -84,9 +94,8 @@ public:
       return mlir::LLVM::LLVMArrayType::get(
           element, static_cast<unsigned>(type.getSize()));
     });
-    addConversion([](smn::FnType type) -> mlir::Type {
-      return closureType(type.getContext());
-    });
+    addConversion(
+        [](smn::FnType type) -> mlir::Type { return closureType(type); });
     addConversion([this](smn::TupleType type) -> std::optional<mlir::Type> {
       llvm::SmallVector<mlir::Type> elements;
       if (mlir::failed(convertTypes(type.getElements(), elements)))
@@ -735,57 +744,94 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
         mlir::failed(
             getTypeConverter()->convertTypes(signature.getResults(), results)))
       return mlir::failure();
-    llvm::SmallVector<mlir::Type> wrapperParams{ptrTy};
+    llvm::SmallVector<mlir::Type> wrapperParams{wordsParam(op.getType())};
     wrapperParams.append(rest);
     auto wrapperType = mlir::LLVM::LLVMFunctionType::get(
         results.empty() ? mlir::LLVM::LLVMVoidType::get(ctx) : results.front(),
         wrapperParams);
 
     auto bound = adaptor.getBound();
-    mlir::Value env;
+    auto closure = closureType(op.getType());
     mlir::LLVM::LLVMStructType envType;
     std::string name;
     if (bound.empty()) {
-      env = mlir::LLVM::ZeroOp::create(rewriter, loc, ptrTy);
       name = ("__wrap_" + op.getCallee()).str();
     } else {
       envType = mlir::LLVM::LLVMStructType::getLiteral(
           ctx, llvm::to_vector(bound.getTypes()));
-      env = entrySlot(rewriter, op, envType);
-      for (auto [i, value] : llvm::enumerate(bound))
-        mlir::LLVM::StoreOp::create(
-            rewriter, loc, value,
-            mlir::LLVM::GEPOp::create(
-                rewriter, loc, ptrTy, envType, env,
-                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
-                mlir::LLVM::GEPNoWrapFlags::inbounds));
       do
         name = "__partial_" + std::to_string(partials++);
       while (module.lookupSymbol(name));
     }
 
+    // Carried inline, what the closure binds is in the words the wrapper is
+    // passed; held in the maker's frame, the words hold a pointer to it.
+    bool inline_ = op.bindsInline();
     defineForwarder(
         rewriter, loc, module, name, wrapperType, op.getCalleeAttr(), results,
         /*firstOwn=*/1,
         [&](mlir::Block *entry, llvm::SmallVectorImpl<mlir::Value> &args) {
+          // The words come by value; what they carry is read from a slot
+          // of the wrapper's own, which LLVM's SROA takes apart.
+          mlir::Value env;
+          if (!bound.empty()) {
+            auto words = entry->getArgument(0);
+            auto one = mlir::arith::ConstantIntOp::create(
+                rewriter, loc, rewriter.getI64Type(), 1);
+            env = mlir::LLVM::AllocaOp::create(rewriter, loc, ptrTy,
+                                               words.getType(), one);
+            mlir::LLVM::StoreOp::create(rewriter, loc, words, env);
+            if (!inline_)
+              env = mlir::LLVM::LoadOp::create(rewriter, loc, ptrTy, env);
+          }
           for (auto [i, value] : llvm::enumerate(bound))
             args.push_back(mlir::LLVM::LoadOp::create(
                 rewriter, loc, value.getType(),
                 mlir::LLVM::GEPOp::create(
-                    rewriter, loc, ptrTy, envType, entry->getArgument(0),
+                    rewriter, loc, ptrTy, envType, env,
                     llvm::ArrayRef<mlir::LLVM::GEPArg>{0,
                                                        static_cast<int32_t>(i)},
                     mlir::LLVM::GEPNoWrapFlags::inbounds)));
         });
 
-    auto closure = closureType(ctx);
-    mlir::Value value = mlir::LLVM::PoisonOp::create(rewriter, loc, closure);
+    // The closure carries what it binds in its words: built in a slot,
+    // where they are written as the wrapper reads them, then loaded whole.
     auto code = mlir::LLVM::AddressOfOp::create(rewriter, loc, ptrTy, name);
-    value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, code,
-                                              llvm::ArrayRef<int64_t>{0});
-    value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, env,
-                                              llvm::ArrayRef<int64_t>{1});
-    rewriter.replaceOp(op, value);
+    if (bound.empty()) {
+      mlir::Value value = mlir::LLVM::PoisonOp::create(rewriter, loc, closure);
+      value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, code,
+                                                llvm::ArrayRef<int64_t>{0});
+      rewriter.replaceOp(op, value);
+      return mlir::success();
+    }
+    // ModuleGen sized the type by every closure of it; one it missed would
+    // write past the closure's words.
+    if (op.getType().getWords() == 0)
+      return op.emitError("the compiler sized '")
+             << op.getType() << "' without this closure, which binds values";
+    auto slot = entrySlot(rewriter, op, closure);
+    mlir::LLVM::StoreOp::create(
+        rewriter, loc, code,
+        mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, closure, slot,
+                                  llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 0},
+                                  mlir::LLVM::GEPNoWrapFlags::inbounds));
+    auto words =
+        mlir::LLVM::GEPOp::create(rewriter, loc, ptrTy, closure, slot,
+                                  llvm::ArrayRef<mlir::LLVM::GEPArg>{0, 1},
+                                  mlir::LLVM::GEPNoWrapFlags::inbounds);
+    mlir::Value env = words;
+    if (!inline_) {
+      env = entrySlot(rewriter, op, envType);
+      mlir::LLVM::StoreOp::create(rewriter, loc, env, words);
+    }
+    for (auto [i, value] : llvm::enumerate(bound))
+      mlir::LLVM::StoreOp::create(
+          rewriter, loc, value,
+          mlir::LLVM::GEPOp::create(
+              rewriter, loc, ptrTy, envType, env,
+              llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
+              mlir::LLVM::GEPNoWrapFlags::inbounds));
+    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(op, closure, slot);
     return mlir::success();
   }
 
@@ -809,9 +855,17 @@ struct CallIndirectLowering
       return mlir::failure();
     auto code = mlir::LLVM::ExtractValueOp::create(
         rewriter, loc, ptrTy, adaptor.getCallee(), llvm::ArrayRef<int64_t>{0});
-    auto env = mlir::LLVM::ExtractValueOp::create(
-        rewriter, loc, ptrTy, adaptor.getCallee(), llvm::ArrayRef<int64_t>{1});
-    llvm::SmallVector<mlir::Type> params{ptrTy};
+    // The code is passed the closure's words, by value (wordsParam).
+    auto fn = op.getCallee().getType();
+    auto wordsType = wordsParam(fn);
+    mlir::Value env;
+    if (wordsType == mlir::Type(ptrTy))
+      env = mlir::LLVM::ZeroOp::create(rewriter, loc, ptrTy);
+    else
+      env = mlir::LLVM::ExtractValueOp::create(rewriter, loc, wordsType,
+                                               adaptor.getCallee(),
+                                               llvm::ArrayRef<int64_t>{1});
+    llvm::SmallVector<mlir::Type> params{wordsType};
     llvm::SmallVector<mlir::Value> operands{code, env};
     for (auto arg : adaptor.getArgs()) {
       params.push_back(arg.getType());

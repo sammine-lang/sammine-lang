@@ -4,6 +4,7 @@
 #include "fmt/core.h"
 #include "parser/Parser.h"
 #include "semantics/NameResolver.h"
+#include "llvm/ADT/StringSet.h"
 
 namespace sammine_lang {
 
@@ -131,6 +132,78 @@ UP Resolver::get_program_from_file(const Path &file_path,
   return mn_program;
 }
 
+namespace {
+
+// Whether a value of the type written `type` holds a function value, in
+// itself or behind a pointer: `holders` names the module's types that do.
+// Another module's type is taken by its name, so one that only shares a
+// name counts too: that copies a function it needn't, nothing worse.
+bool holdsFunction(const AST::TypeExprAST *type,
+                   const llvm::StringSet<> &holders) {
+  if (!type)
+    return false;
+  if (llvm::isa<AST::FunctionTypeExprAST>(type))
+    return true;
+  if (auto *simple = llvm::dyn_cast<AST::SimpleTypeExprAST>(type))
+    return holders.contains(simple->name.get_name());
+  if (auto *ptr = llvm::dyn_cast<AST::PointerTypeExprAST>(type))
+    return holdsFunction(ptr->pointee.get(), holders);
+  if (auto *array = llvm::dyn_cast<AST::ArrayTypeExprAST>(type))
+    return holdsFunction(array->element.get(), holders);
+  if (auto *generic = llvm::dyn_cast<AST::GenericTypeExprAST>(type))
+    return holders.contains(generic->base_name.get_name()) ||
+           llvm::any_of(generic->type_args, [&](auto &arg) {
+             return holdsFunction(arg.get(), holders);
+           });
+  if (auto *tuple = llvm::dyn_cast<AST::TupleTypeExprAST>(type))
+    return llvm::any_of(tuple->element_types, [&](auto &element) {
+      return holdsFunction(element.get(), holders);
+    });
+  return false;
+}
+
+// The module's structs, enums and aliases whose values hold a function
+// value, through each other too.
+llvm::StringSet<>
+functionHolders(const std::vector<std::unique_ptr<AST::DefinitionAST>> &defs) {
+  llvm::StringSet<> holders;
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (auto &def : defs) {
+      std::string name;
+      bool holds = false;
+      if (auto *sd = llvm::dyn_cast<AST::StructDefAST>(def.get())) {
+        name = sd->struct_name.get_name();
+        holds = llvm::any_of(sd->struct_members, [&](auto &member) {
+          return holdsFunction(member->type_expr.get(), holders);
+        });
+      } else if (auto *ed = llvm::dyn_cast<AST::EnumDefAST>(def.get())) {
+        name = ed->enum_name.get_name();
+        for (auto &variant : ed->variants)
+          for (auto &payload : variant.payload_types)
+            holds = holds || holdsFunction(payload.get(), holders);
+      } else if (auto *ta = llvm::dyn_cast<AST::TypeAliasDefAST>(def.get())) {
+        name = ta->alias_name.get_name();
+        holds = holdsFunction(ta->type_expr.get(), holders);
+      }
+      if (holds && holders.insert(name).second)
+        grew = true;
+    }
+  }
+  return holders;
+}
+
+// Whether `proto` takes or gives a value holding a function value.
+bool signatureHoldsFunction(const AST::PrototypeAST *proto,
+                            const llvm::StringSet<> &holders) {
+  return holdsFunction(proto->return_type_expr.get(), holders) ||
+         llvm::any_of(proto->parameterVectors, [&](auto &param) {
+           return holdsFunction(param->type_expr.get(), holders);
+         });
+}
+
+} // namespace
+
 void Resolver::inject_definitions(
     std::vector<std::unique_ptr<DefinitionAST>> &DefinitionVec,
     std::vector<std::unique_ptr<DefinitionAST>> &program_vec,
@@ -142,13 +215,21 @@ void Resolver::inject_definitions(
   // declaration comes. A generic function's body comes, since it is compiled
   // here for the types it is used with, and so do instance methods', as
   // copies to inline (emitted available_externally).
+  // So does the body of a function taking or giving a value that holds a
+  // function value: how big a function value is depends on the closures of
+  // the unit that makes it (ClosureLayouts), so one must not cross from one
+  // unit's code into another's. Compiled here, it is this module's own copy.
+  auto holders = functionHolders(DefinitionVec);
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {
     auto &def = *it;
     // NameResolver names it after its module.
     def->defining_module = name;
 
     if (auto *fd = llvm::dyn_cast<AST::FuncDefAST>(def.get())) {
-      if (!fd->Prototype->is_generic()) {
+      if (!fd->Prototype->is_generic() &&
+          signatureHoldsFunction(fd->Prototype.get(), holders)) {
+        fd->is_import_copy = true;
+      } else if (!fd->Prototype->is_generic()) {
         auto ext = std::make_unique<AST::ExternAST>(std::move(fd->Prototype));
         ext->is_exported = fd->is_exported;
         ext->defining_module = fd->defining_module;
