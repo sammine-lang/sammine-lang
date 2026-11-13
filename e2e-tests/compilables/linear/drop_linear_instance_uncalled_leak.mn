@@ -1,0 +1,23 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md).
+// valgrind checks that all of it is freed, and freed once.
+
+let a1() -> 'ptr<i32> { alloc<i32>(1) }
+
+typeclass Probe<T> {
+  Probe(a: T) -> i32;
+}
+
+instance Probe<i32> {
+  let Probe(a: i32) -> i32 {
+    let p = a1();
+    0
+  }
+}
+
+let main() -> i32 {
+  return 0;
+}

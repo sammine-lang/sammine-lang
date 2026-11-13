@@ -23,6 +23,10 @@ constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 /// kernel's wrapper fills one it is passed last with an array it returns.
 constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
 
+/// The types of the fields of a struct or tuple, or nullopt for any other
+/// type.
+std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type);
+
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);

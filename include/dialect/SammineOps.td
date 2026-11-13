@@ -63,9 +63,11 @@ def DropOp : Sammine_Op<"drop", [MemoryEffects<[MemFree]>]> {
   let description = [{
     Takes the value. For an owned pointer, a box or a buffer, gives back
     the memory it holds; what a box points at must hold nothing by then.
+    `implicit` marks one the compiler inserted where the value went out of
+    use (sammine-elaborate-drops), not a `drop(x)` the program wrote.
   }];
-  let arguments = (ins Sammine_OwnedPtr:$value);
-  let assemblyFormat = "$value attr-dict `:` type($value)";
+  let arguments = (ins Sammine_OwnedPtr:$value, UnitAttr:$implicit);
+  let assemblyFormat = "$value (`implicit` $implicit^)? attr-dict `:` type($value)";
 }
 
 def DerefOp : Sammine_Op<"deref", [Pure,

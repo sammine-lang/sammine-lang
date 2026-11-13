@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 (`drop`), 2 (`'buf<T>`) and 3 (the box rule) are done.
+Status: in progress. Steps 1 to 6 are done.
 
 ## Goal
 
@@ -146,14 +146,20 @@ with many, is a `'buf`.
 
 ## Where drops go
 
-The ownership check runs first, on the program as written, and reports
-misuse: a use of what is moved, on every path or some. A value still owned
-where it goes out of use is no error for a type that drops. Then a MIR
-pass, `sammine-elaborate-drops`, run only on a program the check passed,
-inserts `sammine.drop` for each, from the ownership analysis' states, as
-Rust elaborates drops after borrow checking. Inserting them first would
-turn "moved in some branches" into "already dropped", at a drop the
-program doesn't show.
+A MIR pass, `sammine-elaborate-drops`, inserts `sammine.drop` for each
+value still owned where it goes out of use, from the ownership analysis'
+states, and marks each it inserts: `sammine.drop %p implicit`. The
+ownership check runs after it, on what will run: a leak it still finds is
+a type that doesn't drop yet, or a bug in the elaboration. (Rust
+elaborates drops after borrow checking; Swift's SIL has its cleanups from
+the start and diagnoses after. This is Swift's order.)
+
+The mark keeps the check's messages about the program as written. Where
+paths join, one moved by the program and one by an implicit drop, the
+value is moved on both; the owner keeps the program's move, which a
+message points at, and that some path only dropped it, so a use after it
+reads "moved in some branches" (or "in an earlier turn of the loop"), as
+before, not "already dropped" at a drop the program doesn't show.
 
 Two rules place every drop but the ones at stores:
 
@@ -244,8 +250,11 @@ Each a commit, the suite passing after each.
 5. `io::File`: the file handle in a struct, so no pointer drop frees it.
    (Done.)
 6. `sammine-elaborate-drops`, at returns and on edges, for those
-   pointers, after the check, which no longer reports them still owned.
-   The leak tests for them become programs that run.
+   pointers, before the check, which checks what it leaves. The leak tests
+   for them become programs that run. (Done. 32 tests became `drop_*`
+   programs run under valgrind; `generic_instance_per_linearity` checks a
+   use after a move instead of a leak. A box what it points at was moved
+   out of drops too: its drop is a free.)
 7. (Folded into 6: joins and loop turns are edges.)
 8. `Drop<T>`: the typeclass, the generated function calling it before the
    fields, its two new errors; a value with an instance drops; `File`'s

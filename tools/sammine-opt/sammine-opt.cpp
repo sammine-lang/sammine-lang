@@ -5,6 +5,7 @@
 #include "dialect/MIRToLLVM.h"
 #include "dialect/OwnershipCheck.h"
 #include "dialect/ViewCheck.h"
+#include "dialect/ElaborateDrops.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -30,6 +31,7 @@ int main(int argc, char **argv) {
   sammine_lang::registerMIRToLLVMPass();
   sammine_lang::registerCheckOwnershipPass();
   sammine_lang::registerCheckViewsPass();
+  sammine_lang::registerElaborateDropsPass();
   mlir::DialectRegistry registry;
   // MIR meets the LLVM dialect where it calls, or is called from, code that
   // didn't go through it.

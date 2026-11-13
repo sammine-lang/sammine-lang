@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe
+// REQUIRES: valgrind
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md).
+// valgrind checks that all of it is freed, and freed once.
+
+type M = L('ptr<i32>) | E;
+let mk() -> M { L(alloc<i32>(1)) }
+
+let main() -> i32 {
+  case mk() {
+    L(p) => { },
+    E => { },
+  };
+  return 0;
+}

@@ -1,0 +1,18 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: done
+
+// What the ownership check once reported as left owned here, the compiler
+// now drops where it goes out of use (knowledge_base/plans/drops.md).
+// valgrind checks that all of it is freed, and freed once.
+
+import std;
+
+let main() -> i32 {
+  for i in 0..1 {
+    let q = alloc<i32>(1);
+    *q = 42;
+  };
+  std::printf("done\n");
+  return 0;
+}

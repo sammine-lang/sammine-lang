@@ -1,0 +1,30 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: 7
+
+// In an instance's method, *a1() reads through a pointer nothing keeps:
+// the pointer is dropped once read.
+
+import std;
+
+let a1() -> 'ptr<i32> {
+  let p = alloc<i32>(1);
+  *p = 7;
+  p
+}
+
+typeclass Probe<T> {
+  Probe(a: T) -> i32;
+}
+
+instance Probe<i32> {
+  let Probe(a: i32) -> i32 {
+    let x = *a1();
+    x
+  }
+}
+
+let main() -> i32 {
+  std::printf("%d\n", Probe<i32>(1));
+  0
+}

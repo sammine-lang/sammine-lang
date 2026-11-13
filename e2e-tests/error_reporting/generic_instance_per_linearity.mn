@@ -1,10 +1,16 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: generic_instance_per_linearity.mn:7:13
-// CHECK: Linear variable 'x' must be consumed before scope exit
+// CHECK: generic_instance_per_linearity.mn:10:2
+// CHECK: Cannot use linear variable 'x' — it was already moved previously
 
-// eight<ptr<i64>> and eight<'ptr<i64>> are two instances. The owning one
-// is checked too, and never frees what it's given.
-let eight<T>(x: T) -> i64 { 8i64 }
+// eight<ptr<i64>> and eight<'ptr<i64>> are two instances, and each is
+// checked. A view is copied, so using it twice is fine; the owning one
+// uses x after it moved it.
+
+let eight<T>(x: T) -> i64 {
+  let y = x;
+  let z = x;
+  8i64
+}
 
 let main() -> i32 {
   let n = 5i64;

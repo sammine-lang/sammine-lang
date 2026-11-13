@@ -31,6 +31,8 @@ llvm::StringRef reasonFor(mlir::Operation *op) {
     return "converted";
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::VariantOp>(op))
     return "passed to function";
+  if (isImplicitDrop(op))
+    return "dropped where it went out of use";
   if (mlir::isa<smn::DropOp>(op))
     return "dropped";
   if (mlir::isa<mlir::func::ReturnOp>(op))
@@ -111,7 +113,11 @@ public:
     auto why = reasonFor(owner.movedBy).str();
     std::string when;
     bool loop = false;
-    if (owner.kind == Owner::Moved) {
+    // Moved by the program on some paths and only dropped, out of use, on
+    // the others is moved on some, as the program reads.
+    bool onSome = owner.kind == Owner::MaybeMoved ||
+                  (owner.droppedOnSomePath && !isImplicitDrop(owner.movedBy));
+    if (!onSome) {
       when = "it was already " + why + " previously";
     } else if (onOneLoop(owner.movedBy, op)) {
       loop = true;

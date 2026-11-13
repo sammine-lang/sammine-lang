@@ -9,7 +9,7 @@ lex → parse → imports → semantics → typecheck → dump_ast → mir → c
 - `imports`: every module implicitly imports the prelude `definitions` (except definitions.mn itself), then its own imports
 - `semantics`: ScopeGenerator → GeneralSemantics (two sub-passes)
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec; then, if it found nothing, `OpenTypeCheck` and `ViewPlacementCheck`
-- `mir`: init the MLIR dialects (Arith, Func, LLVM, SCF, CF, sammine; MemRef, Linalg, Tensor, Bufferization, Affine for kernels) + bufferization interfaces → `generateModules()` → `checkViews()` and `checkOwnership()`, their diagnostics reported through a `Reportee`
+- `mir`: init the MLIR dialects (Arith, Func, LLVM, SCF, CF, sammine; MemRef, Linalg, Tensor, Bufferization, Affine for kernels) + bufferization interfaces → `generateModules()` → `checkViews()`, `elaborateDrops()` and `checkOwnership()`, their diagnostics reported through a `Reportee`
 - `codegen`: `lowerMLIRToLLVMIR()` on the modules the `mir` stage built
 - `optimize`: LLVM PassBuilder with O2
 - `emit_library`: writes the `.so`/`.a`

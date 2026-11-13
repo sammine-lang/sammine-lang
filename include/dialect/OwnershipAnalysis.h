@@ -32,12 +32,16 @@ struct Owner {
   Kind kind = Live;
   /// Where it got what it holds: its binding, or the store that filled it.
   mlir::LocationAttr definedAt;
-  /// The op that moved it, if one did.
+  /// The op that moved it, if one did. Where paths join, the program's
+  /// own move rather than an implicit drop.
   mlir::Operation *movedBy = nullptr;
+  /// Whether some path here ended it only with an implicit drop, one the
+  /// compiler inserted where it went out of use.
+  bool droppedOnSomePath = false;
 
-  static Owner live(mlir::Location at) { return {Live, at, nullptr}; }
+  static Owner live(mlir::Location at) { return {Live, at, nullptr, false}; }
   /// Holding nothing: what an owned pointer just made points at.
-  static Owner empty(mlir::Location at) { return {Moved, at, nullptr}; }
+  static Owner empty(mlir::Location at) { return {Moved, at, nullptr, false}; }
   /// Whether it holds nothing on every path here.
   bool isEmpty() const { return kind == Moved && !movedBy; }
   /// Whether it holds a value on some paths only, never having held one on
@@ -48,10 +52,19 @@ struct Owner {
   bool operator==(const Owner &) const = default;
 };
 
+/// Whether `op` is a drop the compiler inserted, not one the program wrote.
+bool isImplicitDrop(mlir::Operation *op);
+
 /// Each tracked part at a point. A part with no entry isn't defined on any
 /// path here, or isn't one: another variant's payload, once a case knows
 /// which variant it has.
 using Owners = std::map<Path, Owner>;
+
+/// Every owner in `path`'s tree still holding memory in `owners`, or
+/// holding it on some paths only. An owned pointer stands for what it
+/// points at.
+void liveOwners(const Owners &owners, const Path &path,
+                llvm::SmallVectorImpl<Path> &out);
 
 /// What the analysis finds wrong, as it applies an op: told to whoever
 /// reports it. Each is told with the state before the op.

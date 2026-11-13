@@ -18,6 +18,10 @@ config.name = "Sammine Lang end-to-end testsuite"
 # Feature detection: CUDA available if ptxas is on PATH
 if shutil.which("ptxas"):
     config.available_features.add("cuda")
+# valgrind, to check a compiled program frees all it allocates, once: the
+# compiled programs aren't built with a sanitizer.
+if shutil.which("valgrind"):
+    config.available_features.add("valgrind")
 
 # Direct test output (Output/ dirs, %t temps) into the build tree so the
 # source tree stays clean.  Without this, lit defaults to placing Output/
@@ -28,6 +32,10 @@ config.test_exec_root = build_dir
 # lit's %t is a unique temp path per test; we use %t.d as a directory.
 # ShTest preamble_commands run before every RUN line, ensuring the dir exists.
 config.substitutions.append(('%sammine_opt', sammine_opt))
+config.substitutions.append(('%valgrind',
+                             'valgrind -q --leak-check=full '
+                             '--show-leak-kinds=all --errors-for-leak-kinds=all '
+                             '--error-exitcode=99'))
 config.substitutions.append(('%sammine_jit', sammine_exe + ' --jit'))
 config.substitutions.append(('%sammine', sammine_exe))
 config.substitutions.append(('%check', sammine_check))

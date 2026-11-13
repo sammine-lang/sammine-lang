@@ -11,6 +11,7 @@
 #include "dialect/OwnershipCheck.h"
 #include "dialect/SammineDialect.h"
 #include "dialect/ViewCheck.h"
+#include "dialect/ElaborateDrops.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -432,6 +433,8 @@ void Compiler::mir() {
       return mlir::success();
     });
     (void)checkViews(*modules_.cpuModule);
+    // Drops where values go out of use, then the check, on what will run.
+    elaborateDrops(*modules_.cpuModule);
     (void)checkOwnership(*modules_.cpuModule);
   }
   reporter.report(ownership);

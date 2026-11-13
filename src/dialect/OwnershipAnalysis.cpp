@@ -33,8 +33,9 @@ bool before(mlir::Location a, mlir::Location b) {
 }
 
 /// Where two paths meet: moved on one and not the other is moved on some.
-/// Moved on both, it keeps the move that comes first in the source, which a
-/// message points at.
+/// Moved on both, it keeps the program's move over an implicit drop, and
+/// else the move that comes first in the source, which a message points
+/// at; that some path only dropped it, it keeps too.
 Owner join(const Owner &a, const Owner &b) {
   if (a.kind == Owner::Live && b.kind == Owner::Live)
     return a;
@@ -48,9 +49,15 @@ Owner join(const Owner &a, const Owner &b) {
     return moved;
   }
   Owner first = a;
-  if (a.movedBy && b.movedBy &&
-      before(b.movedBy->getLoc(), a.movedBy->getLoc()))
+  bool aDrop = a.movedBy && isImplicitDrop(a.movedBy);
+  bool bDrop = b.movedBy && isImplicitDrop(b.movedBy);
+  if (aDrop != bDrop)
+    first = aDrop ? b : a;
+  else if (a.movedBy && b.movedBy &&
+           before(b.movedBy->getLoc(), a.movedBy->getLoc()))
     first = b;
+  first.droppedOnSomePath =
+      a.droppedOnSomePath || b.droppedOnSomePath || aDrop || bDrop;
   first.kind = a.kind == Owner::Moved && b.kind == Owner::Moved
                    ? Owner::Moved
                    : Owner::MaybeMoved;
@@ -246,27 +253,10 @@ private:
       checkLive(*path, op, /*takes=*/false);
   }
 
-  /// Every owner in `path`'s tree still holding memory, or holding it on
-  /// some paths only. An owned pointer stands for what it points at.
   void liveOwners(const Path &path, llvm::SmallVectorImpl<Path> &out) const {
-    auto *owner = lookup(path);
-    if (!owner || owner->isEmpty())
-      return;
-    if (owner->kind == Owner::MaybeMoved) {
-      out.push_back(path);
-      return;
-    }
-    auto type = typeOf(path);
-    auto parts = partsOf(type);
-    bool hasParts =
-        llvm::any_of(parts, [&](Step s) { return lookup(path.child(s)); });
-    if (owner->kind == Owner::Live && (isOwnedPtr(type) || !hasParts)) {
-      out.push_back(path);
-      return;
-    }
-    for (auto step : parts)
-      liveOwners(path.child(step), out);
+    ownership::liveOwners(owners_, path, out);
   }
+
 
   /// Tells the observer what of `whole` is still owned at `at`.
   void checkOwned(const Path &whole, mlir::Operation *at) {
@@ -592,6 +582,33 @@ public:
 };
 
 } // namespace
+
+void liveOwners(const Owners &owners, const Path &path,
+                llvm::SmallVectorImpl<Path> &out) {
+  auto it = owners.find(path);
+  if (it == owners.end() || it->second.isEmpty())
+    return;
+  auto &owner = it->second;
+  if (owner.kind == Owner::MaybeMoved) {
+    out.push_back(path);
+    return;
+  }
+  auto type = typeOf(path);
+  auto parts = partsOf(type);
+  bool hasParts = llvm::any_of(
+      parts, [&](Step s) { return owners.count(path.child(s)) != 0; });
+  if (owner.kind == Owner::Live && (isOwnedPtr(type) || !hasParts)) {
+    out.push_back(path);
+    return;
+  }
+  for (auto step : parts)
+    liveOwners(owners, path.child(step), out);
+}
+
+bool isImplicitDrop(mlir::Operation *op) {
+  auto drop = mlir::dyn_cast<smn::DropOp>(op);
+  return drop && drop.getImplicit();
+}
 
 void applyOp(Owners &owners, mlir::Operation *op, OwnershipObserver *observer) {
   Transfer(owners, observer).apply(op);

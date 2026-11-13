@@ -93,9 +93,7 @@ void SammineDialect::initialize() {
       >();
 }
 
-/// The types of the fields of a struct or tuple, or nullopt for any other
-/// type.
-static std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {
+std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {
   if (auto st = mlir::dyn_cast<StructType>(type))
     return st.getFields();
   if (auto tuple = mlir::dyn_cast<TupleType>(type))
