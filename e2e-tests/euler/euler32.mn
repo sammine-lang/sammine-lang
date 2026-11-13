@@ -1,0 +1,56 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7254 45228
+
+// Project Euler Problem 32: Pandigital products
+// An n-digit number is pandigital when it uses each digit from 1 to n once.
+// 39 * 186 = 7254 writes its factors and product with the digits 1 to 9,
+// each once. Find the sum of all the products that can be written so, each
+// counted once however many ways it can be written.
+
+import std;
+import range;
+
+let digits(x: i64) -> i64 { if x < 10 { 1 } else { 1 + digits(x / 10) } }
+
+let pow10(d: i64) -> i64 { if d == 0 { 1 } else { 10 * pow10(d - 1) } }
+
+// a's digits, then b's.
+let join(a: i64, b: i64) -> i64 { a * pow10(digits(b)) + b }
+
+let has_digit(x: i64, d: i64) -> bool {
+  x > 0 && (x % 10 == d || has_digit(x / 10, d))
+}
+
+// Whether x uses each digit from 1 to n once: it has all n of them, and no
+// digit more.
+let pandigital(n: i64, x: i64) -> bool {
+  digits(x) == n && range::count(1, n + 1, has_digit(x)) == n
+}
+
+// Whether a and p / a multiply to p, the three written with the digits 1
+// to n.
+let writes(n: i64, p: i64, a: i64) -> bool {
+  p % a == 0 && pandigital(n, join(join(a, p / a), p))
+}
+
+// The least number from a on whose square is past p: where the lesser
+// factors of p end.
+let past_root(p: i64, a: i64) -> i64 {
+  if a * a > p { a } else { past_root(p, a + 1) }
+}
+
+// p, when some two factors and it are written with the digits 1 to n.
+let if_product(n: i64, p: i64) -> i64 {
+  if range::any(1, past_root(p, 1), writes(n, p)) { p } else { 0 }
+}
+
+// The products written with their factors in the digits 1 to n. A product
+// has no more digits than its factors together, so at most half of the n.
+let pandigital_products(n: i64) -> i64 {
+  range::sum(1, pow10(n / 2), if_product(n))
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", if_product(9, 7254), pandigital_products(9));
+  0
+}
