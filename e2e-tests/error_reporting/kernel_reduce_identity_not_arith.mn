@@ -1,0 +1,20 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |kernel_reduce_identity_not_arith.mn:17:15
+// CHECK-NEXT:   14|let one() -> f64 { 1.0 }
+// CHECK-NEXT:   15|
+// CHECK-NEXT:   16|kernel f(a: [3]f64) -> f64 {
+// CHECK-NEXT:   17|  reduce(a, +, one())
+// CHECK-NEXT:     |               ^^^
+// CHECK-NEXT:     |               A reduce's identity can only be arithmetic
+// CHECK-NEXT:   18|}
+// CHECK-NEXT:   19|
+// CHECK-NEXT:   20|let main() -> i32 { 0 }
+
+// A reduce starts from an arithmetic value, not, say, a call.
+let one() -> f64 { 1.0 }
+
+kernel f(a: [3]f64) -> f64 {
+  reduce(a, +, one())
+}
+
+let main() -> i32 { 0 }

@@ -39,8 +39,9 @@ public:
   /// memref types, what its wrapper calls; and declares its wrapper, so a
   /// function MIR lowers can call it.
   void declare(AST::KernelDefAST *kd);
-  /// Defines `kd`'s kernel and its wrapper.
-  void define(AST::KernelDefAST *kd);
+  /// Defines `kd`'s kernel and its wrapper. Fails, having reported why, if
+  /// its lambda or identity isn't arithmetic.
+  mlir::LogicalResult define(AST::KernelDefAST *kd);
 
   /// The module of kernels, or null if there is none.
   mlir::ModuleOp kernelModule() const { return kernelModule_; }
@@ -59,9 +60,12 @@ private:
   llvm::StringMap<mlir::Value> params_;
 
   bool targetGPU() const { return gpuMode_ != GPUMode::NONE; }
-  [[noreturn]] void
-  error(const std::string &msg,
-        sammine_util::Location loc = sammine_util::Location(-1, -1));
+  /// Reports what the program asks a kernel to do that it can't.
+  void report(const std::string &msg, sammine_util::Location loc) {
+    reporter_.immediate_error(msg, loc);
+  }
+  /// What the type checker rules out: a bug in the compiler.
+  [[noreturn]] void internalError(const std::string &msg);
   mlir::Location loc(AST::AstBase *ast) const {
     return locator_.loc(builder_, ast);
   }
@@ -82,10 +86,12 @@ private:
   /// wrapper's body is only memref and gpu ops.
   mlir::FunctionType wrapperFunctionType(AST::PrototypeAST *proto);
 
-  mlir::Value defineMap(AST::KernelMapExprAST *mapExpr, mlir::Location location,
-                        mlir::Value output);
-  mlir::Value defineReduce(AST::KernelReduceExprAST *reduceExpr,
-                           AST::KernelDefAST *kd, mlir::Location location);
+  mlir::FailureOr<mlir::Value> defineMap(AST::KernelMapExprAST *mapExpr,
+                                         mlir::Location location,
+                                         mlir::Value output);
+  mlir::FailureOr<mlir::Value>
+  defineReduce(AST::KernelReduceExprAST *reduceExpr, AST::KernelDefAST *kd,
+               mlir::Location location);
   void defineWrapper(AST::KernelDefAST *kd, mlir::Location location);
   /// GPU: frees a device memref.
   void gpuDealloc(mlir::Value deviceMemref, mlir::Location loc);

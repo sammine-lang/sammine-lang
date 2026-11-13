@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |kernel_param_not_number.mn:12:20
+// CHECK-NEXT:   10|
+// CHECK-NEXT:   11|// A kernel computes on numbers: a pointer is no kernel parameter.
+// CHECK-NEXT:   12|kernel f(a: [3]f64, p: ptr<i32>) -> [3]f64 {
+// CHECK-NEXT:     |                    ─────┬
+// CHECK-NEXT:     |                         ╰─ A kernel takes only numbers, bools and chars, or arrays of them; 'p' is 'ptr<i32>'
+// CHECK-NEXT:   13|  map(a, (x: f64) -> f64 { x })
+// CHECK-NEXT:   14|}
+
+// A kernel computes on numbers: a pointer is no kernel parameter.
+kernel f(a: [3]f64, p: ptr<i32>) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x })
+}
+
+let main() -> i32 { 0 }

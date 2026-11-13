@@ -1,0 +1,18 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |kernel_nested_array.mn:14:9
+// CHECK-NEXT:   12|
+// CHECK-NEXT:   13|// A kernel takes arrays of numbers, not arrays of arrays.
+// CHECK-NEXT:   14|kernel f(a: [2][3]f64) -> [2][3]f64 {
+// CHECK-NEXT:     |         ───┬
+// CHECK-NEXT:     |            ╰─ A kernel takes only numbers, bools and chars, or arrays of them; 'a' is '[2][3]f64'
+// CHECK-NEXT:     |                          ┬
+// CHECK-NEXT:     |                          ╰─ A kernel returns only numbers, bools and chars, or arrays of them, not '[2][3]f64'
+// CHECK-NEXT:   15|  map(a, (x: [3]f64) -> [3]f64 { x })
+// CHECK-NEXT:   16|}
+
+// A kernel takes arrays of numbers, not arrays of arrays.
+kernel f(a: [2][3]f64) -> [2][3]f64 {
+  map(a, (x: [3]f64) -> [3]f64 { x })
+}
+
+let main() -> i32 { 0 }

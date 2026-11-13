@@ -413,8 +413,9 @@ void Compiler::mir() {
                              *locator_, options_.file_arg, options_.str_arg,
                              props_, options_.gpu);
   if (!modules_.cpuModule) {
-    fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
-               "MLIR generation failed\n");
+    if (!modules_.reported)
+      fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
+                 "MLIR generation failed\n");
     set_error();
     return;
   }

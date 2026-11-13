@@ -22,9 +22,12 @@ namespace sammine_lang {
 struct GeneratedModules {
   mlir::OwningOpRef<mlir::ModuleOp> cpuModule;
   mlir::OwningOpRef<mlir::ModuleOp> kernelModule;
+  /// With no modules: whether an error in the program, reported, is why.
+  bool reported = false;
 };
 
-/// The MLIR for `program`, or an empty result if a module doesn't verify.
+/// The MLIR for `program`, or an empty result if the program asks for what
+/// can't be generated (reported) or a module doesn't verify.
 /// `moduleName` is the library's name, empty for an executable. Ops are
 /// located by `locator`.
 GeneratedModules

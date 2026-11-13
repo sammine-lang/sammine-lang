@@ -44,8 +44,7 @@ bool isUnsigned(const Type &type) {
 
 } // namespace
 
-void KernelGen::error(const std::string &msg, sammine_util::Location loc) {
-  reporter_.immediate_error(msg, loc);
+void KernelGen::internalError(const std::string &msg) {
   sammine_util::abort(msg);
 }
 
@@ -98,9 +97,9 @@ void KernelGen::declare(AST::KernelDefAST *kd) {
 
 // --- The kernel ---
 
-void KernelGen::define(AST::KernelDefAST *kd) {
+mlir::LogicalResult KernelGen::define(AST::KernelDefAST *kd) {
   if (kd->Prototype->is_generic())
-    return;
+    return mlir::success();
   auto location = loc(kd);
   auto kernelType = kernelFunctionType(kd->Prototype.get());
   auto funcOp =
@@ -125,36 +124,43 @@ void KernelGen::define(AST::KernelDefAST *kd) {
     mlir::func::ReturnOp::create(builder_, location);
   } else {
     auto *expr = kd->Body->expressions[0].get();
-    mlir::Value result;
+    mlir::FailureOr<mlir::Value> result;
     if (auto *num = llvm::dyn_cast<AST::KernelNumberExprAST>(expr)) {
       auto type = kernelType.getResults()[0];
       if (auto floatType = mlir::dyn_cast<mlir::FloatType>(type))
         result = mlir::arith::ConstantFloatOp::create(
-            builder_, location, floatType,
-            llvm::APFloat(std::stod(num->number)));
+                     builder_, location, floatType,
+                     llvm::APFloat(std::stod(num->number)))
+                     .getResult();
       else
         result = mlir::arith::ConstantIntOp::create(
-            builder_, location, type,
-            sammine_util::literal_int_bits(num->number));
+                     builder_, location, type,
+                     sammine_util::literal_int_bits(num->number))
+                     .getResult();
     } else if (auto *map = llvm::dyn_cast<AST::KernelMapExprAST>(expr)) {
       result = defineMap(map, location, output);
     } else if (auto *reduce = llvm::dyn_cast<AST::KernelReduceExprAST>(expr)) {
       result = defineReduce(reduce, kd, location);
     } else {
-      error("Unknown kernel expression type", kd->get_location());
+      internalError("Unknown kernel expression type");
     }
-    mlir::func::ReturnOp::create(builder_, location, mlir::ValueRange{result});
+    if (mlir::failed(result))
+      return mlir::failure();
+    mlir::func::ReturnOp::create(builder_, location, mlir::ValueRange{*result});
   }
 
   defineWrapper(kd, location);
+  return mlir::success();
 }
 
-mlir::Value KernelGen::defineMap(AST::KernelMapExprAST *mapExpr,
-                                 mlir::Location location, mlir::Value output) {
+mlir::FailureOr<mlir::Value>
+KernelGen::defineMap(AST::KernelMapExprAST *mapExpr, mlir::Location location,
+                     mlir::Value output) {
   auto input = params_.lookup(mapExpr->input_name);
   assert(input && "a map's input is a kernel parameter");
   assert(output && "a map kernel fills the tensor passed last");
 
+  bool arithmetic = true;
   auto mapOp = mlir::linalg::MapOp::create(
       builder_, location, /*inputs=*/mlir::ValueRange{input}, /*init=*/output,
       [&](mlir::OpBuilder &b, mlir::Location loc, mlir::ValueRange args) {
@@ -164,18 +170,23 @@ mlir::Value KernelGen::defineMap(AST::KernelMapExprAST *mapExpr,
         bindings[mapExpr->lambda_proto->parameterVectors[0]->name] = args[0];
         auto body =
             mir_.lowerKernelScalar(mapExpr->lambda_body.get(), bindings);
-        if (mlir::failed(body))
-          error("A kernel's lambda can only compute on its element with "
-                "arithmetic",
-                mapExpr->lambda_body->get_location());
-        mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{*body});
+        // The module is dropped then, so the region is left unfinished.
+        arithmetic = mlir::succeeded(body);
+        if (arithmetic)
+          mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{*body});
       });
+  if (!arithmetic) {
+    report("A kernel's lambda can only compute on its element with "
+           "arithmetic",
+           mapExpr->lambda_body->get_location());
+    return mlir::failure();
+  }
   return mapOp->getResult(0);
 }
 
-mlir::Value KernelGen::defineReduce(AST::KernelReduceExprAST *reduceExpr,
-                                    AST::KernelDefAST *kd,
-                                    mlir::Location location) {
+mlir::FailureOr<mlir::Value>
+KernelGen::defineReduce(AST::KernelReduceExprAST *reduceExpr,
+                        AST::KernelDefAST *kd, mlir::Location location) {
   auto input = params_.lookup(reduceExpr->input_name);
   auto &params = kd->Prototype->parameterVectors;
   auto param = llvm::find_if(
@@ -186,9 +197,11 @@ mlir::Value KernelGen::defineReduce(AST::KernelReduceExprAST *reduceExpr,
       std::get<ArrayType>((*param)->get_type().type_data).get_element();
 
   auto identity = mir_.lowerKernelScalar(reduceExpr->identity.get(), {});
-  if (mlir::failed(identity))
-    error("A reduce's identity can only be arithmetic",
-          reduceExpr->identity->get_location());
+  if (mlir::failed(identity)) {
+    report("A reduce's identity can only be arithmetic",
+           reduceExpr->identity->get_location());
+    return mlir::failure();
+  }
 
   // A 0-d tensor holding the identity, which the reduce folds into.
   auto empty = mlir::tensor::EmptyOp::create(
@@ -208,12 +221,13 @@ mlir::Value KernelGen::defineReduce(AST::KernelReduceExprAST *reduceExpr,
                              : emitIntArithOp(b, loc, args[0], args[1], op,
                                               isUnsigned(element));
         if (!result)
-          error("Unsupported reduce operator");
+          internalError("Unsupported reduce operator");
         mlir::linalg::YieldOp::create(b, loc, mlir::ValueRange{result});
       });
 
-  return mlir::tensor::ExtractOp::create(
-             builder_, location, reduceOp->getResult(0), mlir::ValueRange{})
+  return mlir::tensor::ExtractOp::create(builder_, location,
+                                         reduceOp->getResult(0),
+                                         mlir::ValueRange{})
       .getResult();
 }
 
@@ -300,7 +314,7 @@ mlir::Type KernelGen::kernelType(const Type &type, bool asMemref) {
   case TypeKind::Array: {
     auto &array = std::get<ArrayType>(type.type_data);
     if (array.get_element().type_kind == TypeKind::Array)
-      error("Nested arrays not yet supported in kernel context");
+      internalError("Nested arrays not yet supported in kernel context");
     auto element = kernelType(array.get_element());
     auto size = static_cast<int64_t>(array.get_size());
     if (asMemref)
@@ -331,10 +345,10 @@ mlir::Type KernelGen::kernelType(const Type &type, bool asMemref) {
   case TypeKind::Struct:
   case TypeKind::Enum:
   case TypeKind::Tuple:
-    error(fmt::format("Type '{}' is not valid in kernel context",
-                      type.to_string()));
+    internalError(fmt::format("Type '{}' is not valid in kernel context",
+                              type.to_string()));
   default:
-    error("Unknown type kind in kernel context");
+    internalError("Unknown type kind in kernel context");
   }
 }
 

@@ -87,8 +87,10 @@ public:
         reporter_(fileName, sourceText, 3), props_(props), types_(&context),
         mir_(builder_, props, locator_), gpuMode_(gpuMode) {}
 
-  /// The CPU module, or null if a module doesn't verify.
+  /// The CPU module, or null if the program asks for what can't be
+  /// generated (reported()) or a module doesn't verify.
   mlir::ModuleOp generate(AST::ProgramAST *program);
+  bool reported() const { return reported_; }
   mlir::ModuleOp kernelModule() const {
     return kernels_ ? kernels_->kernelModule() : nullptr;
   }
@@ -107,6 +109,7 @@ private:
   MIRLowering mir_;
   GPUMode gpuMode_;
   std::unique_ptr<KernelGen> kernels_;
+  bool reported_ = false;
 
   /// Who a function is for.
   enum class Linkage {
@@ -186,7 +189,10 @@ mlir::ModuleOp ModuleGen::generate(AST::ProgramAST *program) {
       for (auto *fd : functionBodies(d))
         setLinkage(fd, functionLinkage);
     } else if (auto *kd = llvm::dyn_cast<AST::KernelDefAST>(d)) {
-      kernels_->define(kd);
+      if (mlir::failed(kernels_->define(kd))) {
+        reported_ = true;
+        return nullptr;
+      }
     } else if (!llvm::isa<AST::ExternAST, AST::StructDefAST, AST::EnumDefAST,
                           AST::TypeAliasDefAST, AST::TypeClassDeclAST>(d)) {
       error(fmt::format("unknown definition type '{}'", d->getTreeName()),
@@ -432,7 +438,7 @@ generateModules(mlir::MLIRContext &context, AST::ProgramAST *program,
                 gpuMode);
   auto cpuModule = gen.generate(program);
   if (!cpuModule)
-    return {};
+    return {.cpuModule = {}, .kernelModule = {}, .reported = gen.reported()};
   return {cpuModule, gen.kernelModule()};
 }
 

@@ -1893,6 +1893,51 @@ Type BiTypeCheckerVisitor::synthesize(KernelDefAST *ast) {
   auto &fn_type = std::get<FunctionType>(proto_type.type_data);
   auto declared_ret = fn_type.get_return_type();
 
+  // A kernel computes on numbers: it takes and returns scalars, or arrays of
+  // them, and may return nothing.
+  auto scalar = [](const Type &type) {
+    switch (type.type_kind) {
+    case TypeKind::I32_t:
+    case TypeKind::I64_t:
+    case TypeKind::U32_t:
+    case TypeKind::U64_t:
+    case TypeKind::F64_t:
+    case TypeKind::F32_t:
+    case TypeKind::Bool:
+    case TypeKind::Char:
+    case TypeKind::Integer:
+    case TypeKind::Flt:
+      return true;
+    default:
+      return false;
+    }
+  };
+  auto computable = [&](const Type &type) {
+    if (type.type_kind == TypeKind::Array)
+      return scalar(std::get<ArrayType>(type.type_data).get_element());
+    return scalar(type);
+  };
+  bool computes = true;
+  for (auto &param : ast->Prototype->parameterVectors)
+    if (!computable(param->get_type())) {
+      this->add_error(
+          param->get_location(),
+          fmt::format("A kernel takes only numbers, bools and chars, or "
+                      "arrays of them; '{}' is '{}'",
+                      param->name, param->get_type().to_string()));
+      computes = false;
+    }
+  if (declared_ret.type_kind != TypeKind::Unit && !computable(declared_ret)) {
+    this->add_error(
+        ast->Prototype->return_type_expr->location,
+        fmt::format("A kernel returns only numbers, bools and chars, or "
+                    "arrays of them, not '{}'",
+                    declared_ret.to_string()));
+    computes = false;
+  }
+  if (!computes)
+    return ast->set_type(Type::Poisoned());
+
   // Type-check each kernel body expression
   Type body_result_type = Type::Unit();
   for (auto &expr : ast->Body->expressions) {

@@ -2,6 +2,8 @@
 // A map's lambda runs on each element in a linalg region: it can only
 // compute on the element with arithmetic, not, say, call a function.
 // CHECK: A kernel's lambda can only compute on its element with arithmetic
+// CHECK-NOT: Internal Compiler Error
+// CHECK-NOT: MLIR generation failed
 let half(x: f64) -> f64 { x / 2.0 }
 
 kernel halve(a: [3]f64) -> [3]f64 {
