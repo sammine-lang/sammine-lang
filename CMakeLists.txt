@@ -87,8 +87,8 @@ file(MAKE_DIRECTORY ${STDLIB_DIR})
 # compiled first.
 set(STDLIB_PRELUDE definitions)
 # A module comes after the modules it imports, listed in STDLIB_IMPORTS_<mod>.
-set(STDLIB_COMPILED std str io range buffer)
-set(STDLIB_COPIED vec.mn)
+set(STDLIB_COMPILED std str io range buffer map)
+set(STDLIB_COPIED vec.mn set.mn)
 set(STDLIB_C_RUNTIME_io io_runtime.c)
 set(STDLIB_IMPORTS_buffer range)
 

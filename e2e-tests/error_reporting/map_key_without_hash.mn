@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: No instance of Hash<Point>
+
+// A map's keys are hashed: a key type needs a Hash instance.
+import map;
+
+struct Point { x: i32, };
+
+let main() -> i32 {
+  let m = map::insert<Point, i32>(map::new<Point, i32>(), Point { x: 1 }, 2);
+  map::delete<Point, i32>(m);
+  0
+}

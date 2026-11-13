@@ -1,0 +1,190 @@
+// A hash table from keys that own nothing (the integers, char, bool: what
+// the prelude hashes) to values, which may own memory. Open addressing
+// with linear probing: a key sits in the first free slot from where it
+// hashes to, and a lookup walks from there to the key or an empty slot.
+
+// Each slot is empty ('\0', never used), full ('f') or removed ('r', its
+// key's value taken out: a lookup walks past it, an insert may reuse it).
+export struct Map<K, V> {
+  keys: 'buf<K>,
+  vals: 'buf<V>,
+  slots: 'buf<char>,
+  // Full slots.
+  size: i64,
+  // Full and removed slots: what a lookup may walk over.
+  used: i64,
+  // A power of two, so a hash's slot is its low bits.
+  cap: i64,
+};
+
+// n slots, all empty.
+let unsafe empty_slots(n: i64) -> 'buf<char> {
+  let s = alloc_buf<char>(n);
+  for i in 0i64..n {
+    s[i] = '\0';
+  };
+  s
+}
+
+let unsafe with_room<K, V>(n: i64) -> Map<K, V> {
+  Map<K, V> {
+    keys: alloc_buf<K>(n),
+    vals: alloc_buf<V>(n),
+    slots: empty_slots(n),
+    size: 0i64,
+    used: 0i64,
+    cap: n,
+  }
+}
+
+// An empty map.
+export let new<K, V>() -> Map<K, V> { with_room<K, V>(8i64) }
+
+// The slot k hashes to, in a table of n slots.
+let home<K>(k: K, n: i64) -> i64 { (Hash<K>(k) as i64) & (n - 1i64) }
+
+// The slot after i, round to the first.
+let next(i: i64, n: i64) -> i64 { (i + 1i64) & (n - 1i64) }
+
+// The slot holding k, from slot i on, or -1: an empty slot ends the walk,
+// as does having looked at every slot.
+let unsafe find<K, V>(m: ptr<Map<K, V>>, k: K, i: i64, left: i64) -> i64 {
+  if left == 0i64 || (*m).slots[i] == '\0' {
+    0i64 - 1i64
+  } else if (*m).slots[i] == 'f' && (*m).keys[i] == k {
+    i
+  } else {
+    find<K, V>(m, k, next(i, (*m).cap), left - 1i64)
+  }
+}
+
+let unsafe slot_of<K, V>(m: ptr<Map<K, V>>, k: K) -> i64 {
+  find<K, V>(m, k, home<K>(k, (*m).cap), (*m).cap)
+}
+
+// The first slot from i on that isn't full. One is: a map is never full.
+let unsafe free_slot<K, V>(m: ptr<Map<K, V>>, i: i64) -> i64 {
+  if (*m).slots[i] == 'f' { free_slot<K, V>(m, next(i, (*m).cap)) } else { i }
+}
+
+// m with k, which it doesn't hold, mapped to v.
+let unsafe place<K, V>(m: Map<K, V>, k: K, v: V) -> Map<K, V> {
+  let i = free_slot<K, V>(&m, home<K>(k, m.cap));
+  let reused = m.slots[i] == 'r';
+  m.keys[i] = k;
+  m.vals[i] = v;
+  m.slots[i] = 'f';
+  Map<K, V> {
+    keys: m.keys,
+    vals: m.vals,
+    slots: m.slots,
+    size: m.size + 1i64,
+    used: if reused { m.used } else { m.used + 1i64 },
+    cap: m.cap,
+  }
+}
+
+// m's buffers freed, its values not dropped: moved out already.
+let unsafe free_buffers<K, V>(m: Map<K, V>) -> unit {
+  drop(m.keys);
+  drop(m.vals);
+  drop(m.slots)
+}
+
+// What old holds, from slot i on, placed in into; then old's buffers are
+// freed, its values moved, not dropped.
+let unsafe move_all<K, V>(old: Map<K, V>, into: Map<K, V>, i: i64) -> Map<K, V> {
+  if i == old.cap {
+    free_buffers<K, V>(old);
+    into
+  } else if old.slots[i] == 'f' {
+    let placed = place<K, V>(into, old.keys[i], old.vals[i]);
+    move_all<K, V>(old, placed, i + 1i64)
+  } else {
+    move_all<K, V>(old, into, i + 1i64)
+  }
+}
+
+// m with room for one more key, its removed slots cleared: at most 3/4 of
+// its slots are used, so walks stay short. It doubles when most of what is
+// used is full, and is rebuilt at its size when most is removed.
+let unsafe roomy<K, V>(m: Map<K, V>) -> Map<K, V> {
+  if (m.used + 1i64) * 4i64 <= m.cap * 3i64 {
+    m
+  } else {
+    let n = if (m.size + 1i64) * 2i64 > m.cap { m.cap * 2i64 } else { m.cap };
+    move_all<K, V>(m, with_room<K, V>(n), 0i64)
+  }
+}
+
+// m with k mapped to v. The value k had, if any, is dropped.
+export let unsafe insert<K, V>(m: Map<K, V>, k: K, v: V) -> Map<K, V> {
+  let m = roomy<K, V>(m);
+  let i = slot_of<K, V>(&m, k);
+  if i >= 0i64 {
+    drop(m.vals[i]);
+    m.vals[i] = v;
+    m
+  } else {
+    place<K, V>(m, k, v)
+  }
+}
+
+// The value k maps to, or None. For values that own nothing, as v[i].
+export let unsafe get<K, V>(m: ptr<Map<K, V>>, k: K) -> Option<V> {
+  let i = slot_of<K, V>(m, k);
+  if i < 0i64 { Option<V>::None } else { Option<V>::Some((*m).vals[i]) }
+}
+
+// Whether m maps k to a value.
+export let unsafe contains<K, V>(m: ptr<Map<K, V>>, k: K) -> bool {
+  slot_of<K, V>(m, k) >= 0i64
+}
+
+// How many keys m maps.
+export let length<K, V>(m: ptr<Map<K, V>>) -> i64 { (*m).size }
+
+// m without k, and the value k mapped to, or None if it mapped none.
+export let unsafe remove<K, V>(m: Map<K, V>, k: K) -> (Map<K, V>, Option<V>) {
+  let i = slot_of<K, V>(&m, k);
+  if i < 0i64 {
+    (Map<K, V> {
+       keys: m.keys,
+       vals: m.vals,
+       slots: m.slots,
+       size: m.size,
+       used: m.used,
+       cap: m.cap,
+     },
+     Option<V>::None)
+  } else {
+    m.slots[i] = 'r';
+    let v = m.vals[i];
+    (Map<K, V> {
+       keys: m.keys,
+       vals: m.vals,
+       slots: m.slots,
+       size: m.size - 1i64,
+       used: m.used,
+       cap: m.cap,
+     },
+     Option<V>::Some(v))
+  }
+}
+
+// A map's drop drops the values it holds, then its buffers: a buffer's own
+// drop only frees it. Keys own nothing.
+export instance<K, V> Drop<Map<K, V>> {
+  let unsafe Drop(m: Map<K, V>) -> unit {
+    for i in 0i64..m.cap {
+      if m.slots[i] == 'f' {
+        drop(m.vals[i]);
+      };
+    };
+    drop(m.keys);
+    drop(m.vals);
+    drop(m.slots)
+  }
+}
+
+export let delete<K, V>(m: Map<K, V>) -> unit { drop(m) }

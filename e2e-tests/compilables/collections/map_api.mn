@@ -1,0 +1,88 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
+// CHECK:      get 11 20 -1, length 2, contains 1 0
+// CHECK-NEXT: removed 11 -1, length 1
+// CHECK-NEXT: workload length 750, sum 365793922
+// CHECK-NEXT: removed box 6, kept box 7
+
+// insert, get, contains, remove and length. A deterministic workload of
+// 20000 inserts, overwrites and removes over 1000 keys grows the map and
+// leaves removed slots to walk past and reuse; its result is a Python
+// dict's on the same steps. Owned values: an overwrite drops the old one,
+// remove hands one back, and the rest drop with the map, under ASan with
+// nothing leaked or freed twice.
+
+import std;
+import map;
+
+let show(o: Option<i32>) -> i32 { case o { Some(x) => x, None => -1 } }
+
+let step(m: map::Map<i32, i32>, n: i32, seed: i64) -> map::Map<i32, i32> {
+  if n == 0 {
+    m
+  } else {
+    let s = seed * 6364136223846793005i64 + 1442695040888963407i64;
+    let k = ((s >> 33i64) % 1000i64) as i32;
+    let k = if k < 0 { -k } else { k };
+    let m = if (s >> 20i64) % 4i64 == 0i64 {
+      let (rest, _) = map::remove<i32, i32>(m, k);
+      rest
+    } else {
+      map::insert<i32, i32>(m, k, n)
+    };
+    step(m, n - 1, s)
+  }
+}
+
+// Each key times its value, over the keys mapped.
+let sum(m: ptr<map::Map<i32, i32>>, k: i32, acc: i64) -> i64 {
+  if k == 1000 {
+    acc
+  } else {
+    let v = show(map::get<i32, i32>(m, k));
+    sum(m, k + 1, if v < 0 { acc } else { acc + (k as i64) * (v as i64) })
+  }
+}
+
+let boxed(n: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = n; p }
+let unbox(o: Option<'ptr<i32>>) -> i32 {
+  case o {
+    Some(p) => {
+      let n = *p;
+      drop(p);
+      n
+    },
+    None => 0,
+  }
+}
+
+let main() -> i32 {
+  let m = map::insert<i32, i32>(map::new<i32, i32>(), 1, 10);
+  let m = map::insert<i32, i32>(map::insert<i32, i32>(m, 2, 20), 1, 11);
+  std::printf("get %d %d %d, length %lld, contains %d %d\n",
+              show(map::get<i32, i32>(&m, 1)), show(map::get<i32, i32>(&m, 2)),
+              show(map::get<i32, i32>(&m, 3)), map::length<i32, i32>(&m),
+              map::contains<i32, i32>(&m, 2), map::contains<i32, i32>(&m, 3));
+  let (m, a) = map::remove<i32, i32>(m, 1);
+  let (m, b) = map::remove<i32, i32>(m, 1);
+  std::printf("removed %d %d, length %lld\n", show(a), show(b),
+              map::length<i32, i32>(&m));
+  map::delete<i32, i32>(m);
+
+  let big = step(map::new<i32, i32>(), 20000, 42i64);
+  std::printf("workload length %lld, sum %lld\n", map::length<i32, i32>(&big),
+              sum(&big, 0, 0i64));
+  map::delete<i32, i32>(big);
+
+  let o = map::insert<i32, 'ptr<i32>>(map::new<i32, 'ptr<i32>>(), 1, boxed(5));
+  let o = map::insert<i32, 'ptr<i32>>(map::insert<i32, 'ptr<i32>>(o, 2,
+                                                                  boxed(6)),
+                                      1, boxed(7));
+  let (o, six) = map::remove<i32, 'ptr<i32>>(o, 2);
+  let (o, seven) = map::remove<i32, 'ptr<i32>>(o, 1);
+  std::printf("removed box %d, kept box %d\n", unbox(six), unbox(seven));
+  map::delete<i32, 'ptr<i32>>(o);
+  0
+}

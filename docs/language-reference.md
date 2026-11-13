@@ -1285,6 +1285,8 @@ A generic function is compiled in each module that uses it, for the types it is 
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
+- **`map`** -- provides `Map<K, V>`, a hash table (see below)
+- **`set`** -- provides `Set<T>`, a set of values over `Map<T, bool>` (see below)
 - **`str`** -- provides `String` type with `new` and `delete`; `str::push(s, c)` and `str::append(s, "...")` give `s` with a `char` or a C string after it, growing it as `Vec`'s push does; `str::length(&s)`; `str::get(&s, i)` is `s[i]` giving `Option<char>`, `None` out of bounds; `str::eq(&a, &b)` compares what two strings hold; `s[i]` is byte `i` of `s` as a `char`, for an `i64` index in `0..s.length` (the terminator isn't among them), and any other panics, as `v[i]` does for a `Vec`, through `Indexer<String, char>`. It also orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`, and `&a < &b`, `>`, `<=` and `>=` compare through views (instances on `ptr<String>`), since a comparison only reads the strings. `==` on views still compares addresses, as for any pointer
 
 ---
@@ -1345,3 +1347,45 @@ let v3 = vec::push<i32>(v2, 2);  // triggers growth to capacity 4
 // ... keep pushing, grows as needed
 vec::delete<i32>(v3);
 ```
+
+---
+
+## 18. Map\<K, V\> and Set\<T\>
+
+`map::Map<K, V>` is a hash table from keys to values; `set::Set<T>` holds each
+value once. Keys and set values own nothing and need a `Hash` instance, as
+the integers, `char` and `bool` have (a key type without one is an error,
+"No instance of Hash<...>"), and `==`. Values may own memory. As with
+`Vec`, what changes a map takes it and gives it back; what reads one
+borrows it.
+
+```sammine
+import std;
+import map;
+
+let main() -> i32 {
+  let m = map::insert<i32, i32>(map::new<i32, i32>(), 1, 10);
+  let m = map::insert<i32, i32>(m, 1, 11);           // replaces 10
+  let v = case map::get<i32, i32>(&m, 1) { Some(v) => v, None => 0 };
+  std::printf("%d\n", v);                            // 11
+  let (m, old) = map::remove<i32, i32>(m, 1);        // old: Some(11)
+  map::delete<i32, i32>(m);
+  0
+}
+```
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `map::new<K, V>()` | `() -> Map<K, V>` | An empty map |
+| `map::insert<K, V>(m, k, v)` | `(Map<K, V>, K, V) -> Map<K, V>` | Map `k` to `v`, dropping a value `k` had |
+| `map::get<K, V>(&m, k)` | `(ptr<Map<K, V>>, K) -> Option<V>` | The value `k` maps to, or `None`. For a value type that owns nothing |
+| `map::contains<K, V>(&m, k)` | `(ptr<Map<K, V>>, K) -> bool` | Whether `k` maps to a value |
+| `map::remove<K, V>(m, k)` | `(Map<K, V>, K) -> (Map<K, V>, Option<V>)` | Take `k` out, handing its value back |
+| `map::length<K, V>(&m)` | `(ptr<Map<K, V>>) -> i64` | How many keys `m` maps |
+| `map::delete<K, V>(m)` | `(Map<K, V>) -> unit` | Drop the map and the values it holds |
+| `set::new<T>()`, `set::insert<T>(s, x)`, `set::contains<T>(&s, x)`, `set::remove<T>(s, x)`, `set::length<T>(&s)`, `set::delete<T>(s)` | | The same for a set; `remove` gives `(Set<T>, bool)`, whether `x` was in it |
+
+A map is open-addressed with linear probing: a key sits in the first free
+slot from where it hashes to. It keeps at most 3/4 of its slots used,
+doubling when most of those hold keys and rebuilding at its size when most
+are removed ones, so a lookup walks a few slots.

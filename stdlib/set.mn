@@ -1,0 +1,33 @@
+// A set of values that own nothing (the integers, char, bool: what the
+// prelude hashes): a map from each to true.
+
+import map;
+
+export struct Set<T> { items: map::Map<T, bool>, };
+
+// An empty set.
+export let new<T>() -> Set<T> { Set<T> { items: map::new<T, bool>() } }
+
+// s with x in it.
+export let unsafe insert<T>(s: Set<T>, x: T) -> Set<T> {
+  Set<T> { items: map::insert<T, bool>(s.items, x, true) }
+}
+
+// Whether x is in s.
+export let unsafe contains<T>(s: ptr<Set<T>>, x: T) -> bool {
+  map::contains<T, bool>(&(*s).items, x)
+}
+
+// s without x, and whether x was in it.
+export let unsafe remove<T>(s: Set<T>, x: T) -> (Set<T>, bool) {
+  let (items, was) = map::remove<T, bool>(s.items, x);
+  let found = case was { Some(_) => true, None => false };
+  (Set<T> { items: items }, found)
+}
+
+// How many values s holds.
+export let length<T>(s: ptr<Set<T>>) -> i64 {
+  map::length<T, bool>(&(*s).items)
+}
+
+export let delete<T>(s: Set<T>) -> unit { drop(s) }
