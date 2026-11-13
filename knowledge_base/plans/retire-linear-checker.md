@@ -1,6 +1,6 @@
 # Plan: retire the AST linear checker
 
-Status: in progress. Step 1 done.
+Status: in progress. Steps 1 and 2 done.
 
 `LinearTypeChecker` (`src/typecheck/LinearTypeChecker.cpp`, 791 lines) is
 what's left of the AST ownership checking: rules that don't depend on
@@ -86,7 +86,7 @@ Each a commit, the suite passing after each.
 
 1. Open type arguments: reported by the type checker after each function.
    (Done: `OpenTypeCheck`, run in the type-check stage.)
-2. View placement: in the type checker.
+2. View placement: in the type checker. (Done: `ViewPlacementCheck`.)
 3. `ViewCheck`: writes through a view, `&` of owned memory and of owning
    values; the lateral-escape test reports the write.
 4. Closures in `ViewCheck`: binding an owning value, a view-capturing

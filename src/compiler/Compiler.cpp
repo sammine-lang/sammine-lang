@@ -57,6 +57,7 @@
 #include "typecheck/BiTypeChecker.h"
 #include "typecheck/LinearTypeChecker.h"
 #include "typecheck/OpenTypeCheck.h"
+#include "typecheck/ViewPlacementCheck.h"
 #include "util/Logging.h"
 #include "util/QualifiedName.h"
 #include "util/Tracy.h"
@@ -270,7 +271,11 @@ void Compiler::typecheck() {
   auto open = sammine_lang::AST::OpenTypeCheck(props_);
   programAST->accept_vis(&open);
   reporter.report(open);
-  if (open.has_errors())
+  // Views where none may be.
+  auto placement = sammine_lang::AST::ViewPlacementCheck();
+  programAST->accept_vis(&placement);
+  reporter.report(placement);
+  if (open.has_errors() || placement.has_errors())
     set_error();
 }
 

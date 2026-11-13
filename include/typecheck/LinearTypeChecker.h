@@ -40,13 +40,6 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_case(CaseExprAST *ast);
   void check_addr_of(AddrOfExprAST *ast);
 
-  // Report `type` if it holds a non-owning ptr<T> where one is not allowed.
-  // `ptr_allowed_here` says whether `type` itself may be a ptr<T>: true for
-  // parameters and locals, false for returns and anything stored.
-  void check_placement(const Type &type, bool ptr_allowed_here,
-                       sammine_util::Location loc, const std::string &where);
-  void check_prototype_placement(PrototypeAST *proto);
-
   // Reject a wildcard arm that could match a variant with a linear payload.
   void check_wildcard_arm(const CaseExprAST &ast, const CaseArm &wildcard);
 
