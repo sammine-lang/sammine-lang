@@ -2011,12 +2011,8 @@ auto Parser::expect(TokenType tokType, bool exhausts, TokenType until,
   if (result) {
     return tokStream->consume();
   } else {
-    // TODO: Add error reporting after this point.
-    if (!message.empty() && tokStream->peek()->tok_type != TokEOF) {
-      report_error(message, tokStream->currentLocation());
-    } else if (!message.empty()) {
+    if (!message.empty())
       report_error(message, currentToken->get_location());
-    }
     if (exhausts) {
       last_exhaustible_loc = currentToken->get_location();
       tokStream->exhaust_until(until);
