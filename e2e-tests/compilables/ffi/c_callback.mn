@@ -1,0 +1,48 @@
+// RUN: %cc -fPIC -c %dir/Inputs/c_callback_runtime.c -o %T/c_callback_runtime.o && %sammine --file %dir/Inputs/c_callback.mn %O && %sammine_jit --file %full %I -I %dir/Inputs | %check %full
+// RUN: %sammine --file %full --emit llvm %I -I %dir/Inputs | %check %full --check-prefix IR
+// CHECK:      apply 42
+// CHECK-NEXT: twice 84
+// CHECK-NEXT: abs 7
+// CHECK-NEXT: char 61
+// CHECK-NEXT: bool 1 0
+// CHECK-NEXT: mixed 6.5
+// CHECK-NEXT: each 4
+// CHECK-NEXT: each 8
+// CHECK-NEXT: each 15
+
+// C takes a function as a pointer to its code. A function named where C
+// takes one is passed as __c_<f>, a copy C calls as it calls any function,
+// which extends a char or bool as C expects and calls f.
+// IR:      call i32 @apply(ptr @__c_double_it, i32 21)
+// IR:      call i32 @apply(ptr @__c_abs, i32 -7)
+// IR:      define internal i32 @__c_double_it(i32 %0)
+// IR-NOT:  define internal i32 @__c_double_it
+// IR:      define internal i32 @__c_abs(i32 %0)
+// IR:      define internal signext i8 @__c_negate(i8 signext %0)
+// IR:      define internal zeroext i1 @__c_is_big(i32 %0)
+
+import std;
+import c_callback as c;
+
+reuse abs(x: i32) -> i32;
+
+let double_it(x: i32) -> i32 { x * 2 }
+let negate(ch: char) -> char { (0 - (ch as i32)) as char }
+let is_big(x: i32) -> bool { x > 3 }
+let mixed(a: f64, b: f32, n: i64) -> f64 { a + (b as f64) + (n as f64) }
+let show(p: ptr<i32>) -> unit { std::printf("each %d\n", *p); }
+
+let unsafe main() -> i32 {
+  std::printf("apply %d\n", c::apply(double_it, 21));
+  // The same function twice: one copy for C.
+  std::printf("twice %d\n", c::apply_twice(double_it, 21));
+  // A C function, given back to C.
+  std::printf("abs %d\n", c::apply(abs, -7));
+  // 0xC3, the first byte of "é": negative as a signed char.
+  let s = "é";
+  std::printf("char %d\n", c::call_char(negate, s[0]));
+  std::printf("bool %d %d\n", c::call_bool(is_big, 7), c::call_bool(is_big, 1));
+  std::printf("mixed %.1f\n", c::call_mixed(mixed, 1.5, 2.0f32, 3i64));
+  c::each(show, 3);
+  0
+}

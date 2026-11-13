@@ -286,6 +286,14 @@ void ModuleGen::declareCBinding(AST::ExternAST *ast) {
     return type.type_kind == TypeKind::Struct ||
            type.type_kind == TypeKind::Tuple;
   };
+  auto isFunction = [](const Type &type) {
+    return type.type_kind == TypeKind::Function;
+  };
+  // C takes a function as a plain pointer to its code, where sammine has a
+  // closure; lowering passes the code of a C-callable copy (MIRToLLVM).
+  auto cParamType = [&](const Type &type) {
+    return isFunction(type) ? llvmPtr() : llvmType(type);
+  };
 
   // C moves a struct in registers, as the type cabi::registerType gives, or
   // through memory: a returned one through a pointer the caller passes as a
@@ -294,7 +302,7 @@ void ModuleGen::declareCBinding(AST::ExternAST *ast) {
   // it needs are no longer all free. LLVM leaves this to the frontend.
   if (ast->is_c_function &&
       (isStruct(result) || llvm::any_of(params, [&](auto &param) {
-         return isStruct(param->get_type());
+         return isStruct(param->get_type()) || isFunction(param->get_type());
        }))) {
     mlir::DataLayout layout(module_);
     llvm::SmallVector<mlir::Type, 4> paramTypes;
@@ -323,7 +331,7 @@ void ModuleGen::declareCBinding(AST::ExternAST *ast) {
 
     llvm::SmallVector<std::pair<unsigned, mlir::Type>> byvalTypes;
     for (auto &param : params) {
-      auto paramType = llvmType(param->get_type());
+      auto paramType = cParamType(param->get_type());
       if (!isStruct(param->get_type())) {
         take(cabi::registersFor(paramType));
         paramTypes.push_back(paramType);
@@ -359,7 +367,8 @@ void ModuleGen::declareCBinding(AST::ExternAST *ast) {
   if (proto->is_var_arg) {
     llvm::SmallVector<mlir::Type, 4> paramTypes;
     for (auto &param : params)
-      paramTypes.push_back(llvmType(param->get_type()));
+      paramTypes.push_back(ast->is_c_function ? cParamType(param->get_type())
+                                              : llvmType(param->get_type()));
     auto llvmResult =
         result.type_kind == TypeKind::Unit ? llvmVoid() : llvmType(result);
     auto funcOp = mlir::LLVM::LLVMFuncOp::create(

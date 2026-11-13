@@ -757,7 +757,8 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
     // nothing says C only reads it. sammine memory is immutable: C hands
     // back what it produces instead of writing into ours.
     bool lends_address = false;
-    for (auto &arg : llvm::drop_begin(ast->arguments, params.size()))
+    bool passes_function = false;
+    for (auto &arg : llvm::drop_begin(ast->arguments, params.size())) {
       if (llvm::isa<AddrOfExprAST>(arg.get())) {
         this->add_error(arg->get_location(),
                         fmt::format("Cannot pass an address through the '...' "
@@ -765,7 +766,18 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
                                     ast->functionName.mangled()));
         lends_address = true;
       }
-    if (lends_address)
+      // Nothing declares it a function, so it would go as sammine has it,
+      // a closure, not as C takes one.
+      if (arg->get_type().type_kind == TypeKind::Function) {
+        this->add_error(arg->get_location(),
+                        fmt::format("Cannot pass a function through the '...' "
+                                    "of '{}': declare the parameter, so C "
+                                    "gets a pointer to its code",
+                                    ast->functionName.mangled()));
+        passes_function = true;
+      }
+    }
+    if (lends_address || passes_function || !check_c_call(ast, params))
       return ResolvedCall::failure();
     return ResolvedCall{callee, {}, func.get_return_type(), ty, false};
   }
@@ -777,8 +789,47 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
                                 ast->arguments.size()));
     return ResolvedCall::failure();
   }
+  if (!check_c_call(ast, params))
+    return ResolvedCall::failure();
 
   return applied_call(ast, callee, params, func.get_return_type(), ty);
+}
+
+bool BiTypeCheckerVisitor::check_c_call(CallExprAST *ast,
+                                        std::span<const Type> params) {
+  auto name = ast->functionName.mangled();
+  if (!takes_c_callback(name))
+    return true;
+  // A partial application is a closure, which calls C through sammine's
+  // calling convention: the function it is given would reach C as one too.
+  if (ast->arguments.size() < params.size()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("'{}' gives a function to C, so it can't be "
+                                "partially applied: pass all {} arguments",
+                                ast->written_name.mangled(), params.size()));
+    return false;
+  }
+  bool ok = true;
+  for (auto [arg, param] : llvm::zip(ast->arguments, params)) {
+    if (param.type_kind != TypeKind::Function)
+      continue;
+    // C calls a function through a pointer to its code, with nothing bound:
+    // a function named here has one. A closure or a binding holding a
+    // function value is code and an environment, and C has nowhere to put
+    // the environment.
+    auto *var = llvm::dyn_cast<VariableExprAST>(arg.get());
+    if (var && !names_variable(var->variableName.mangled()) &&
+        lookup_type(var->variableName.mangled()))
+      continue;
+    this->add_error(arg->get_location(),
+                    fmt::format("'{}' gives this function to C, which calls "
+                                "it through a pointer to its code: pass a "
+                                "function by name, not a closure or a "
+                                "function value",
+                                ast->written_name.mangled()));
+    ok = false;
+  }
+  return ok;
 }
 
 // A call of a function taking `params` and returning `result`, given at most
@@ -1040,6 +1091,15 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
       this->add_error(ast->get_location(),
                       fmt::format("'{}' is variadic, so it can't be used as a "
                                   "value; call it directly",
+                                  ast->variableName.mangled()));
+      return ast->set_type(Type::Poisoned());
+    }
+    // Called through a function value, it would be given closures where C
+    // takes pointers to code (check_c_call).
+    if (takes_c_callback(ast->variableName.mangled())) {
+      this->add_error(ast->get_location(),
+                      fmt::format("'{}' gives a function to C, so it can't be "
+                                  "used as a value; call it directly",
                                   ast->variableName.mangled()));
       return ast->set_type(Type::Poisoned());
     }

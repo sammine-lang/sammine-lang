@@ -77,6 +77,12 @@ public:
     return binding && !binding->is_function;
   }
 
+  // The functions bound from C (`reuse`). C takes a function as a pointer
+  // to its code, with no environment, so what one is given is checked.
+  std::unordered_set<std::string> c_bindings;
+  // Whether `name` is a C binding with a parameter of function type.
+  bool takes_c_callback(const std::string &name) const;
+
   // INFO: i64, f64 bla bla bla
   LexicalStack<Type> typename_to_type;
   TypeMapOrdering type_map_ordering;
@@ -300,6 +306,13 @@ public:
   std::optional<ResolvedCall> resolve_typeclass_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_generic_call(CallExprAST *ast);
   std::optional<ResolvedCall> resolve_normal_call(CallExprAST *ast);
+  /// A call to a C binding: each function it is given must be named, as C
+  /// calls it through a pointer to its code. Returns false if one isn't
+  /// (reported here).
+  bool check_c_call(CallExprAST *ast, std::span<const Type> params);
+  /// A C binding's function parameters: C calls the function back passing
+  /// only what C can pass it.
+  void check_c_callback_types(ExternAST *ast);
   ResolvedCall applied_call(CallExprAST *ast, std::string callee,
                             std::span<const Type> params, Type result,
                             std::optional<Type> signature);

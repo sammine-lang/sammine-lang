@@ -1,0 +1,26 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      thread got 42
+// CHECK-NEXT: joined 0
+
+// A thread C starts runs a sammine function: pthread_create takes it as a
+// pointer to its code.
+
+import std;
+
+reuse pthread_create(t: ptr<u64>, attr: i64, f: (i64) -> i64, arg: i64) -> i32;
+reuse pthread_join(t: u64, result: i64) -> i32;
+
+let work(arg: i64) -> i64 {
+  std::printf("thread got %ld\n", arg);
+  0
+}
+
+let main() -> i32 {
+  let t = alloc<u64>(1);
+  *t = 0u64;
+  pthread_create(t, 0i64, work, 42i64);
+  std::printf("joined %d\n", pthread_join(*t, 0i64));
+  drop(t);
+  0
+}

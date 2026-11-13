@@ -1,0 +1,14 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: C calls the function given as 'f', so it can take and return only numbers, bool, char and pointers, not '(Pair) -> i32'
+// CHECK: C calls the function given as 'g', so it can take and return only numbers, bool, char and pointers, not '(i32) -> Pair'
+// CHECK: C calls the function given as 'h', so it can take and return only numbers, bool, char and pointers, not '((i32) -> i32) -> i32'
+
+// C calls a function back passing only what it passes any function.
+
+struct Pair { a: i32, b: i32 };
+
+reuse takes_struct(f: (Pair) -> i32) -> i32;
+reuse returns_struct(g: (i32) -> Pair) -> i32;
+reuse takes_function(h: ((i32) -> i32) -> i32) -> i32;
+
+let main() -> i32 { 0 }

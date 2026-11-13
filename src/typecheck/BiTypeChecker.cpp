@@ -95,6 +95,8 @@ void BiTypeCheckerVisitor::visit(ProgramAST *ast) {
     } else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
       if (!ext->Prototype->is_generic())
         pre_register_function(ext->Prototype.get());
+      if (ext->is_c_function)
+        c_bindings.insert(ext->Prototype->functionName.mangled());
     } else if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get())) {
       // A generic instance's methods are registered with each copy.
       if (!tci->is_generic())
@@ -254,6 +256,58 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
     return;
   }
   ast->Prototype->accept_vis(this);
+  if (ast->is_c_function)
+    check_c_callback_types(ast);
+}
+
+bool BiTypeCheckerVisitor::takes_c_callback(const std::string &name) const {
+  if (!c_bindings.contains(name) || names_variable(name))
+    return false;
+  auto type = lookup_type(name);
+  if (!type || type->type_kind != TypeKind::Function)
+    return false;
+  return llvm::any_of(
+      std::get<FunctionType>(type->type_data).get_params_types(),
+      [](const Type &param) { return param.type_kind == TypeKind::Function; });
+}
+
+// What C passes a function it calls, as it passes any function: a number,
+// bool, char or pointer. A struct, tuple, array, enum or closure sammine
+// passes its own way, and the copy C calls (MIRToLLVM's __c_<f>) only
+// forwards what both pass alike.
+static bool c_passes(const Type &type) {
+  switch (type.type_kind) {
+  case TypeKind::I32_t:
+  case TypeKind::I64_t:
+  case TypeKind::U32_t:
+  case TypeKind::U64_t:
+  case TypeKind::F32_t:
+  case TypeKind::F64_t:
+  case TypeKind::Bool:
+  case TypeKind::Char:
+  case TypeKind::Pointer:
+    return true;
+  default:
+    return false;
+  }
+}
+
+void BiTypeCheckerVisitor::check_c_callback_types(ExternAST *ast) {
+  for (auto &param : ast->Prototype->parameterVectors) {
+    auto type = param->get_type();
+    if (type.type_kind != TypeKind::Function)
+      continue;
+    auto &fn = std::get<FunctionType>(type.type_data);
+    auto result = fn.get_return_type();
+    if (llvm::all_of(fn.get_params_types(), c_passes) &&
+        (result.type_kind == TypeKind::Unit || c_passes(result)))
+      continue;
+    this->add_error(
+        param->get_location(),
+        fmt::format("C calls the function given as '{}', so it can take and "
+                    "return only numbers, bool, char and pointers, not '{}'",
+                    param->name, type.to_string()));
+  }
 }
 
 void BiTypeCheckerVisitor::visit(StructDefAST *ast) {

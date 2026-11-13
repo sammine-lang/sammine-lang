@@ -1,0 +1,6 @@
+export reuse apply(f: (i32) -> i32, x: i32) -> i32;
+export reuse apply_twice(f: (i32) -> i32, x: i32) -> i32;
+export reuse call_char(f: (char) -> char, c: char) -> i32;
+export reuse call_bool(f: (i32) -> bool, x: i32) -> i32;
+export reuse call_mixed(f: (f64, f32, i64) -> f64, a: f64, b: f32, c: i64) -> f64;
+export reuse each(f: (ptr<i32>) -> unit, n: i32) -> unit;

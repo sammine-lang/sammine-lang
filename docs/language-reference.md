@@ -173,6 +173,25 @@ reuse printf(fmt: ptr<char>, ...) -> i32;       // varargs supported
 
 C never writes into sammine memory, because sammine values are immutable. A C function hands back what it produces as its result, including new pointers, and a `ptr<T>` parameter is one C only reads. The compiler cannot see what C does, so a declaration that says otherwise is a bug in the declaration. Passing an address through `...`, as in `sscanf(s, "%d", &v)`, is an error, since nothing declares how C uses it.
 
+A `reuse` parameter of function type is a function C calls back, which C
+takes as a pointer to its code. The function is passed by name, and C calls it
+as it calls any C function:
+
+```sammine
+reuse pthread_create(t: ptr<u64>, attr: i64, f: (i64) -> i64, arg: i64) -> i32;
+
+let work(arg: i64) -> i64 { arg * 2 }
+
+pthread_create(t, 0i64, work, 42i64);
+```
+
+C has nowhere to keep an environment, so only a function named at the call can
+be passed: a partial application such as `add(1)`, a binding holding a
+function, or a function parameter is an error. A C function that takes one
+can't be partially applied or used as a value either, and a function can't go
+through `...`. C passes a callback only numbers, `bool`, `char` and pointers,
+so its parameters and result are limited to those (or `unit` as the result).
+
 Calling a `reuse` function is currently allowed anywhere. It will later need
 an unsafe function, like pointer indexing, once `printf` is reworked.
 

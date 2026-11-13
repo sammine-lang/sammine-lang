@@ -1,0 +1,29 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: 'apply' gives this function to C, which calls it through a pointer to its code: pass a function by name, not a closure or a function value
+// CHECK: 'apply' gives this function to C, which calls it through a pointer to its code: pass a function by name, not a closure or a function value
+// CHECK: 'apply' gives this function to C, which calls it through a pointer to its code: pass a function by name, not a closure or a function value
+// CHECK: 'apply' gives a function to C, so it can't be partially applied: pass all 2 arguments
+// CHECK: 'apply' gives a function to C, so it can't be used as a value; call it directly
+// CHECK: Cannot pass a function through the '...' of 'std::printf': declare the parameter, so C gets a pointer to its code
+
+// C takes a function as a pointer to its code, with no environment: only a
+// function named at the call has one.
+
+import std;
+
+reuse apply(f: (i32) -> i32, x: i32) -> i32;
+
+let add(a: i32, b: i32) -> i32 { a + b }
+let twice(x: i32) -> i32 { x * 2 }
+
+let pass_param(f: (i32) -> i32) -> i32 { apply(f, 1) }
+
+let main() -> i32 {
+  apply(add(1), 2);              // a closure
+  let f = twice;
+  apply(f, 2);                   // a binding holding a function value
+  let g = apply(twice);          // a partial application
+  let h = apply;                 // apply as a value
+  std::printf("%p\n", twice);    // through `...`
+  0
+}

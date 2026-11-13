@@ -301,6 +301,104 @@ struct StoreLowering : public mlir::OpConversionPattern<smn::StoreOp> {
   }
 };
 
+/// The function `name` of `type`, defined at the end of `module` unless it
+/// is there already: it calls `callee` with what `leading` gives, then its
+/// own arguments from `firstOwn` on, and returns what `callee` returns
+/// (`results`, converted). A C callee is called as C takes its arguments.
+/// Returns the function if this defined it, else null.
+mlir::LLVM::LLVMFuncOp
+defineForwarder(mlir::ConversionPatternRewriter &rewriter, mlir::Location loc,
+                mlir::ModuleOp module, llvm::StringRef name,
+                mlir::LLVM::LLVMFunctionType type,
+                mlir::FlatSymbolRefAttr callee,
+                llvm::ArrayRef<mlir::Type> results, unsigned firstOwn,
+                llvm::function_ref<void(mlir::Block *,
+                                        llvm::SmallVectorImpl<mlir::Value> &)>
+                    leading) {
+  if (module.lookupSymbol(name))
+    return nullptr;
+  mlir::OpBuilder::InsertionGuard guard(rewriter);
+  rewriter.setInsertionPointToEnd(module.getBody());
+  auto forwarder = mlir::LLVM::LLVMFuncOp::create(
+      rewriter, loc, name, type, mlir::LLVM::Linkage::Internal);
+  auto *entry = forwarder.addEntryBlock(rewriter);
+  rewriter.setInsertionPointToStart(entry);
+  llvm::SmallVector<mlir::Value, 4> args;
+  leading(entry, args);
+  for (auto arg : entry->getArguments().drop_front(firstOwn))
+    args.push_back(arg);
+  if (auto cFunc =
+          module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(callee.getValue())) {
+    // A slot for C's struct passing, at the top of the forwarder.
+    auto slot = [&](mlir::Type slotType) -> mlir::Value {
+      mlir::OpBuilder::InsertionGuard top(rewriter);
+      rewriter.setInsertionPointToStart(entry);
+      auto one = mlir::arith::ConstantIntOp::create(rewriter, loc,
+                                                    rewriter.getI64Type(), 1);
+      return mlir::LLVM::AllocaOp::create(
+          rewriter, loc, llvmPtr(loc.getContext()), slotType, one);
+    };
+    auto value =
+        cabi::callC(rewriter, loc, cFunc, args,
+                    results.empty() ? mlir::Type() : results.front(), slot);
+    mlir::LLVM::ReturnOp::create(
+        rewriter, loc, value ? mlir::ValueRange{value} : mlir::ValueRange{});
+  } else {
+    auto call =
+        mlir::func::CallOp::create(rewriter, loc, callee, results, args);
+    mlir::LLVM::ReturnOp::create(rewriter, loc, call.getResults());
+  }
+  return forwarder;
+}
+
+/// C expects a char or bool argument or result already extended to 32 bits
+/// by whoever produces it: signed for a char, unsigned for a bool.
+std::optional<llvm::StringRef> cExtension(mlir::Type type) {
+  if (type.isInteger(8))
+    return mlir::LLVM::LLVMDialect::getSExtAttrName();
+  if (type.isInteger(1))
+    return mlir::LLVM::LLVMDialect::getZExtAttrName();
+  return std::nullopt;
+}
+
+/// What C calls for the function value `fn`, passed to a C function: the
+/// code of __c_<f>, which takes f's arguments as C passes them and calls f.
+/// C holds no environment, so `fn` must name a function and bind nothing,
+/// as the type checker sees to; and C passes only numbers, bool, char and
+/// pointers to it, as the type checker sees to in the C declaration.
+mlir::FailureOr<mlir::Value>
+cFunctionPointer(mlir::ConversionPatternRewriter &rewriter,
+                 const mlir::TypeConverter &converter, mlir::Value fn) {
+  auto closure = fn.getDefiningOp<smn::ClosureOp>();
+  if (!closure || !closure.getBound().empty())
+    return mlir::failure();
+  auto loc = closure.getLoc();
+  auto *ctx = closure.getContext();
+  auto signature = closure.getType().getSignature();
+  llvm::SmallVector<mlir::Type> params, results;
+  if (mlir::failed(converter.convertTypes(signature.getInputs(), params)) ||
+      mlir::failed(converter.convertTypes(signature.getResults(), results)))
+    return mlir::failure();
+  auto type = mlir::LLVM::LLVMFunctionType::get(
+      results.empty() ? mlir::LLVM::LLVMVoidType::get(ctx) : results.front(),
+      params);
+  auto name = ("__c_" + closure.getCallee()).str();
+  auto module = closure->getParentOfType<mlir::ModuleOp>();
+  if (auto thunk = defineForwarder(
+          rewriter, loc, module, name, type, closure.getCalleeAttr(), results,
+          /*firstOwn=*/0, [](mlir::Block *, auto &) {})) {
+    for (auto [i, param] : llvm::enumerate(params))
+      if (auto ext = cExtension(param))
+        thunk.setArgAttr(static_cast<unsigned>(i), *ext,
+                         mlir::UnitAttr::get(ctx));
+    if (!results.empty())
+      if (auto ext = cExtension(results.front()))
+        thunk.setResultAttr(0, *ext, mlir::UnitAttr::get(ctx));
+  }
+  return mlir::LLVM::AddressOfOp::create(rewriter, loc, llvmPtr(ctx), name)
+      .getResult();
+}
+
 // By now the callee has its final signature in LLVM types, whichever way it
 // was emitted, and MIR's call takes and gives the same ones once converted. A
 // C function declared as an llvm.func is called as C calls it, a kernel's
@@ -371,8 +469,19 @@ struct CallLowering : public mlir::OpConversionPattern<smn::CallOp> {
     if (auto cFunc =
             mlir::SymbolTable::lookupNearestSymbolFrom<mlir::LLVM::LLVMFuncOp>(
                 op, op.getCalleeAttr())) {
+      // A function C calls back takes a C function pointer.
+      auto args = llvm::to_vector<4>(adaptor.getArgs());
+      for (auto [i, arg] : llvm::enumerate(op.getArgs())) {
+        if (!mlir::isa<smn::FnType>(arg.getType()))
+          continue;
+        auto pointer = cFunctionPointer(rewriter, *getTypeConverter(), arg);
+        if (mlir::failed(pointer))
+          return op.emitError("a function passed to C must name a function "
+                              "and bind nothing");
+        args[i] = *pointer;
+      }
       auto value = cabi::callC(
-          rewriter, op.getLoc(), cFunc, llvm::to_vector<4>(adaptor.getArgs()),
+          rewriter, op.getLoc(), cFunc, args,
           results.empty() ? mlir::Type() : results.front(),
           [&](mlir::Type type) { return entrySlot(rewriter, op, type); });
       if (value)
@@ -655,45 +764,19 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
       while (module.lookupSymbol(name));
     }
 
-    if (!module.lookupSymbol(name)) {
-      mlir::OpBuilder::InsertionGuard guard(rewriter);
-      rewriter.setInsertionPointToEnd(module.getBody());
-      auto wrapper = mlir::LLVM::LLVMFuncOp::create(
-          rewriter, loc, name, wrapperType, mlir::LLVM::Linkage::Internal);
-      auto *entry = wrapper.addEntryBlock(rewriter);
-      rewriter.setInsertionPointToStart(entry);
-      llvm::SmallVector<mlir::Value, 4> args;
-      for (auto [i, value] : llvm::enumerate(bound))
-        args.push_back(mlir::LLVM::LoadOp::create(
-            rewriter, loc, value.getType(),
-            mlir::LLVM::GEPOp::create(
-                rewriter, loc, ptrTy, envType, entry->getArgument(0),
-                llvm::ArrayRef<mlir::LLVM::GEPArg>{0, static_cast<int32_t>(i)},
-                mlir::LLVM::GEPNoWrapFlags::inbounds)));
-      for (auto arg : entry->getArguments().drop_front())
-        args.push_back(arg);
-      if (auto cFunc =
-              module.lookupSymbol<mlir::LLVM::LLVMFuncOp>(op.getCallee())) {
-        // A slot for C's struct passing, at the top of the wrapper.
-        auto slot = [&](mlir::Type type) -> mlir::Value {
-          mlir::OpBuilder::InsertionGuard top(rewriter);
-          rewriter.setInsertionPointToStart(entry);
-          auto one = mlir::arith::ConstantIntOp::create(
-              rewriter, loc, rewriter.getI64Type(), 1);
-          return mlir::LLVM::AllocaOp::create(rewriter, loc, ptrTy, type, one);
-        };
-        auto value =
-            cabi::callC(rewriter, loc, cFunc, args,
-                        results.empty() ? mlir::Type() : results.front(), slot);
-        mlir::LLVM::ReturnOp::create(rewriter, loc,
-                                     value ? mlir::ValueRange{value}
-                                           : mlir::ValueRange{});
-      } else {
-        auto call = mlir::func::CallOp::create(
-            rewriter, loc, op.getCalleeAttr(), results, args);
-        mlir::LLVM::ReturnOp::create(rewriter, loc, call.getResults());
-      }
-    }
+    defineForwarder(
+        rewriter, loc, module, name, wrapperType, op.getCalleeAttr(), results,
+        /*firstOwn=*/1,
+        [&](mlir::Block *entry, llvm::SmallVectorImpl<mlir::Value> &args) {
+          for (auto [i, value] : llvm::enumerate(bound))
+            args.push_back(mlir::LLVM::LoadOp::create(
+                rewriter, loc, value.getType(),
+                mlir::LLVM::GEPOp::create(
+                    rewriter, loc, ptrTy, envType, entry->getArgument(0),
+                    llvm::ArrayRef<mlir::LLVM::GEPArg>{0,
+                                                       static_cast<int32_t>(i)},
+                    mlir::LLVM::GEPNoWrapFlags::inbounds)));
+        });
 
     auto closure = closureType(ctx);
     mlir::Value value = mlir::LLVM::PoisonOp::create(rewriter, loc, closure);
