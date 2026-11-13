@@ -8,20 +8,20 @@
 // arguments it gives, an owned pointer lent to the closure as to a call
 // (sammine.lend). A call through a value is
 // sammine.call_indirect.
-// CHECK-LABEL: func.func private @apply(
+// CHECK-LABEL: func.func private @"::apply"(
 // CHECK-SAME: !sammine.fn<(i32) -> i32, 1>
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: sammine.call_indirect %arg0(%arg1) : <(i32) -> i32, 1>, (i32) -> i32
-// CHECK-LABEL: func.func private @use_inc(
+// CHECK-LABEL: func.func private @"::use_inc"(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @inc() {sammine.by_value} : () -> !sammine.fn<(i32) -> i32, 1>
-// CHECK-LABEL: func.func private @add_to(
+// CHECK-NEXT: sammine.closure @"::inc"() {sammine.by_value} : () -> !sammine.fn<(i32) -> i32, 1>
+// CHECK-LABEL: func.func private @"::add_to"(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.closure @add(%arg0) {sammine.by_value} : (i32) -> !sammine.fn<(i32) -> i32, 1>
-// CHECK-LABEL: func.func private @peek_into(
+// CHECK-NEXT: sammine.closure @"::add"(%arg0) {sammine.by_value} : (i32) -> !sammine.fn<(i32) -> i32, 1>
+// CHECK-LABEL: func.func private @"::peek_into"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.lend
-// CHECK-NEXT: sammine.closure @peek_plus(
+// CHECK-NEXT: sammine.closure @"::peek_plus"(
 let inc(a: i32) -> i32 { a + 1 }
 let add(a: i32, b: i32) -> i32 { a + b }
 let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }

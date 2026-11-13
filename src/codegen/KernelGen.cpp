@@ -27,8 +27,6 @@ namespace sammine_lang {
 
 namespace {
 
-constexpr llvm::StringLiteral kKernelPrefix = "__kernel_";
-
 Type returnType(AST::PrototypeAST *proto) {
   return std::get<FunctionType>(proto->get_type().type_data).get_return_type();
 }
@@ -44,6 +42,18 @@ bool isUnsigned(const Type &type) {
 
 } // namespace
 
+std::string kernelSymbol(llvm::StringRef wrapper) {
+  std::string symbol = "__kernel_";
+  while (!wrapper.empty()) {
+    auto [part, rest] = wrapper.split("::");
+    symbol += part;
+    if (part.size() != wrapper.size())
+      symbol += "__";
+    wrapper = rest;
+  }
+  return symbol;
+}
+
 void KernelGen::internalError(const std::string &msg) {
   sammine_util::abort(msg);
 }
@@ -53,7 +63,7 @@ std::string KernelGen::publicName(AST::KernelDefAST *kd) const {
 }
 
 std::string KernelGen::internalName(AST::KernelDefAST *kd) const {
-  return kKernelPrefix.str() + publicName(kd);
+  return kernelSymbol(publicName(kd));
 }
 
 // --- Declarations ---

@@ -794,12 +794,7 @@ inline std::string QualifiedName::get_module() const {
   return parts_.size() > 1 ? parts_.front().name : "";
 }
 inline std::string QualifiedName::get_qualifier() const {
-  if (parts_.size() <= 1)
-    return "";
-  std::string result = parts_[0].mangled();
-  for (size_t i = 1; i + 1 < parts_.size(); i++)
-    result += "::" + parts_[i].mangled();
-  return result;
+  return is_qualified() ? qualifier().mangled() : "";
 }
 inline QualifiedName QualifiedName::qualifier() const {
   return from_parts(std::vector<Part>(parts_.begin(), parts_.end() - 1));
@@ -807,12 +802,16 @@ inline QualifiedName QualifiedName::qualifier() const {
 inline bool QualifiedName::operator==(const QualifiedName &other) const {
   return parts_ == other.parts_;
 }
-inline std::string QualifiedName::mangled() const {
-  std::string result = parts_[0].mangled();
-  for (size_t i = 1; i < parts_.size(); i++)
+inline std::string QualifiedName::joined(size_t first) const {
+  std::string result = parts_[first].mangled();
+  for (size_t i = first + 1; i < parts_.size(); i++)
     result += "::" + parts_[i].mangled();
   return result;
 }
+inline std::string QualifiedName::mangled() const {
+  return joined(is_of_program() ? 1 : 0);
+}
+inline std::string QualifiedName::symbol() const { return joined(0); }
 inline std::string name_text(const QualifiedName &name) {
   return name.mangled();
 }

@@ -338,15 +338,20 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
 
+  // A local shadows whatever else is named as it is: a call through it is
+  // a normal call, whichever function, method or variant shares its name.
   std::optional<ResolvedCall> call;
-  for (auto resolve : {&BiTypeCheckerVisitor::resolve_enum_call,
-                       &BiTypeCheckerVisitor::resolve_typeclass_call,
-                       &BiTypeCheckerVisitor::resolve_generic_call,
-                       &BiTypeCheckerVisitor::resolve_normal_call}) {
-    call = (this->*resolve)(ast);
-    if (call)
-      break;
-  }
+  if (names_variable(ast->functionName))
+    call = resolve_normal_call(ast);
+  else
+    for (auto resolve : {&BiTypeCheckerVisitor::resolve_enum_call,
+                         &BiTypeCheckerVisitor::resolve_typeclass_call,
+                         &BiTypeCheckerVisitor::resolve_generic_call,
+                         &BiTypeCheckerVisitor::resolve_normal_call}) {
+      call = (this->*resolve)(ast);
+      if (call)
+        break;
+    }
   if (!call || call->failed)
     return ast->set_type(Type::Poisoned());
 
@@ -362,7 +367,8 @@ Type BiTypeCheckerVisitor::synthesize(CallExprAST *ast) {
                                         call->signature->to_string()));
   }
   ast->set_type(args_ok ? call->result : Type::Poisoned());
-  instantiate_generic_callee(ast);
+  if (call->generic_copy)
+    instantiate_generic_callee(*call->generic_copy);
   return ast->get_type();
 }
 
@@ -531,8 +537,7 @@ BiTypeCheckerVisitor::resolve_enum_call(CallExprAST *ast) {
     return ResolvedCall::failure();
   }
 
-  props_.call(ast->id()).is_enum_constructor = true;
-  props_.call(ast->id()).enum_variant_index = *variant_idx;
+  props_.call(ast->id()).callee = {Reference::Variant{*variant_idx}};
   return ResolvedCall{
       fmt::format("{}::{}", ast->functionName.get_qualifier(), vi.name),
       vi.payload_types, *enum_type_opt, std::nullopt, false};
@@ -614,10 +619,10 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   }
 
   auto resolved_name = tc_key.to_typeclass_name(method_name);
-  props_.call(ast->id()).resolved_name = resolved_name;
-  props_.call(ast->id()).is_typeclass_call = true;
   if (is_builtin_instance(tc_key))
-    props_.call(ast->id()).builtin_instance = tc_key;
+    props_.call(ast->id()).callee = {Reference::Builtin{tc_key}};
+  else
+    props_.call(ast->id()).callee = {Reference::Function{resolved_name}};
   auto [expected, result] = resolve_generic_signature(
       method_proto, params, func_type.get_return_type(), tc_bindings);
   // The instance's signature, as for any other call: the linear checker reads
@@ -714,17 +719,18 @@ BiTypeCheckerVisitor::resolve_generic_call(CallExprAST *ast) {
   auto key =
       MonomorphizedKey::from_bindings(ast->functionName, type_params, bindings);
 
-  props_.call(ast->id()).resolved_name = key.generic_name();
-  props_.call(ast->id()).type_bindings = bindings;
+  props_.call(ast->id()).callee = {Reference::Function{key.generic_name()}};
   auto [expected, result] = resolve_generic_signature(
       generic_def->Prototype.get(), params, func.get_return_type(), bindings);
   // The instance's signature: what the call passes and gets back, as the
   // linear checker and codegen read it.
   auto instance_type = signature_of(expected, result);
   props_.call(ast->id()).callee_func_type = instance_type;
-  return applied_call(
+  auto call = applied_call(
       ast, format_generic_call_name(ast->written_name, type_params, bindings),
       expected, std::move(result), std::move(instance_type));
+  call.generic_copy = {generic_def, std::move(key), std::move(bindings)};
+  return call;
 }
 
 std::optional<ResolvedCall>
@@ -738,6 +744,7 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
   }
 
   props_.call(ast->id()).callee_func_type = ty;
+  props_.call(ast->id()).callee = bound_reference(ast->functionName);
 
   // Already reported, e.g. a variadic function bound to a variable.
   if (ty->is_poisoned())
@@ -838,7 +845,7 @@ Type BiTypeCheckerVisitor::synthesize_generic_function_value(
   // The copy is made as a call to it makes it (instantiate_generic_callee).
   auto key =
       MonomorphizedKey::from_bindings(ast->variableName, type_params, bindings);
-  props_.variable(ast->id()).resolved_function = key.generic_name();
+  props_.variable(ast->id()).value = {Reference::Function{key.generic_name()}};
   if (auto *copy = monomorphizer.try_instantiate_func(generic, key, bindings)) {
     TopLevelScopeGuard scope(*this);
     copy->accept_vis(this);
@@ -1157,6 +1164,7 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
                                   ast->variableName.mangled()));
       return ast->set_type(Type::Poisoned());
     }
+    props_.variable(ast->id()).value = bound_reference(ast->variableName);
     ast->set_type(*ty);
   } else if (auto enum_type = enum_of_variant(ast->variableName,
                                               ast->explicit_type_args, ast)) {
@@ -1186,8 +1194,7 @@ Type BiTypeCheckerVisitor::synthesize(VariableExprAST *ast) {
                       vi.payload_types.size()));
       return ast->set_type(Type::Poisoned());
     }
-    props_.variable(ast->id()).is_enum_unit_variant = true;
-    props_.variable(ast->id()).enum_variant_index = *variant_idx;
+    props_.variable(ast->id()).value = {Reference::Variant{*variant_idx}};
     ast->set_type(*enum_type);
   } else {
     this->add_error(

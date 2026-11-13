@@ -74,6 +74,8 @@ public:
 
   virtual void visit(ExternAST *ast) override;
 
+  virtual void visit(KernelDefAST *ast) override;
+
   // pre order — only non-empty overrides
   using ScopedASTVisitor::preorder_walk;
   virtual void preorder_walk(ProgramAST *ast) override;

@@ -2,7 +2,7 @@
 // RUN: %sammine_jit --file %full | %check %full --check-prefix OUT
 // A function that writes `-> unit` and runs off its end returns (): MIR
 // adds the return, as the AST codegen did.
-// CHECK-LABEL: func.func private @shout(
+// CHECK-LABEL: func.func private @"::shout"(
 // CHECK-SAME: sammine.mir
 // CHECK: return
 // OUT: hi 3

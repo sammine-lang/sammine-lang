@@ -1,7 +1,7 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
 // for i in a..b: Range { a, b } goes round a loop calling
 // Iterator<Range<T>, T>::next; Some gives the next range and i, None leaves.
-// CHECK-LABEL: func.func private @sum(
+// CHECK-LABEL: func.func private @"::sum"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.aggregate(%{{.*}}, %arg0) : (i32, i32) -> !sammine.struct<"Range<i32>", (current: i32, end_val: i32)>
 // CHECK: sammine.call @"Iterator<Range<i32>, i32>::next"(

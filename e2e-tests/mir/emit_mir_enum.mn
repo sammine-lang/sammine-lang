@@ -3,10 +3,10 @@
 // variant's payload; a variant is sammine.variant with its payload fields'
 // offsets, as the AST codegen lays them out; a case is a cf.switch on its
 // tag, each arm binding its payload with sammine.payload.
-// CHECK-LABEL: func.func private @wrap(
+// CHECK-LABEL: func.func private @"::wrap"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: sammine.variant 1(%arg0, %arg1) at [0, 8] : (i8, i64) -> !sammine.enum<"Shape", 16, (Dot: !sammine.tuple<>, Tagged: !sammine.tuple<i8, i64>)>
-// CHECK-LABEL: func.func private @size(
+// CHECK-LABEL: func.func private @"::size"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.tag %arg0
 // CHECK-NEXT: cf.switch %0 : i32, [

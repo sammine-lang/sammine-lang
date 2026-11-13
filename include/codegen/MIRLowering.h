@@ -102,7 +102,9 @@ private:
   mlir::FailureOr<mlir::Value> lowerPartialApplication(AST::CallExprAST *call,
                                                        llvm::StringRef name,
                                                        mlir::FunctionType type);
-  mlir::FailureOr<mlir::Value> lowerFunctionValue(AST::VariableExprAST *var);
+  mlir::FailureOr<mlir::Value>
+  lowerFunctionValue(AST::VariableExprAST *var,
+                     const sammine_util::QualifiedName &function);
   mlir::FailureOr<mlir::Value>
   lowerIndexerCall(AST::IndexExprAST *index,
                    const sammine_util::QualifiedName &method);

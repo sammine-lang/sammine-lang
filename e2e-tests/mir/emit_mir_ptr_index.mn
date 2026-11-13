@@ -2,13 +2,13 @@
 // p[i] of a pointer, in an unsafe function, is the place sammine.ptr_elem,
 // i elements past *p:
 // read with a copy, written with a store, as *p is.
-// CHECK-LABEL: func.func private @fill(
+// CHECK-LABEL: func.func private @"::fill"(
 // CHECK-SAME: sammine.mir
 // CHECK: %0 = sammine.let "xs" %arg0 : !sammine.ptr<i64, buffer>
 // CHECK-NEXT: %1 = sammine.deref %0 : <i64, buffer>
 // CHECK-NEXT: sammine.ptr_elem %1[%arg1] : <i64>, i64
 // CHECK-NEXT: sammine.store
-// CHECK-LABEL: func.func private @second(
+// CHECK-LABEL: func.func private @"::second"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.ptr_elem %0[%{{.*}}] : <f64>, i32
 // CHECK-NEXT: sammine.copy

@@ -23,12 +23,13 @@ void OpenTypeCheck::visit(TypeClassInstanceAST *ast) {
 
 void OpenTypeCheck::preorder_walk(VariableExprAST *ast) {
   if (props_.variable(ast->id()) &&
-      props_.variable(ast->id())->is_enum_unit_variant)
+      props_.variable(ast->id())->value.is<Reference::Variant>())
     check(ast, ast->variableName.get_name());
 }
 
 void OpenTypeCheck::preorder_walk(CallExprAST *ast) {
-  if (props_.call(ast->id()) && props_.call(ast->id())->is_enum_constructor)
+  if (props_.call(ast->id()) &&
+      props_.call(ast->id())->callee.is<Reference::Variant>())
     check(ast, ast->functionName.get_name());
 }
 

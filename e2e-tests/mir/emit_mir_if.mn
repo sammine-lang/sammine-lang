@@ -3,16 +3,16 @@
 // to the block after, which takes the if's value. a && b is lowered as
 // if a { b } else { false }, a || b as if a { true } else { b }. Comparisons are arith.cmpi/cmpf, unsigned
 // ones unsigned.
-// CHECK-LABEL: func.func private @pick(
+// CHECK-LABEL: func.func private @"::pick"(
 // CHECK-SAME: sammine.mir
 // CHECK: %0 = arith.cmpi sgt, %arg0, %{{.*}} : i32
 // CHECK-NEXT: cf.cond_br %0, ^bb1, ^bb2
 // CHECK: bb3(%{{[0-9]+}}: i32{{.*}}):
-// CHECK-LABEL: func.func private @sign(
+// CHECK-LABEL: func.func private @"::sign"(
 // CHECK-SAME: sammine.mir
 // CHECK: arith.subi %c0_i32{{.*}}, %c1_i32
 // CHECK-NEXT: return
-// CHECK-LABEL: func.func private @both(
+// CHECK-LABEL: func.func private @"::both"(
 // CHECK-SAME: sammine.mir
 // CHECK: cf.cond_br %arg0, ^bb1, ^bb2
 // CHECK: ^bb1:
@@ -25,10 +25,10 @@
 // CHECK-NEXT: %true = arith.constant true
 // CHECK: ^bb5:
 // CHECK: arith.cmpi eq
-// CHECK-LABEL: func.func private @below(
+// CHECK-LABEL: func.func private @"::below"(
 // CHECK: arith.cmpi ult
 // CHECK: arith.cmpf olt
-// CHECK-LABEL: func.func private @keep(
+// CHECK-LABEL: func.func private @"::keep"(
 // CHECK-SAME: sammine.mir
 // CHECK: bb3(%{{[0-9]+}}: !sammine.ptr<i32, owned>{{.*}}):
 

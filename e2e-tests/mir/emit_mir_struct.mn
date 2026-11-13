@@ -4,23 +4,23 @@
 // and read by sammine.extract. A tuple is !sammine.tuple; `let (a, b) = t`
 // reads each element. A generic struct is named as its instance, Box<i32>,
 // in a call to a generic function too.
-// CHECK-LABEL: func.func private @swap(
+// CHECK-LABEL: func.func private @"::swap"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.extract %arg0[0]
 // CHECK-NEXT: %1 = sammine.extract %arg0[1]
 // CHECK-NEXT: sammine.aggregate(%1, %0) : (i32, i32) -> !sammine.struct<"Point", (x: i32, y: i32)>
-// CHECK-LABEL: func.func private @norm1(
+// CHECK-LABEL: func.func private @"::norm1"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.extract %arg0[0] : !sammine.struct<"Point", (x: i32, y: i32)> -> i32
-// CHECK-LABEL: func.func private @split(
+// CHECK-LABEL: func.func private @"::split"(
 // CHECK-SAME: -> !sammine.tuple<i32, i32>
-// CHECK-LABEL: func.func private @sum_split(
+// CHECK-LABEL: func.func private @"::sum_split"(
 // CHECK-SAME: sammine.mir
 // CHECK: sammine.extract %{{[0-9]+}}[0] : !sammine.tuple<i32, i32> -> i32
 // CHECK-NEXT: sammine.extract %{{[0-9]+}}[1] : !sammine.tuple<i32, i32> -> i32
-// CHECK-LABEL: func.func private @boxed(
+// CHECK-LABEL: func.func private @"::boxed"(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.call @"wrap<i32>"(%arg0) : (i32) -> !sammine.struct<"Box<i32>", (value: i32)>
+// CHECK: sammine.call @"::wrap<i32>"(%arg0) : (i32) -> !sammine.struct<"Box<i32>", (value: i32)>
 
 struct Point { x: i32, y: i32 };
 struct Box<T> { value: T };

@@ -6,29 +6,51 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <variant>
 
 namespace sammine_lang {
 namespace AST {
 
+/// What a name used as a value means: the callee of a call, or a variable
+/// expression. The type checker decides it, once; every later stage reads it
+/// and none looks the name up again.
+struct Reference {
+  /// A parameter or a `let` of the function the name is used in.
+  struct Local {};
+  /// A function, by its definition's name: a function or a C binding, a
+  /// generic function's copy for its types (id<i32>), an instance's method
+  /// (Add<Point>::add).
+  struct Function {
+    sammine_util::QualifiedName name;
+  };
+  /// A variant of the enum the expression has the type of, by its index.
+  struct Variant {
+    size_t index;
+  };
+  /// A method of an instance the compiler provides, such as Add<i32>, which
+  /// has no function to call. Only a call reaches one.
+  struct Builtin {
+    MonomorphizedKey instance;
+  };
+  /// Nothing, until the checker resolves the name; it stays so if it can't.
+  std::variant<std::monostate, Local, Function, Variant, Builtin> target;
+
+  template <typename T> const T *as() const { return std::get_if<T>(&target); }
+  template <typename T> bool is() const {
+    return std::holds_alternative<T>(target);
+  }
+};
+
 struct CallProps {
+  /// What is called.
+  Reference callee;
   std::optional<Type> callee_func_type;
   bool is_partial = false;
-  std::optional<sammine_util::QualifiedName> resolved_name;
-  TypeBindings type_bindings;
-  bool is_typeclass_call = false;
-  /// Set when the typeclass call reaches an instance the compiler provides,
-  /// such as Add<i32>, which has no function to call.
-  std::optional<MonomorphizedKey> builtin_instance;
-  bool is_enum_constructor = false;
-  size_t enum_variant_index = 0;
 };
 
 struct VariableProps {
-  bool is_enum_unit_variant = false;
-  size_t enum_variant_index = 0;
-  /// For a generic function named with its types, `id<i32>`: the copy for
-  /// them, the function the value is.
-  std::optional<sammine_util::QualifiedName> resolved_function;
+  /// What the variable expression is the value of.
+  Reference value;
 };
 
 struct BinaryProps {
@@ -107,9 +129,10 @@ public:
     return it != for_props_.end() ? &it->second : nullptr;
   }
 
-  //! The symbol the definition named `name` is linked as, which NameResolver
-  //! decides: a C binding's is its C name, in every module that binds it
-  //! (std::printf and io::printf are both printf).
+  //! The symbol the definition named `name` is linked as, where NameResolver
+  //! decides it isn't the name's own: a C binding's is its C name, in every
+  //! module that binds it (std::printf and io::printf are both printf), and
+  //! a program's entry point is main.
   void set_symbol(const sammine_util::QualifiedName &name, std::string symbol) {
     symbols_[name] = std::move(symbol);
   }
@@ -117,7 +140,7 @@ public:
   //! NameResolver set another.
   std::string symbol(const sammine_util::QualifiedName &name) const {
     auto it = symbols_.find(name);
-    return it != symbols_.end() ? it->second : name.mangled();
+    return it != symbols_.end() ? it->second : name.symbol();
   }
 
   // Type accessors (for future AstBase::type migration)

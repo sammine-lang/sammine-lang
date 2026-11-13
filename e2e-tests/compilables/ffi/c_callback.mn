@@ -13,13 +13,13 @@
 // C takes a function as a pointer to its code. A function named where C
 // takes one is passed as __c_<f>, a copy C calls as it calls any function,
 // which extends a char or bool as C expects and calls f.
-// IR:      call i32 @apply(ptr @__c_double_it, i32 21)
+// IR:      call i32 @apply(ptr @"__c_::double_it", i32 21)
 // IR:      call i32 @apply(ptr @__c_abs, i32 -7)
-// IR:      define internal i32 @__c_double_it(i32 %0)
-// IR-NOT:  define internal i32 @__c_double_it
+// IR:      define internal i32 @"__c_::double_it"(i32 %0)
+// IR-NOT:  define internal i32 @"__c_::double_it"
 // IR:      define internal i32 @__c_abs(i32 %0)
-// IR:      define internal signext i8 @__c_negate(i8 signext %0)
-// IR:      define internal zeroext i1 @__c_is_big(i32 %0)
+// IR:      define internal signext i8 @"__c_::negate"(i8 signext %0)
+// IR:      define internal zeroext i1 @"__c_::is_big"(i32 %0)
 
 import std;
 import c_callback as c;

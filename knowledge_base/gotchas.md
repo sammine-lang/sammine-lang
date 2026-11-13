@@ -7,7 +7,7 @@
 - **Monomorphized defs at front**: injected at front of `DefinitionVec` so codegen processes them before call sites
 - **Generic templates skipped**: BiTypeChecker, OpenTypeCheck, ViewPlacementCheck, NeverValueCheck, and codegen all skip `is_generic()` defs — only monomorphized copies are processed
 - **`TypeKind::TypeParam` must never reach codegen** — `MIRTypes::mirType()` has no type for it, and declaring or lowering a function using it is an error
-- **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's stay bare), references are rewritten to those names. It also decides each definition's symbol (`ASTProperties::symbol`): its name, but a C binding's is its C name. The parser keeps names as written; nothing after scope generation renames anything
+- **Names are decided only by `NameResolver`**: definitions get `module::name` (an executable's the module with no name: [, name], shown `name`), references are rewritten to those names, and a value's name left as one part is a local. A definition's symbol is its name (`QualifiedName::symbol`), but for a C binding's, its C name, and a program's `main` (`ASTProperties::symbol`). The parser keeps names as written; nothing after scope generation renames anything
 - **Kernel lambdas**: a map lambda's body and a reduce's identity go through `MIRLowering::lowerKernelScalar`, which accepts only plain arith ops in one block, what a linalg region holds
 - **`IdentityLayoutMap`**: kernel bufferization must use this so memref types match `kernel_abi::memrefOfPointer` output
 - **Closures are stack-allocated**: cannot escape defining scope
@@ -61,7 +61,8 @@
 
 ## Codegen Gotchas
 - `if` lowers to `cf` blocks, not `scf.if`, so a `return` inside a branch is a plain `func.return` in its block
-- A C binding's name and symbol differ: it is named after its module like any definition (`std::printf`, `io::printf`, `str::strlen`), as the same C function is bound in many modules, each with its own types, but its symbol is its C name (`@printf`). NameResolver records the symbol in `ASTProperties::set_symbol`; codegen (`mangleName`) and MIR's calls read `ASTProperties::symbol`
+- A definition is linked as its name, every part (`QualifiedName::symbol`): `vec::push<i32>`, and a program's own `helper`, which is of the module with no name, as `::helper`, so no sammine function's symbol is a C function's (a program may define `printf` or `free`). Two symbols differ from the name, recorded by NameResolver in `ASTProperties::set_symbol`: a C binding is named after its module like any definition (`std::printf`, `io::printf`, `str::strlen`), as the same C function is bound in many modules, each with its own types, but its symbol is its C name (`@printf`); and a program's `main` is `main`. Codegen reads every symbol through `ASTProperties::symbol`. A kernel's own function is `kernelSymbol` of its wrapper's (`__kernel_m__scale`): a GPU's assembler takes no `::`
+- What a call's callee or a variable expression means is decided once, by the type checker, as a `Reference` (`CallProps::callee`, `VariableProps::value`): a local, a function by name, an enum's variant, or a built-in instance. MIR lowering reads it and never asks the module whether a function of that name exists: a local `f` holding a function value shadows a function `f`
 - Kernel wrappers get `noinline` to preserve LICM (LLVM can hoist calls when ptr args are loop-invariant)
 - `GreenInterner` is NOT movable (pmr limitation) — always `make_unique`
 - CST and AST diverge where parser desugars (pipe, `**` double deref, implicit returns)

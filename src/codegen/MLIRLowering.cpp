@@ -1,4 +1,5 @@
 #include "codegen/MLIRLowering.h"
+#include "codegen/KernelGen.h"
 #include "codegen/LinalgReduceToGpu.h"
 #include "compiler/Compiler.h"
 #include "dialect/ElaborateDrops.h"
@@ -274,7 +275,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
       F.addFnAttr(llvm::Attribute::InlineHint);
     if (F.getName() == "malloc")
       F.addRetAttr(llvm::Attribute::NoAlias);
-    if (llvmModule->getFunction(("__kernel_" + F.getName()).str()))
+    if (llvmModule->getFunction(kernelSymbol(F.getName())))
       F.addFnAttr(llvm::Attribute::NoInline);
   }
 

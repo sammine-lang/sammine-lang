@@ -32,9 +32,16 @@ struct ResolvedCall {
   Type result;
   std::optional<Type> signature; ///< Shown in a note on argument mismatches.
   bool failed; ///< An error was already reported; the call is poisoned.
+  /// A call to a generic function: the copy of it the call needs made.
+  struct GenericCopy {
+    FuncDefAST *generic;
+    MonomorphizedKey key;
+    TypeBindings bindings;
+  };
+  std::optional<GenericCopy> generic_copy = std::nullopt;
 
   static ResolvedCall failure() {
-    return {"", {}, Type::Poisoned(), std::nullopt, true};
+    return {"", {}, Type::Poisoned(), std::nullopt, true, std::nullopt};
   }
 };
 
@@ -86,6 +93,13 @@ public:
   bool names_variable(const Name &name) const {
     auto binding = id_to_type.recursive_try_get(name);
     return binding && !binding->is_function;
+  }
+  // What `name`, bound in id_to_type, refers to: the innermost binding of
+  // it, a local or else the function.
+  Reference bound_reference(const Name &name) const {
+    if (names_variable(name))
+      return {Reference::Local{}};
+    return {Reference::Function{name}};
   }
 
   // The functions bound from C (`reuse`). C takes a function as a pointer
@@ -266,7 +280,7 @@ public:
                                std::string otherwise) const;
 
   // Monomorphize and type-check the generic function a call resolved to.
-  void instantiate_generic_callee(CallExprAST *ast);
+  void instantiate_generic_callee(const ResolvedCall::GenericCopy &copy);
 
   /// The type parameters of the generic struct or enum `base`, or null if
   /// it names neither.

@@ -7,18 +7,18 @@
 // Functions calling each other, an SCC, are copied whole per set they are
 // used with (the paper's 6.3): each copy of even and odd calls its own
 // partner, and its closure's function directly.
-// IR-LABEL: define internal i32 @even(
+// IR-LABEL: define internal i32 @"::even"(
 // IR-NOT: switch i32
-// IR: call i32 @odd(
-// IR-LABEL: define internal i32 @even.spec{{[0-9]+}}(
+// IR: call i32 @"::odd"(
+// IR-LABEL: define internal i32 @"::even.spec{{[0-9]+}}"(
 // IR-NOT: switch i32
-// IR: call i32 @odd.spec{{[0-9]+}}(
-// IR-LABEL: define internal i32 @odd(
+// IR: call i32 @"::odd.spec{{[0-9]+}}"(
+// IR-LABEL: define internal i32 @"::odd"(
 // IR-NOT: switch i32
-// IR: call i32 @even(
-// IR-LABEL: define internal i32 @odd.spec{{[0-9]+}}(
+// IR: call i32 @"::even"(
+// IR-LABEL: define internal i32 @"::odd.spec{{[0-9]+}}"(
 // IR-NOT: switch i32
-// IR: call i32 @even.spec{{[0-9]+}}(
+// IR: call i32 @"::even.spec{{[0-9]+}}"(
 
 import std;
 

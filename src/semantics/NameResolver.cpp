@@ -10,7 +10,7 @@ namespace sammine_lang::AST {
 sammine_util::QualifiedName
 NameResolver::qualify(const sammine_util::QualifiedName &name,
                       const std::string &module, bool exported) {
-  if (name.is_qualified() || module.empty() || (module == kPrelude && exported))
+  if (name.is_qualified() || (module == kPrelude && exported))
     return name;
   return sammine_util::QualifiedName::from_parts(
       std::vector<sammine_util::QualifiedName::Part>{{module, {}},
@@ -24,8 +24,7 @@ void NameResolver::use_program(ProgramAST &program) {
     auto &module = def.defining_module;
     auto written = n.get_name();
     n = qualify(n, module, def.is_exported);
-    // Defined twice in its module, or, in a program, as the prelude
-    // exports it: a program's names and those are both unqualified.
+    // Defined twice in its module.
     if (auto it = definitions.find(n); it != definitions.end()) {
       report_redefinition(written, location, it->second.location);
       return;
@@ -38,9 +37,13 @@ void NameResolver::use_program(ProgramAST &program) {
     if (auto *tci = llvm::dyn_cast<TypeClassInstanceAST>(def.get()))
       for (auto &method : tci->methods)
         method->defining_module = def->defining_module;
-    if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get()))
-      declare(*def, fd->Prototype->functionName, fd->Prototype->get_location());
-    else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
+    if (auto *fd = llvm::dyn_cast<FuncDefAST>(def.get())) {
+      auto &fn = fd->Prototype->functionName;
+      declare(*def, fn, fd->Prototype->get_location());
+      // C's runtime calls a program's main by that name.
+      if (fn.is_of_program() && fn.get_name() == kEntryPoint)
+        props.set_symbol(fn, std::string(kEntryPoint));
+    } else if (auto *kd = llvm::dyn_cast<KernelDefAST>(def.get()))
       declare(*def, kd->Prototype->functionName, kd->Prototype->get_location());
     else if (auto *ext = llvm::dyn_cast<ExternAST>(def.get())) {
       auto &fn = ext->Prototype->functionName;

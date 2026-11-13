@@ -15,14 +15,15 @@ using namespace AST;
 // instance's method or a C function.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   auto *cp = props_.call(call->id());
-  if (cp->is_enum_constructor) {
+  if (!cp)
+    return mlir::failure();
+  if (auto *variant = cp->callee.as<Reference::Variant>()) {
     llvm::SmallVector<ExprAST *> payload;
     for (auto &arg : call->arguments)
       payload.push_back(arg.get());
-    return lowerVariant(loc(call), call->get_type(), cp->enum_variant_index,
-                        payload);
+    return lowerVariant(loc(call), call->get_type(), variant->index, payload);
   }
-  if (cp->builtin_instance) {
+  if (auto *builtin = cp->callee.as<Reference::Builtin>()) {
     llvm::SmallVector<mlir::Value, 2> args;
     for (auto &arg : call->arguments) {
       auto value = lowerValue(arg.get());
@@ -30,15 +31,17 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
         return mlir::failure();
       args.push_back(*value);
     }
-    return lowerBuiltinInstance(loc(call), *cp->builtin_instance, args,
+    return lowerBuiltinInstance(loc(call), builtin->instance, args,
                                 call->get_type());
   }
-  auto name = props_.symbol(cp->resolved_name ? *cp->resolved_name
-                                              : call->functionName);
-  // A name no function has is a binding holding a function value.
-  auto callee = module_.lookupSymbol<mlir::FunctionOpInterface>(name);
-  if (!callee)
+  if (cp->callee.is<Reference::Local>())
     return lowerIndirectCall(call);
+  auto *function = cp->callee.as<Reference::Function>();
+  if (!function)
+    return mlir::failure();
+  auto name = props_.symbol(function->name);
+  if (!module_.lookupSymbol<mlir::FunctionOpInterface>(name))
+    return mlir::failure();
   auto type = types_.mirFunctionType(
       std::get<FunctionType>(cp->callee_func_type->type_data));
   if (!type)
@@ -145,14 +148,13 @@ mlir::Value MIRLowering::lend(mlir::Value place, mlir::Location loc) {
   return smn::LendOp::create(builder_, loc, type, place).getResult();
 }
 
-// A function named as a value, `apply(f, x)`: f binding nothing. A
-// generic one, `id<i32>`, is its copy for the types given.
+// The function `function` named as a value, `apply(f, x)`: f binding
+// nothing. A generic one, `id<i32>`, is its copy for the types given.
 mlir::FailureOr<mlir::Value>
-MIRLowering::lowerFunctionValue(VariableExprAST *var) {
+MIRLowering::lowerFunctionValue(VariableExprAST *var,
+                                const sammine_util::QualifiedName &function) {
   auto type = types_.mirType(var->get_type());
-  auto *vp = props_.variable(var->id());
-  auto name = props_.symbol(vp && vp->resolved_function ? *vp->resolved_function
-                                                        : var->variableName);
+  auto name = props_.symbol(function);
   if (!type || !mlir::isa<smn::FnType>(*type) ||
       !module_.lookupSymbol<mlir::FunctionOpInterface>(name))
     return mlir::failure();

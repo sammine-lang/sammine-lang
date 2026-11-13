@@ -1,7 +1,7 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
 // A let names the value of its right side, lowered first, so a let that
 // shadows a name reads the one it shadows. No stack slot is made.
-// CHECK-LABEL: func.func private @f(
+// CHECK-LABEL: func.func private @"::f"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %c2_i64 = arith.constant 2 : i64
 // CHECK-NEXT: %0 = arith.muli %arg0, %c2_i64 : i64

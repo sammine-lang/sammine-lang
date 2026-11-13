@@ -1,0 +1,30 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// CHECK:      103
+// CHECK-NEXT: 5 2 3
+// CHECK-NEXT: 8
+
+// A program's function may be named as a C function is: printf here is not
+// C's printf, which std binds, nor malloc, free and exit the ones the
+// compiler calls. A program's function is linked as `::name`, which no C
+// function is; only main is linked as C knows it.
+// IR: declare i32 @printf(ptr, ...)
+// IR: define internal i32 @"::printf"(i32
+// IR: define i32 @main()
+
+import std;
+
+let printf(x: i32) -> i32 { x + 100 }
+let free(x: i32) -> i32 { x + 1 }
+let malloc(x: i32) -> i32 { x + 2 }
+let exit(c: i32) -> i32 { c + 7 }
+
+let main() -> i32 {
+  std::printf("%d\n", printf(3));
+  let p = alloc<i32>(1);
+  *p = 5;
+  std::printf("%d %d %d\n", *p, free(1), malloc(1));
+  drop(p);
+  std::printf("%d\n", exit(1));
+  return 0;
+}

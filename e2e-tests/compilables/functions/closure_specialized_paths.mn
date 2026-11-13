@@ -6,9 +6,9 @@
 // are merged per set as each function's turn comes, not once per path:
 // one h per level, and a second of each h that mul reaches.
 // IR-NOT: switch i32
-// IR: define internal i32 @h0(
-// IR: define internal i32 @h0.spec{{[0-9]+}}(
-// IR-NOT: define internal i32 @h0.spec
+// IR: define internal i32 @"::h0"(
+// IR: define internal i32 @"::h0.spec{{[0-9]+}}"(
+// IR-NOT: define internal i32 @"::h0.spec
 
 import std;
 

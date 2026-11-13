@@ -1,0 +1,37 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      42
+// CHECK-NEXT: 43
+// CHECK-NEXT: 44
+// CHECK-NEXT: 45
+
+// A local holding a function value shadows whatever else has its name: a
+// call through it calls what it holds, not the function, the generic
+// function or the typeclass method named alike.
+
+import std;
+
+typeclass Shown<T> {
+  show(x: T) -> T;
+}
+
+instance Shown<i32> {
+  let show(x: i32) -> i32 { 0 - 3 }
+}
+
+let inc(x: i32) -> i32 { x + 1 }
+
+let f(x: i32) -> i32 { 0 - 1 }
+let g(x: i32, y: i32) -> i32 { 0 - 2 }
+let id<T>(x: T) -> T { x }
+
+let main() -> i32 {
+  let f: (i32) -> i32 = inc;
+  std::printf("%d\n", f(41));
+  let g: (i32) -> i32 = inc;
+  std::printf("%d\n", g(42));
+  let id: (i32) -> i32 = inc;
+  std::printf("%d\n", id(43));
+  let show: (i32) -> i32 = inc;
+  std::printf("%d\n", show(44));
+  return 0;
+}

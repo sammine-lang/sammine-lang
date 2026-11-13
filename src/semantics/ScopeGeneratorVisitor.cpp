@@ -80,6 +80,23 @@ void ScopeGeneratorVisitor::visit(TypeClassInstanceAST *ast) {
     method->Block->accept_vis(this);
   }
 }
+// A kernel is code of its module like a function: its parameters, and the
+// names its map's lambda and its reduce's identity are written with.
+void ScopeGeneratorVisitor::visit(KernelDefAST *ast) {
+  ScopeGuard scope(*this);
+  enter_definition(*ast, ast->Prototype->type_params);
+  ast->Prototype->accept_vis(this);
+  for (auto &expr : ast->Body->expressions) {
+    if (auto *map = llvm::dyn_cast<KernelMapExprAST>(expr.get())) {
+      ScopeGuard lambda(*this);
+      map->lambda_proto->accept_vis(this);
+      map->lambda_body->accept_vis(this);
+    } else if (auto *reduce = llvm::dyn_cast<KernelReduceExprAST>(expr.get());
+               reduce && reduce->identity) {
+      reduce->identity->accept_vis(this);
+    }
+  }
+}
 void ScopeGeneratorVisitor::preorder_walk(StructDefAST *ast) {
   push_ast_context();
   enter_definition(*ast, ast->type_params);

@@ -22,6 +22,12 @@
 
 namespace sammine_lang {
 
+/// The symbol of the kernel whose wrapper is linked as `wrapper`:
+/// `__kernel_` and the wrapper's, its `::` written `__`, as a GPU's assembler
+/// takes only letters, digits and `_` (m::scale's is __kernel_m__scale). No
+/// name has `__` in it, so no two kernels share one.
+std::string kernelSymbol(llvm::StringRef wrapper);
+
 class KernelGen {
 public:
   /// Builds with `builder`, the one `mir` lowers a kernel's scalar code with.

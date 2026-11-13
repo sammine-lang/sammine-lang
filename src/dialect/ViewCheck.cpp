@@ -67,11 +67,12 @@ mlir::Value placeRoot(mlir::Value place) {
   return place;
 }
 
-/// A function's name as the source writes it: its symbol, without the type
+/// A function's name as the source writes it, from its symbol: without the
+/// `::` ahead of a program's own function (::helper), and without the type
 /// arguments a generic copy's carries.
-std::string writtenName(smn::ClosureOp closure) {
-  auto name = closure.getCallee().str();
-  return name.substr(0, name.find('<'));
+std::string writtenName(llvm::StringRef symbol) {
+  symbol.consume_front("::");
+  return symbol.substr(0, symbol.find('<')).str();
 }
 
 /// Adds to `set` each of `items` it hasn't; true if it grew.
@@ -158,7 +159,7 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
     error(closure.getLoc(),
           "Cannot bind " + (name.empty() ? "a value" : "'" + name + "'") +
               " that owns memory into a partial application of '" +
-              writtenName(closure) +
+              writtenName(closure.getCallee()) +
               "': the closure can be called more than once");
   }
 }
@@ -235,7 +236,7 @@ private:
   }
 
   static std::string what(smn::ClosureOp closure) {
-    return "a partial application of '" + writtenName(closure) + "' that " +
+    return "a partial application of '" + writtenName(closure.getCallee()) + "' that " +
            (bindsView(closure) ? "captured a view (ptr<T>)"
                                : "can hold itself through what it binds, so "
                                  "keeps that in this call's frame");
@@ -342,9 +343,9 @@ private:
               !llvm::is_contained(callee->escapes, static_cast<unsigned>(i)))
             continue;
           leaves(taintOf(arg), call.getLoc(),
-                 "Cannot pass to '" + call.getCallee().str() + "'",
-                 "once this function returns: '" + call.getCallee().str() +
-                     "' keeps it",
+                 "Cannot pass to '" + writtenName(call.getCallee()) + "'",
+                 "once this function returns: '" +
+                     writtenName(call.getCallee()) + "' keeps it",
                  summary.escapes);
         }
       } else if (auto indirect = mlir::dyn_cast<smn::CallIndirectOp>(op)) {

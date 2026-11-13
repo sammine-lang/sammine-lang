@@ -213,8 +213,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
   auto optionType = types_.mirType(iteration.option);
   auto stepType = types_.mirType(iteration.step);
   auto element = types_.mirType(elementType);
+  auto nextSymbol = props_.symbol(iteration.next);
   if (!rangeType || !optionType || !stepType || !element ||
-      !module_.lookupSymbol<mlir::FunctionOpInterface>(iteration.next))
+      !module_.lookupSymbol<mlir::FunctionOpInterface>(nextSymbol))
     return mlir::failure();
   auto location = loc(forExpr);
 
@@ -236,7 +237,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFor(ForExprAST *forExpr) {
   builder_.setInsertionPointToStart(header);
   auto option =
       smn::CallOp::create(builder_, location, mlir::TypeRange{*optionType},
-                          iteration.next, header->getArgument(0), "for")
+                          nextSymbol, header->getArgument(0), "for")
           .getResult(0);
   auto tag =
       smn::TagOp::create(builder_, location, builder_.getI32Type(), option);

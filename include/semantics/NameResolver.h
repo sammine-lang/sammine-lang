@@ -16,12 +16,14 @@
 namespace sammine_lang::AST {
 
 //! The one place names are decided. It names every definition after its
-//! module (shapes::Point), and resolves every name written in code to the
-//! definition it means, rewriting it to that definition's name. Later stages
-//! only read names. It also decides the symbol each definition is linked as,
-//! in ASTProperties: its name, but a C binding's is its C name, as a C
-//! function is bound in many modules (std::printf, io::printf), each with
-//! the types it gives it, and C knows it as one (printf).
+//! module (shapes::Point; a program's own after the module with no name),
+//! and resolves every name written in code to the definition it means,
+//! rewriting it to that definition's name. A name it leaves as one part is a
+//! local. Later stages only read names. A definition is linked as its name
+//! (QualifiedName::symbol), but for two, whose symbol it records in
+//! ASTProperties: a C binding's is its C name, as a C function is bound in
+//! many modules (std::printf, io::printf), each with the types it gives it,
+//! and C knows it as one (printf); and a program's main is main.
 //!
 //! Every module has its own scope, wherever its code is compiled: a name
 //! written bare in module M's code is a local, else one of M's own top-level
@@ -43,7 +45,8 @@ public:
       : scopes(scopes), variant_to_enum(variant_to_enum), reportee(reportee),
         props(props) {}
 
-  //! Name every definition of `program`, give each C binding its symbol,
+  //! Name every definition of `program`, give each C binding and main its
+  //! symbol,
   //! take its modules' import aliases, and give each module its top-level
   //! names, before any name is resolved. A module defining a name twice, or
   //! one the prelude exports, is reported.
@@ -55,10 +58,14 @@ public:
   //! including in its own library, so symbols built from them agree.
   static constexpr std::string_view kPrelude = "definitions";
 
-  //! `name` as a definition of `module` is named: module::name. A name
-  //! already qualified, of no module (an executable's) or exported by the
-  //! prelude, is unchanged. The prelude's private names are qualified as any
-  //! module's: they aren't to be used, or taken, without a prefix elsewhere.
+  //! The function a program starts at.
+  static constexpr std::string_view kEntryPoint = "main";
+
+  //! `name` as a definition of `module` is named: module::name, a program's
+  //! own by the module with no name. A name already qualified, or exported
+  //! by the prelude, is unchanged. The prelude's private names are qualified
+  //! as any module's: they aren't to be used, or taken, without a prefix
+  //! elsewhere.
   static sammine_util::QualifiedName
   qualify(const sammine_util::QualifiedName &name, const std::string &module,
           bool exported = true);

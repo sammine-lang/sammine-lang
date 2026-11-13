@@ -747,29 +747,19 @@ std::optional<Type> BiTypeCheckerVisitor::common_type(const Type &a,
 void BiTypeCheckerVisitor::report_open_type(const ExprAST *expr) {
   std::optional<std::string> variant;
   if (auto *var = llvm::dyn_cast<VariableExprAST>(expr);
-      var && props_.variable(var->id()).is_enum_unit_variant)
+      var && props_.variable(var->id()).value.is<Reference::Variant>())
     variant = var->variableName.get_name();
   else if (auto *call = llvm::dyn_cast<CallExprAST>(expr);
-           call && props_.call(call->id()).is_enum_constructor)
+           call && props_.call(call->id()).callee.is<Reference::Variant>())
     variant = call->functionName.get_name();
   add_error(expr->get_location(),
             open_type_message(expr->get_type(), variant));
 }
 
-void BiTypeCheckerVisitor::instantiate_generic_callee(CallExprAST *ast) {
-  auto &cp = props_.call(ast->id());
-  if (cp.is_enum_constructor || cp.is_typeclass_call ||
-      !cp.resolved_name.has_value())
-    return;
-
-  auto *generic_def = monomorphizer.generic_funcs.find(ast->functionName);
-  if (!generic_def)
-    return;
-
-  auto key = MonomorphizedKey::from_bindings(
-      ast->functionName, generic_def->Prototype->type_params, cp.type_bindings);
-  if (auto *cloned = monomorphizer.try_instantiate_func(generic_def, key,
-                                                        cp.type_bindings)) {
+void BiTypeCheckerVisitor::instantiate_generic_callee(
+    const ResolvedCall::GenericCopy &copy) {
+  if (auto *cloned = monomorphizer.try_instantiate_func(copy.generic, copy.key,
+                                                        copy.bindings)) {
     TopLevelScopeGuard scope(*this);
     cloned->accept_vis(this);
   }

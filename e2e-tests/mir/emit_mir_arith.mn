@@ -1,17 +1,17 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
 // Integer functions with arithmetic and return go through MIR, marked
 // sammine.mir, signed or unsigned as their types are.
-// CHECK-LABEL: func.func private @inc(
+// CHECK-LABEL: func.func private @"::inc"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %c1_i32 = arith.constant 1 : i32
 // CHECK-NEXT: %0 = arith.addi %arg0, %c1_i32 : i32
 // CHECK-NEXT: return %0 : i32
-// CHECK-LABEL: func.func private @mix(
+// CHECK-LABEL: func.func private @"::mix"(
 // CHECK-SAME: sammine.mir
 // CHECK: arith.muli
 // CHECK: arith.divsi
 // CHECK: arith.remsi
-// CHECK-LABEL: func.func private @udiv(
+// CHECK-LABEL: func.func private @"::udiv"(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: arith.divui
 

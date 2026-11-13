@@ -3,11 +3,11 @@
 // signature: 'ptr<T> is owned, ptr<T> a view. `&x` makes x's binding live in
 // a slot (sammine.local), and is a view of it (sammine.addr), the same one
 // each time.
-// CHECK-LABEL: func.func private @pass(%arg0: !sammine.ptr<i32, owned>{{.*}}) -> !sammine.ptr<i32, owned>
+// CHECK-LABEL: func.func private @"::pass"(%arg0: !sammine.ptr<i32, owned>{{.*}}) -> !sammine.ptr<i32, owned>
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.let "p" %arg0 : !sammine.ptr<i32, owned>
 // CHECK-NEXT: return %0 : !sammine.ptr<i32, owned>
-// CHECK-LABEL: func.func private @pick(%arg0: !sammine.ptr<i64, view>{{.*}}, %arg1: !sammine.ptr<i64, view>{{.*}}) -> i32
+// CHECK-LABEL: func.func private @"::pick"(%arg0: !sammine.ptr<i64, view>{{.*}}, %arg1: !sammine.ptr<i64, view>{{.*}}) -> i32
 // CHECK-SAME: sammine.mir
 // CHECK-LABEL: func.func @main
 // CHECK-SAME: sammine.mir
@@ -15,7 +15,7 @@
 // CHECK-NEXT: sammine.store %c3_i64, %[[X]] : <i64>
 // CHECK: sammine.addr %[[X]] : <i64>
 // CHECK-NEXT: sammine.addr %[[X]] : <i64>
-// CHECK-NEXT: sammine.call @pick(
+// CHECK-NEXT: sammine.call @"::pick"(
 let pass(p: 'ptr<i32>) -> 'ptr<i32> { p }
 let pick(a: ptr<i64>, b: ptr<i64>) -> i32 { 7 }
 

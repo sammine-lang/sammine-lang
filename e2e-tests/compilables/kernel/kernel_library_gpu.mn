@@ -1,0 +1,9 @@
+// REQUIRES: cuda
+// RUN: %sammine -f %full %O --gpu=cuda
+
+// A library's kernel compiles for a GPU: its kernel's symbol is spelled
+// with what a GPU's assembler takes, which `::` is not.
+
+export kernel double_arr(a: [3]f64) -> [3]f64 {
+  map(a, (x: f64) -> f64 { x * 2.0 })
+}

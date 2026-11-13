@@ -12,11 +12,11 @@
 // no function here switches on which closure it was given. Places using it
 // with alike sets share a copy: apply(add(1)) and apply(add(2)) do.
 // IR-NOT: switch i32
-// IR-LABEL: define internal i32 @apply(
+// IR-LABEL: define internal i32 @"::apply"(
 // IR-NOT: switch i32
-// IR-LABEL: define internal i32 @apply.spec{{[0-9]+}}(
+// IR-LABEL: define internal i32 @"::apply.spec{{[0-9]+}}"(
 // IR-NOT: switch i32
-// IR-NOT: define internal i32 @apply.spec
+// IR-NOT: define internal i32 @"::apply.spec
 
 import std;
 

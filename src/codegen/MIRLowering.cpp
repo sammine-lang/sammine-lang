@@ -400,11 +400,16 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerChar(CharExprAST *c) {
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
-  if (auto *vp = props_.variable(var->id()); vp && vp->is_enum_unit_variant)
-    return lowerVariant(loc(var), var->get_type(), vp->enum_variant_index, {});
+  auto *vp = props_.variable(var->id());
+  if (!vp)
+    return mlir::failure();
+  if (auto *variant = vp->value.as<Reference::Variant>())
+    return lowerVariant(loc(var), var->get_type(), variant->index, {});
+  if (auto *function = vp->value.as<Reference::Function>())
+    return lowerFunctionValue(var, function->name);
   auto it = findLocal(var->variableName);
-  if (it == names_.end())
-    return lowerFunctionValue(var);
+  if (!vp->value.is<Reference::Local>() || it == names_.end())
+    return mlir::failure();
   // A binding of (), no value.
   if (!it->second)
     return mlir::Value();

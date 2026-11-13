@@ -28,6 +28,12 @@ namespace sammine_util {
 /// are the same name when their parts and those types are: a name is a key
 /// as it is (QualifiedNameHash), and `mangled()` only shows it.
 ///
+/// A definition's name starts with its module. A program, which is no
+/// module, has the module with no name: its `helper` is [, helper], shown
+/// as `helper` and linked as `::helper`. So a value's name of one part is
+/// always a local, never a function, and no function's symbol is a C
+/// function's name.
+///
 /// Its functions are defined at the end of typecheck/Types.h, where Type is
 /// whole.
 struct QualifiedName {
@@ -81,12 +87,24 @@ public:
 
   // Query methods
   bool is_qualified() const { return parts_.size() > 1; }
+  /// Whether this is a name in a program's own code, the module with no
+  /// name.
+  bool is_of_program() const {
+    return is_qualified() && parts_.front().name.empty();
+  }
 
   bool operator==(const QualifiedName &other) const;
 
-  /// The name as source writes it, `a::b<T>::c`: for messages, and for the
-  /// symbol a definition is linked as.
+  /// The name as source writes it, `a::b<T>::c`, for messages. A program's
+  /// own is written without a module: `helper`.
   std::string mangled() const;
+  /// The symbol a definition of this name is linked as: every part,
+  /// `a::b<T>::c`, a program's own as `::helper`.
+  std::string symbol() const;
+
+private:
+  /// The parts from `first` on, `::` between them.
+  std::string joined(size_t first) const;
 };
 
 /// A name as text, for a message.
