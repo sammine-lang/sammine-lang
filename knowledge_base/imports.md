@@ -39,7 +39,7 @@
 | `io.mn` | Typed prints (`print_i32`, ...; `print` itself is built in), file I/O (`File`, a struct over C's `FILE *`, ended by `close`), stdin readers, stderr |
 | `str.mn` | `String` struct (data, length, cap), new/delete, `compare`, and `Less`/`Greater`/`LessEqual`/`GreaterEqual` and `Format` instances on `ptr<String>` (Format writes its text, `write(f, "{}", text(data))`: a String keeps a terminator, as its length and cap are kept) (views: an instance on `String` itself would own, and have to free, its operands). No `Equal`: `ptr<T>` has a built-in address `==` |
 | `vec.mn` | Generic `Vec<T>` (data: 'buf<T>, length, cap), new/push/delete; internal grow_buf, and check_index, the bounds check `v[i]` and `set` share |
-| `definitions.mn` | The prelude: typeclasses (Sized, Add, Sub, Mul, Div, Mod, Convert, Hash, Format, Indexer, Iterator), the comparison and `Hash` instances of `string` (over C's `strcmp`; the hash mixes each char into the one before), exported Sized/Iterator<Range> instances, `type Option<T>`, `struct Range<T>`. Compiled to definitions.so/.a first; other stdlib modules depend on it |
+| `definitions.mn` | The prelude: typeclasses (Sized, Add, Sub, Mul, Div, Mod, Convert, Hash, Format (with `Option<T>`'s instance), Indexer, Iterator), a C runtime (`definitions_runtime.c`: the streams print writes to, picked up as `definitions_runtime.o` like any module's), the comparison and `Hash` instances of `string` (over C's `strcmp`; the hash mixes each char into the one before), exported Sized/Iterator<Range> instances, `type Option<T>`, `struct Range<T>`. Compiled to definitions.so/.a first; other stdlib modules depend on it |
 | `io_runtime.c` | C runtime for io module |
 
 - Stdlib dir: `<binary>/../lib/sammine/`

@@ -262,13 +262,19 @@ void ModuleGen::declareRuntime() {
   mlir::LLVM::LLVMFuncOp::create(
       builder_, unknown, runtime::kFree,
       mlir::LLVM::LLVMFunctionType::get(llvmVoid(), {llvmPtr()}));
-  mlir::LLVM::LLVMFuncOp::create(
-      builder_, unknown, runtime::kPrintf,
-      mlir::LLVM::LLVMFunctionType::get(i32, {llvmPtr()}, /*isVarArg=*/true));
-  mlir::LLVM::LLVMFuncOp::create(
-      builder_, unknown, runtime::kDprintf,
-      mlir::LLVM::LLVMFunctionType::get(i32, {i32, llvmPtr()},
-                                        /*isVarArg=*/true));
+  auto declare = [&](llvm::StringRef name, mlir::Type result,
+                     llvm::ArrayRef<mlir::Type> params, bool variadic) {
+    mlir::LLVM::LLVMFuncOp::create(
+        builder_, unknown, name,
+        mlir::LLVM::LLVMFunctionType::get(result, params, variadic));
+  };
+  declare(runtime::kFprintf, i32, {llvmPtr(), llvmPtr()}, /*variadic=*/true);
+  declare(runtime::kStdout, llvmPtr(), {}, false);
+  declare(runtime::kStderr, llvmPtr(), {}, false);
+  declare(runtime::kTextOpen, llvmPtr(), {}, false);
+  declare(runtime::kTextStream, llvmPtr(), {llvmPtr()}, false);
+  declare(runtime::kTextFinish, builder_.getI64Type(), {llvmPtr()}, false);
+  declare(runtime::kTextTake, llvmPtr(), {llvmPtr()}, false);
   auto exit = mlir::func::FuncOp::create(unknown, runtime::kExit,
                                          builder_.getFunctionType({i32}, {}));
   exit.setVisibility(mlir::SymbolTable::Visibility::Private);

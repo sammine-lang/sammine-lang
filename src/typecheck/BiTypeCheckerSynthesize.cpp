@@ -1730,8 +1730,9 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   return ast->set_type(Type::I32_t());
 }
 
-// Formatted output. print, eprint and write are (), and panic never gives a
-// value: Never, which fits where any is expected. The format is a literal,
+// Formatted output. print, eprint and write are (), format is the text it
+// would have written, and panic never gives a value: Never, which fits
+// where any is expected. The format is a literal,
 // read here: each `{}` in it takes an argument, written by the instance of
 // Format for its type, the compiler's for a number, bool, char or string.
 // write's first argument is the Formatter it writes to.
@@ -1796,7 +1797,6 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
   }
   for (auto [index, arg] :
        llvm::enumerate(llvm::drop_begin(args, format_at + 1))) {
-    fp.methods.emplace_back();
     auto type = arg->accept_synthesis(this);
     if (type.is_poisoned()) {
       ok = false;
@@ -1812,22 +1812,31 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
     }
     auto key = MonomorphizedKey::instance(kFormatClass, {type});
     if (!has_instance(key)) {
+      // The part of it that has no instance, if it prints part by part.
+      auto lacking = key;
+      for (auto parts = format_parts(type); parts;
+           parts = format_parts(lacking.type_args[0])) {
+        auto part = llvm::find_if(*parts, [&](const Type &t) {
+          return !has_instance(MonomorphizedKey::instance(kFormatClass, {t}));
+        });
+        if (part == parts->end())
+          break;
+        lacking = MonomorphizedKey::instance(kFormatClass, {*part});
+      }
       this->add_error(
           arg->get_location(),
-          missing_instance(key,
+          missing_instance(lacking,
                            fmt::format("{}() can't print '{}': no instance "
                                        "of Format<{}>",
                                        keyword, type.to_string(),
-                                       key.type_args_string())));
+                                       lacking.type_args_string())));
       ok = false;
       continue;
     }
-    fp.methods.back() = method_reference(key, std::string(kFormatClass));
-    // A program's instance is handed the digits, in its Formatter, to do
-    // with as it sees fit. The compiler's use them for a float alone.
-    if (fp.methods.back().is<Reference::Builtin>() &&
-        index < placeholders.size() && placeholders[index]->precision &&
-        !type.is_float()) {
+    // A program's instance, and a tuple's or array's parts, are handed
+    // the digits. The compiler's own use them for a float alone.
+    if (builtin_format_directive(type) && index < placeholders.size() &&
+        placeholders[index]->precision && !type.is_float()) {
       this->add_error(arg->get_location(),
                       fmt::format("'{{.{}}}' gives a float's digits after "
                                   "the point, and this is '{}'",
@@ -1838,8 +1847,16 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
   }
   if (!ok)
     return ast->set_type(Type::Poisoned());
-  return ast->set_type(ast->kind == FormatExprAST::Kind::Panic ? Type::Never()
-                                                               : Type::Unit());
+  switch (ast->kind) {
+  case FormatExprAST::Kind::Panic:
+    return ast->set_type(Type::Never());
+  case FormatExprAST::Kind::Format:
+    // The text: its chars, in a buffer of its own, and how many.
+    return ast->set_type(
+        Type::Tuple({Type::Buffer(Type::Char()), Type::I64_t()}));
+  default:
+    return ast->set_type(Type::Unit());
+  }
 }
 
 Type BiTypeCheckerVisitor::synthesize(DimExprAST *ast) {

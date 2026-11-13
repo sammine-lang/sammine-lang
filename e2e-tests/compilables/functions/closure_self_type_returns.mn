@@ -8,7 +8,8 @@
 // value and can be returned. Every function value here has a known set, so
 // each call through one is a direct call, and LLVM folds main to constants.
 // IR-LABEL: define {{.*}} @main()
-// IR-NEXT: call i32 (ptr, ...) @printf(ptr {{.*}}, i32 11, i32 18, i32 102)
+// IR-NEXT: call ptr @sammine_stdout()
+// IR-NEXT: call i32 (ptr, ptr, ...) @fprintf(ptr {{.*}}, ptr {{.*}}, i32 11, i32 18, i32 102)
 
 import std;
 

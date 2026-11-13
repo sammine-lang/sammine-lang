@@ -169,7 +169,8 @@ export typeclass Drop<T> {
 // `{}` in a format prints its argument through this. An instance is given
 // a Formatter, which says where to write and how, and writes the value's
 // parts to it: write(f, "({}, {})", p.x, p.y). The compiler provides the
-// instances for numbers, bool, char and string.
+// instances for numbers, bool, char and string, and for a tuple or an array
+// of what prints: (1, true), [1, 2, 3].
 export typeclass Format<T> {
   Format(val: T, f: Formatter) -> unit;
 }
@@ -179,6 +180,21 @@ export typeclass Indexer<T, E> {
 }
 
 export type Option<T> = Some(T) | None;
+
+// An Option prints as it is written, its value with the digits it was
+// given: Some(2.50), None.
+export instance<T> Format<Option<T>> {
+  let Format(o: Option<T>, f: Formatter) -> unit {
+    case o {
+      Some(v) => {
+        write(f, "Some(");
+        Format<T>(v, f);
+        write(f, ")")
+      },
+      None => write(f, "None"),
+    }
+  }
+}
 
 export typeclass Iterator<I, T> {
   next(iter : I) -> Option<(I, T)>;

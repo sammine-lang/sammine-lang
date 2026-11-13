@@ -1020,6 +1020,12 @@ bool BiTypeCheckerVisitor::instantiate_generic_instance(
 // its privacy is checked here: a private one is only for its module's code,
 // such as that module's generic functions compiled here.
 bool BiTypeCheckerVisitor::has_instance(const MonomorphizedKey &key) {
+  // A tuple or an array prints if each of its parts does.
+  if (key.is_of_prelude_class(kFormatClass) && key.type_args.size() == 1)
+    if (auto parts = format_parts(key.type_args[0]))
+      return llvm::all_of(*parts, [&](const Type &part) {
+        return has_instance(MonomorphizedKey::instance(kFormatClass, {part}));
+      });
   if (is_builtin_instance(key))
     return true;
   if (!type_class_instances.contains(key) &&

@@ -23,7 +23,7 @@ Comments begin with `#` and extend to the end of the line.
 | `bool` | Boolean (`true` or `false`)  | 1 byte  |
 | `char` | Single character             | 1 byte  |
 | `string` | Text that lives as long as the program | a pointer |
-| `Formatter` | Where a `Format` instance writes, and how (see Print) | 8 bytes |
+| `Formatter` | Where a `Format` instance writes, and how (see Print) | 16 bytes |
 | `unit` | Unit type (no meaningful value) | 0 bytes |
 
 A double-quoted literal, `"hello"`, is a `string`: its text lives as long as
@@ -333,7 +333,10 @@ print("{{}} is a placeholder, 100%\n");    // {} is a placeholder, 100%
 - **An argument prints through the `Format` instance for its type.** The
   compiler provides the instances for `i32`, `i64`, `u32` and `u64`, for
   `f32` and `f64` (six digits after the point), for `bool` (`true` or
-  `false`), `char`, `string`, and an integer-backed enum (its integer).
+  `false`), `char`, `string`, and an integer-backed enum (its integer). A
+  tuple and an array print part by part, `(1, true)` and `[1, 2, 3]`, if
+  each part prints. The prelude gives `Option<T>` an instance (`Some(4)`,
+  `None`) and `vec` gives `Vec<T>` one, through a view (`print("{}", &v)`).
   Nothing in the format says the type again, so nothing can say it wrong. A
   type with no instance is an error ("print() can't print 'P': no instance of
   Format<P>").
@@ -347,6 +350,14 @@ print("{{}} is a placeholder, 100%\n");    // {} is a placeholder, 100%
   doesn't say.
 
 `eprint("format", args...)` is `print` to stderr.
+
+`format("format", args...)` writes nowhere: it gives the text, its chars in
+a buffer of their own and how many, `('buf<char>, i64)`, which `str::from`
+makes a `String` of:
+
+```sammine
+let s = str::from(format("{} of {}", 3, 10));   // the String "3 of 10"
+```
 
 A type of your own prints once it has an instance of `Format`. The instance
 is given a `Formatter`, which says where to write and how, and writes the
@@ -369,7 +380,8 @@ panic("bad point {}", p);                  // in a panic's message
 
 A `Formatter` is only handed on: to `write`, or to another instance's
 `Format`. It carries the placeholder's digits, so an instance that hands it
-to a float's prints the float with them:
+to a float's prints the float with them, as a tuple's, an array's and an
+`Option`'s do for their parts:
 
 ```sammine
 struct Money { amount: f64, };

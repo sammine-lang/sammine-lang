@@ -288,7 +288,7 @@ The MLIR code generator's entry point is `generateModules` (`include/codegen/Mod
 
 `ModuleGen::generate()` runs several phases:
 
-1. **Runtime function declarations.** Declares `malloc`, `free`, `exit`, `printf` and `dprintf`, for allocation, `print`, and `panic` and bounds-check reports.
+1. **Runtime function declarations.** Declares `malloc`, `free` and `exit`, C's `fprintf`, and the prelude's C runtime (`sammine_stdout`, `sammine_stderr`, `sammine_text_*`), for allocation, ending the program and formatted output.
 
 2. **Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies) in MIR types (`MIRTypes`), and C bindings. This enables mutual recursion and function-as-value references. `sammine-mir-to-llvm` converts a declaration's MIR types as it does a definition's. A C binding that is an `llvm.func` needs LLVM types already: it gets them from its MIR types through `llvmTypeOf`, the pass's own conversion, so there is one mapping from sammine types to LLVM's.
 

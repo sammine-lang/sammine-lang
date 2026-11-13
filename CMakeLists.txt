@@ -133,7 +133,9 @@ function(stdlib_add_module mod extra_deps)
       PARENT_SCOPE)
 endfunction()
 
-stdlib_add_module(${STDLIB_PRELUDE} "")
+# The prelude's C runtime is what print writes to: every program links it.
+stdlib_compile_c_runtime(${STDLIB_PRELUDE}_runtime.c _prelude_runtime)
+stdlib_add_module(${STDLIB_PRELUDE} "${_prelude_runtime}")
 set(STDLIB_PRELUDE_OUTPUTS ${STDLIB_DIR}/${STDLIB_PRELUDE}.so
     ${STDLIB_DIR}/${STDLIB_PRELUDE}.a ${STDLIB_DIR}/${STDLIB_PRELUDE}.mn)
 

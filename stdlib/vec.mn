@@ -22,6 +22,19 @@ export instance<T> Indexer<Vec<T>, T> {
   }
 }
 
+// A Vec prints through a view, print("{}", &v), as an array does: each of
+// its values, with the digits it was given, between brackets.
+export instance<T> Format<ptr<Vec<T>>> {
+  let unsafe Format(v: ptr<Vec<T>>, f: Formatter) -> unit {
+    write(f, "[");
+    for i in 0i64..(*v).length {
+      if i > 0i64 { write(f, ", ") };
+      Format<T>((*v).data[i], f);
+    };
+    write(f, "]")
+  }
+}
+
 export let new<T>(cap: i64) -> Vec<T> {
   Vec<T> { data: alloc_buf<T>(cap), length: 0i64, cap: cap }
 }

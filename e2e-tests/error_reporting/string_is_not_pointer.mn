@@ -5,6 +5,7 @@
 // CHECK: Type mismatch: expression has type string, but variable declared as ptr<char>
 // CHECK: print() can't print 'Unprintable': no instance of Format<Unprintable>
 // CHECK: write() takes the Formatter to write to first: write(f, "what to say")
+// CHECK: print() can't print '(i32, [2]Unprintable)': no instance of Format<Unprintable>
 
 // A pointer to a char is no string: nothing says where its text ends, so
 // it doesn't print, and only an unsafe function calls one a string. A
@@ -25,5 +26,7 @@ let main() -> i32 {
   let x: ptr<char> = "lit";
   print("{}\n", Unprintable { x: 1 });
   write("no formatter\n");
+  // A tuple or an array prints if its parts do: the one that doesn't is named.
+  print("{}\n", (1, [Unprintable { x: 1 }, Unprintable { x: 2 }]));
   0
 }

@@ -234,86 +234,54 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
   return mlir::success();
 }
 
-// A Formatter is one word. Its lowest bit says where: 0 stdout, 1 stderr.
-// Its upper half is a float's digits after the point, plus one, or 0 for
-// none said.
-static constexpr int64_t kToStderr = 1;
-static constexpr int64_t kPrecisionShift = 32;
-
-static int64_t formatterBits(bool toStderr, std::optional<unsigned> precision) {
-  return (toStderr ? kToStderr : 0) |
-         (precision ? (static_cast<int64_t>(*precision) + 1) << kPrecisionShift
-                    : 0);
+// A call of `name`, one of the runtime's C functions, giving a `result`.
+mlir::Value MIRLowering::callRuntime(mlir::Location location,
+                                     llvm::StringRef name, mlir::Type result,
+                                     mlir::ValueRange args) {
+  return smn::CallOp::create(builder_, location, mlir::TypeRange{result}, name,
+                             args)
+      .getResult(0);
 }
 
-// The Formatter a method is handed for a `{}` written to `to`, with the
-// placeholder's digits.
-mlir::Value MIRLowering::formatterFor(mlir::Location location,
-                                      const WriteTo &to,
-                                      std::optional<unsigned> precision) {
-  auto i64 = builder_.getI64Type();
-  if (!to.formatter)
-    return intConstant(location, i64, formatterBits(to.stderr_, precision));
-  // write(f, ...): where f writes, and this placeholder's own digits.
-  auto where = mlir::arith::AndIOp::create(
-      builder_, location, to.formatter, intConstant(location, i64, kToStderr));
-  if (!precision)
-    return where;
-  return mlir::arith::OrIOp::create(
-      builder_, location, where,
-      intConstant(location, i64, formatterBits(false, precision)));
+// C's stream `name` gives: sammine_stdout or sammine_stderr.
+mlir::Value MIRLowering::cStream(mlir::Location location,
+                                 llvm::StringRef name) {
+  return callRuntime(location, name, viewOf(builder_.getI8Type()), {});
 }
 
-// Writes `format`, C's, with `args`, where `to` says: stdout through
-// printf, whose buffer C's own output shares, and stderr, which has none,
-// through dprintf.
-void MIRLowering::write(mlir::Location location, const WriteTo &to,
-                        llvm::StringRef format, mlir::ValueRange args) {
-  auto i32 = builder_.getI32Type();
-  auto text = smn::StringOp::create(builder_, location,
-                                    viewOf(builder_.getI8Type()), format)
-                  .getResult();
-  auto toStdout = [&] {
-    llvm::SmallVector<mlir::Value> operands{text};
-    operands.append(args.begin(), args.end());
-    smn::CallOp::create(builder_, location, mlir::TypeRange{i32},
-                        runtime::kPrintf, operands);
-  };
-  auto toStderr = [&] {
-    llvm::SmallVector<mlir::Value> operands{intConstant(location, i32, 2),
-                                            text};
-    operands.append(args.begin(), args.end());
-    smn::CallOp::create(builder_, location, mlir::TypeRange{i32},
-                        runtime::kDprintf, operands);
-  };
-  // Which it is, is known where the program wrote print, eprint or panic.
-  if (!to.formatter)
-    return to.stderr_ ? toStderr() : toStdout();
-  auto i64 = builder_.getI64Type();
-  auto where = mlir::arith::AndIOp::create(
-      builder_, location, to.formatter, intConstant(location, i64, kToStderr));
-  auto isStderr = mlir::arith::CmpIOp::create(
-      builder_, location, mlir::arith::CmpIPredicate::ne, where,
-      intConstant(location, i64, 0));
-  auto *region = builder_.getInsertionBlock()->getParent();
-  auto *err = &region->emplaceBlock();
-  auto *out = &region->emplaceBlock();
-  auto *after = &region->emplaceBlock();
-  mlir::cf::CondBranchOp::create(builder_, location, isStderr, err, out);
-  builder_.setInsertionPointToStart(err);
-  toStderr();
-  mlir::cf::BranchOp::create(builder_, location, after);
-  builder_.setInsertionPointToStart(out);
-  toStdout();
-  mlir::cf::BranchOp::create(builder_, location, after);
-  builder_.setInsertionPointToStart(after);
+// Writes what `out` has gathered, C's format and its arguments, to its
+// stream, and starts it over.
+void MIRLowering::flush(mlir::Location location, FormatOutput &out) {
+  if (out.format.empty())
+    return;
+  llvm::SmallVector<mlir::Value> operands{
+      out.stream,
+      smn::StringOp::create(builder_, location, viewOf(builder_.getI8Type()),
+                            out.format)
+          .getResult()};
+  operands.append(out.args.begin(), out.args.end());
+  smn::CallOp::create(builder_, location,
+                      mlir::TypeRange{builder_.getI32Type()},
+                      runtime::kFprintf, operands);
+  out.format.clear();
+  out.args.clear();
+}
+
+// Text, printed as it is: a `%` in it isn't a directive.
+static std::string verbatim(llvm::StringRef text) {
+  std::string result;
+  for (char c : text)
+    result += c == '%' ? std::string("%%") : std::string(1, c);
+  return result;
 }
 
 mlir::LogicalResult MIRLowering::fail(mlir::Location location,
                                       llvm::StringRef format,
                                       mlir::ValueRange args) {
   auto i32 = builder_.getI32Type();
-  write(location, WriteTo{/*stderr_=*/true, {}}, format, args);
+  FormatOutput out{cStream(location, runtime::kStderr), format.str(),
+                   llvm::SmallVector<mlir::Value>(args.begin(), args.end())};
+  flush(location, out);
   smn::CallOp::create(builder_, location, mlir::TypeRange{}, runtime::kExit,
                       mlir::ValueRange{intConstant(location, i32, 1)});
   mlir::ub::UnreachableOp::create(builder_, location);
@@ -341,122 +309,227 @@ mlir::Value MIRLowering::boolText(mlir::Location location, mlir::Value value) {
   return after->getArgument(0);
 }
 
-// What printf is given for `value`, of a `type` the compiler prints: a
-// bool's text, any other as it is.
-mlir::Value MIRLowering::printable(mlir::Location location, const Type &type,
-                                   mlir::Value value) {
-  return type.type_kind == TypeKind::Bool ? boolText(location, value) : value;
+// The digits as a value, for a Formatter or for printf's `%.*f`: fewer
+// than none where none was said, which printf takes as none.
+mlir::Value MIRLowering::digitsValue(mlir::Location location,
+                                     const Digits &digits) {
+  if (digits.handedOn)
+    return digits.handedOn;
+  return intConstant(location, builder_.getI32Type(),
+                     digits.said ? static_cast<int64_t>(*digits.said) : -1);
 }
 
-// Format<T>(value, f), the compiler's, called by name. The Formatter's
-// digits are known only when it runs, so a float's are handed to printf
-// beside it (`%.*f`), which takes fewer than none as none said.
-void MIRLowering::writeBuiltin(mlir::Location location, mlir::Value formatter,
-                               const Type &type, mlir::Value value) {
-  WriteTo to{false, formatter};
-  auto directive = builtin_format_directive(type);
-  if (!directive)
-    sammine_util::abort("ICE: the compiler has no Format instance for " +
-                        type.to_string());
-  if (!type.is_float())
-    return write(location, to, *directive, printable(location, type, value));
-  auto i64 = builder_.getI64Type();
-  auto digits = mlir::arith::SubIOp::create(
-      builder_, location,
-      mlir::arith::ShRSIOp::create(
-          builder_, location, formatter,
-          intConstant(location, i64, kPrecisionShift)),
-      intConstant(location, i64, 1));
-  auto narrow = mlir::arith::TruncIOp::create(builder_, location,
-                                              builder_.getI32Type(), digits);
-  write(location, to, "%.*f", {narrow, value});
+// Writes `value`, of `type`, into `out`, as its instance of Format does.
+// The compiler's, for a type in builtin_format_directive, is that
+// directive, gathered with the text around it. A tuple and an array print
+// part by part. Any other is a program's instance: what was gathered is
+// written, then its method is called with the value and a Formatter, the
+// stream and the digits.
+mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
+                                            FormatOutput &out,
+                                            const Type &type,
+                                            mlir::Value value,
+                                            const Digits &digits) {
+  if (auto directive = builtin_format_directive(type)) {
+    if (!type.is_float()) {
+      out.format += *directive;
+      out.args.push_back(type.type_kind == TypeKind::Bool
+                             ? boolText(location, value)
+                             : value);
+    } else if (digits.handedOn) {
+      // Known only when it runs: handed to printf beside the float.
+      out.format += "%.*f";
+      out.args.push_back(digits.handedOn);
+      out.args.push_back(value);
+    } else {
+      out.format += digits.said ? "%." + std::to_string(*digits.said) + "f"
+                                : std::string(*directive);
+      out.args.push_back(value);
+    }
+    return mlir::success();
+  }
+  if (auto *tuple = std::get_if<TupleType>(&type.type_data)) {
+    out.format += "(";
+    for (size_t i = 0; i < tuple->size(); ++i) {
+      auto element = types_.mirType(tuple->get_element(i));
+      if (!element)
+        return mlir::failure();
+      if (i)
+        out.format += ", ";
+      if (mlir::failed(writeValue(
+              location, out, tuple->get_element(i),
+              smn::ExtractOp::create(builder_, location, *element, value, i),
+              digits)))
+        return mlir::failure();
+    }
+    out.format += ")";
+    return mlir::success();
+  }
+  if (auto *array = std::get_if<ArrayType>(&type.type_data)) {
+    auto elementType = array->get_element();
+    auto element = types_.mirType(elementType);
+    if (!element)
+      return mlir::failure();
+    auto i64 = builder_.getI64Type();
+    auto size = static_cast<int64_t>(array->get_size());
+    auto at = [&](mlir::Value index) {
+      return smn::ElementOp::create(builder_, location, *element, value, index)
+          .getResult();
+    };
+    out.format += "[";
+    if (size > 0 && mlir::failed(writeValue(location, out, elementType,
+                                            at(intConstant(location, i64, 0)),
+                                            digits)))
+      return mlir::failure();
+    // The rest, each after a comma, in a loop: an array can be long.
+    if (size > 1) {
+      flush(location, out);
+      auto *region = builder_.getInsertionBlock()->getParent();
+      auto *header = &region->emplaceBlock();
+      auto *body = &region->emplaceBlock();
+      auto *after = &region->emplaceBlock();
+      header->addArgument(i64, location);
+      mlir::cf::BranchOp::create(builder_, location, header,
+                                 mlir::ValueRange{intConstant(location, i64, 1)});
+      builder_.setInsertionPointToStart(header);
+      auto index = header->getArgument(0);
+      auto more = mlir::arith::CmpIOp::create(
+          builder_, location, mlir::arith::CmpIPredicate::slt, index,
+          intConstant(location, i64, size));
+      mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
+      builder_.setInsertionPointToStart(body);
+      out.format += ", ";
+      if (mlir::failed(
+              writeValue(location, out, elementType, at(index), digits)))
+        return mlir::failure();
+      flush(location, out);
+      auto next = mlir::arith::AddIOp::create(builder_, location, index,
+                                              intConstant(location, i64, 1));
+      mlir::cf::BranchOp::create(builder_, location, header,
+                                 mlir::ValueRange{next.getResult()});
+      builder_.setInsertionPointToStart(after);
+    }
+    out.format += "]";
+    return mlir::success();
+  }
+  auto formatterType = types_.mirType(Type::Formatter());
+  if (!formatterType)
+    return mlir::failure();
+  flush(location, out);
+  auto formatter = smn::AggregateOp::create(
+      builder_, location, *formatterType,
+      mlir::ValueRange{out.stream, digitsValue(location, digits)});
+  auto method = MonomorphizedKey::instance(kFormatClass, {type})
+                    .to_typeclass_name(std::string(kFormatClass));
+  smn::CallOp::create(builder_, location, mlir::TypeRange{},
+                      props_.symbol(method),
+                      mlir::ValueRange{value, formatter.getResult()}, "{}");
+  return mlir::success();
 }
 
-// print, eprint, write and panic. The format becomes C's: text as it is, a
-// `%` in it one that prints a `%`, and each `{}` whose argument the
-// compiler's instance of Format prints the directive that does. An argument
-// a program's instance prints splits it: what came before is written, then
-// the instance's method is called with the argument and a Formatter, which
-// says where this writes and the placeholder's digits. panic writes
-// `file:line:col: panic: ` first and a newline last, to stderr, and ends
-// the program: the block ends there, unreachable, so no drop is put after
-// it and no path through it joins the rest. None has a value.
+// Format<T>(value, formatter), the compiler's, called by name: the value
+// written to the Formatter's stream, with the digits it hands on.
+mlir::LogicalResult MIRLowering::writeBuiltin(mlir::Location location,
+                                              mlir::Value formatter,
+                                              const Type &type,
+                                              mlir::Value value) {
+  auto parts = mlir::cast<smn::TupleType>(formatter.getType()).getElements();
+  FormatOutput out{
+      smn::ExtractOp::create(builder_, location, parts[0], formatter, 0), {},
+      {}};
+  Digits digits{std::nullopt,
+                smn::ExtractOp::create(builder_, location, parts[1], formatter,
+                                       1)};
+  if (mlir::failed(writeValue(location, out, type, value, digits)))
+    return mlir::failure();
+  flush(location, out);
+  return mlir::success();
+}
+
+// print, eprint, write, format and panic. The format becomes C's, text as
+// it is and each `{}` what writeValue makes of its argument, and is written
+// to a C stream with fprintf: stdout for print, stderr for eprint and
+// panic, the Formatter's for write, and for format one that keeps its
+// text, which is the value. panic writes `file:line:col: panic: ` first and
+// a newline last, and ends the program: the block ends there, unreachable,
+// so no drop is put after it and no path through it joins the rest.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerFormat(FormatExprAST *ast) {
   auto location = loc(ast);
   auto *fp = props_.format(ast->id());
   if (!fp || !fp->format)
     return mlir::failure();
   using Kind = FormatExprAST::Kind;
-  bool panics = ast->kind == Kind::Panic;
-  WriteTo to{panics || ast->kind == Kind::EPrint, {}};
-  if (ast->kind == Kind::Write) {
+  auto pointer = viewOf(builder_.getI8Type());
+  FormatOutput out;
+  mlir::Value text;
+  switch (ast->kind) {
+  case Kind::Print:
+    out.stream = cStream(location, runtime::kStdout);
+    break;
+  case Kind::EPrint:
+  case Kind::Panic:
+    out.stream = cStream(location, runtime::kStderr);
+    break;
+  case Kind::Format:
+    text = callRuntime(location, runtime::kTextOpen, pointer, {});
+    out.stream = callRuntime(location, runtime::kTextStream, pointer, text);
+    break;
+  case Kind::Write: {
     auto formatter = lowerValue(ast->arguments.front().get());
     if (mlir::failed(formatter))
       return mlir::failure();
-    to.formatter = *formatter;
+    out.stream = smn::ExtractOp::create(builder_, location, pointer,
+                                        *formatter, 0);
+    break;
   }
-  // Text is printed as it is: a `%` in it isn't a directive.
-  auto verbatim = [](llvm::StringRef text) {
-    std::string result;
-    for (char c : text)
-      result += c == '%' ? std::string("%%") : std::string(1, c);
-    return result;
-  };
-  std::string format;
-  llvm::SmallVector<mlir::Value> args;
-  auto flush = [&] {
-    if (!format.empty())
-      write(location, to, format, args);
-    format.clear();
-    args.clear();
-  };
+  }
+  bool panics = ast->kind == Kind::Panic;
   if (auto range = mlir::dyn_cast<mlir::FileLineColRange>(location);
       range && panics)
-    format = verbatim(range.getFilename().getValue()) + ":" +
-             std::to_string(range.getStartLine()) + ":" +
-             std::to_string(range.getStartColumn() + 1) + ": ";
+    out.format = verbatim(range.getFilename().getValue()) + ":" +
+                 std::to_string(range.getStartLine()) + ":" +
+                 std::to_string(range.getStartColumn() + 1) + ": ";
   if (panics)
-    format += "panic: ";
-  size_t next = 0;
+    out.format += "panic: ";
+  size_t next = ast->format_index() + 1;
   for (auto &piece : fp->format->pieces) {
     if (!piece.placeholder) {
-      format += verbatim(piece.text);
+      out.format += verbatim(piece.text);
       continue;
     }
-    if (next >= fp->methods.size())
+    if (next >= ast->arguments.size())
       return mlir::failure();
-    auto *arg = ast->arguments[ast->format_index() + 1 + next].get();
-    auto &method = fp->methods[next++];
+    auto *arg = ast->arguments[next++].get();
     auto value = lowerValue(arg);
-    if (mlir::failed(value))
+    if (mlir::failed(value) ||
+        mlir::failed(writeValue(loc(arg), out, arg->get_type(), *value,
+                                Digits{piece.precision, {}})))
       return mlir::failure();
-    auto type = arg->get_type();
-    if (method.is<Reference::Builtin>()) {
-      auto directive = builtin_format_directive(type);
-      if (!directive)
-        return mlir::failure();
-      format += piece.precision
-                    ? "%." + std::to_string(*piece.precision) + "f"
-                    : std::string(*directive);
-      args.push_back(printable(loc(arg), type, *value));
-      continue;
-    }
-    auto *instance = method.as<Reference::Function>();
-    if (!instance)
-      return mlir::failure();
-    flush();
-    smn::CallOp::create(
-        builder_, loc(arg), mlir::TypeRange{}, props_.symbol(instance->name),
-        mlir::ValueRange{*value, formatterFor(loc(arg), to, piece.precision)},
-        "{}");
   }
   if (panics) {
-    if (mlir::failed(fail(location, format + "\n", args)))
-      return mlir::failure();
+    out.format += "\n";
+    flush(location, out);
+    smn::CallOp::create(
+        builder_, location, mlir::TypeRange{}, runtime::kExit,
+        mlir::ValueRange{intConstant(location, builder_.getI32Type(), 1)});
+    mlir::ub::UnreachableOp::create(builder_, location);
     return mlir::Value();
   }
-  flush();
-  return mlir::Value();
+  flush(location, out);
+  if (ast->kind != Kind::Format)
+    return mlir::Value();
+  // The text: how many chars, then the chars, the program's to drop.
+  auto result = types_.mirType(ast->get_type());
+  if (!result)
+    return mlir::failure();
+  auto length = callRuntime(location, runtime::kTextFinish,
+                            builder_.getI64Type(), text);
+  auto chars = callRuntime(
+      location, runtime::kTextTake,
+      mlir::cast<smn::TupleType>(*result).getElements()[0], text);
+  return smn::AggregateOp::create(builder_, location, *result,
+                                  mlir::ValueRange{chars, length})
+      .getResult();
 }
 
 /// Which field of its struct or tuple `access` reads.

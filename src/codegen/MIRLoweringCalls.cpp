@@ -197,7 +197,9 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
   if (key.is_of_prelude_class(kFormatClass)) {
     if (args.size() != 2)
       return mlir::failure();
-    writeBuiltin(location, args[1], key.type_args[0], args[0]);
+    if (mlir::failed(
+            writeBuiltin(location, args[1], key.type_args[0], args[0])))
+      return mlir::failure();
     return mlir::Value();
   }
   auto op = operator_of_class(key.name.get_name());

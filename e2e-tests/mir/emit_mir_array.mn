@@ -1,13 +1,14 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
 // An array is !sammine.array, a literal sammine.aggregate of its elements.
-// a[i] checks i first, as code of its own: out of bounds, dprintf reports it
+// a[i] checks i first, as code of its own: out of bounds, fprintf reports it
 // and exit(1) ends the program; in bounds, sammine.element reads it. len is
 // a constant. A function returns an array by value.
 // CHECK-LABEL: func.func private @"::third"(
 // CHECK-SAME: sammine.mir
 // CHECK: arith.extsi %arg1 : i32 to i64
 // CHECK: cf.cond_br %{{[0-9]+}}, ^bb1, ^bb2
-// CHECK: sammine.call @dprintf(
+// CHECK: sammine.call @sammine_stderr(
+// CHECK: sammine.call @fprintf(
 // CHECK: sammine.call @exit(
 // CHECK-NEXT: ub.unreachable
 // CHECK: sammine.element %arg0[%arg1] : <3, i64>, i32 -> i64

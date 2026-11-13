@@ -774,13 +774,14 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
   return {std::make_unique<NodeT>(kw_tok, std::move(operand)), SUCCESS};
 }
 
-// print, eprint, write or panic, then its arguments: a format and what it
+// print, eprint, write, format or panic, then its arguments: a format and what it
 // formats, after the Formatter for write.
 auto Parser::ParseFormatExpr() -> p<ExprAST> {
   static constexpr std::pair<TokenType, FormatExprAST::Kind> kKeywords[] = {
       {TokPrint, FormatExprAST::Kind::Print},
       {TokEPrint, FormatExprAST::Kind::EPrint},
       {TokWrite, FormatExprAST::Kind::Write},
+      {TokFormat, FormatExprAST::Kind::Format},
       {TokPanic, FormatExprAST::Kind::Panic},
   };
   std::shared_ptr<Token> kw_tok;

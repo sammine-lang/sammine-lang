@@ -73,11 +73,9 @@ struct CastProps {
 };
 
 struct FormatProps {
-  /// The format, as the type checker read it.
+  /// The format, as the type checker read it. Each argument it prints has
+  /// an instance of Format for its type, which the checker made sure of.
   std::optional<sammine_util::FormatString> format;
-  /// For each argument the format prints, in order, the method of the
-  /// Format<T> instance that prints it.
-  std::vector<Reference> methods;
 };
 
 struct TypeAliasProps {

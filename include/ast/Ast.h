@@ -836,13 +836,15 @@ public:
 /// as the Format instance of its type writes it (util/FormatString.h).
 /// `print("format", args...)` writes to stdout, `eprint` to stderr, and
 /// `write(f, "format", args...)` to the Formatter `f`, as an instance does
-/// with the one it is given: all three are (). `panic("format", args...)`
+/// with the one it is given: all three are (). `format("format", args...)`
+/// writes nowhere and gives the text, the chars in a buffer of its own and
+/// how many: ('buf<char>, i64). `panic("format", args...)`
 /// writes where it is and the message to stderr and ends the program with
 /// status 1; nothing is dropped, and it gives no value, so it fits where
 /// any is expected: its type is Never.
 class FormatExprAST : public ExprAST {
 public:
-  enum class Kind { Print, EPrint, Write, Panic };
+  enum class Kind { Print, EPrint, Write, Format, Panic };
   Kind kind;
   std::vector<std::unique_ptr<ExprAST>> arguments;
   explicit FormatExprAST(Kind kind_, std::shared_ptr<Token> tok,
@@ -862,6 +864,8 @@ public:
       return "eprint";
     case Kind::Write:
       return "write";
+    case Kind::Format:
+      return "format";
     case Kind::Panic:
       return "panic";
     }

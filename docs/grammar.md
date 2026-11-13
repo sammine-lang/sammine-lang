@@ -149,6 +149,7 @@ Operator precedence (low to high). `as` binds tighter than all of these:
   | `len` `(` **expr** `)`                    *array length*
   | (`print` | `eprint`) `(` STRING (`,` **expr**)* `)`  *formatted output, to stdout or stderr*
   | `write` `(` **expr** `,` STRING (`,` **expr**)* `)`  *formatted output, to a Formatter*
+  | `format` `(` STRING (`,` **expr**)* `)`   *the text, not written anywhere*
   | `panic` `(` STRING (`,` **expr**)* `)`    *end the program*
 
 **field_init** ::= ID `:` **expr**

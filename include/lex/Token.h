@@ -79,6 +79,7 @@ enum TokenType {
   TokPrint,     // print
   TokEPrint,    // eprint
   TokWrite,     // write
+  TokFormat,    // format
   TokArrow,     // ->
   TokLet,       // let
   TokReuse,     // reuse
@@ -183,6 +184,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokPrint, "print"},
     {TokEPrint, "eprint"},
     {TokWrite, "write"},
+    {TokFormat, "format"},
     {TokReuse, "reuse"},
     {TokExport, "export"},
     {TokImport, "import"},

@@ -176,25 +176,32 @@ private:
   mlir::FailureOr<mlir::Value> lowerFormat(AST::FormatExprAST *ast);
   /// "true" or "false", as the bool `value` is.
   mlir::Value boolText(mlir::Location location, mlir::Value value);
-  /// What printf is given for `value`, of a `type` the compiler prints.
-  mlir::Value printable(mlir::Location location, const Type &type,
-                        mlir::Value value);
-  /// Where formatted text is written: stdout or stderr, known where print,
-  /// eprint or panic is written, or wherever `formatter` says, for write.
-  struct WriteTo {
-    bool stderr_ = false;
-    mlir::Value formatter;
+  /// What a format gathers before it is written: the C stream it goes to,
+  /// C's format so far, and the arguments it takes.
+  struct FormatOutput {
+    mlir::Value stream;
+    std::string format;
+    llvm::SmallVector<mlir::Value> args;
   };
-  /// The Formatter a method is handed for a `{}` written to `to`, with the
-  /// placeholder's digits after the point.
-  mlir::Value formatterFor(mlir::Location location, const WriteTo &to,
-                           std::optional<unsigned> precision);
-  /// Writes C's `format` with `args` to `to`.
-  void write(mlir::Location location, const WriteTo &to,
-             llvm::StringRef format, mlir::ValueRange args);
+  /// A float's digits after the point: what a placeholder said, or what a
+  /// Formatter hands on, a value known when the program runs.
+  struct Digits {
+    std::optional<unsigned> said;
+    mlir::Value handedOn;
+  };
+  mlir::Value callRuntime(mlir::Location location, llvm::StringRef name,
+                          mlir::Type result, mlir::ValueRange args);
+  mlir::Value cStream(mlir::Location location, llvm::StringRef name);
+  void flush(mlir::Location location, FormatOutput &out);
+  mlir::Value digitsValue(mlir::Location location, const Digits &digits);
+  /// Writes `value`, of `type`, into `out`, as its Format instance does.
+  mlir::LogicalResult writeValue(mlir::Location location, FormatOutput &out,
+                                 const Type &type, mlir::Value value,
+                                 const Digits &digits);
   /// Format<T>(value, formatter), of a `type` the compiler prints.
-  void writeBuiltin(mlir::Location location, mlir::Value formatter,
-                    const Type &type, mlir::Value value);
+  mlir::LogicalResult writeBuiltin(mlir::Location location,
+                                   mlir::Value formatter, const Type &type,
+                                   mlir::Value value);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerDrop(AST::DropExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

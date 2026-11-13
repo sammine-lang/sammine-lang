@@ -156,6 +156,22 @@ inline std::optional<std::string_view> builtin_format_directive(const Type &t) {
   }
 }
 
+/// The types a value of `t` prints part by part, each through its own
+/// instance of Format, for the types the compiler prints so: a tuple's
+/// elements, between parentheses, and an array's, between brackets. None
+/// for any other type.
+inline std::optional<std::vector<Type>> format_parts(const Type &t) {
+  if (auto *tuple = std::get_if<TupleType>(&t.type_data)) {
+    std::vector<Type> parts;
+    for (size_t i = 0; i < tuple->size(); ++i)
+      parts.push_back(tuple->get_element(i));
+    return parts;
+  }
+  if (auto *array = std::get_if<ArrayType>(&t.type_data))
+    return std::vector<Type>{array->get_element()};
+  return std::nullopt;
+}
+
 /// True if the compiler provides the instance `key`.
 inline bool is_builtin_instance(const MonomorphizedKey &key) {
   // Only the prelude's classes have them: a module's own Add is its own.
@@ -165,8 +181,10 @@ inline bool is_builtin_instance(const MonomorphizedKey &key) {
     return key.type_args.size() == 2 &&
            is_builtin_conversion(key.type_args[0], key.type_args[1]);
   if (key.is_of_prelude_class(kFormatClass))
+    // A tuple's and an array's too, which need their parts' (has_instance).
     return key.type_args.size() == 1 &&
-           builtin_format_directive(key.type_args[0]).has_value();
+           (builtin_format_directive(key.type_args[0]).has_value() ||
+            format_parts(key.type_args[0]).has_value());
   auto op = operator_of_class(key.name.get_name());
   if (!op || key.type_args.size() != 1)
     return false;

@@ -28,6 +28,14 @@ export let delete(s: String) -> unit {
   drop(s)
 }
 
+// The String of the text format() gives: its chars, in a buffer of their
+// own with a terminator after them, and how many.
+// let s = str::from(format("{} of {}", done, all));
+export let from(text: ('buf<char>, i64)) -> String {
+  let (data, n) = text;
+  String { data: data, length: n, cap: n }
+}
+
 // How many characters s holds, its terminator not counted.
 export let length(s: ptr<String>) -> i64 { (*s).length }
 
@@ -115,12 +123,12 @@ export let unsafe compare(a: ptr<String>, b: ptr<String>) -> i32 {
 // The chars `chars` views, as text. A String keeps a terminator after its
 // last char, as new, push and append do, and the text is read while the
 // String is.
-let unsafe text(chars: ptr<char>) -> string { chars as string }
+let unsafe text_of(chars: ptr<char>) -> string { chars as string }
 
 // A String prints through a view, print("{}", &s): printing only reads it.
 export instance Format<ptr<String>> {
   let Format(s: ptr<String>, f: Formatter) -> unit {
-    write(f, "{}", text((*s).data))
+    write(f, "{}", text_of((*s).data))
   }
 }
 

@@ -33,8 +33,13 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     return mlir::IntegerType::get(ctx_, 1);
   case TypeKind::Char:
     return mlir::IntegerType::get(ctx_, 8);
-  case TypeKind::Formatter: // where and how, in one word (FormatterBits)
-    return mlir::IntegerType::get(ctx_, 64);
+  case TypeKind::Formatter:
+    // The C stream it writes to, and a float's digits after the point, or
+    // fewer than none where the placeholder said none.
+    return smn::TupleType::get(
+        ctx_, {smn::PtrType::get(ctx_, mlir::IntegerType::get(ctx_, 8),
+                                 smn::Ownership::View),
+               mlir::IntegerType::get(ctx_, 32)});
   case TypeKind::String: // a view of its chars
     return smn::PtrType::get(ctx_, mlir::IntegerType::get(ctx_, 8),
                              smn::Ownership::View);

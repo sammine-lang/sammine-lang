@@ -1,7 +1,7 @@
 // RUN: %sammine --file %full %O --emit llvm-opt 2>&1 | %check %full
 // Immutable array with constant elements should be fully constant-folded.
 // main should have no alloca — LLVM folds the array + sum into a single constant.
-// std::printf is C's printf, called by its C name.
+// print writes with C's fprintf, to the stream the runtime gives.
 
 import std;
 
@@ -17,5 +17,5 @@ let main() -> i32 {
 
 // CHECK:      define noundef i32 @main() local_unnamed_addr
 // CHECK-NOT:  alloca
-// CHECK:      @printf(ptr nonnull {{.*}}@{{(.mir)?}}.str.{{[0-9]+}}, i32 60)
+// CHECK:      @fprintf(ptr {{.*}}, ptr nonnull {{.*}}@{{(.mir)?}}.str.{{[0-9]+}}, i32 60)
 // CHECK:      ret i32 0
