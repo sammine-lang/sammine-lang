@@ -28,13 +28,26 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFree(FreeExprAST *free) {
 
 // The place `*p` is, for `p` a pointer MIR has a type for.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerDerefPlace(DerefExprAST *deref) {
-  if (!types_.mirType(deref->operand->get_type()))
+  return lowerPointee(deref->operand.get(), loc(deref));
+}
+
+mlir::FailureOr<mlir::Value>
+MIRLowering::lowerPointee(ExprAST *pointer, mlir::Location location) {
+  if (!types_.mirType(pointer->get_type()))
     return mlir::failure();
-  auto ptr = lowerValue(deref->operand.get());
+  // A pointer held in a place stays there: reaching what it points at only
+  // reads it, as `**pp` reads `*pp`.
+  if (hasPlace(pointer)) {
+    auto place = lowerPlace(pointer);
+    if (mlir::failed(place))
+      return mlir::failure();
+    return smn::ThroughOp::create(builder_, location, *place).getResult();
+  }
+  auto ptr = lowerValue(pointer);
   if (mlir::failed(ptr))
     return mlir::failure();
   auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
-  return smn::DerefOp::create(builder_, loc(deref), placeOf(pointee), *ptr)
+  return smn::DerefOp::create(builder_, location, placeOf(pointee), *ptr)
       .getResult();
 }
 
@@ -128,14 +141,13 @@ mlir::FailureOr<mlir::Value>
 MIRLowering::lowerPtrElemPlace(IndexExprAST *index) {
   if (index->array_expr->get_type().type_kind != TypeKind::Pointer)
     return mlir::failure();
-  auto ptr = lowerValue(index->array_expr.get());
-  if (mlir::failed(ptr))
+  auto base = lowerPointee(index->array_expr.get(), loc(index));
+  if (mlir::failed(base))
     return mlir::failure();
   auto offset = lowerValue(index->index_expr.get());
   if (mlir::failed(offset))
     return mlir::failure();
-  auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
-  return smn::PtrElemOp::create(builder_, loc(index), placeOf(pointee), *ptr,
+  return smn::PtrElemOp::create(builder_, loc(index), base->getType(), *base,
                                 *offset)
       .getResult();
 }

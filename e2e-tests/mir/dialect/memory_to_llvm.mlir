@@ -45,7 +45,19 @@ func.func @lend(%p: !sammine.ptr<i32, owned>) -> i32 {
 // CHECK-NEXT: %0 = llvm.getelementptr inbounds %arg0[%arg1] : (!llvm.ptr, i64) -> !llvm.ptr, i32
 // CHECK-NEXT: %1 = llvm.load %0 : !llvm.ptr -> i32
 func.func @elem(%p: !sammine.ptr<i32, view>, %i: i64) -> i32 {
-  %place = sammine.ptr_elem %p[%i] : !sammine.ptr<i32, view>, i64
+  %pointee = sammine.deref %p : !sammine.ptr<i32, view>
+  %place = sammine.ptr_elem %pointee[%i] : !sammine.place<i32>, i64
+  %v = sammine.copy %place : !sammine.place<i32>
+  return %v : i32
+}
+
+// What a pointer held in a place points at: the pointer, loaded.
+// CHECK-LABEL: func.func @through(%arg0: !llvm.ptr) -> i32
+// CHECK-NEXT: %0 = llvm.load %arg0 : !llvm.ptr -> !llvm.ptr
+// CHECK-NEXT: %1 = llvm.load %0 : !llvm.ptr -> i32
+func.func @through(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, view>) -> i32 {
+  %held = sammine.deref %pp : !sammine.ptr<!sammine.ptr<i32, owned>, view>
+  %place = sammine.through %held : !sammine.place<!sammine.ptr<i32, owned>> -> !sammine.place<i32>
   %v = sammine.copy %place : !sammine.place<i32>
   return %v : i32
 }

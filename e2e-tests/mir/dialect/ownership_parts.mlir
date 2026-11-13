@@ -158,3 +158,24 @@ func.func @lend_and_move(%n: i32) attributes {sammine.mir} {
   sammine.call @both(%view, %p) : (!sammine.ptr<i32, view>, !sammine.ptr<i32, owned>) -> ()
   return
 }
+
+// -----
+
+// `**pp = v`: through the pointer *pp holds, which stays there.
+func.func @through_held_pointer(%n: i32) attributes {sammine.mir} {
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  %1 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  %held = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  sammine.store %1, %held : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>>
+  %2 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %again = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  %inner = sammine.through %again : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>> -> <!sammine.ptr<i32, owned>>
+  // expected-error @+1 {{Linear variable '**pp' must be consumed before scope exit (use free() to deallocate)}}
+  sammine.store %2, %inner : <!sammine.ptr<i32, owned>>
+  %last = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  %taken = sammine.move %last : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>>
+  sammine.free %taken : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  sammine.free %pp : !sammine.ptr<!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
+  return
+}

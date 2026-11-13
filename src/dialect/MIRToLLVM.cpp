@@ -194,6 +194,18 @@ struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
   }
 };
 
+// The place a pointer held in a place points at: the pointer, loaded.
+struct ThroughLowering : public mlir::OpConversionPattern<smn::ThroughOp> {
+  using OpConversionPattern::OpConversionPattern;
+  mlir::LogicalResult
+  matchAndRewrite(smn::ThroughOp op, OpAdaptor adaptor,
+                  mlir::ConversionPatternRewriter &rewriter) const override {
+    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(
+        op, llvmPtr(op.getContext()), adaptor.getPlace());
+    return mlir::success();
+  }
+};
+
 // A binding is the value it names.
 struct LetLowering : public mlir::OpConversionPattern<smn::LetOp> {
   using OpConversionPattern::OpConversionPattern;
@@ -211,12 +223,12 @@ struct PtrElemLowering : public mlir::OpConversionPattern<smn::PtrElemOp> {
   mlir::LogicalResult
   matchAndRewrite(smn::PtrElemOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    auto element = getTypeConverter()->convertType(
-        mlir::cast<smn::PtrType>(op.getPtr().getType()).getPointee());
+    auto element =
+        getTypeConverter()->convertType(op.getBase().getType().getValueType());
     if (!element)
       return mlir::failure();
     rewriter.replaceOpWithNewOp<mlir::LLVM::GEPOp>(
-        op, llvmPtr(op.getContext()), element, adaptor.getPtr(),
+        op, llvmPtr(op.getContext()), element, adaptor.getBase(),
         llvm::ArrayRef<mlir::LLVM::GEPArg>{adaptor.getIndex()},
         mlir::LLVM::GEPNoWrapFlags::inbounds);
     return mlir::success();
@@ -776,7 +788,7 @@ struct MIRToLLVMPass
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
         patterns, converter);
     patterns.add<
-        AllocLowering, FreeLowering, LetLowering,
+        AllocLowering, FreeLowering, LetLowering, ThroughLowering,
         SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
         SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
         ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,

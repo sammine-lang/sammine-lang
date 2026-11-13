@@ -1,14 +1,16 @@
 // RUN: %sammine --file %full --emit mlir | %check %full
-// p[i] of a pointer, in an unsafe function, is the place sammine.ptr_elem:
+// p[i] of a pointer, in an unsafe function, is the place sammine.ptr_elem,
+// i elements past *p:
 // read with a copy, written with a store, as *p is.
 // CHECK-LABEL: func.func private @fill(
 // CHECK-SAME: sammine.mir
 // CHECK: %0 = sammine.let "xs" %arg0 : !sammine.ptr<i64, owned>
-// CHECK-NEXT: sammine.ptr_elem %0[%arg1] : <i64, owned>, i64
+// CHECK-NEXT: %1 = sammine.deref %0 : <i64, owned>
+// CHECK-NEXT: sammine.ptr_elem %1[%arg1] : <i64>, i64
 // CHECK-NEXT: sammine.store
 // CHECK-LABEL: func.func private @second(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.ptr_elem %arg0[%{{.*}}] : <f64, view>, i32
+// CHECK: sammine.ptr_elem %0[%{{.*}}] : <f64>, i32
 // CHECK-NEXT: sammine.copy
 let unsafe fill(xs: 'ptr<i64>, i: i64, v: i64) -> 'ptr<i64> { xs[i] = v; xs }
 let unsafe second(xs: ptr<f64>) -> f64 { xs[1] }

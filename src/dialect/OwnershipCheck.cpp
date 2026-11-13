@@ -267,34 +267,14 @@ mlir::Location definedAt(mlir::Value value) {
   return mlir::cast<mlir::BlockArgument>(value).getLoc();
 }
 
-/// Whether every use of `value` only looks at it: dereferences it, indexes
-/// past it, takes its address.
-bool onlyLookedAt(mlir::Value value) {
-  return !value.use_empty() &&
-         llvm::all_of(value.getUsers(), [](mlir::Operation *user) {
-           return mlir::isa<smn::DerefOp, smn::PtrElemOp, smn::AddressOp>(user);
-         });
-}
-
 /// The path a value or place names: a value that owns memory, a part of
 /// one, a slot, a part of a place. Nullopt for one the check doesn't
 /// follow: owning nothing, or behind a pointer that doesn't own.
 std::optional<Path> pathOf(mlir::Value value) {
   auto *op = value.getDefiningOp();
-  if (auto move = mlir::dyn_cast_if_present<smn::MoveOp>(op)) {
-    auto place = pathOf(move.getPlace());
-    // What is moved out of a place the function doesn't own, behind a view
-    // or past a pointer, is read where it lives: its owner is elsewhere.
-    if (!place)
-      return std::nullopt;
-    // So is one only looked at, as `**pp` reads `*pp` to reach what it
-    // points at: it names the place.
-    if (onlyLookedAt(move.getResult()))
-      return place;
-  }
-  if (!op ||
-      !mlir::isa<smn::ExtractOp, smn::PayloadOp, smn::ElementOp, smn::FieldOp,
-                 smn::ElemOp, smn::DerefOp, smn::PtrElemOp, smn::LocalOp>(op)) {
+  if (!op || !mlir::isa<smn::ExtractOp, smn::PayloadOp, smn::ElementOp,
+                        smn::FieldOp, smn::ElemOp, smn::DerefOp, smn::ThroughOp,
+                        smn::PtrElemOp, smn::LocalOp>(op)) {
     if (!smn::ownsMemory(value.getType()))
       return std::nullopt;
     return Path{value, {}};
@@ -321,6 +301,11 @@ std::optional<Path> pathOf(mlir::Value value) {
   } else if (auto elem = mlir::dyn_cast<smn::ElemOp>(op)) {
     base = pathOf(elem.getBase());
     step = {Step::Element};
+  } else if (auto through = mlir::dyn_cast<smn::ThroughOp>(op)) {
+    if (!isOwnedPtr(through.getPlace().getType().getValueType()))
+      return std::nullopt;
+    base = pathOf(through.getPlace());
+    step = {Step::Pointee};
   } else {
     auto deref = mlir::cast<smn::DerefOp>(op);
     if (!isOwnedPtr(deref.getPtr().getType()))
@@ -625,6 +610,19 @@ private:
       checkLive(*path, op, verb);
   }
 
+  /// The verb for reaching a pointer's pointee `place`, by what reaches it:
+  /// indexing past it, a view of it, or anything else.
+  static llvm::StringRef reachedFor(mlir::Value place) {
+    if (!place.hasOneUse())
+      return "dereference";
+    auto *user = *place.getUsers().begin();
+    if (mlir::isa<smn::PtrElemOp>(user))
+      return "index";
+    if (mlir::isa<smn::LendOp, smn::AddrOp>(user))
+      return "use";
+    return "dereference";
+  }
+
   /// Why the value `result` is taken, by what uses it.
   static llvm::StringRef takenFor(mlir::Value result) {
     if (result.hasOneUse())
@@ -766,19 +764,11 @@ void Transfer::apply(mlir::Operation *op) {
     return;
   }
   if (auto move = mlir::dyn_cast<smn::MoveOp>(op)) {
+    // What is moved owns what it took: what the check follows of the place,
+    // or, from a place it doesn't follow, a value of its own.
     auto place = pathOf(move.getPlace());
     Path result{move.getResult(), {}};
-    if (!place)
-      return;
-    if (onlyLookedAt(move.getResult())) {
-      auto *user = *move.getResult().getUsers().begin();
-      checkLive(*place, op,
-                mlir::isa<smn::DerefOp>(user)     ? "dereference"
-                : mlir::isa<smn::PtrElemOp>(user) ? "index"
-                                                  : "use");
-      return;
-    }
-    if (!lookup(*place)) {
+    if (!place || !lookup(*place)) {
       fresh(owners_, result, loc);
       return;
     }
@@ -825,31 +815,31 @@ void Transfer::apply(mlir::Operation *op) {
     owner.reason = "matched in case";
     return;
   }
-  if (auto deref = mlir::dyn_cast<smn::DerefOp>(op)) {
-    if (isOwnedPtr(deref.getPtr().getType()))
-      look(deref.getPtr(), op, "dereference");
-    return;
-  }
-  if (auto ptrElem = mlir::dyn_cast<smn::PtrElemOp>(op)) {
-    if (isOwnedPtr(ptrElem.getPtr().getType()))
-      look(ptrElem.getPtr(), op, "index");
+  if (mlir::isa<smn::DerefOp, smn::ThroughOp>(op)) {
+    // Reaching what a pointer points at reads the pointer: a value, or one
+    // held in a place. The verb is what the place is reached for.
+    auto pointer = op->getOperand(0);
+    auto type = pointer.getType();
+    if (auto place = mlir::dyn_cast<smn::PlaceType>(type))
+      type = place.getValueType();
+    if (isOwnedPtr(type))
+      look(pointer, op, reachedFor(op->getResult(0)));
     return;
   }
   if (mlir::isa<smn::LendOp, smn::AddrOp>(op)) {
-    // A view of what an owned pointer points at is a view through the
-    // pointer: it may see it hold nothing, as the pointer's type allows.
-    auto verb = mlir::isa<smn::AddrOp>(op) ? "take the address of" : "use";
+    // A view of what a pointer points at: the deref or through that reached
+    // it read the pointer, and the view may see it hold nothing, as the
+    // pointer's type allows. A view of any other place reads the place.
     auto place = pathOf(op->getOperand(0));
     if (place && !place->steps.empty() &&
-        place->steps.back().kind == Step::Pointee) {
-      place->steps.pop_back();
-      if (lookup(*place))
-        checkLive(*place, op, verb);
+        place->steps.back().kind == Step::Pointee)
       return;
-    }
-    look(op->getOperand(0), op, verb);
+    look(op->getOperand(0), op,
+         mlir::isa<smn::AddrOp>(op) ? "take the address of" : "use");
     return;
   }
+  if (mlir::isa<smn::PtrElemOp>(op))
+    return;
   if (mlir::isa<smn::CopyOp, smn::AddressOp>(op)) {
     look(op->getOperand(0), op, "use");
     return;

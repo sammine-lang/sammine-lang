@@ -112,34 +112,38 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
 // argument a partial application binds, as long as what it points at.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerArgument(ExprAST *arg, mlir::Type param, ViewLasts view) {
-  auto value = lowerValue(arg);
-  if (mlir::failed(value))
-    return mlir::failure();
-  if (value->getType() == param)
+  auto type = types_.mirType(arg->get_type());
+  auto ptr = type ? mlir::dyn_cast<smn::PtrType>(*type) : smn::PtrType();
+  if (!ptr || !ptr.isOwned() || param != viewOf(ptr.getPointee())) {
+    auto value = lowerValue(arg);
+    if (mlir::failed(value) || value->getType() != param)
+      return mlir::failure();
     return *value;
-  auto ptr = mlir::dyn_cast<smn::PtrType>(value->getType());
-  if (!ptr || !ptr.isOwned() || param != viewOf(ptr.getPointee()))
+  }
+  auto place = lowerPointee(arg, loc(arg));
+  if (mlir::failed(place))
     return mlir::failure();
-  return lend(*value, loc(arg), view);
+  return lend(*place, loc(arg), view);
 }
 
 // An argument passed through a C function's `...`. Nothing declares its
 // type, and C only reads what sammine passes it (the type checker keeps
 // addresses out), so an owned pointer is lent, as the linear checker has it.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerVariadicArgument(ExprAST *arg) {
-  auto value = lowerValue(arg);
-  if (mlir::failed(value))
-    return mlir::failure();
-  if (smn::ownsMemory(value->getType()))
-    return lend(*value, loc(arg), ViewLasts::Call);
-  return *value;
+  auto type = types_.mirType(arg->get_type());
+  if (type && smn::ownsMemory(*type)) {
+    auto place = lowerPointee(arg, loc(arg));
+    if (mlir::failed(place))
+      return mlir::failure();
+    return lend(*place, loc(arg), ViewLasts::Call);
+  }
+  return lowerValue(arg);
 }
 
-mlir::Value MIRLowering::lend(mlir::Value owner, mlir::Location loc,
+mlir::Value MIRLowering::lend(mlir::Value place, mlir::Location loc,
                               ViewLasts view) {
-  auto pointee = mlir::cast<smn::PtrType>(owner.getType()).getPointee();
-  auto place = smn::DerefOp::create(builder_, loc, placeOf(pointee), owner);
-  auto type = viewOf(pointee);
+  auto type =
+      viewOf(mlir::cast<smn::PlaceType>(place.getType()).getValueType());
   if (view == ViewLasts::Place)
     return smn::AddrOp::create(builder_, loc, type, place).getResult();
   return smn::LendOp::create(builder_, loc, type, place).getResult();

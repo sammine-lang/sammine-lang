@@ -133,8 +133,12 @@ private:
                                              mlir::Type param,
                                              ViewLasts view = ViewLasts::Call);
   mlir::FailureOr<mlir::Value> lowerVariadicArgument(AST::ExprAST *arg);
-  /// A view of what the owned pointer `owner` points at.
-  mlir::Value lend(mlir::Value owner, mlir::Location loc, ViewLasts view);
+  /// A view of `place`, what an owned pointer points at.
+  mlir::Value lend(mlir::Value place, mlir::Location loc, ViewLasts view);
+  /// The place what `pointer` names points at: through a pointer value, or
+  /// through one held in a place, which stays there.
+  mlir::FailureOr<mlir::Value> lowerPointee(AST::ExprAST *pointer,
+                                            mlir::Location loc);
   mlir::FailureOr<mlir::Value>
   lowerAggregate(mlir::Location location, mlir::Type type,
                  llvm::ArrayRef<mlir::Type> fieldTypes,

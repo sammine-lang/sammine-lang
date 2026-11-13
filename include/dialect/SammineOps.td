@@ -143,17 +143,37 @@ def AddrOp : Sammine_Op<"addr", [Pure,
   let assemblyFormat = "$place attr-dict `:` type($place)";
 }
 
-def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
-    TypesMatchWith<"the place holds what the pointer points at",
-                   "ptr", "place", PlaceOfPointee>]> {
-  let summary = "the place `index` elements past where a pointer points, `p[i]`";
+def ThroughOp : Sammine_Op<"through", [Pure]> {
+  let summary = "the place a pointer held in a place points at, `**pp`";
   let description = [{
-    Only in an unsafe function: nothing checks the index, and the ownership
-    check doesn't follow what is stored there.
+    `*e` where e is itself a place holding a pointer, as `*pp` is: the
+    pointer stays where it is, as sammine.deref leaves a pointer value.
   }];
-  let arguments = (ins Sammine_PtrType:$ptr, AnySignlessInteger:$index);
+  let arguments = (ins Sammine_PlaceType:$place);
+  let results = (outs Sammine_PlaceType:$pointee);
+  let assemblyFormat =
+      "$place attr-dict `:` type($place) `->` type($pointee)";
+  let hasVerifier = 1;
+  let builders = [OpBuilder<(ins "::mlir::Value":$place), [{
+    auto ptr = ::llvm::cast<::sammine_lang::smn::PtrType>(
+        ::llvm::cast<::sammine_lang::smn::PlaceType>(place.getType())
+            .getValueType());
+    build($_builder, $_state, ::sammine_lang::smn::PlaceType::get(
+        $_builder.getContext(), ptr.getPointee()), place);
+  }]>];
+}
+
+def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
+    AllTypesMatch<["base", "place"]>]> {
+  let summary = "the place `index` elements past a place, `p[i]`";
+  let description = [{
+    `p[i]` is `index` elements past `*p`. Only in an unsafe function:
+    nothing checks the index, and the ownership check doesn't follow what is
+    stored there.
+  }];
+  let arguments = (ins Sammine_PlaceType:$base, AnySignlessInteger:$index);
   let results = (outs Sammine_PlaceType:$place);
-  let assemblyFormat = "$ptr `[` $index `]` attr-dict `:` type($ptr) `,` type($index)";
+  let assemblyFormat = "$base `[` $index `]` attr-dict `:` type($base) `,` type($index)";
 }
 
 def AddressOp : Sammine_Op<"address", [Pure]> {

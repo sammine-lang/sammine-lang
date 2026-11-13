@@ -190,6 +190,16 @@ std::string spelling(mlir::Type type) {
   return s;
 }
 
+mlir::LogicalResult ThroughOp::verify() {
+  auto ptr = mlir::dyn_cast<PtrType>(getPlace().getType().getValueType());
+  if (!ptr)
+    return emitOpError("goes through a place holding a pointer, not ")
+           << getPlace().getType();
+  if (getPointee().getType().getValueType() != ptr.getPointee())
+    return emitOpError("gives the place the held pointer points at");
+  return mlir::success();
+}
+
 mlir::LogicalResult FieldOp::verify() {
   auto base = getBase().getType().getValueType();
   auto fields = fieldTypes(base);
