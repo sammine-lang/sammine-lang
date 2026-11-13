@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 12 are done; step 13 is left.
+Status: done. Every owning type drops where it goes out of use.
 
 ## Goal
 
@@ -295,7 +295,9 @@ Each a commit, the suite passing after each.
     shadowed binding and a temporary are values like any, dropped where
     they go out of use, not at the statement's end.)
 13. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
-    becomes "owning" in the diagnostics that stay; docs. (Moving a part out
+    becomes "owning" in the diagnostics that stay; docs. (Done: the leak
+    reports stay, worded as what they find, for the check run alone; the
+    messages say "owned".) (Moving a part out
     of a value with a `Drop` instance is an error but in unsafe code, as
     E0509: such a value never leaks in part, so a leak report is left for
     the check run alone, or a bug in elaboration. Indexing a `'ptr` is an
