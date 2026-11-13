@@ -195,6 +195,21 @@ public:
                   "and drops whole");
   }
 
+  void movedOutOfDropValue(const Path &part, const Path &whole,
+                           mlir::Location at) override {
+    if (!first(part))
+      return;
+    llvm::StringRef type;
+    if (auto st = mlir::dyn_cast<smn::StructType>(typeOf(whole)))
+      type = st.getName();
+    else if (auto en = mlir::dyn_cast<smn::EnumType>(typeOf(whole)))
+      type = en.getName();
+    error(at, "Cannot move " + quoted(part) + " out of " + quoted(whole) +
+                  ": '" + type.str() +
+                  "' has a Drop instance, so it drops whole; take it apart "
+                  "in an unsafe function");
+  }
+
   void lentAndMoved(const Path &lent, mlir::Operation *call) override {
     error(call->getLoc(),
           "Cannot lend " + quoted(lent) + " and move it in the same call");

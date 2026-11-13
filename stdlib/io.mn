@@ -49,7 +49,7 @@ export let read_f64() -> f64 { sammine_io_read_f64() }
 export struct File { handle: 'ptr<char>, };
 
 export instance Drop<File> {
-  let Drop(f: File) -> unit { sammine_io_close(f.handle) }
+  let unsafe Drop(f: File) -> unit { sammine_io_close(f.handle) }
 }
 
 export let open(path: ptr<char>, mode: ptr<char>) -> File {
@@ -57,11 +57,11 @@ export let open(path: ptr<char>, mode: ptr<char>) -> File {
 }
 export let close(f: File) -> unit { drop(f) }
 // Returns the file back with the next line.
-export let file_read_line(f: File) -> (File, ReadResult) {
+export let unsafe file_read_line(f: File) -> (File, ReadResult) {
   let (handle, buf, n) = sammine_io_file_read_line(f.handle);
   (File { handle: handle }, to_read_result(buf, n))
 }
-export let file_write(f: File, content: ptr<char>, nbytes: i64) -> File {
+export let unsafe file_write(f: File, content: ptr<char>, nbytes: i64) -> File {
   File { handle: sammine_io_file_write(f.handle, content, nbytes) }
 }
 

@@ -148,6 +148,18 @@ int64_t payloadSize(llvm::ArrayRef<mlir::Type> fields) {
   return payloadOffsets(fields).back() + sizeOf(fields.back());
 }
 
+mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type) {
+  llvm::StringRef name;
+  if (auto st = mlir::dyn_cast<StructType>(type))
+    name = st.getName();
+  else if (auto en = mlir::dyn_cast<EnumType>(type))
+    name = en.getName();
+  else
+    return {};
+  return module.lookupSymbol<mlir::FunctionOpInterface>(
+      ("Drop<" + name + ">::Drop").str());
+}
+
 std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {
   if (auto st = mlir::dyn_cast<StructType>(type))
     return st.getFields();

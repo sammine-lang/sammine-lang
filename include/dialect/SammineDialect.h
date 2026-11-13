@@ -1,9 +1,11 @@
 #pragma once
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
+#include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/Dialect.h"
 #include "mlir/IR/OpDefinition.h"
 #include "mlir/IR/SymbolTable.h"
+#include "mlir/Interfaces/FunctionInterfaces.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
 #include "SammineDialect.h.inc"
@@ -35,6 +37,14 @@ int64_t sizeOf(mlir::Type type);
 llvm::SmallVector<int64_t> payloadOffsets(llvm::ArrayRef<mlir::Type> fields);
 /// The bytes a payload of `fields` takes.
 int64_t payloadSize(llvm::ArrayRef<mlir::Type> fields);
+
+/// Marks a function the program declared `let unsafe`: what MIR checks of
+/// the invariants unsafe code keeps, it checks only elsewhere.
+constexpr llvm::StringLiteral kUnsafeAttr = "sammine.unsafe";
+
+/// The function that drops a value of `type`, its Drop instance's method
+/// (`Drop<T>::Drop`) in `module`, or null if it has none.
+mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type);
 
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.

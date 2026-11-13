@@ -105,6 +105,8 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   }
 
   (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
+  if (ast->Prototype->is_unsafe)
+    (*func)->setAttr(smn::kUnsafeAttr, builder_.getUnitAttr());
   decl->getBlock()->getOperations().insert(mlir::Block::iterator(decl),
                                            func.release());
   decl.erase();

@@ -17,10 +17,6 @@
 
 namespace sammine_lang {
 
-/// The function that drops a value of `type`, its Drop instance's method
-/// (`Drop<T>::Drop`) in `module`, or null if it has none.
-mlir::func::FuncOp dropFunction(mlir::ModuleOp module, mlir::Type type);
-
 /// Each drop of a struct, tuple or enum becomes a call of its type's Drop
 /// instance, or, with none, the drops of its parts: a struct's or tuple's
 /// fields, an enum's payload, the variant its tag picks, an array's

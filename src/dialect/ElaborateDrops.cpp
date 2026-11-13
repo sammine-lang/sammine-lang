@@ -15,18 +15,6 @@
 
 namespace sammine_lang {
 
-mlir::func::FuncOp dropFunction(mlir::ModuleOp module, mlir::Type type) {
-  llvm::StringRef name;
-  if (auto st = mlir::dyn_cast<smn::StructType>(type))
-    name = st.getName();
-  else if (auto en = mlir::dyn_cast<smn::EnumType>(type))
-    name = en.getName();
-  else
-    return {};
-  return module.lookupSymbol<mlir::func::FuncOp>(
-      ("Drop<" + name + ">::Drop").str());
-}
-
 void expandDrops(mlir::ModuleOp module) {
   llvm::SmallVector<smn::DropOp> work;
   module.walk([&](smn::DropOp drop) { work.push_back(drop); });
@@ -36,7 +24,7 @@ void expandDrops(mlir::ModuleOp module) {
     auto type = value.getType();
     auto loc = drop.getLoc();
     mlir::OpBuilder builder(drop);
-    if (auto fn = dropFunction(module, type)) {
+    if (auto fn = smn::dropFunction(module, type)) {
       smn::CallOp::create(builder, loc, mlir::TypeRange{}, fn.getName(),
                           value);
     } else if (auto fields = smn::fieldTypes(type)) {
@@ -240,7 +228,8 @@ private:
       out.push_back(path);
       return;
     }
-    if (auto drop = dropFunction(module_, type); drop && drop != func_) {
+    if (auto drop = smn::dropFunction(module_, type);
+        drop && drop.getOperation() != func_.getOperation()) {
       if (allLive(owners, path))
         out.push_back(path);
       return;

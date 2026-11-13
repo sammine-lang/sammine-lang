@@ -21,7 +21,7 @@ export let new(src: ptr<char>) -> String {
 }
 
 export instance Drop<String> {
-  let Drop(s: String) -> unit { drop(s.data) }
+  let unsafe Drop(s: String) -> unit { drop(s.data) }
 }
 
 export let delete(s: String) -> unit {

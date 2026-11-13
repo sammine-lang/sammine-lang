@@ -860,12 +860,14 @@ drop(p);             // Error: Cannot use linear variable 'p' — it was already
 ```
 
 A type says what its end does with a `Drop` instance, which takes the value
-and must use up what it owns; nothing else is dropped after it. `Vec<T>`'s
+and must use up what it owns; nothing else is dropped after it. Such a
+value drops whole: moving a field out of one is an error, but in an
+unsafe function, as the type's own code does. `Vec<T>`'s
 drops each value it holds, then its buffer; `io::File`'s closes the file:
 
 ```sammine
 instance Drop<File> {
-  let Drop(f: File) -> unit { sammine_io_close(f.handle) }
+  let unsafe Drop(f: File) -> unit { sammine_io_close(f.handle) }
 }
 ```
 

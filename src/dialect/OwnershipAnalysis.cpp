@@ -235,6 +235,27 @@ private:
       observer_->movedOutOfArray(path, at);
   }
 
+  /// Tells the observer if `op` takes `path`, read at `at`, out of a value
+  /// whose type has a Drop instance, in a function not unsafe. A drop the
+  /// compiler inserted takes the parts of one in its own Drop.
+  void checkNotFromDropValue(const Path &path, mlir::Operation *op,
+                             mlir::Location at) {
+    if (!observer_ || path.steps.empty() || isImplicitDrop(op))
+      return;
+    auto func = op->getParentOfType<mlir::func::FuncOp>();
+    if (func && func->hasAttr(smn::kUnsafeAttr))
+      return;
+    auto module = op->getParentOfType<mlir::ModuleOp>();
+    Path whole{path.root, {}};
+    for (auto step : path.steps) {
+      if (smn::dropFunction(module, typeOf(whole))) {
+        observer_->movedOutOfDropValue(path, whole, at);
+        return;
+      }
+      whole = whole.child(step);
+    }
+  }
+
   /// Moves the whole of what `value` names, for `op`.
   void take(mlir::Value value, mlir::Operation *op) {
     auto path = pathOf(value);
@@ -242,7 +263,9 @@ private:
       return;
     // Where the element was read, as `a[i]`, not where it is taken.
     auto *read = value.getDefiningOp();
-    checkNotFromArray(*path, read ? read->getLoc() : op->getLoc());
+    auto readAt = read ? read->getLoc() : op->getLoc();
+    checkNotFromArray(*path, readAt);
+    checkNotFromDropValue(*path, op, readAt);
     if (checkLive(*path, op, /*takes=*/true) && observer_)
       // Its parts must all be there; what an owned pointer points at goes
       // with it whatever it holds.
@@ -365,6 +388,7 @@ void Transfer::apply(mlir::Operation *op) {
     }
     Owners before = owners_;
     checkNotFromArray(*place, op->getLoc());
+    checkNotFromDropValue(*place, op, op->getLoc());
     checkLive(*place, op, /*takes=*/true);
     handOn(before, owners_, place, result, std::nullopt);
     markMoved(*place, op);
