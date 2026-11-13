@@ -1,5 +1,6 @@
-// A set of values that own nothing (the integers, char, bool: what the
-// prelude hashes): a map from each to true.
+// A set of values, which may own memory: any type with Hash and Equal. A
+// map from each to true: the set owns what is put in it, and a lookup only
+// looks at the value it is given.
 
 import map;
 
@@ -14,12 +15,12 @@ export let unsafe insert<T>(s: Set<T>, x: T) -> Set<T> {
 }
 
 // Whether x is in s.
-export let unsafe contains<T>(s: ptr<Set<T>>, x: T) -> bool {
+export let unsafe contains<T>(s: ptr<Set<T>>, x: ptr<T>) -> bool {
   map::contains<T, bool>(&(*s).items, x)
 }
 
 // s without x, and whether x was in it.
-export let unsafe remove<T>(s: Set<T>, x: T) -> (Set<T>, bool) {
+export let unsafe remove<T>(s: Set<T>, x: ptr<T>) -> (Set<T>, bool) {
   let (items, was) = map::remove<T, bool>(s.items, x);
   let found = case was { Some(_) => true, None => false };
   (Set<T> { items: items }, found)

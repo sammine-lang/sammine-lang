@@ -1,0 +1,52 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// CHECK:      2 Some(31) None true false
+// CHECK-NEXT: 2 Some(29) jan is still jan
+// CHECK-NEXT: 1 Some(29) None
+// CHECK-NEXT: 2 true false true
+// CHECK-NEXT: 3 5
+
+// A Map's keys may own memory, as a String does: the map owns the keys put
+// in it and drops them with itself. A lookup is lent the key it is given,
+// so the String looked up with is still the program's, and a key the map
+// has already is dropped when it is put in again. A Set is the same.
+// A value is lent to any parameter that takes a view of its type, so a
+// lookup is written with the value, a number's as a String's.
+
+import str;
+import map;
+import set;
+
+let size(s: ptr<str::String>) -> i64 { str::length(s) }
+
+let main() -> i32 {
+  let days = map::insert(map::insert(map::new<str::String, i32>(),
+                                     str::new("jan"), 31),
+                         str::new("feb"), 28);
+  let jan = str::new("jan");
+  print("{} {} {} {} {}\n", map::length(days), map::get(days, jan),
+        map::get(days, str::new("mar")), map::contains(days, jan),
+        map::contains(days, str::new("dec")));
+
+  // feb again: its value changes, and the second key is dropped.
+  let days = map::insert(days, str::new("feb"), 29);
+  print("{} {} {} is still {}\n", map::length(days),
+        map::get(days, str::new("feb")), jan, jan);
+
+  let (days, gone) = map::remove(days, jan);
+  print("{} {} {}\n", map::length(days), map::get(days, str::new("feb")),
+        map::get(days, jan));
+
+  let names = set::insert(set::insert(set::insert(set::new<str::String>(),
+                                                  str::new("ada")),
+                                      str::new("bob")),
+                          str::new("ada"));
+  let (names, was) = set::remove(names, str::new("zed"));
+  print("{} {} {} {}\n", set::length(names), set::contains(names, str::new("ada")),
+        was, set::contains(names, str::new("bob")));
+
+  // Lent to a function's view parameter the same way.
+  print("{} {}\n", size(jan), size(str::new("hello")));
+  0
+}

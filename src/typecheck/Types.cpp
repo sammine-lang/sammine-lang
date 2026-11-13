@@ -426,6 +426,16 @@ bool TypeMapOrdering::lendable_to_from(const Type &to,
          structurally_compatible(to, from);
 }
 
+std::optional<Type> TypeMapOrdering::viewed_by(const Type &to,
+                                               const Type &from) const {
+  if (to.type_kind != TypeKind::Pointer || to.is_linear_v())
+    return std::nullopt;
+  auto pointee = std::get<PointerType>(to.type_data).get_pointee();
+  if (!compatible_to_from(pointee, from))
+    return std::nullopt;
+  return pointee;
+}
+
 bool TypeMapOrdering::compatible_to_from(const Type &to,
                                          const Type &from) const {
   if (!qualifier_compatible(to, from))

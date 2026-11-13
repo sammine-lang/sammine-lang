@@ -47,9 +47,9 @@ struct CallProps {
   Reference callee;
   std::optional<Type> callee_func_type;
   bool is_partial = false;
-  /// For a typeclass's method called by name, the arguments it is lent: its
-  /// class takes a view there, `ptr<T>`, and the call gives the value, as
-  /// an operator's operands are. Empty if none is.
+  /// The arguments the callee is lent: it takes a view there, `ptr<T>`,
+  /// and the call gives a value of T, which stays the caller's. Empty if
+  /// none is.
   std::vector<bool> lent;
   bool lends(size_t argument) const {
     return argument < lent.size() && lent[argument];

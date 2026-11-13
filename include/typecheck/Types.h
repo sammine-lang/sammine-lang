@@ -759,6 +759,11 @@ struct TypeMapOrdering {
   /// The caller keeps ownership; the callee only reads through it. A string
   /// is lent to a ptr<char> the same way: a view of its chars.
   bool lendable_to_from(const Type &to, const Type &from) const;
+
+  /// Call arguments only: a value of `from` given where `to`, a view, is
+  /// taken is lent, a view of it for the call. The type the view is of, if
+  /// `from` is one; none if this is no such case.
+  std::optional<Type> viewed_by(const Type &to, const Type &from) const;
 };
 
 // --- sammine_util::QualifiedName, defined here, where Type is whole ---

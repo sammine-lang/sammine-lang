@@ -38,7 +38,7 @@ public:
   }
   void preorder_walk(CallExprAST *ast) override {
     auto *cp = props.call(ast->id());
-    if (!cp || !cp->callee.is<Reference::Function>())
+    if (!cp)
       return;
     for (auto [i, arg] : llvm::enumerate(ast->arguments))
       if (cp->lends(i))

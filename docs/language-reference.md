@@ -1180,9 +1180,24 @@ let main() -> i32 {
 }
 ```
 
-Lending only happens at a call: `let q: ptr<i32> = b;` is a type mismatch, and
-taking the address of owned memory (`&*b`, `&b[0]`) is an error, since the view
-could outlive a `drop`.
+Any value is lent the same way: given where a `ptr<T>` is taken, a `T` is
+lent, a view of it for the call, and stays the caller's. So a function that
+only looks at something takes a view of it, and is called with the thing
+itself, a binding's value or one made in place:
+
+```sammine
+let size(s: ptr<str::String>) -> i64 { str::length(s) }
+
+let name = str::new("ada");
+size(name);                  // name is lent, and still the caller's
+size(str::new("grace"));     // lent where it is made, then dropped
+map::get(days, name);        // both are lent
+```
+
+`&x` still makes a view to keep in a binding. Lending only happens at a call:
+`let q: ptr<i32> = b;` is a type mismatch, and taking the address of owned
+memory (`&*b`, `&b[0]`) or of a value no binding names (`&make()`) is an
+error, since the view could outlive what it views.
 
 ### Pointer Indexing
 
@@ -1524,11 +1539,12 @@ vec::delete<i32>(v3);
 ## 18. Map\<K, V\> and Set\<T\>
 
 `map::Map<K, V>` is a hash table from keys to values; `set::Set<T>` holds each
-value once. Keys and set values own nothing and need a `Hash` instance, as
-the integers, `char` and `bool` have (a key type without one is an error,
-"No instance of Hash<...>"), and `==`. Values may own memory. As with
-`Vec`, what changes a map takes it and gives it back; what reads one
-borrows it.
+value once. Keys and set values need a `Hash` instance, as the integers,
+`char`, `bool`, `string` and `str::String` have (a key type without one is an
+error, "No instance of Hash<...>"), and `==`. Keys and values may own memory:
+the map owns what is put in it, and drops it with itself. As with `Vec`, what
+changes a map takes it and gives it back; what reads one is lent it, and the
+key it looks up.
 
 ```sammine
 import std;
@@ -1548,13 +1564,13 @@ let main() -> i32 {
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `map::new<K, V>()` | `() -> Map<K, V>` | An empty map |
-| `map::insert<K, V>(m, k, v)` | `(Map<K, V>, K, V) -> Map<K, V>` | Map `k` to `v`, dropping a value `k` had |
-| `map::get<K, V>(&m, k)` | `(ptr<Map<K, V>>, K) -> Option<V>` | The value `k` maps to, or `None`. For a value type that owns nothing |
-| `map::contains<K, V>(&m, k)` | `(ptr<Map<K, V>>, K) -> bool` | Whether `k` maps to a value |
-| `map::remove<K, V>(m, k)` | `(Map<K, V>, K) -> (Map<K, V>, Option<V>)` | Take `k` out, handing its value back |
-| `map::length<K, V>(&m)` | `(ptr<Map<K, V>>) -> i64` | How many keys `m` maps |
-| `map::delete<K, V>(m)` | `(Map<K, V>) -> unit` | Drop the map and the values it holds |
-| `set::new<T>()`, `set::insert<T>(s, x)`, `set::contains<T>(&s, x)`, `set::remove<T>(s, x)`, `set::length<T>(&s)`, `set::delete<T>(s)` | | The same for a set; `remove` gives `(Set<T>, bool)`, whether `x` was in it |
+| `map::insert<K, V>(m, k, v)` | `(Map<K, V>, K, V) -> Map<K, V>` | Map `k` to `v`: the map takes both. If it maps `k` already, the value it had is dropped, and `k` too |
+| `map::get<K, V>(m, k)` | `(ptr<Map<K, V>>, ptr<K>) -> Option<V>` | The value `k` maps to, or `None`: `m` and `k` are lent. For a value type that owns nothing |
+| `map::contains<K, V>(m, k)` | `(ptr<Map<K, V>>, ptr<K>) -> bool` | Whether `k` maps to a value |
+| `map::remove<K, V>(m, k)` | `(Map<K, V>, ptr<K>) -> (Map<K, V>, Option<V>)` | Take `k` out, handing its value back and dropping the key the map held |
+| `map::length<K, V>(m)` | `(ptr<Map<K, V>>) -> i64` | How many keys `m` maps |
+| `map::delete<K, V>(m)` | `(Map<K, V>) -> unit` | Drop the map and the keys and values it holds |
+| `set::new<T>()`, `set::insert<T>(s, x)`, `set::contains<T>(s, x)`, `set::remove<T>(s, x)`, `set::length<T>(s)`, `set::delete<T>(s)` | | The same for a set; `remove` gives `(Set<T>, bool)`, whether `x` was in it |
 
 A map is open-addressed with linear probing: a key sits in the first free
 slot from where it hashes to. It keeps at most 3/4 of its slots used,

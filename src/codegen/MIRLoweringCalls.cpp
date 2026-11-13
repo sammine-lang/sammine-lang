@@ -76,9 +76,12 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerIndirectCall(CallExprAST *call) {
   if (!fn || fn.getSignature().getNumInputs() != call->arguments.size())
     return mlir::failure();
   llvm::SmallVector<mlir::Value, 4> args;
-  for (auto [arg, param] :
-       llvm::zip(call->arguments, fn.getSignature().getInputs())) {
-    auto value = lowerArgument(arg.get(), param);
+  auto *cp = props_.call(call->id());
+  for (auto [i, arg] : llvm::enumerate(call->arguments)) {
+    auto value = cp && cp->lends(i)
+                     ? lowerLent(arg.get())
+                     : lowerArgument(arg.get(), fn.getSignature().getInput(
+                           static_cast<unsigned>(i)));
     if (mlir::failed(value))
       return mlir::failure();
     args.push_back(*value);
@@ -98,8 +101,11 @@ MIRLowering::lowerPartialApplication(CallExprAST *call, llvm::StringRef name,
       call->arguments.size() > type.getNumInputs())
     return mlir::failure();
   llvm::SmallVector<mlir::Value, 4> bound;
-  for (auto [arg, param] : llvm::zip(call->arguments, type.getInputs())) {
-    auto value = lowerArgument(arg.get(), param);
+  auto *cp = props_.call(call->id());
+  for (auto [i, arg] : llvm::enumerate(call->arguments)) {
+    auto value = cp && cp->lends(i) ? lowerLent(arg.get())
+                                    : lowerArgument(arg.get(),
+                                                    type.getInput(static_cast<unsigned>(i)));
     if (mlir::failed(value))
       return mlir::failure();
     bound.push_back(*value);

@@ -282,6 +282,15 @@ bool BiTypeCheckerVisitor::check_call_argument(CallExprAST *ast, size_t i,
 
   bool is_lent = type_map_ordering.lendable_to_from(expected, arg_type);
   if (!is_lent && !type_map_ordering.compatible_to_from(expected, arg_type)) {
+    // A value is lent to a parameter that takes a view of its type: the
+    // callee looks at it for the call, and the caller keeps it.
+    if (auto viewed = type_map_ordering.viewed_by(expected, arg_type)) {
+      auto &lent = props_.call(ast->id()).lent;
+      lent.resize(ast->arguments.size(), false);
+      lent[i] = true;
+      resolve_literal_type(arg, *viewed);
+      return true;
+    }
     report_type_mismatch(arg->get_location(),
                          fmt::format("Argument {} to '{}': expected {}, got {}",
                                      i + 1, callee, expected.to_string(),
@@ -391,7 +400,16 @@ std::optional<size_t> BiTypeCheckerVisitor::infer_type_args(
       return true;
     auto arg_type = default_polymorphic_type(args[i]->get_type());
     resolve_literal_type(args[i].get(), arg_type);
-    return unify(patterns[i], arg_type, bindings);
+    if (auto direct = bindings; unify(patterns[i], arg_type, direct)) {
+      bindings = std::move(direct);
+      return true;
+    }
+    // A parameter that takes a view, given a value it is lent: ptr<K>
+    // takes K from the value.
+    auto &pattern = patterns[i];
+    return pattern.type_kind == TypeKind::Pointer && !pattern.is_linear_v() &&
+           unify(std::get<PointerType>(pattern.type_data).get_pointee(),
+                 arg_type, bindings);
   };
 
   for (size_t i = 0; i < count; i++) {
@@ -613,26 +631,6 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   // it to tell a lent argument from a moved one.
   auto instance_type = signature_of(expected, result);
   props_.call(ast->id()).callee_func_type = instance_type;
-  // Where the class takes a view of its type, `ptr<T>`, the method is lent
-  // the argument, as an operator's operand is: the call gives the value,
-  // and is checked against T. An argument that is a view already is given
-  // as it is.
-  auto &lent = props_.call(ast->id()).lent;
-  lent.assign(params.size(), false);
-  for (size_t i = 0; i < params.size(); ++i) {
-    auto &declared = params[i];
-    if (declared.type_kind != TypeKind::Pointer || declared.is_linear_v() ||
-        std::get<PointerType>(declared.type_data).get_pointee().type_kind !=
-            TypeKind::TypeParam)
-      continue;
-    auto given = ast->arguments[i]->accept_synthesis(this);
-    if (given.type_kind == TypeKind::Pointer &&
-        (type_map_ordering.compatible_to_from(expected[i], given) ||
-         type_map_ordering.lendable_to_from(expected[i], given)))
-      continue;
-    lent[i] = true;
-    expected[i] = std::get<PointerType>(expected[i].type_data).get_pointee();
-  }
   return ResolvedCall{resolved_name.mangled(), std::move(expected),
                       std::move(result), std::move(instance_type), false};
 }
