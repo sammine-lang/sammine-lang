@@ -1,0 +1,37 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 983
+
+// Project Euler Problem 26: Reciprocal cycles
+// 1/7 = 0.(142857) has a 6-digit recurring cycle. Find the d < 1000 for
+// which 1/d has the longest recurring cycle in its decimal fraction part.
+
+import std;
+import range;
+
+// n with every factor p divided out.
+let without(n: i64, p: i64) -> i64 {
+  if n % p == 0 { without(n / p, p) } else { n }
+}
+
+// The k at which r, standing for 10^k mod m, comes back around to 1.
+let order(m: i64, r: i64, k: i64) -> i64 {
+  if r == 1 { k } else { order(m, r * 10 % m, k + 1) }
+}
+
+// The length of 1/d's recurring cycle. Factors of 2 and 5 only delay the
+// cycle, as 10 divides them out; what is left, m, repeats every k digits
+// for the least k with 10^k = 1 mod m, and 1/m terminates when m is 1.
+let cycle_length(d: i64) -> i64 {
+  let m = without(without(d, 2), 5);
+  if m == 1 { 0 } else { order(m, 10 % m, 1) }
+}
+
+// Whichever of best and d has the longer cycle, best on a tie.
+let longer(best: i64, d: i64) -> i64 {
+  if cycle_length(d) > cycle_length(best) { d } else { best }
+}
+
+let main() -> i32 {
+  std::printf("%ld\n", range::fold(2, 1000, 2i64, longer));
+  0
+}
