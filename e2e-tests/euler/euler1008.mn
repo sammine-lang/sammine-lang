@@ -1,0 +1,115 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4 3
+// CHECK-NEXT: 282031486
+
+// Project Euler Problem 1008: Functional Inverse
+// The (N, M)-functional inverse of x^2 is the monic polynomial Q of degree
+// N + 1 with Q(n^2) = n mod M for 0 <= n <= N, its coefficients below M.
+// The (2, 7)-functional inverse is x^3 + 3x^2 + 4x. Find the coefficient
+// of x^10 in the (10^7, 10^9 + 7)-functional inverse.
+//
+// Q is W + L: W(x) = x (x - 1)(x - 4)...(x - N^2) vanishes at every point,
+// and L is the polynomial of degree at most N through them, as Lagrange
+// writes it: L(x) = sum over n of n W(x) / ((x - n^2) W'(n^2)). Only low
+// coefficients are wanted, and those of W(x) / (x - a), as W(a) = 0, are
+// those of -W(x) / a / (1 - x / a): [x^K] is -sum_{i<=K} w_i a^(i - K - 1).
+// W'(n^2) is (-1)^(N - n) (N - n)! (N + n)! / 2, so with
+//   S_i = sum_n (-1)^(N - n) n^(2i - 2K - 1) / ((N - n)! (N + n)!),
+// [x^K] Q is w_K - 2 sum_i w_i S_i. W's low coefficients w_i come from the
+// power sums p_j = sum_n n^(-2j) by Newton's identities. One pass over n
+// sums both; nothing of degree N is ever built.
+
+import std;
+import buffer;
+
+let mul(m: i64, a: i64, b: i64) -> i64 { a * b % m }
+
+// acc * b^e mod m, squaring b as e halves.
+let pow_acc(m: i64, b: i64, e: i64, acc: i64) -> i64 {
+  if e == 0 { acc }
+  else if e % 2 == 1 { pow_acc(m, b * b % m, e / 2, acc * b % m) }
+  else { pow_acc(m, b * b % m, e / 2, acc) }
+}
+
+let pow_mod(m: i64, b: i64, e: i64) -> i64 { pow_acc(m, b, e, 1) }
+
+// 1/a mod the prime m.
+let inv(m: i64, a: i64) -> i64 { pow_mod(m, a % m, m - 2) }
+
+// from * (from + 1) * ... * to, mod m.
+let product(m: i64, from: i64, to: i64, acc: i64) -> i64 {
+  if from > to { acc } else { product(m, from + 1, to, acc * from % m) }
+}
+
+// Adds term, term * ratio, term * ratio^2, ... into `count` cells of acc
+// from i on, stepping by step.
+let unsafe add_geometric(m: i64, acc: 'buf<i64>, i: i64, step: i64,
+                         term: i64, ratio: i64, count: i64) -> 'buf<i64> {
+  if count == 0 { acc } else {
+    acc[i] = (acc[i] + term) % m;
+    add_geometric(m, acc, i + step, step, term * ratio % m, ratio, count - 1)
+  }
+}
+
+// The pass over n from n to big_n. acc holds p_1..p_k at 1..k and
+// S_0..S_k at k + 1..2k + 1; r is 1 / ((N - n)! (N + n)!).
+let unsafe sweep(m: i64, big_n: i64, k: i64, acc: 'buf<i64>, n: i64,
+                 r: i64) -> 'buf<i64> {
+  if n > big_n { acc } else {
+    // One inverse gives both 1/n and 1/(N + n + 1).
+    let both = inv(m, n * (big_n + n + 1) % m);
+    let inv_n = both * ((big_n + n + 1) % m) % m;
+    let inv_next = both * n % m;
+    let inv_sq = inv_n * inv_n % m;
+    let with_p = add_geometric(m, acc, 1, 1, inv_sq, inv_sq, k);
+    // S_k's term is (-1)^(N - n) r / n; each S_i below gains 1/n^2.
+    let sign = if (big_n - n) % 2 == 0 { 1 } else { m - 1 };
+    let with_s = add_geometric(m, with_p, 2 * k + 1, 0 - 1,
+                               sign * r % m * inv_n % m, inv_sq, k + 1);
+    sweep(m, big_n, k, with_s, n + 1, r * (big_n - n) % m * inv_next % m)
+  }
+}
+
+// e_j for j <= k, the coefficients of prod (1 - x / n^2), from the power
+// sums by Newton's identities: j e_j = -sum_{i=1..j} p_i e_(j - i).
+let unsafe newton_sum(m: i64, acc: ptr<i64>, e: ptr<i64>, j: i64, i: i64) -> i64 {
+  if i > j { 0 } else { (acc[i] * e[j - i] + newton_sum(m, acc, e, j, i + 1)) % m }
+}
+
+let unsafe newton(m: i64, k: i64, acc: ptr<i64>, e: 'buf<i64>, j: i64) -> 'buf<i64> {
+  if j > k { e } else {
+    e[j] = (m - newton_sum(m, acc, e, j, 1)) % m * inv(m, j) % m;
+    newton(m, k, acc, e, j + 1)
+  }
+}
+
+// sum_{i=1..k} w_i S_i, w_i being c e_(i - 1); w_0 is 0, as W(0) = 0.
+let unsafe weighted(m: i64, k: i64, acc: ptr<i64>, e: ptr<i64>, c: i64, i: i64) -> i64 {
+  if i > k { 0 } else {
+    (c * e[i - 1] % m * acc[k + 1 + i] + weighted(m, k, acc, e, c, i + 1)) % m
+  }
+}
+
+// The coefficient of x^k in the (N, m)-functional inverse of x^2.
+let unsafe coefficient(big_n: i64, m: i64, k: i64) -> i64 {
+  let r = inv(m, product(m, 1, big_n - 1, 1) * product(m, 1, big_n + 1, 1) % m);
+  let acc = sweep(m, big_n, k, buffer::filled(2 * k + 2, 0i64), 1, r);
+  let e = buffer::filled(k + 1, 0i64);
+  e[0] = 1;
+  let e = newton(m, k, acc, e, 1);
+  // prod (x - n^2) is (-1)^N (N!)^2 prod (1 - x / n^2).
+  let factorial = product(m, 1, big_n, 1);
+  let square = factorial * factorial % m;
+  let c = if big_n % 2 == 0 { square } else { (m - square) % m };
+  let w_k = c * e[k - 1] % m;
+  let result = (w_k + m - 2 * weighted(m, k, acc, e, c, 1) % m) % m;
+  drop(acc);
+  drop(e);
+  result
+}
+
+let unsafe main() -> i32 {
+  std::printf("%ld %ld\n", coefficient(2, 7, 1), coefficient(2, 7, 2));
+  std::printf("%ld\n", coefficient(10000000, 1000000007, 10));
+  0
+}
