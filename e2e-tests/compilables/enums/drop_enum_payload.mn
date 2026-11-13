@@ -1,0 +1,31 @@
+// RUN: %sammine --file %full %O && %valgrind %T/%base.exe | %check %full
+// REQUIRES: valgrind
+// CHECK: 3
+
+// An enum value nothing takes apart is dropped whole: its tag picks the
+// variant, whose payload is dropped. So is one drop(x) is given, one with
+// no payload, and the Options a Vec holds, through Vec's own drop.
+
+import std;
+import vec;
+
+type Slot = Full('ptr<i32>, 'ptr<i64>) | Empty;
+
+let boxed(x: i32) -> 'ptr<i32> {
+  let p = alloc<i32>(1);
+  *p = x;
+  p
+}
+
+let main() -> i32 {
+  let a = Full(boxed(1), alloc<i64>(1i64));
+  let b = Some(boxed(2));
+  drop(b);
+  let c: Option<'ptr<i32>> = None;
+  let v = vec::new<Option<'ptr<i32>>>(1);
+  let v = vec::push(v, Some(boxed(3)));
+  let v = vec::push(v, None);
+  let v = vec::push(v, Some(boxed(4)));
+  std::printf("%lld\n", v.length);
+  0
+}

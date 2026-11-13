@@ -45,6 +45,39 @@ void expandDrops(mlir::ModuleOp module) {
               builder, loc,
               smn::ExtractOp::create(builder, loc, field, value, i),
               drop.getImplicitAttr()));
+    } else if (auto en = mlir::dyn_cast<smn::EnumType>(type)) {
+      // Its tag picks the variant, whose payload's fields are dropped; one
+      // that owns nothing goes straight on.
+      auto *after =
+          drop->getBlock()->splitBlock(std::next(drop->getIterator()));
+      auto tag = smn::TagOp::create(builder, loc, builder.getI32Type(), value);
+      llvm::SmallVector<int32_t> tags;
+      llvm::SmallVector<mlir::Block *> dests;
+      for (uint64_t v = 0; v < en.getVariants().size(); ++v) {
+        auto payload = en.getPayload(v);
+        if (!llvm::any_of(payload, smn::ownsMemory))
+          continue;
+        auto *block = new mlir::Block();
+        after->getParent()->getBlocks().insert(after->getIterator(), block);
+        tags.push_back(static_cast<int32_t>(v));
+        dests.push_back(block);
+        mlir::OpBuilder inArm = mlir::OpBuilder::atBlockEnd(block);
+        auto offsets = smn::payloadOffsets(payload);
+        for (auto [i, field] : llvm::enumerate(payload))
+          if (smn::ownsMemory(field))
+            work.push_back(smn::DropOp::create(
+                inArm, loc,
+                smn::PayloadOp::create(
+                    inArm, loc, field, value,
+                    inArm.getI64IntegerAttr(static_cast<int64_t>(v)),
+                    inArm.getI64IntegerAttr(static_cast<int64_t>(i)),
+                    inArm.getI64IntegerAttr(offsets[i])),
+                drop.getImplicitAttr()));
+        mlir::cf::BranchOp::create(inArm, loc, after);
+      }
+      llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
+      mlir::cf::SwitchOp::create(builder, loc, tag, after, mlir::ValueRange{},
+                                 tags, dests, noOperands);
     } else {
       continue;
     }
@@ -128,9 +161,9 @@ private:
 
   /// What of `path` is live in `owners` and is dropped, as its type drops:
   /// a pointer, after what a box points at; a value with a Drop instance,
-  /// whole, if all of it is there; any other struct or tuple, field by
-  /// field. Inside T's own Drop, a T is dropped field by field, or it would
-  /// call itself. An enum or an array isn't dropped yet.
+  /// or an enum, whole, if all of it is there; any other struct or tuple,
+  /// field by field. Inside T's own Drop, a T is dropped field by field, or
+  /// it would call itself. An array isn't dropped yet.
   void collect(const Owners &owners, const Path &path,
                llvm::SmallVectorImpl<Path> &out) {
     auto it = owners.find(path);
@@ -144,6 +177,13 @@ private:
       return;
     }
     if (auto drop = dropFunction(module_, type); drop && drop != func_) {
+      if (allLive(owners, path))
+        out.push_back(path);
+      return;
+    }
+    // An enum drops whole, its tag picking the payload; one a case took
+    // apart, its arms' bindings drop.
+    if (mlir::isa<smn::EnumType>(type)) {
       if (allLive(owners, path))
         out.push_back(path);
       return;

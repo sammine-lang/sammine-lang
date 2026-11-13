@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 9 are done, and 11 for inserted drops.
+Status: in progress. Steps 1 to 10 are done, and 11 for inserted drops.
 
 ## Goal
 
@@ -277,7 +277,10 @@ Each a commit, the suite passing after each.
    LLVM. Elaboration drops what of a partly moved one is left. A value
    with an instance moved in part isn't dropped: the check reports what
    is left. Arrays come with enums.)
-10. Enums: by tag, or by the variant a case arm knows.
+10. Enums: by tag, or by the variant a case arm knows. (Done: whole, by
+    tag, in `expandDrops`, with the layout moved onto MIR types; a case
+    arm's bindings drop as any. Still to come: a wildcard arm's unnamed
+    payloads, and arrays, whose elements the check follows as one.)
 11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done for the
     drops elaboration inserts. `drop(p)` the program writes still wants
     `*p` gone first.)
