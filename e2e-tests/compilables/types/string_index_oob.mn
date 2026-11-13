@@ -1,0 +1,15 @@
+// RUN: (%sammine_jit --file %full 2>&1; echo "status $?") | %check %full
+// s[i] stops at the length: the terminator isn't a byte of the string. Out
+// of it, the program panics.
+// CHECK: {{.*}}str.mn:{{[0-9]+}}:{{[0-9]+}}: panic: index 5 out of bounds for a String of length 5
+// CHECK-NEXT: status 1
+// CHECK-NOT: unreachable
+import std;
+import str;
+
+let main() -> i32 {
+  let s = str::new("hello");
+  std::printf("unreachable %c\n", s[5]);
+  str::delete(s);
+  0
+}

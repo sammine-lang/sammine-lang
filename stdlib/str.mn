@@ -28,6 +28,19 @@ export let delete(s: String) -> unit {
   drop(s)
 }
 
+// s[i]: byte i of the first s.length, the terminator not among them. An
+// index outside them ends the program.
+export instance Indexer<String, char> {
+  let unsafe Indexer(s: ptr<String>, i: i64) -> char {
+    if i < 0i64 || i >= (*s).length {
+      panic("index %lld out of bounds for a String of length %lld", i,
+            (*s).length)
+    } else {
+      (*s).data[i]
+    }
+  }
+}
+
 reuse strcmp(a: ptr<char>, b: ptr<char>) -> i32;
 
 // Negative, zero or positive as `a` sorts before, with, or after `b`, byte

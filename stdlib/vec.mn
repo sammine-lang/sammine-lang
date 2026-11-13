@@ -4,19 +4,16 @@ export struct Vec<T> {
   cap: i64,
 };
 
-reuse dprintf(fd: i32, format: ptr<char>, ...) -> i32;
-reuse exit(code: i32) -> unit;
-
-// v[i]: element i of the first v.length. An index outside them is reported
-// on stderr and ends the program.
+// v[i]: element i of the first v.length. An index outside them ends the
+// program.
 export instance<T> Indexer<Vec<T>, T> {
   let unsafe Indexer(v: ptr<Vec<T>>, i: i64) -> T {
     if i < 0i64 || i >= (*v).length {
-      dprintf(2, "index %lld out of bounds for a Vec of length %lld\n", i,
-              (*v).length);
-      exit(1);
-    };
-    (*v).data[i]
+      panic("index %lld out of bounds for a Vec of length %lld", i,
+            (*v).length)
+    } else {
+      (*v).data[i]
+    }
   }
 }
 

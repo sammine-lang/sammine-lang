@@ -1,0 +1,12 @@
+// RUN: (%sammine_jit --file %full 2>&1; echo "status $?") | %check %full
+// CHECK: panic: index -1 out of bounds for a String of length 2
+// CHECK-NEXT: status 1
+import std;
+import str;
+
+let main() -> i32 {
+  let s = str::new("hi");
+  std::printf("unreachable %c\n", s[0i64 - 1i64]);
+  str::delete(s);
+  0
+}

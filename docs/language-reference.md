@@ -1285,7 +1285,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 - **`std`** -- provides `printf`
 - **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
-- **`str`** -- provides `String` type with `new` and `delete`, and orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`, and `&a < &b`, `>`, `<=` and `>=` compare through views (instances on `ptr<String>`), since a comparison only reads the strings. `==` on views still compares addresses, as for any pointer
+- **`str`** -- provides `String` type with `new` and `delete`; `s[i]` is byte `i` of `s` as a `char`, for an `i64` index in `0..s.length` (the terminator isn't among them), and any other panics, as `v[i]` does for a `Vec`, through `Indexer<String, char>`. It also orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`, and `&a < &b`, `>`, `<=` and `>=` compare through views (instances on `ptr<String>`), since a comparison only reads the strings. `==` on views still compares addresses, as for any pointer
 
 ---
 
@@ -1315,7 +1315,7 @@ let main() -> i32 {
 | `vec::new<T>(cap)` | `(i64) -> Vec<T>` | Create a new Vec with given capacity |
 | `vec::push<T>(v, val)` | `(Vec<T>, T) -> Vec<T>` | Append an element, auto-grows if full |
 | `vec::delete<T>(v)` | `(Vec<T>) -> unit` | Free the underlying memory |
-| `v[i]` | `Indexer<Vec<T>, T>` | Element `i`, for an element type that owns nothing. An `i` outside `0..v.length` prints `index 2 out of bounds for a Vec of length 2` to stderr and exits with status 1 |
+| `v[i]` | `Indexer<Vec<T>, T>` | Element `i`, for an element type that owns nothing. An `i` outside `0..v.length` panics: `…vec.mn:12:7: panic: index 2 out of bounds for a Vec of length 2` on stderr, status 1 |
 
 ### Vec\<T\> Structure
 

@@ -1,0 +1,37 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      hello: h e o
+// CHECK-NEXT: first b, 3 a's
+
+// s[i] is byte i of a String, as v[i] is element i of a Vec: lent through
+// Indexer, so s is still the caller's, and bounds-checked. The index is an
+// i64, as Vec's is.
+
+import std;
+import str;
+
+let first(p: ptr<str::String>) -> char { (*p)[0] }
+
+let count(s: ptr<str::String>, c: char) -> i32 {
+  let n = alloc<i32>(1);
+  *n = 0;
+  for i in 0i64..(*s).length {
+    if (*s)[i] == c {
+      *n = *n + 1;
+    };
+  };
+  let r = *n;
+  drop(n);
+  r
+}
+
+let main() -> i32 {
+  let s = str::new("hello");
+  let i: i32 = 1;
+  std::printf("hello: %c %c %c\n", s[0], s[i as i64], s[s.length - 1i64]);
+  str::delete(s);
+  let b = str::new("banana");
+  std::printf("first %c, %d a's\n", first(&b), count(&b, 'a'));
+  str::delete(b);
+  0
+}

@@ -1,6 +1,6 @@
 // RUN: (! %sammine_jit --file %full 2>&1) | %check %full
 // v[i] stops at the length, not the capacity.
-// CHECK: index 2 out of bounds for a Vec of length 2
+// CHECK: panic: index 2 out of bounds for a Vec of length 2
 // CHECK-NOT: unreachable
 import std;
 import vec;
