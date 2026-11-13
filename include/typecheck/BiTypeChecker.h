@@ -346,6 +346,9 @@ public:
   /// calls it through a pointer to its code. Returns false if one isn't
   /// (reported here).
   bool check_c_call(CallExprAST *ast, std::span<const Type> params);
+  /// Whether C and sammine pass a value of `type` alike, with no parameter
+  /// of a declared layout to go by: a number, bool, char or pointer.
+  static bool c_passes(const Type &type);
   /// A C binding's signature: C calls a function it is given passing only
   /// what C can pass it, and takes or returns no value holding a function
   /// value, which has no layout C knows.

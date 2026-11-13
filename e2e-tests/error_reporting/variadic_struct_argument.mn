@@ -1,0 +1,18 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: variadic_struct_argument.mn:15:22
+// CHECK: Cannot pass 'P' through the '...' of 'std::printf': C reads numbers, bool, char and pointers there
+// CHECK: Cannot pass '(i32, i32)' through the '...' of 'std::printf': C reads numbers, bool, char and pointers there
+
+// No parameter says how a value passed through `...` is laid out, so only
+// what C and sammine pass alike goes there: a struct or a tuple doesn't.
+
+import std;
+
+struct P { x: i32, };
+
+let main() -> i32 {
+  let p = P { x: 7 };
+  std::printf("%d\n", p);
+  std::printf("%d\n", (1i32, 2i32));
+  return 0;
+}

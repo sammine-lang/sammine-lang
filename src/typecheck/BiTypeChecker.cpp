@@ -271,24 +271,17 @@ bool BiTypeCheckerVisitor::takes_c_callback(const Name &name) const {
 }
 
 // What C passes a function it calls, as it passes any function: a number,
-// bool, char or pointer. A struct, tuple, array, enum or closure sammine
-// passes its own way, and the copy C calls (MIRToLLVM's __c_<f>) only
-// forwards what both pass alike.
-static bool c_passes(const Type &type) {
-  switch (type.type_kind) {
-  case TypeKind::I32_t:
-  case TypeKind::I64_t:
-  case TypeKind::U32_t:
-  case TypeKind::U64_t:
-  case TypeKind::F32_t:
-  case TypeKind::F64_t:
-  case TypeKind::Bool:
-  case TypeKind::Char:
-  case TypeKind::Pointer:
-    return true;
-  default:
-    return false;
-  }
+// bool, char or pointer, and an enum that is an integer. A struct, tuple,
+// array, enum with payloads or closure sammine passes its own way, and the
+// copy C calls (MIRToLLVM's __c_<f>) only forwards what both pass alike. It
+// is what C reads out of a `...` too, where no parameter says how a value
+// is passed.
+bool BiTypeCheckerVisitor::c_passes(const Type &type) {
+  if (auto *en = std::get_if<EnumType>(&type.type_data))
+    return en->is_integer_backed();
+  return type.is_numeric() || type.type_kind == TypeKind::Bool ||
+         type.type_kind == TypeKind::Char ||
+         type.type_kind == TypeKind::Pointer;
 }
 
 void BiTypeCheckerVisitor::check_c_signature(ExternAST *ast) {

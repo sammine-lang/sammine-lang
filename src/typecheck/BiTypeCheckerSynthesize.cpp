@@ -756,28 +756,37 @@ BiTypeCheckerVisitor::resolve_normal_call(CallExprAST *ast) {
     // A pointer passed through `...` has no declared parameter type, so
     // nothing says C only reads it. sammine memory is immutable: C hands
     // back what it produces instead of writing into ours.
-    bool lends_address = false;
-    bool passes_function = false;
+    bool passable = true;
     for (auto &arg : llvm::drop_begin(ast->arguments, params.size())) {
       if (llvm::isa<AddrOfExprAST>(arg.get())) {
         this->add_error(arg->get_location(),
                         fmt::format("Cannot pass an address through the '...' "
                                     "of '{}': C could write through it",
                                     ast->functionName.mangled()));
-        lends_address = true;
+        passable = false;
       }
-      // Nothing declares it a function, so it would go as sammine has it,
-      // a closure, not as C takes one.
-      if (arg->get_type().type_kind == TypeKind::Function) {
+      // No parameter declares how the value is passed, so it goes as
+      // sammine has it: only what C and sammine pass alike can.
+      // A type not whole yet is reported as that, where it is.
+      auto type = arg->get_type();
+      if (type.is_poisoned() || type.is_open() || c_passes(type))
+        continue;
+      passable = false;
+      if (type.type_kind == TypeKind::Function)
         this->add_error(arg->get_location(),
                         fmt::format("Cannot pass a function through the '...' "
                                     "of '{}': declare the parameter, so C "
                                     "gets a pointer to its code",
                                     ast->functionName.mangled()));
-        passes_function = true;
-      }
+      else
+        this->add_error(arg->get_location(),
+                        fmt::format("Cannot pass '{}' through the '...' of "
+                                    "'{}': C reads numbers, bool, char and "
+                                    "pointers there",
+                                    type.to_string(),
+                                    ast->functionName.mangled()));
     }
-    if (lends_address || passes_function || !check_c_call(ast, params))
+    if (!passable || !check_c_call(ast, params))
       return ResolvedCall::failure();
     return ResolvedCall{callee, {}, func.get_return_type(), ty, false};
   }

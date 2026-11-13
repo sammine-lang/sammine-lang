@@ -201,7 +201,9 @@ C has nowhere to keep an environment, so only a function named at the call can
 be passed: a partial application such as `add(1)`, a binding holding a
 function, or a function parameter is an error. A C function that takes one
 can't be partially applied or used as a value either, and a function can't go
-through `...`. C passes a callback only numbers, `bool`, `char` and pointers,
+through `...`. Only numbers, `bool`, `char`, pointers and enums that are
+integers go through `...`: no parameter says how a struct, tuple, array or
+enum with payloads would be passed. C passes a callback only numbers, `bool`, `char` and pointers,
 so its parameters and result are limited to those (or `unit` as the result).
 
 Calling a `reuse` function is currently allowed anywhere. It will later need

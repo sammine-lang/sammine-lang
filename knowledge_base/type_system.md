@@ -64,7 +64,7 @@
 - Arm type unification: starts `Never`; adopt first non-Never; bidirectional compat
 
 ### Variadic Functions
-- Extern only (`...`); require at least N fixed params; no per-arg checking beyond fixed params
+- Extern only (`...`); require at least N fixed params. Through `...` goes only what C and sammine pass alike (`c_passes`, the rule for a callback's signature too): numbers, bool, char, pointers, integer-backed enums; no address (`&x`), and a function only through a declared parameter. An open type is left to `OpenTypeCheck`
 
 ### Kernels
 - `synthesize_kernel_map`: input must be Array, lambda 1-param matching element type, result = Array(lambda_ret, input_size)
