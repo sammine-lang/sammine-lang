@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 to 12 are done, but for arrays.
+Status: in progress. Steps 1 to 12 are done; step 13 is left.
 
 ## Goal
 
@@ -284,8 +284,9 @@ Each a commit, the suite passing after each.
     tag, in `expandDrops`, with the layout moved onto MIR types; a case
     arm's bindings drop as any. A wildcard arm's unnamed payloads too:
     lowering binds each unnamed variant's payload in a block of its own on
-    the way to the wildcard's body, which the edge rule drops. Still to
-    come: arrays, whose elements the check follows as one.)
+    the way to the wildcard's body, which the edge rule drops. Arrays too:
+    whole, in a loop over the elements, which move only with the array, as
+    Rust's E0508 has it: the check follows them as one.)
 11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free. (Done: an
     inserted drop of a box drops what it points at first, and so does
     elaboration before a `drop(p)` the program writes.)

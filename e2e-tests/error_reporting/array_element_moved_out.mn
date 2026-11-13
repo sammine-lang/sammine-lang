@@ -1,0 +1,20 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: array_element_moved_out.mn:13:10
+// CHECK: ╰─ Cannot move an element out of 'a': an array of values that own memory moves and drops whole
+// CHECK: ╰─ Cannot move an element out of 'b': an array of values that own memory moves and drops whole
+
+// The ownership check follows an array's elements as one, so taking one
+// out would leave the others to leak: an array of values that own memory
+// moves, and drops, whole. Through a slot, as one whose address is taken,
+// too. Reading through an element is fine.
+
+let main() -> i32 {
+  let a = [alloc<i32>(1), alloc<i32>(1)];
+  let x = a[0];
+  let b = [alloc<i32>(1)];
+  let r = &b;
+  let y = b[0];
+  let c = [alloc<i32>(1)];
+  let v = *c[0];
+  0
+}

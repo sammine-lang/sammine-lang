@@ -226,11 +226,23 @@ private:
         observer_->handedOnEmpty(part.parent(), part, owner, op);
   }
 
+  /// Tells the observer if taking `path`, read at `at`, takes it out of an
+  /// array.
+  void checkNotFromArray(const Path &path, mlir::Location at) {
+    if (observer_ && llvm::any_of(path.steps, [](Step s) {
+          return s.kind == Step::Element;
+        }))
+      observer_->movedOutOfArray(path, at);
+  }
+
   /// Moves the whole of what `value` names, for `op`.
   void take(mlir::Value value, mlir::Operation *op) {
     auto path = pathOf(value);
     if (!path || !lookup(*path))
       return;
+    // Where the element was read, as `a[i]`, not where it is taken.
+    auto *read = value.getDefiningOp();
+    checkNotFromArray(*path, read ? read->getLoc() : op->getLoc());
     if (checkLive(*path, op, /*takes=*/true) && observer_)
       // Its parts must all be there; what an owned pointer points at goes
       // with it whatever it holds.
@@ -352,6 +364,7 @@ void Transfer::apply(mlir::Operation *op) {
       return;
     }
     Owners before = owners_;
+    checkNotFromArray(*place, op->getLoc());
     checkLive(*place, op, /*takes=*/true);
     handOn(before, owners_, place, result, std::nullopt);
     markMoved(*place, op);

@@ -91,6 +91,10 @@ public:
   virtual void overwritten(const Path &target, mlir::Operation *store) = 0;
   /// `call` lends `lent` and takes it too.
   virtual void lentAndMoved(const Path &lent, mlir::Operation *call) = 0;
+  /// `element`, a part of an array's elements, read at `at`, is taken: an
+  /// array of values that own memory moves and drops whole, as the analysis
+  /// follows its elements as one.
+  virtual void movedOutOfArray(const Path &element, mlir::Location at) = 0;
 };
 
 /// Applies `op` to `owners`, telling `observer`, if any, what it finds.

@@ -183,6 +183,18 @@ public:
                                "' without consuming its previous value");
   }
 
+  void movedOutOfArray(const Path &element, mlir::Location at) override {
+    if (!first(element))
+      return;
+    auto array = element;
+    while (array.steps.back().kind != Step::Element)
+      array.steps.pop_back();
+    array.steps.pop_back();
+    error(at, "Cannot move an element out of " + quoted(array) +
+                  ": an array of values that own memory moves "
+                  "and drops whole");
+  }
+
   void lentAndMoved(const Path &lent, mlir::Operation *call) override {
     error(call->getLoc(),
           "Cannot lend " + quoted(lent) + " and move it in the same call");

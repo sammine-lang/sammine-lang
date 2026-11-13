@@ -166,3 +166,12 @@ func.func @before_box_drop(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) a
   sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
 }
+
+// -----
+
+// An array drops whole: its elements move only with it.
+// CHECK-LABEL: func.func @array(
+// CHECK-NEXT: sammine.drop %arg0 implicit : !sammine.array<2, !sammine.ptr<i32, owned>>
+func.func @array(%a: !sammine.array<2, !sammine.ptr<i32, owned>>) attributes {sammine.mir} {
+  return
+}

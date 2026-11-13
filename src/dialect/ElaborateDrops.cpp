@@ -2,6 +2,7 @@
 #include "dialect/OwnershipAnalysis.h"
 #include "dialect/SammineDialect.h"
 
+#include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Dominance.h"
@@ -78,6 +79,36 @@ void expandDrops(mlir::ModuleOp module) {
       llvm::SmallVector<mlir::ValueRange> noOperands(dests.size());
       mlir::cf::SwitchOp::create(builder, loc, tag, after, mlir::ValueRange{},
                                  tags, dests, noOperands);
+    } else if (auto array = mlir::dyn_cast<smn::ArrayType>(type)) {
+      // Each element, in a loop: i from 0 while i < N, dropping element i.
+      auto *after =
+          drop->getBlock()->splitBlock(std::next(drop->getIterator()));
+      auto *region = after->getParent();
+      auto i64 = builder.getI64Type();
+      auto *header = new mlir::Block();
+      auto *body = new mlir::Block();
+      region->getBlocks().insert(after->getIterator(), header);
+      region->getBlocks().insert(after->getIterator(), body);
+      auto index = header->addArgument(i64, loc);
+      auto constant = [&](mlir::OpBuilder &b, int64_t v) {
+        return mlir::arith::ConstantIntOp::create(b, loc, i64, v).getResult();
+      };
+      mlir::cf::BranchOp::create(builder, loc, header,
+                                 mlir::ValueRange{constant(builder, 0)});
+      mlir::OpBuilder inHeader = mlir::OpBuilder::atBlockEnd(header);
+      auto more = mlir::arith::CmpIOp::create(
+          inHeader, loc, mlir::arith::CmpIPredicate::slt, index,
+          constant(inHeader, array.getSize()));
+      mlir::cf::CondBranchOp::create(inHeader, loc, more, body, after);
+      mlir::OpBuilder inBody = mlir::OpBuilder::atBlockEnd(body);
+      work.push_back(smn::DropOp::create(
+          inBody, loc,
+          smn::ElementOp::create(inBody, loc, array.getElement(), value, index),
+          drop.getImplicitAttr()));
+      auto next =
+          mlir::arith::AddIOp::create(inBody, loc, index, constant(inBody, 1));
+      mlir::cf::BranchOp::create(inBody, loc, header,
+                                 mlir::ValueRange{next.getResult()});
     } else {
       continue;
     }
@@ -194,9 +225,9 @@ private:
 
   /// What of `path` is live in `owners` and is dropped, as its type drops:
   /// a pointer, after what a box points at; a value with a Drop instance,
-  /// or an enum, whole, if all of it is there; any other struct or tuple,
-  /// field by field. Inside T's own Drop, a T is dropped field by field, or
-  /// it would call itself. An array isn't dropped yet.
+  /// an enum or an array, whole, if all of it is there; any other struct or
+  /// tuple, field by field. Inside T's own Drop, a T is dropped field by
+  /// field, or it would call itself.
   void collect(const Owners &owners, const Path &path,
                llvm::SmallVectorImpl<Path> &out) {
     auto it = owners.find(path);
@@ -215,8 +246,9 @@ private:
       return;
     }
     // An enum drops whole, its tag picking the payload; one a case took
-    // apart, its arms' bindings drop.
-    if (mlir::isa<smn::EnumType>(type)) {
+    // apart, its arms' bindings drop. An array drops whole, element by
+    // element: its elements move only with it.
+    if (mlir::isa<smn::EnumType, smn::ArrayType>(type)) {
       if (allLive(owners, path))
         out.push_back(path);
       return;

@@ -23,8 +23,9 @@ mlir::func::FuncOp dropFunction(mlir::ModuleOp module, mlir::Type type);
 
 /// Each drop of a struct, tuple or enum becomes a call of its type's Drop
 /// instance, or, with none, the drops of its parts: a struct's or tuple's
-/// fields, an enum's payload, the variant its tag picks. What is left drops
-/// pointers, which lower to free. Run before lowering to LLVM.
+/// fields, an enum's payload, the variant its tag picks, an array's
+/// elements, in a loop. What is left drops pointers, which lower to free.
+/// Run before lowering to LLVM.
 void expandDrops(mlir::ModuleOp module);
 
 /// Elaborates the drops of every function MIR defines (marked

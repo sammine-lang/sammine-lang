@@ -1313,17 +1313,8 @@ Type BiTypeCheckerVisitor::synthesize(DropExprAST *ast) {
 
   ast->operand->accept_vis(this);
 
-  // Any value drops; one that owns nothing, doing nothing. An array that
-  // owns memory doesn't yet (knowledge_base/plans/drops.md).
-  auto operand_type = ast->operand->accept_synthesis(this);
-  if (operand_type.type_kind == TypeKind::Array &&
-      operand_type.containsLinearTypes()) {
-    this->add_error(ast->get_location(),
-                    fmt::format("Cannot drop '{}' yet: an array that owns "
-                                "memory doesn't drop yet",
-                                operand_type.to_string()));
-    return ast->set_type(Type::Poisoned());
-  }
+  // Any value drops; one that owns nothing, doing nothing.
+  ast->operand->accept_synthesis(this);
   return ast->set_type(Type::Unit());
 }
 

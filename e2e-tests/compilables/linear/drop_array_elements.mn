@@ -1,0 +1,29 @@
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
+// CHECK: 7
+
+// An array of values that own memory drops whole, element by element:
+// one nothing takes, one drop(x) is given, one of structs, one nested.
+// Its elements move only with it.
+
+import std;
+
+struct Pair { a: 'ptr<i32>, b: i32, };
+
+let a1() -> 'ptr<i32> {
+  let p = alloc<i32>(1);
+  *p = 7;
+  p
+}
+
+let main() -> i32 {
+  [a1(), a1()];
+  let kept = [a1(), a1(), a1()];
+  drop(kept);
+  let pairs = [Pair { a: a1(), b: 1 }, Pair { a: a1(), b: 2 }];
+  let nested = [[a1()], [a1()]];
+  let read = [a1()];
+  std::printf("%d\n", *read[0]);
+  0
+}
