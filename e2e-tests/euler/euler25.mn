@@ -1,0 +1,55 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4782
+
+// Project Euler Problem 25: 1000-digit Fibonacci number
+// F1 = F2 = 1 and Fn = Fn-1 + Fn-2. What is the index of the first term
+// in the Fibonacci sequence to contain 1000 digits?
+// Terms are held as 112 base-10^9 chunks in an owned buffer, least
+// significant first: room for 1008 digits.
+
+import std;
+import buffer;
+
+let base() -> i64 { 1000000000 }
+let chunks() -> i64 { 112 }
+
+// Adds chunks i.. of b into a, with `carry` into chunk i.
+let unsafe add_into(a: 'buf<i64>, b: ptr<i64>, i: i64, carry: i64) -> 'buf<i64> {
+  if i == chunks() { a } else {
+    let sum = a[i] + b[i] + carry;
+    a[i] = sum % base();
+    add_into(a, b, i + 1, sum / base())
+  }
+}
+
+// The digits in x, at least 1.
+let digits_in(x: i64) -> i64 {
+  if x < 10 { 1 } else { 1 + digits_in(x / 10) }
+}
+
+// The digits in n, counted from its highest nonzero chunk at or below i.
+let unsafe digits(n: ptr<i64>, i: i64) -> i64 {
+  if i > 0 && n[i] == 0 { digits(n, i - 1) } else { 9 * i + digits_in(n[i]) }
+}
+
+// The index of the first term from Fk on with `want` digits, given
+// Fk-1 and Fk. Fk-1 becomes Fk+1 in place, as Fk is added into it.
+let unsafe first_with(older: 'buf<i64>, newer: 'buf<i64>, k: i64, want: i64) -> i64 {
+  if digits(newer, chunks() - 1) >= want {
+    drop(older);
+    drop(newer);
+    k
+  } else {
+    let next = add_into(older, newer, 0, 0);
+    first_with(newer, next, k + 1, want)
+  }
+}
+
+let unsafe main() -> i32 {
+  let f1 = buffer::filled(chunks(), 0i64);
+  let f2 = buffer::filled(chunks(), 0i64);
+  f1[0] = 1;
+  f2[0] = 1;
+  std::printf("%ld\n", first_with(f1, f2, 2, 1000));
+  0
+}
