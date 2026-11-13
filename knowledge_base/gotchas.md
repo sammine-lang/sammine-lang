@@ -18,7 +18,7 @@
 2. Add `TypeData` variant class if compound
 3. Add `Type::` factory method + `to_string()` case
 4. Register in `enter_new_scope()` if named
-5. Add a `layout::typeSize()` case if it can be an enum payload
+5. Add a `smn::sizeOf()` case for its MIR type if it can be an enum payload
 6. Add a `MIRTypes::mirType()` case, with a MIR type and its conversion to LLVM in `MIRToLLVM.cpp` if it needs one
 
 ## New AST Node Checklist

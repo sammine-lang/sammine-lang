@@ -1,5 +1,4 @@
 #include "codegen/MIRTypes.h"
-#include "codegen/TypeLayout.h"
 #include "dialect/SammineDialect.h"
 
 namespace sammine_lang {
@@ -74,8 +73,7 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
       if (!fields)
         return std::nullopt;
       variants.push_back(smn::TupleType::get(ctx_, *fields));
-      payloadSize = std::max(payloadSize,
-                             layout::variantPayloadSize(variant.payload_types));
+      payloadSize = std::max(payloadSize, smn::payloadSize(*fields));
     }
     llvm::SmallVector<mlir::StringAttr> names;
     for (auto &variant : et.get_variants())

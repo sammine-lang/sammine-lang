@@ -1,6 +1,5 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/RangeIteration.h"
-#include "codegen/TypeLayout.h"
 #include "util/Utilities.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -154,15 +153,15 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
     // Run by lowerArms, after this loop: it holds only what outlives it.
     arms.push_back(
         armOf(block, arm.body.get(),
-            [this, &pattern, &payloadTypes, mirPayload, scrutinee = *value,
+            [this, &pattern, mirPayload, scrutinee = *value,
              location] {
-              int64_t offset = 0;
+              auto offsets = smn::payloadOffsets(mirPayload);
               for (auto [i, name] : llvm::enumerate(pattern.bindings)) {
-                auto at = layout::advancePayloadOffset(offset, payloadTypes[i]);
                 bind(name,
-                     smn::PayloadOp::create(builder_, location, mirPayload[i],
-                                            scrutinee, pattern.variant_index, i,
-                                            static_cast<uint64_t>(at)),
+                     smn::PayloadOp::create(
+                         builder_, location, mirPayload[i], scrutinee,
+                         pattern.variant_index, i,
+                         static_cast<uint64_t>(offsets[i])),
                      loc(pattern.location));
               }
             }));

@@ -6,6 +6,7 @@
 #include "mlir/IR/OpImplementation.h"
 #include "mlir/Interfaces/FunctionInterfaces.h"
 #include "llvm/ADT/TypeSwitch.h"
+#include "llvm/Support/MathExtras.h"
 
 #include "SammineDialect.cpp.inc"
 
@@ -91,6 +92,60 @@ void SammineDialect::initialize() {
 #define GET_OP_LIST
 #include "SammineOps.cpp.inc"
       >();
+}
+
+/// The next multiple of `size` from `offset`: where a field of `size` goes.
+static int64_t alignTo(int64_t offset, int64_t size) {
+  return size == 0 ? offset
+                   : static_cast<int64_t>(llvm::alignTo(
+                         static_cast<uint64_t>(offset),
+                         static_cast<uint64_t>(size)));
+}
+
+/// The bytes `fields` take laid out in order, then rounded up to the
+/// largest of them.
+static int64_t fieldsSize(llvm::ArrayRef<mlir::Type> fields) {
+  int64_t size = payloadSize(fields), largest = 0;
+  for (auto field : fields)
+    largest = std::max(largest, sizeOf(field));
+  return alignTo(size, largest);
+}
+
+int64_t sizeOf(mlir::Type type) {
+  if (auto integer = mlir::dyn_cast<mlir::IntegerType>(type))
+    return std::max<int64_t>(1, integer.getWidth() / 8);
+  if (auto flt = mlir::dyn_cast<mlir::FloatType>(type))
+    return flt.getWidth() / 8;
+  if (mlir::isa<PtrType>(type))
+    return 8;
+  if (mlir::isa<FnType>(type))
+    return 16; // a closure: its function and what it binds
+  if (auto array = mlir::dyn_cast<ArrayType>(type))
+    return sizeOf(array.getElement()) * array.getSize();
+  if (auto st = mlir::dyn_cast<StructType>(type))
+    return fieldsSize(st.getFields());
+  if (auto tuple = mlir::dyn_cast<TupleType>(type))
+    return fieldsSize(tuple.getElements());
+  if (auto en = mlir::dyn_cast<EnumType>(type))
+    return 4 + en.getPayloadSize(); // the i32 tag, then the payload
+  return 0;
+}
+
+llvm::SmallVector<int64_t> payloadOffsets(llvm::ArrayRef<mlir::Type> fields) {
+  llvm::SmallVector<int64_t> offsets;
+  int64_t offset = 0;
+  for (auto field : fields) {
+    offset = alignTo(offset, sizeOf(field));
+    offsets.push_back(offset);
+    offset += sizeOf(field);
+  }
+  return offsets;
+}
+
+int64_t payloadSize(llvm::ArrayRef<mlir::Type> fields) {
+  if (fields.empty())
+    return 0;
+  return payloadOffsets(fields).back() + sizeOf(fields.back());
 }
 
 std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type) {

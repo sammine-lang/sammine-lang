@@ -101,8 +101,8 @@ def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
     variant k's payload is the k-th tuple's elements. Lowered to LLVM it is
     the identified struct `sammine.enum.<name>`, an i32 tag then the payload
     bytes, which declarations of functions taking or giving one use too:
-    payload fields sit at the byte offsets layout:: gives, which the ops
-    that read and write them carry.
+    payload fields sit at the byte offsets smn::payloadOffsets gives, which
+    the ops that read and write them carry.
   }];
   let parameters = (ins StringRefParameter<"the enum's name">:$name,
                         "int64_t":$payloadSize,

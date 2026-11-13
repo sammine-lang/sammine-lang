@@ -27,6 +27,15 @@ constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
 /// type.
 std::optional<llvm::ArrayRef<mlir::Type>> fieldTypes(mlir::Type type);
 
+/// How enums lay out their payloads: each field at the next multiple of its
+/// own size, in the bytes `sizeOf` gives it. VariantOp and PayloadOp carry
+/// the offsets; an enum's type, the size of its largest payload.
+int64_t sizeOf(mlir::Type type);
+/// Where each of `fields` goes in a payload, in order.
+llvm::SmallVector<int64_t> payloadOffsets(llvm::ArrayRef<mlir::Type> fields);
+/// The bytes a payload of `fields` takes.
+int64_t payloadSize(llvm::ArrayRef<mlir::Type> fields);
+
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);

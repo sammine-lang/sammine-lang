@@ -348,7 +348,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 5. Update every `switch` on `TypeKind`. The compiler will help you find them via `-Wswitch` -- expect hits in:
    - `Types.cpp` (`compatible_to_from`, `structurally_compatible`, `TypeMapOrdering::populate`)
    - `BiTypeCheckerSynthesize.cpp` (type resolution)
-   - `TypeLayout.cpp` (`layout::typeSize`)
+   - `SammineDialect.cpp` (`smn::sizeOf`), if it can be an enum payload
    - `MIRTypes.cpp` (`mirType`) and the `MIRLowering*.cpp` files (lowering values of the new type), with a MIR type in `SammineTypes.td` and its conversion in `MIRToLLVM.cpp` if it needs one
    - `MIRTypes.cpp` and `SammineDialect.cpp` (`ownsMemory`), and `OwnershipPaths.cpp` (`partsOf`, `typeOf`), if the type can hold owned memory
 6. Add parsing support in `Parser.cpp` if the type has new syntax.

@@ -1,6 +1,5 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/Runtime.h"
-#include "codegen/TypeLayout.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
@@ -14,7 +13,7 @@ namespace sammine_lang {
 using namespace AST;
 
 // `Option<i64>::Some(x)`, or a variant with no payload, `None`: its payload
-// fields at the offsets layout:: gives them.
+// fields at the offsets smn::payloadOffsets gives them.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerVariant(mlir::Location location, const Type &type,
                           size_t index, llvm::ArrayRef<ExprAST *> payload) {
@@ -36,16 +35,13 @@ MIRLowering::lowerVariant(mlir::Location location, const Type &type,
   if (payload.size() != payloadTypes.size())
     return mlir::failure();
   llvm::SmallVector<mlir::Value> fields;
-  llvm::SmallVector<int64_t> offsets;
-  int64_t offset = 0;
-  for (auto [expr, fieldType, mirField] :
-       llvm::zip(payload, payloadTypes, enumType.getPayload(index))) {
+  for (auto [expr, mirField] : llvm::zip(payload, enumType.getPayload(index))) {
     auto value = lowerValue(expr);
     if (mlir::failed(value) || value->getType() != mirField)
       return mlir::failure();
     fields.push_back(*value);
-    offsets.push_back(layout::advancePayloadOffset(offset, fieldType));
   }
+  auto offsets = smn::payloadOffsets(enumType.getPayload(index));
   return smn::VariantOp::create(builder_, location, enumType, index, offsets,
                                 fields)
       .getResult();

@@ -1,6 +1,5 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/ScalarOps.h"
-#include "codegen/TypeLayout.h"
 #include "typecheck/BuiltinInstances.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -205,10 +204,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerEquality(mlir::Location location,
     auto &fields = et.get_variant(variant).payload_types;
     auto mirFields = enumType.getPayload(variant);
     mlir::Value all = intConstant(location, i1, 1);
-    int64_t offset = 0;
+    auto offsets = smn::payloadOffsets(mirFields);
     for (auto [i, field] : llvm::enumerate(fields)) {
-      auto at =
-          static_cast<uint64_t>(layout::advancePayloadOffset(offset, field));
+      auto at = static_cast<uint64_t>(offsets[i]);
       auto a = smn::PayloadOp::create(builder_, location, mirFields[i], lhs,
                                       variant, i, at);
       auto b = smn::PayloadOp::create(builder_, location, mirFields[i], rhs,
