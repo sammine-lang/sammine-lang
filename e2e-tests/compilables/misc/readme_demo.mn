@@ -1,19 +1,28 @@
 // RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
 // CHECK:      34
 // CHECK-NEXT: (30, 40)
 // CHECK-NEXT: sizeof i32 = 4
-// CHECK-NEXT: sizeof i32 = 4
 // CHECK-NEXT: A
+// CHECK-NEXT: area 12
+// CHECK-NEXT: some 7
+// CHECK-NEXT: 0 10 20
+// CHECK-NEXT: vec: 3 items, last 30
+// CHECK-NEXT: 42
+// CHECK-NEXT: closing log 1
+// CHECK-NEXT: done
 
 // Line comments start with //
-// Types: i32, i64, f64, bool, char, unit, etc
+// Types: i32, i64, u32, u64, f64, f32, bool, char, (), and more
 
-import std;                                   // import standard library (provides printf)
+import std;                                  // import a module: std::printf
+import vec;                                  // a growable vector, vec::Vec<T>
 
 reuse sqrt(x: f64) -> f64;                   // C function binding
 
 let add(a: i32, b: i32) -> i32 {             // function definition
-  a + b                                       // implicit return (last expression)
+  a + b                                      // the last expression is returned
 }
 
 let fib(x: i32) -> i32 {                     // recursion, if/else as expression
@@ -26,82 +35,117 @@ let fib(x: i32) -> i32 {                     // recursion, if/else as expression
 
 let identity<T>(x: T) -> T { x }             // generics (monomorphized)
 
-let apply<T, U>(f: (T) -> U, x: T) -> U {   // higher-order + generic
+let apply<T, U>(f: (T) -> U, x: T) -> U {    // higher-order + generic
   f(x)                                       // (T) -> U is a function type
 }
 
 // --- Type aliases ---
-type Int = i32;                                   // transparent alias for i32
+type Int = i32;                              // transparent alias for i32
 
-// --- Structs ---
+// --- Structs, and operator overloading via typeclasses ---
 struct Vec2 { x: i32, y: i32, };
 
-// --- Operator overloading via typeclasses ---
 instance Add<Vec2> {
   let Add(a: Vec2, b: Vec2) -> Vec2 {
     Vec2 { x: a.x + b.x, y: a.y + b.y }
   }
 }
 
-let main() -> i32 {
-  // --- Variables ---
-  let x: Int = 5;                            // using type alias
+// --- Enums, taken apart by case ---
+type Shape = Circle(f64) | Rect(i32, i32);
+
+let area(s: Shape) -> i32 {
+  case s {
+    Rect(w, h) => w * h,                     // a pattern binds the payload
+    _ => 0,                                  // a wildcard takes the rest
+  }
+}
+
+// --- Ownership ---
+// 'ptr<T> owns one value on the heap; ptr<T> is a view of one. An owned
+// value is used at most once (moved, returned, or given to drop), and
+// whatever nothing takes is dropped where it goes out of use.
+let boxed(x: i32) -> 'ptr<i32> {
+  let p = alloc<i32>(1);                     // room for one value
+  *p = x;                                    // write through the pointer
+  p                                          // ownership moves to the caller
+}
+
+let peek(p: ptr<i32>) -> i32 { *p }          // an owned pointer is lent here
+
+// A type says what its end does with a Drop instance.
+struct Log { id: i32, buf: 'ptr<i32>, };
+
+instance Drop<Log> {
+  let unsafe Drop(l: Log) -> unit {
+    std::printf("closing log %d\n", l.id);
+    drop(l.buf)
+  }
+}
+
+let write_log() -> unit {
+  let log = Log { id: 1, buf: boxed(0) };
+  std::printf("42\n");                       // log is dropped after this
+}
+
+// 'buf<T> owns room for many values; its slots are reached by index, only
+// in an unsafe function, where nothing checks bounds.
+let unsafe tens(n: i64) -> 'buf<i64> {
+  let b = alloc_buf<i64>(n);
+  for i in 0i64..n {                         // a for loop over a range
+    b[i] = i * 10i64;
+  };
+  b
+}
+
+let unsafe main() -> i32 {                   // unsafe: it indexes buffers
+  // --- Variables and control flow ---
+  let x: Int = 5;                            // using the type alias
   let y = 10;                                // type inference
-  // --- Control flow ---
-  let sign = if x > 0 { 1 }                 // if/else is an expression
-             else if x == 0 { 0 }           // comparison: < <= > >= == !=
+  let sign = if x > 0 { 1 }                  // if/else is an expression
+             else if x == 0 { 0 }            // comparison: < <= > >= == !=
              else { -1 };                    // unary negation
+  let wide = x as i64;                       // conversion with `as`
 
-  // --- Arrays ---
-  let a: [3]i32 = [10, 20, 30];           // fixed-size array literal
-  let first = a[0];                          // indexing
-  let size = len(a);                         // array length
+  // --- Arrays and tuples ---
+  let a: [3]i32 = [10, 20, 30];              // fixed-size, bounds-checked
+  let first = a[0];
+  let size = len(a);
+  let (tx, ty) = (100, true);                // destructuring let
 
-  // --- Tuples ---
-  let t = (100, true);                        // tuple literal (i32, bool)
-  let (tx, ty) = t;                           // destructuring let
+  // --- Pipes, partial application, functions as values ---
+  let r1 = 5 |> add(3);                      // x |> f(y) is f(x, y)
+  let add5 = add(5);                         // fewer arguments: a closure
+  let res = apply(add5, 42);                 // pass a function as a value
+  let i = identity(42);                      // generic, type inferred
+  let d = identity<f64>(3.14);               // or given
 
-  // --- Pointers & memory ---
-  let p: 'ptr<i32> = alloc<i32>(1);         // heap allocation (count, linear)
-  *p = 42;                                   // write through pointer
-  let val = *p;                              // dereference
-  drop(p);                                   // manual deallocation
+  // --- Structs and typeclasses ---
+  let v3 = Vec2 { x: 10, y: 15 } + Vec2 { x: 20, y: 25 };
+  let sz = Sized<i32>();                     // a built-in typeclass
 
-  let q: ptr<i32> = &x;                     // address-of (stack pointer)
-  let pp: ptr<ptr<i32>> = &q;               // nested pointers
+  std::printf("%d\n", fib(9));               // 34
+  std::printf("(%d, %d)\n", v3.x, v3.y);     // (30, 40)
+  std::printf("sizeof i32 = %ld\n", sz);     // sizeof i32 = 4
+  std::printf("%c\n", 'A');                  // A
+  std::printf("area %d\n", area(Rect(3, 4)));
 
-  // --- Pipe operator ---
-  let r1 = 5 |> add(3);                     // x |> f(y) becomes f(x, y)
-  let r2 = 5 |> identity |> add(3);         // chained pipes
+  // --- Option, and owned values in it ---
+  case Some(boxed(7)) {
+    Some(p) => { std::printf("some %d\n", peek(p)); () },
+    None => { },
+  };                                         // p is dropped at the arm's end
 
-  // --- Partial function application ---
-  let add5 = add(5);                         // fewer args -> closure
-  let eight = add5(3);                       // call the partially applied fn
+  // --- Buffers, in unsafe code; a Vec over one ---
+  let b = tens(3i64);
+  let shown = std::printf("%lld %lld %lld\n", b[0], b[1], b[2]);
+  let v = vec::new<'ptr<i32>>(1);            // grows as needed
+  let v = vec::push(v, boxed(10));
+  let v = vec::push(v, boxed(20));
+  let v = vec::push(v, boxed(30));
+  std::printf("vec: %lld items, last %d\n", v.length, peek(v.data[2]));
 
-  // --- Higher-order functions ---
-  let f: (i32) -> i32 = add5;               // function as value
-  let res = apply(f, 42);                   // pass function as argument
-
-  // --- Generics (monomorphized) ---
-  let a_i32 = identity(42);                 // inferred: identity.i32
-  let a_f64 = identity<f64>(3.14);          // explicit type arg: identity.f64
-
-  // --- Structs + operator overloading ---
-  let v1: Vec2 = Vec2 { x: 10, y: 15 };    // struct literal
-  let v2: Vec2 = Vec2 { x: 20, y: 25 };
-  let v3: Vec2 = v1 + v2;                   // uses Add<Vec2> instance
-
-  // --- Sizeof (built-in typeclass) ---
-  let sz = Sized<i32>();                     // compile-time size info
-  let sz2 = Sized<i32>::Sized();             // qualified typeclass call syntax
-
-  // --- Chars ---
-  let ch: char = 'A';
-
-  std::printf("%d\n", fib(9));              // 34
-  std::printf("(%d, %d)\n", v3.x, v3.y);   // (30, 40)
-  std::printf("sizeof i32 = %ld\n", sz);   // sizeof i32 = 4
-  std::printf("sizeof i32 = %ld\n", sz2);  // sizeof i32 = 4 (qualified syntax)
-  std::printf("%c\n", ch);                  // A
-  return 0;                                  // explicit return
+  write_log();
+  std::printf("done\n");
+  0                                          // b, v and all it holds drop here
 }

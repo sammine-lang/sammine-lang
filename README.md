@@ -1,6 +1,6 @@
 # sammine-lang
 
-> A compiled programming language built with C++23 and LLVM/MLIR. Features: type inference, generics, partial application, pipe operators, linear types, structs, enums, typeclasses, and more. Follow along via Jasmine's [blog](https://badumbatish.github.io/blog).
+> A compiled programming language built with C++23 and LLVM/MLIR. Features: type inference, generics, partial application, pipe operators, ownership with automatic drops (owned values are used at most once and dropped where they go out of use; a `Drop` instance says what a type's end does), structs, enums, typeclasses, and more. Follow along via Jasmine's [blog](https://badumbatish.github.io/blog).
 
 ![](https://github.com/badumbatish/sammine-lang/blob/main/img.png)
 How I pictured sammine-lang in my head
