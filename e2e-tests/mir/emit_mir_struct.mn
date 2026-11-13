@@ -8,10 +8,10 @@
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.extract %arg0[0]
 // CHECK-NEXT: %1 = sammine.extract %arg0[1]
-// CHECK-NEXT: sammine.aggregate(%1, %0) : (i32, i32) -> !sammine.struct<"Point", (i32, i32)>
+// CHECK-NEXT: sammine.aggregate(%1, %0) : (i32, i32) -> !sammine.struct<"Point", (x: i32, y: i32)>
 // CHECK-LABEL: func.func private @norm1(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.extract %arg0[0] : !sammine.struct<"Point", (i32, i32)> -> i32
+// CHECK: sammine.extract %arg0[0] : !sammine.struct<"Point", (x: i32, y: i32)> -> i32
 // CHECK-LABEL: func.func private @split(
 // CHECK-SAME: -> !sammine.tuple<i32, i32>
 // CHECK-LABEL: func.func private @sum_split(
@@ -20,7 +20,7 @@
 // CHECK-NEXT: sammine.extract %{{[0-9]+}}[1] : !sammine.tuple<i32, i32> -> i32
 // CHECK-LABEL: func.func private @boxed(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.call @"wrap<i32>"(%arg0) : (i32) -> !sammine.struct<"Box<i32>", (i32)>
+// CHECK: sammine.call @"wrap<i32>"(%arg0) : (i32) -> !sammine.struct<"Box<i32>", (value: i32)>
 
 struct Point { x: i32, y: i32 };
 struct Box<T> { value: T };

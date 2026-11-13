@@ -1,8 +1,8 @@
 // RUN: %sammine_opt %s -split-input-file -verify-diagnostics
 
 func.func @wrong_field(%a: i64) {
-  // expected-error @+1 {{'sammine.aggregate' op takes the types of the fields of '!sammine.struct<"P", (i32)>'}}
-  %s = sammine.aggregate(%a) : (i64) -> !sammine.struct<"P", (i32)>
+  // expected-error @+1 {{'sammine.aggregate' op takes the types of the fields of '!sammine.struct<"P", (x: i32)>'}}
+  %s = sammine.aggregate(%a) : (i64) -> !sammine.struct<"P", (x: i32)>
   return
 }
 

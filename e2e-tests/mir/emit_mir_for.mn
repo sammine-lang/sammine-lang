@@ -3,7 +3,7 @@
 // Iterator<Range<T>, T>::next; Some gives the next range and i, None leaves.
 // CHECK-LABEL: func.func private @sum(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.aggregate(%{{.*}}, %arg0) : (i32, i32) -> !sammine.struct<"Range<i32>", (i32, i32)>
+// CHECK: sammine.aggregate(%{{.*}}, %arg0) : (i32, i32) -> !sammine.struct<"Range<i32>", (current: i32, end_val: i32)>
 // CHECK: sammine.call @"Iterator<Range<i32>, i32>::next"(
 // CHECK: sammine.tag
 // CHECK: sammine.payload %{{.*}}[0, 0] at 0

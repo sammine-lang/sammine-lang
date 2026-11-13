@@ -51,7 +51,10 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     auto fields = mirTypes(st.get_field_types());
     if (!fields)
       return std::nullopt;
-    return smn::StructType::get(ctx_, st.get_name().mangled(), *fields);
+    llvm::SmallVector<mlir::StringAttr> names;
+    for (auto &field : st.get_field_names())
+      names.push_back(mlir::StringAttr::get(ctx_, field));
+    return smn::StructType::get(ctx_, st.get_name().mangled(), names, *fields);
   }
   case TypeKind::Enum: {
     auto &et = std::get<EnumType>(type.type_data);

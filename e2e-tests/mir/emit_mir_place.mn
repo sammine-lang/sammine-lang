@@ -5,15 +5,15 @@
 // Indexer lends the method x's place, or a slot holding a temporary.
 // CHECK-LABEL: func.func private @second(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.local "t" : <!sammine.struct<"Trio", (i32, i32, i32)>>
+// CHECK: sammine.local "t" : <!sammine.struct<"Trio", (a: i32, b: i32, c: i32)>>
 // CHECK: sammine.lend
 // CHECK-NEXT: sammine.call @"Indexer<Trio, i32>::Indexer"(
 // CHECK-LABEL: func.func private @fresh(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.local "" : <!sammine.struct<"Trio", (i32, i32, i32)>>
+// CHECK: sammine.local "" : <!sammine.struct<"Trio", (a: i32, b: i32, c: i32)>>
 // CHECK-LABEL: func.func private @field_view(
 // CHECK-SAME: sammine.mir
-// CHECK: sammine.field %{{[0-9]+}}[1] : <!sammine.struct<"Trio", (i32, i32, i32)>> -> <i32>
+// CHECK: sammine.field %{{[0-9]+}}[1] : <!sammine.struct<"Trio", (a: i32, b: i32, c: i32)>> -> <i32>
 // CHECK-NEXT: sammine.addr
 // CHECK-LABEL: func.func private @elem_view(
 // CHECK-SAME: sammine.mir

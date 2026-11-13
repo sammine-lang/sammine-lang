@@ -19,7 +19,7 @@
 |---|---|---|
 | integers, floats, bool, char | `i32`/`i64`/`f32`/`f64`/`i1`/`i8` | same |
 | `'ptr<T>` / `ptr<T>` | `!sammine.ptr<T, owned/view>` | `!llvm.ptr` |
-| struct | `!sammine.struct<"name", (fields)>` | identified `sammine.struct.<name>` |
+| struct | `!sammine.struct<"name", (field: T, ...)>`, its fields named | identified `sammine.struct.<name>` |
 | tuple | `!sammine.tuple<...>` | literal struct |
 | `[N]T` | `!sammine.array<N, T>` | `!llvm.array<N x T>` |
 | enum with payloads | `!sammine.enum<"name", N, (payload tuples)>` | identified `sammine.enum.<name>`, `{i32 tag, [N x i8]}` |

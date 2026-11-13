@@ -35,6 +35,45 @@ static void printTypeList(mlir::AsmPrinter &printer,
   llvm::interleaveComma(types, printer);
 }
 
+// A struct's fields, `name: type`, comma-separated, as
+// `custom<FieldList>`.
+static mlir::ParseResult
+parseFieldList(mlir::AsmParser &parser,
+               llvm::SmallVector<mlir::StringAttr> &names,
+               llvm::SmallVector<mlir::Type> &types) {
+  auto parseField = [&]() -> mlir::ParseResult {
+    std::string name;
+    mlir::Type type;
+    if (parser.parseKeywordOrString(&name) || parser.parseColon() ||
+        parser.parseType(type))
+      return mlir::failure();
+    names.push_back(parser.getBuilder().getStringAttr(name));
+    types.push_back(type);
+    return mlir::success();
+  };
+  std::string first;
+  if (mlir::failed(parser.parseOptionalKeywordOrString(&first)))
+    return mlir::success();
+  mlir::Type type;
+  if (parser.parseColon() || parser.parseType(type))
+    return mlir::failure();
+  names.push_back(parser.getBuilder().getStringAttr(first));
+  types.push_back(type);
+  while (mlir::succeeded(parser.parseOptionalComma()))
+    if (parseField())
+      return mlir::failure();
+  return mlir::success();
+}
+
+static void printFieldList(mlir::AsmPrinter &printer,
+                           llvm::ArrayRef<mlir::StringAttr> names,
+                           llvm::ArrayRef<mlir::Type> types) {
+  llvm::interleaveComma(llvm::zip(names, types), printer, [&](auto field) {
+    printer.printKeywordOrString(std::get<0>(field).getValue());
+    printer << ": " << std::get<1>(field);
+  });
+}
+
 #define GET_TYPEDEF_CLASSES
 #include "SammineTypes.cpp.inc"
 
@@ -84,6 +123,17 @@ bool ownsMemory(mlir::Type type) {
   if (auto array = mlir::dyn_cast<ArrayType>(type))
     return ownsMemory(array.getElement());
   return false;
+}
+
+mlir::LogicalResult
+StructType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                   llvm::StringRef structName,
+                   llvm::ArrayRef<mlir::StringAttr> names,
+                   llvm::ArrayRef<mlir::Type> fields) {
+  if (names.size() != fields.size())
+    return emitError() << "struct '" << structName << "' names " << names.size()
+                       << " fields but has " << fields.size();
+  return mlir::success();
 }
 
 std::string spelling(mlir::Type type) {

@@ -45,16 +45,19 @@ def Sammine_PlaceType : Sammine_Type<"Place", "place"> {
 }
 
 def Sammine_StructType : Sammine_Type<"Struct", "struct"> {
-  let summary = "a struct: its name and the types of its fields, in order";
+  let summary = "a struct: its name and its fields' names and types, in order";
   let description = [{
-    `!sammine.struct<"Point", (i32, i32)>`. The name is the struct's, as
+    `!sammine.struct<"Point", (x: i32, y: i32)>`. The name is the struct's, as
     NameResolver gives it (`shapes::Point`, `Range<i32>`): lowered to LLVM
     it is the identified struct `sammine.struct.<name>`, the very type the
     module's other code, and its declarations, use for it.
   }];
   let parameters = (ins StringRefParameter<"the struct's name">:$name,
+                        ArrayRefParameter<"::mlir::StringAttr", "field names">:$fieldNames,
                         ArrayRefParameter<"::mlir::Type", "field types">:$fields);
-  let assemblyFormat = "`<` $name `,` `(` custom<TypeList>($fields) `)` `>`";
+  let assemblyFormat =
+      "`<` $name `,` `(` custom<FieldList>($fieldNames, $fields) `)` `>`";
+  let genVerifyDecl = 1;
 }
 
 def Sammine_TupleType : Sammine_Type<"Tuple", "tuple"> {
