@@ -47,6 +47,13 @@ struct CallProps {
   Reference callee;
   std::optional<Type> callee_func_type;
   bool is_partial = false;
+  /// For a typeclass's method called by name, the arguments it is lent: its
+  /// class takes a view there, `ptr<T>`, and the call gives the value, as
+  /// an operator's operands are. Empty if none is.
+  std::vector<bool> lent;
+  bool lends(size_t argument) const {
+    return argument < lent.size() && lent[argument];
+  }
 };
 
 struct VariableProps {
@@ -58,6 +65,9 @@ struct BinaryProps {
   /// For an operator through a typeclass (`+` through Add): the instance's
   /// method, a function or built in. Nothing for one that goes through none.
   Reference method;
+  /// Whether the method is lent its operands, as `<` is: its class takes
+  /// views of them, so comparing uses neither up.
+  bool lends = false;
 };
 
 struct IndexProps {
@@ -76,6 +86,9 @@ struct FormatProps {
   /// The format, as the type checker read it. Each argument it prints has
   /// an instance of Format for its type, which the checker made sure of.
   std::optional<sammine_util::FormatString> format;
+  /// Whether an instance's method is lent the value it prints, as Format's
+  /// is: its class takes a view of it, so printing doesn't use it up.
+  bool lends = false;
 };
 
 struct TypeAliasProps {

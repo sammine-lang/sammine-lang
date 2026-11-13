@@ -6,7 +6,7 @@ import std;
 struct Point { x: i32, y: i32, };
 
 instance Hash<Point> {
-  let Hash(val: Point) -> u64 { 42u64 }
+  let Hash(val: ptr<Point>) -> u64 { 42u64 }
 }
 
 let main() -> i32 {

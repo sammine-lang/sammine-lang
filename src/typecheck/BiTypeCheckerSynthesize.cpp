@@ -613,6 +613,26 @@ BiTypeCheckerVisitor::resolve_typeclass_call(CallExprAST *ast) {
   // it to tell a lent argument from a moved one.
   auto instance_type = signature_of(expected, result);
   props_.call(ast->id()).callee_func_type = instance_type;
+  // Where the class takes a view of its type, `ptr<T>`, the method is lent
+  // the argument, as an operator's operand is: the call gives the value,
+  // and is checked against T. An argument that is a view already is given
+  // as it is.
+  auto &lent = props_.call(ast->id()).lent;
+  lent.assign(params.size(), false);
+  for (size_t i = 0; i < params.size(); ++i) {
+    auto &declared = params[i];
+    if (declared.type_kind != TypeKind::Pointer || declared.is_linear_v() ||
+        std::get<PointerType>(declared.type_data).get_pointee().type_kind !=
+            TypeKind::TypeParam)
+      continue;
+    auto given = ast->arguments[i]->accept_synthesis(this);
+    if (given.type_kind == TypeKind::Pointer &&
+        (type_map_ordering.compatible_to_from(expected[i], given) ||
+         type_map_ordering.lendable_to_from(expected[i], given)))
+      continue;
+    lent[i] = true;
+    expected[i] = std::get<PointerType>(expected[i].type_data).get_pointee();
+  }
   return ResolvedCall{resolved_name.mangled(), std::move(expected),
                       std::move(result), std::move(instance_type), false};
 }
@@ -1097,8 +1117,9 @@ Type BiTypeCheckerVisitor::synthesize_binary_operator(BinaryExprAST *ast,
       return ast->set_type(Type::Poisoned());
     }
     // A built-in instance is an instruction; any other is called.
-    props_.binary(ast->id()).method =
-        method_reference(tc_key, tc_key.class_name());
+    auto &bp = props_.binary(ast->id());
+    bp.method = method_reference(tc_key, tc_key.class_name());
+    bp.lends = method_lends(tc_key.name, 0);
     return ast->set_type(ast->Op->is_comparison() ? Type::Bool() : lhs_type);
   }
 
@@ -1748,6 +1769,7 @@ Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
   auto &fp = props_.format(ast->id());
   fp = {};
   size_t format_at = ast->format_index();
+  fp.lends = method_lends(Name::prelude(kFormatClass), 0);
   bool ok = true;
   if (ast->kind == FormatExprAST::Kind::Write) {
     auto first = args.empty() ? Type::Poisoned()

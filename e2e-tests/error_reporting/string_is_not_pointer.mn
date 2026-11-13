@@ -13,7 +13,7 @@
 // written again.
 
 instance Format<i32> {
-  let Format(x: i32, f: Formatter) -> unit { write(f, "int") }
+  let Format(x: ptr<i32>, f: Formatter) -> unit { write(f, "int") }
 }
 
 struct Unprintable { x: i32, };

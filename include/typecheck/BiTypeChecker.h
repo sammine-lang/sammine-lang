@@ -400,6 +400,10 @@ public:
   std::vector<MonomorphizedKey> indexer_instances_for(const Type &coll) const;
   // Reports `what` unless the enclosing function is declared `let unsafe`.
   void check_unsafe_allowed(sammine_util::Location loc, std::string_view what);
+  /// Whether the method of `cls` named after it takes its parameter `param`
+  /// as a view of the class's type, `ptr<T>`: what calls it through an
+  /// operator or a `{}` lends the value there, as `x[i]` lends x.
+  bool method_lends(const Name &cls, size_t param) const;
   /// Whether `module` may write the instance `key`: it defines the class,
   /// or one of the types the instance is for.
   static bool owns_instance(const std::string &module,

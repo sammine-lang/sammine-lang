@@ -52,8 +52,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCall(CallExprAST *call) {
   auto params = type->getInputs();
   llvm::SmallVector<mlir::Value, 4> args;
   for (auto [i, arg] : llvm::enumerate(call->arguments)) {
-    auto value = i < params.size() ? lowerArgument(arg.get(), params[i])
-                                   : lowerVariadicArgument(arg.get());
+    auto value = cp->lends(i)          ? lowerLent(arg.get())
+                 : i < params.size() ? lowerArgument(arg.get(), params[i])
+                                     : lowerVariadicArgument(arg.get());
     if (mlir::failed(value))
       return mlir::failure();
     args.push_back(*value);
@@ -205,35 +206,54 @@ MIRLowering::lowerBuiltinInstance(mlir::Location location,
   auto op = operator_of_class(key.name.get_name());
   if (!op || args.size() != 2)
     return mlir::failure();
-  return lowerOperator(location, *op, args[0], args[1], key.type_args[0]);
+  // A class that takes views of its operands, as Less, is given them when
+  // called by name too: they are read.
+  auto operand = types_.mirType(key.type_args[0]);
+  auto value = [&](mlir::Value arg) {
+    if (!operand || arg.getType() != viewOf(*operand))
+      return arg;
+    return read(location,
+                smn::DerefOp::create(builder_, location, arg).getResult());
+  };
+  return lowerOperator(location, *op, value(args[0]), value(args[1]),
+                       key.type_args[0]);
 }
 
-// `x[i]` through an Indexer instance: its method is lent x's place, or a
-// slot holding x's value when x names none.
+// The place `expr` names, or a slot holding its value when it names none:
+// what a method lent the value is given a view of.
+mlir::FailureOr<mlir::Value> MIRLowering::lentPlace(ExprAST *expr) {
+  if (hasPlace(expr))
+    return lowerPlace(expr);
+  auto value = lowerValue(expr);
+  if (mlir::failed(value))
+    return mlir::failure();
+  auto place = smn::LocalOp::create(builder_, loc(expr),
+                                    placeOf(value->getType()), "")
+                   .getResult();
+  smn::StoreOp::create(builder_, loc(expr), *value, place);
+  return place;
+}
+
+// A view of `expr`, lent to a method: `expr` keeps its value.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerLent(ExprAST *expr) {
+  auto place = lentPlace(expr);
+  if (mlir::failed(place))
+    return mlir::failure();
+  return lend(*place, loc(expr));
+}
+
+// `x[i]` through an Indexer instance: its method is lent x.
 mlir::FailureOr<mlir::Value>
 MIRLowering::lowerIndexerCall(IndexExprAST *index,
                               const sammine_util::QualifiedName &method) {
-  auto location = loc(index);
-  mlir::FailureOr<mlir::Value> place = mlir::failure();
-  if (hasPlace(index->array_expr.get())) {
-    place = lowerPlace(index->array_expr.get());
-  } else {
-    auto value = lowerValue(index->array_expr.get());
-    if (mlir::failed(value))
-      return mlir::failure();
-    place =
-        smn::LocalOp::create(builder_, location, placeOf(value->getType()), "")
-            .getResult();
-    smn::StoreOp::create(builder_, location, *value, *place);
-  }
+  auto place = lentPlace(index->array_expr.get());
   if (mlir::failed(place))
     return mlir::failure();
   auto offset = lowerValue(index->index_expr.get());
   if (mlir::failed(offset))
     return mlir::failure();
-  auto holds = mlir::cast<smn::PlaceType>(place->getType()).getValueType();
-  auto view = smn::LendOp::create(builder_, location, viewOf(holds), *place);
-  return callMethod(location, method, {view, *offset}, index->get_type(), "[]");
+  return callMethod(loc(index), method, {lend(*place, loc(index)), *offset},
+                    index->get_type(), "[]");
 }
 
 } // namespace sammine_lang

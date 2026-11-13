@@ -12,7 +12,7 @@ instance<T> Add<Pair<T>> {
 }
 
 instance<T> Equal<Pair<T>> {
-  let Equal(x: Pair<T>, y: Pair<T>) -> bool { x.a == y.a && x.b == y.b }
+  let Equal(x: ptr<Pair<T>>, y: ptr<Pair<T>>) -> bool { (*x).a == (*y).a && (*x).b == (*y).b }
 }
 
 let bit(x: bool) -> i32 { if x { 1 } else { 0 } }

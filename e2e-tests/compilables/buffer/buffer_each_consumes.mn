@@ -9,7 +9,7 @@ import buffer;
 
 // Each String is moved into the function, which must consume it.
 let print_and_delete(s: str::String) -> unit {
-  print("{}\n", &s);
+  print("{}\n", s);
   str::delete(s);
 }
 

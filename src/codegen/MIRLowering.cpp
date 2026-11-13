@@ -1,4 +1,5 @@
 #include "codegen/MIRLowering.h"
+#include "typecheck/BuiltinInstances.h"
 #include "codegen/ScalarOps.h"
 #include "util/Utilities.h"
 
@@ -19,9 +20,10 @@ using namespace AST;
 namespace {
 
 /// The bindings of a function body whose address its code takes: the
-/// variable at the root of `&x`, `&x.f` or `&a[i]`, or of `x[i]` through an
-/// Indexer, which lends x. By name, so a binding a later one shadows counts
-/// too.
+/// variable at the root of `&x`, `&x.f` or `&a[i]`, or of what is lent to
+/// an instance's method, as x is in `x[i]` through an Indexer, in `x < y`
+/// through Less, and in print("{}", x) through Format. By name, so a
+/// binding a later one shadows counts too.
 class AddressedBindings : public ASTVisitor {
 public:
   explicit AddressedBindings(const ASTProperties &props) : props(props) {}
@@ -33,6 +35,30 @@ public:
   void preorder_walk(IndexExprAST *ast) override {
     if (auto *ip = props.index(ast->id()); ip && ip->through_instance())
       addRoot(ast->array_expr.get());
+  }
+  void preorder_walk(CallExprAST *ast) override {
+    auto *cp = props.call(ast->id());
+    if (!cp || !cp->callee.is<Reference::Function>())
+      return;
+    for (auto [i, arg] : llvm::enumerate(ast->arguments))
+      if (cp->lends(i))
+        addRoot(arg.get());
+  }
+  void preorder_walk(BinaryExprAST *ast) override {
+    auto *bp = props.binary(ast->id());
+    if (bp && bp->lends && bp->method.is<Reference::Function>()) {
+      addRoot(ast->LHS.get());
+      addRoot(ast->RHS.get());
+    }
+  }
+  void preorder_walk(FormatExprAST *ast) override {
+    auto *fp = props.format(ast->id());
+    if (!fp || !fp->lends)
+      return;
+    // What the compiler prints by a directive is read, not lent.
+    for (auto &arg : llvm::drop_begin(ast->arguments, ast->format_index() + 1))
+      if (!builtin_format_directive(arg->get_type()))
+        addRoot(arg.get());
   }
 
 private:

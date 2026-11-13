@@ -1,0 +1,33 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// CHECK:      pear pear plum
+// CHECK-NEXT: true false true false
+// CHECK-NEXT: (pear, 3) [pear, plum]
+// CHECK-NEXT: true true
+// CHECK-NEXT: still pear and plum
+
+// A class whose method only looks at a value takes a view of it, so what
+// calls the method lends the value and it stays: a String is printed,
+// compared and hashed, in a tuple and a Vec too, and is still the
+// program's afterwards.
+
+import str;
+import vec;
+
+let main() -> i32 {
+  let a = str::new("pear");
+  let b = str::new("plum");
+  print("{} {} {}\n", a, a, b);
+  print("{} {} {} {}\n", a < b, a == b, a != b, a >= b);
+  let pair = (str::new("pear"), 3);
+  let both = vec::push(vec::push(vec::new<str::String>(2i64), str::new("pear")),
+                       str::new("plum"));
+  print("{} {}\n", pair, both);
+  // Values no binding names are compared where they are made, and dropped.
+  print("{} {}\n", str::new("fig") == str::new("fig"),
+        Hash<str::String>(a) == Hash<string>("pear"));
+
+  print("still {} and {}\n", a, b);
+  0
+}

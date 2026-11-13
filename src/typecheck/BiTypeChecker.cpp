@@ -987,6 +987,22 @@ static std::optional<std::string> module_of(const Type &type) {
   return std::nullopt;
 }
 
+bool BiTypeCheckerVisitor::method_lends(const Name &cls, size_t param) const {
+  auto it = type_class_defs.find(cls);
+  if (it == type_class_defs.end())
+    return false;
+  for (auto &method : it->second->methods) {
+    if (method->functionName.get_name() != cls.get_name() ||
+        param >= method->parameterVectors.size())
+      continue;
+    auto type = method->parameterVectors[param]->get_type();
+    return type.type_kind == TypeKind::Pointer && !type.is_linear_v() &&
+           std::get<PointerType>(type.type_data).get_pointee().type_kind ==
+               TypeKind::TypeParam;
+  }
+  return false;
+}
+
 bool BiTypeCheckerVisitor::owns_instance(const std::string &module,
                                          const MonomorphizedKey &key) {
   return key.name.get_module() == module ||

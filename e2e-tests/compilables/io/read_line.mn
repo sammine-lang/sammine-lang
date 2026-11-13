@@ -8,7 +8,7 @@ let main() -> i32 {
   case io::read_line() {
     Some(text) => {
       print("got: ");
-            print("{}", &text);
+            print("{}", text);
       print(" (");
       io::print_i64(str::length(&text));
       print(")\n");

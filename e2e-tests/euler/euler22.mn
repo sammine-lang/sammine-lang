@@ -38,7 +38,7 @@ let unsafe push_name(buf: ptr<char>, names: vec::Vec<str::String>,
 
 // Whether the name at a sorts after the one at b.
 let unsafe name_after(names: ptr<str::String>, a: i64, b: i64) -> bool {
-  &names[a] > &names[b]
+  names[a] > names[b]
 }
 
 // A = 1, B = 2, ...

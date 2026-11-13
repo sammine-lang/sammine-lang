@@ -18,7 +18,7 @@ import vec;
 struct Point { x: i32, y: i32, };
 
 instance Format<Point> {
-  let Format(p: Point, f: Formatter) -> unit { write(f, "({}, {})", p.x, p.y) }
+  let Format(p: ptr<Point>, f: Formatter) -> unit { write(f, "({}, {})", (*p).x, (*p).y) }
 }
 
 let main() -> i32 {
@@ -26,12 +26,12 @@ let main() -> i32 {
   print("{.2} {.1} {.3}\n", [0.5, 2.5], (1.0, 2), Option<f64>::Some(0.25));
   let v = vec::push(vec::push(vec::new<i32>(2i64), 7), 8);
   let empty = vec::new<i32>(1i64);
-  print("{} {} {} {}\n", Option<i32>::Some(4), Option<string>::None, &v,
-        &empty);
+  print("{} {} {} {}\n", Option<i32>::Some(4), Option<string>::None, v,
+        empty);
   print("{} {}\n", [[1, 2], [3, 4]], [Point { x: 1, y: 2 }]);
   let s = str::from(format("{} of {}: {.2}", 3, 10, 0.3));
-  print("{} ({})\n", &s, str::length(&s));
+  print("{} ({})\n", s, str::length(&s));
   let listed = str::from(format("{}", [1, 2, 3]));
-  print("{} is {} chars\n", &listed, str::length(&listed));
+  print("{} is {} chars\n", listed, str::length(&listed));
   0
 }

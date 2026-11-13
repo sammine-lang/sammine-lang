@@ -4,7 +4,7 @@
 // CHECK-NEXT: true true
 // CHECK-NEXT: true
 
-// Strings are compared through views, &a < &b, byte by byte as C's strcmp
+// Strings are compared through views, a < b, byte by byte as C's strcmp
 // does. A comparison only reads them: each is still deleted after.
 
 import str;
@@ -14,11 +14,11 @@ let main() -> i32 {
   let a = str::new("apple");
   let b = str::new("banana");
   let a2 = str::new("apple");
-  print("{} {} {}\n", &a < &b, &b < &a, &a < &a2);
-  print("{} {} {}\n", &a <= &a2, &b > &a, &a >= &b);
+  print("{} {} {}\n", a < b, b < a, a < a2);
+  print("{} {} {}\n", a <= a2, b > a, a >= b);
   // Uppercase sorts before lowercase, as in ASCII.
   let upper = str::new("Zebra");
-  print("{} {}\n", &upper < &a, str::compare(&a, &a2) == 0);
+  print("{} {}\n", upper < a, str::compare(&a, &a2) == 0);
   print("{}\n", str::compare(&a, &b) < 0);
   str::delete(a);
   str::delete(b);

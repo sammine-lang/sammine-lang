@@ -8,7 +8,7 @@ export instance<T> Indexer<Box<T>, T> {
 // Not exported: only this module's code may use it, including its generic
 // functions compiled in an importer.
 instance<T> Equal<Box<T>> {
-  let Equal(x: Box<T>, y: Box<T>) -> bool { x.v == y.v }
+  let Equal(x: ptr<Box<T>>, y: ptr<Box<T>>) -> bool { (*x).v == (*y).v }
 }
 
 export let same<T>(x: Box<T>, y: Box<T>) -> bool { x == y }

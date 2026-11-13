@@ -8,10 +8,10 @@ import std;
 struct Point { x: i64, };
 type Color = Red | Blue;
 
-instance Less<Point> { let Less(a: Point, b: Point) -> bool { a.x < b.x } }
+instance Less<Point> { let Less(a: ptr<Point>, b: ptr<Point>) -> bool { (*a).x < (*b).x } }
 instance GreaterEqual<Color> {
-  let GreaterEqual(a: Color, b: Color) -> bool {
-    case a { Blue => true, Red => b == Color::Red, }
+  let GreaterEqual(a: ptr<Color>, b: ptr<Color>) -> bool {
+    case *a { Blue => true, Red => *b == Color::Red, }
   }
 }
 instance Add<Point> {

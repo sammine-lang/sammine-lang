@@ -15,7 +15,7 @@ let main() -> i32 {
   let (f, line) = io::file_read_line(f);
   case line {
     Some(text) => {
-            print("{}", &text);
+            print("{}", text);
     },
     None => { },
   };

@@ -104,6 +104,11 @@ private:
   mlir::FailureOr<mlir::Value>
   lowerFunctionValue(AST::VariableExprAST *var,
                      const sammine_util::QualifiedName &function);
+  /// The place `expr` names, or a slot holding its value: what a method
+  /// lent the value gets a view of.
+  mlir::FailureOr<mlir::Value> lentPlace(AST::ExprAST *expr);
+  /// A view of `expr`, lent to a method.
+  mlir::FailureOr<mlir::Value> lowerLent(AST::ExprAST *expr);
   mlir::FailureOr<mlir::Value>
   lowerIndexerCall(AST::IndexExprAST *index,
                    const sammine_util::QualifiedName &method);
@@ -194,10 +199,14 @@ private:
   mlir::Value cStream(mlir::Location location, llvm::StringRef name);
   void flush(mlir::Location location, FormatOutput &out);
   mlir::Value digitsValue(mlir::Location location, const Digits &digits);
-  /// Writes `value`, of `type`, into `out`, as its Format instance does.
-  mlir::LogicalResult writeValue(mlir::Location location, FormatOutput &out,
-                                 const Type &type, mlir::Value value,
-                                 const Digits &digits);
+  /// Writes into `out` a value the compiler prints by a directive.
+  void writeScalar(mlir::Location location, FormatOutput &out,
+                   const Type &type, mlir::Value value, const Digits &digits);
+  /// Writes into `out` what `place` holds, of `type`, as its Format
+  /// instance does: one a program wrote is lent the place if `lends`.
+  mlir::LogicalResult writePlace(mlir::Location location, FormatOutput &out,
+                                 const Type &type, mlir::Value place,
+                                 const Digits &digits, bool lends);
   /// Format<T>(value, formatter), of a `type` the compiler prints.
   mlir::LogicalResult writeBuiltin(mlir::Location location,
                                    mlir::Value formatter, const Type &type,

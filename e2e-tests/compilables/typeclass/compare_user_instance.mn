@@ -12,18 +12,18 @@ import std;
 struct Version { major: i32, minor: i32, };
 
 instance Less<Version> {
-  let Less(a: Version, b: Version) -> bool {
-    a.major < b.major || (a.major == b.major && a.minor < b.minor)
+  let Less(a: ptr<Version>, b: ptr<Version>) -> bool {
+    (*a).major < (*b).major || ((*a).major == (*b).major && (*a).minor < (*b).minor)
   }
 }
 
 instance Greater<Version> {
-  let Greater(a: Version, b: Version) -> bool { Less<Version>(b, a) }
+  let Greater(a: ptr<Version>, b: ptr<Version>) -> bool { Less<Version>(b, a) }
 }
 
 instance Equal<Version> {
-  let Equal(a: Version, b: Version) -> bool {
-    a.major == b.major && a.minor == b.minor
+  let Equal(a: ptr<Version>, b: ptr<Version>) -> bool {
+    (*a).major == (*b).major && (*a).minor == (*b).minor
   }
 }
 

@@ -11,7 +11,7 @@ let main() -> i32 {
   let (f, first) = io::file_read_line(f);
   case first {
     Some(text) => {
-            print("{}\n", &text);
+            print("{}\n", text);
     },
     None => print("eof\n"),
   };
@@ -19,7 +19,7 @@ let main() -> i32 {
   let (f, second) = io::file_read_line(f);
   case second {
     Some(text) => {
-            print("{}\n", &text);
+            print("{}\n", text);
     },
     None => print("eof\n"),
   };

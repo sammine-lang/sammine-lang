@@ -19,16 +19,16 @@ import str;
 struct Point { x: i32, y: i32, };
 
 instance Format<Point> {
-  let Format(p: Point, f: Formatter) -> unit {
-    write(f, "({}, {})", p.x, p.y)
+  let Format(p: ptr<Point>, f: Formatter) -> unit {
+    write(f, "({}, {})", (*p).x, (*p).y)
   }
 }
 
 type Shape = Dot(Point) | Line(Point, Point);
 
 instance Format<Shape> {
-  let Format(s: Shape, f: Formatter) -> unit {
-    case s {
+  let Format(s: ptr<Shape>, f: Formatter) -> unit {
+    case *s {
       Dot(p) => write(f, "dot {}", p),
       Line(a, b) => write(f, "line {} to {}", a, b),
     }
@@ -39,9 +39,9 @@ struct Money { amount: f64, };
 
 // The amount prints with the digits the placeholder gave Money.
 instance Format<Money> {
-  let Format(m: Money, f: Formatter) -> unit {
+  let Format(m: ptr<Money>, f: Formatter) -> unit {
     write(f, "$");
-    Format<f64>(m.amount, f)
+    Format<f64>((*m).amount, f)
   }
 }
 
@@ -59,6 +59,6 @@ let main() -> i32 {
   eprint("warning: {} costs {.1}\n", p, Money { amount: 0.5 });
   // A String prints through a view of it.
   let s = str::append(str::new("hello"), ", text");
-  print("{}\n", &s);
+  print("{}\n", s);
   check(Point { x: -1, y: 0 })
 }

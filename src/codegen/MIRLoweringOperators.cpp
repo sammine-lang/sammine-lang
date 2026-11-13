@@ -41,14 +41,17 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {
 // An operator through the instance the type checker chose: one the program
 // declares is a call to its method, one the compiler provides lowerOperator.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerBinary(BinaryExprAST *bin) {
-  auto lhs = lowerValue(bin->LHS.get());
+  auto *bp = props_.binary(bin->id());
+  auto *method = bp ? bp->method.as<Reference::Function>() : nullptr;
+  // A method that takes views of its operands is lent them.
+  bool lends = method && bp->lends;
+  auto lhs = lends ? lowerLent(bin->LHS.get()) : lowerValue(bin->LHS.get());
   if (mlir::failed(lhs))
     return mlir::failure();
-  auto rhs = lowerValue(bin->RHS.get());
+  auto rhs = lends ? lowerLent(bin->RHS.get()) : lowerValue(bin->RHS.get());
   if (mlir::failed(rhs))
     return mlir::failure();
-  auto *bp = props_.binary(bin->id());
-  if (auto *method = bp ? bp->method.as<Reference::Function>() : nullptr)
+  if (method)
     return callMethod(loc(bin), method->name, {*lhs, *rhs}, bin->get_type(),
                       bin->Op->lexeme);
   // The operands' type decides what the operator does; a comparison's own

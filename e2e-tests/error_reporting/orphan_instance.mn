@@ -1,6 +1,6 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
 // CHECK: Hash<Range<i32>> can't be written here: an instance belongs to the module of its class or of one of its types, so no two modules write the same one. Wrap the type in a struct of your own to give it an instance
-// CHECK: Format<ptr<vec::Vec<bool>>> can't be written here
+// CHECK: Format<vec::Vec<bool>> can't be written here
 // CHECK: Hash<(i32, i32)> can't be written here
 // CHECK-NOT: can't be written here
 
@@ -13,10 +13,10 @@
 import vec;
 
 instance Hash<Range<i32>> {
-  let Hash(r: Range<i32>) -> u64 { 1u64 }
+  let Hash(r: ptr<Range<i32>>) -> u64 { 1u64 }
 }
 
-instance Format<ptr<vec::Vec<bool>>> {
+instance Format<vec::Vec<bool>> {
   let Format(v: ptr<vec::Vec<bool>>, f: Formatter) -> unit { write(f, "bools") }
 }
 
@@ -29,10 +29,10 @@ instance Hash<(i32, i32)> {
 struct Pair { a: i32, b: i32, };
 
 instance Hash<Pair> {
-  let Hash(p: Pair) -> u64 { Hash<i32>(p.a) ^ Hash<i32>(p.b) }
+  let Hash(p: ptr<Pair>) -> u64 { Hash<i32>((*p).a) ^ Hash<i32>((*p).b) }
 }
 
-instance Format<ptr<Pair>> {
+instance Format<Pair> {
   let Format(p: ptr<Pair>, f: Formatter) -> unit { write(f, "pair") }
 }
 

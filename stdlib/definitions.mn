@@ -49,28 +49,30 @@ export typeclass Mod<T> {
 // The comparisons: < goes through Less, == through Equal, and so on. The
 // compiler provides the instances for numbers and char, and Equal and
 // NotEqual also for bool, pointers and arrays of those.
+// A comparison only looks at what it compares, so it takes a view of each:
+// `a < b` lends both, and uses neither up.
 export typeclass Less<T> {
-  Less(a: T, b: T) -> bool;
+  Less(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 export typeclass Greater<T> {
-  Greater(a: T, b: T) -> bool;
+  Greater(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 export typeclass LessEqual<T> {
-  LessEqual(a: T, b: T) -> bool;
+  LessEqual(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 export typeclass GreaterEqual<T> {
-  GreaterEqual(a: T, b: T) -> bool;
+  GreaterEqual(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 export typeclass Equal<T> {
-  Equal(a: T, b: T) -> bool;
+  Equal(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 export typeclass NotEqual<T> {
-  NotEqual(a: T, b: T) -> bool;
+  NotEqual(a: ptr<T>, b: ptr<T>) -> bool;
 }
 
 // Strings compare by their chars, as C's strcmp orders them: two strings
@@ -78,27 +80,27 @@ export typeclass NotEqual<T> {
 reuse strcmp(a: string, b: string) -> i32;
 
 export instance Equal<string> {
-  let unsafe Equal(a: string, b: string) -> bool { strcmp(a, b) == 0 }
+  let unsafe Equal(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) == 0 }
 }
 
 export instance NotEqual<string> {
-  let unsafe NotEqual(a: string, b: string) -> bool { strcmp(a, b) != 0 }
+  let unsafe NotEqual(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) != 0 }
 }
 
 export instance Less<string> {
-  let unsafe Less(a: string, b: string) -> bool { strcmp(a, b) < 0 }
+  let unsafe Less(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) < 0 }
 }
 
 export instance Greater<string> {
-  let unsafe Greater(a: string, b: string) -> bool { strcmp(a, b) > 0 }
+  let unsafe Greater(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) > 0 }
 }
 
 export instance LessEqual<string> {
-  let unsafe LessEqual(a: string, b: string) -> bool { strcmp(a, b) <= 0 }
+  let unsafe LessEqual(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) <= 0 }
 }
 
 export instance GreaterEqual<string> {
-  let unsafe GreaterEqual(a: string, b: string) -> bool { strcmp(a, b) >= 0 }
+  let unsafe GreaterEqual(a: ptr<string>, b: ptr<string>) -> bool { strcmp(*a, *b) >= 0 }
 }
 
 // `x as To` converts through this. The compiler provides the instances
@@ -107,8 +109,9 @@ export typeclass Convert<From, To> {
   Convert(x: From) -> To;
 }
 
+// Hashing only looks at the value: it takes a view of it.
 export typeclass Hash<T> {
-  Hash(val: T) -> u64;
+  Hash(val: ptr<T>) -> u64;
 }
 
 // splitmix64's finalizer: every bit of x moves every bit of the hash, so
@@ -120,27 +123,27 @@ let mix(x: u64) -> u64 {
 }
 
 export instance Hash<i32> {
-  let Hash(val: i32) -> u64 { mix(val as u64) }
+  let Hash(val: ptr<i32>) -> u64 { mix(*val as u64) }
 }
 
 export instance Hash<i64> {
-  let Hash(val: i64) -> u64 { mix(val as u64) }
+  let Hash(val: ptr<i64>) -> u64 { mix(*val as u64) }
 }
 
 export instance Hash<u32> {
-  let Hash(val: u32) -> u64 { mix(val as u64) }
+  let Hash(val: ptr<u32>) -> u64 { mix(*val as u64) }
 }
 
 export instance Hash<u64> {
-  let Hash(val: u64) -> u64 { mix(val) }
+  let Hash(val: ptr<u64>) -> u64 { mix(*val) }
 }
 
 export instance Hash<char> {
-  let Hash(val: char) -> u64 { mix(val as u64) }
+  let Hash(val: ptr<char>) -> u64 { mix(*val as u64) }
 }
 
 export instance Hash<bool> {
-  let Hash(val: bool) -> u64 { mix(if val { 1u64 } else { 0u64 }) }
+  let Hash(val: ptr<bool>) -> u64 { mix(if *val { 1u64 } else { 0u64 }) }
 }
 
 // A string's hash is each of its chars mixed into the one before, so equal
@@ -154,7 +157,7 @@ let unsafe hash_chars(chars: ptr<char>, hash: u64) -> u64 {
 }
 
 export instance Hash<string> {
-  let unsafe Hash(val: string) -> u64 { hash_chars(val, 0u64) }
+  let unsafe Hash(val: ptr<string>) -> u64 { hash_chars(*val, 0u64) }
 }
 
 // coll[idx], for a coll that is neither an array nor a pointer. The
@@ -167,12 +170,13 @@ export typeclass Drop<T> {
 }
 
 // `{}` in a format prints its argument through this. An instance is given
-// a Formatter, which says where to write and how, and writes the value's
-// parts to it: write(f, "({}, {})", p.x, p.y). The compiler provides the
-// instances for numbers, bool, char and string, and for a tuple or an array
-// of what prints: (1, true), [1, 2, 3].
+// a view of the value, as printing only looks at it, and a Formatter, which
+// says where to write and how, and writes the value's parts to it:
+// write(f, "({}, {})", (*p).x, (*p).y). The compiler provides the instances
+// for numbers, bool, char and string, and for a tuple or an array of what
+// prints: (1, true), [1, 2, 3].
 export typeclass Format<T> {
-  Format(val: T, f: Formatter) -> unit;
+  Format(val: ptr<T>, f: Formatter) -> unit;
 }
 
 export typeclass Indexer<T, E> {
@@ -184,8 +188,8 @@ export type Option<T> = Some(T) | None;
 // An Option prints as it is written, its value with the digits it was
 // given: Some(2.50), None.
 export instance<T> Format<Option<T>> {
-  let Format(o: Option<T>, f: Formatter) -> unit {
-    case o {
+  let Format(o: ptr<Option<T>>, f: Formatter) -> unit {
+    case *o {
       Some(v) => {
         write(f, "Some(");
         Format<T>(v, f);

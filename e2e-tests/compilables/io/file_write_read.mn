@@ -8,7 +8,7 @@ let main() -> i32 {
   let result: i32 = io::write_file("/tmp/sammine_test_io.txt", content, 15);
   case io::read_file("/tmp/sammine_test_io.txt") {
     Some(text) => {
-            print("{}\n", &text);
+            print("{}\n", text);
     },
     None => print("could not read\n"),
   };

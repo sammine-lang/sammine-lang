@@ -125,33 +125,51 @@ export let unsafe compare(a: ptr<String>, b: ptr<String>) -> i32 {
 // String is.
 let unsafe text_of(chars: ptr<char>) -> string { chars as string }
 
-// A String prints through a view, print("{}", &s): printing only reads it.
-export instance Format<ptr<String>> {
+// A String prints as its text.
+export instance Format<String> {
   let Format(s: ptr<String>, f: Formatter) -> unit {
     write(f, "{}", text_of((*s).data))
   }
 }
 
-// Whether a and b hold the same characters. `==` on two views compares
-// where they point, as for any pointer; this compares what they hold.
+// It hashes as its text does, so a String and a string that say the same
+// hash alike.
+export instance Hash<String> {
+  let Hash(s: ptr<String>) -> u64 {
+    let text = text_of((*s).data);
+    Hash<string>(&text)
+  }
+}
+
+// Whether a and b hold the same characters: what `==` on two Strings is.
+// `==` on two views of them compares where they point, as for any pointer.
 export let eq(a: ptr<String>, b: ptr<String>) -> bool {
   (*a).length == (*b).length && compare(a, b) == 0
 }
 
-// Strings are ordered through views, &a < &b: a comparison only reads them.
-export instance Less<ptr<String>> {
+// Strings compare by what they hold, a == b and a < b: a comparison only
+// looks at them, so it is lent both.
+export instance Equal<String> {
+  let Equal(a: ptr<String>, b: ptr<String>) -> bool { eq(a, b) }
+}
+
+export instance NotEqual<String> {
+  let NotEqual(a: ptr<String>, b: ptr<String>) -> bool { eq(a, b) == false }
+}
+
+export instance Less<String> {
   let Less(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) < 0 }
 }
 
-export instance Greater<ptr<String>> {
+export instance Greater<String> {
   let Greater(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) > 0 }
 }
 
-export instance LessEqual<ptr<String>> {
+export instance LessEqual<String> {
   let LessEqual(a: ptr<String>, b: ptr<String>) -> bool { compare(a, b) <= 0 }
 }
 
-export instance GreaterEqual<ptr<String>> {
+export instance GreaterEqual<String> {
   let GreaterEqual(a: ptr<String>, b: ptr<String>) -> bool {
     compare(a, b) >= 0
   }

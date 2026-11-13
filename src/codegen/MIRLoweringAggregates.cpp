@@ -319,33 +319,42 @@ mlir::Value MIRLowering::digitsValue(mlir::Location location,
                      digits.said ? static_cast<int64_t>(*digits.said) : -1);
 }
 
-// Writes `value`, of `type`, into `out`, as its instance of Format does.
-// The compiler's, for a type in builtin_format_directive, is that
-// directive, gathered with the text around it. A tuple and an array print
-// part by part. Any other is a program's instance: what was gathered is
-// written, then its method is called with the value and a Formatter, the
-// stream and the digits.
-mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
+// Writes into `out` a value the compiler prints by a directive, of a
+// `type` in builtin_format_directive: the directive, gathered with the text
+// around it, and the value.
+void MIRLowering::writeScalar(mlir::Location location, FormatOutput &out,
+                              const Type &type, mlir::Value value,
+                              const Digits &digits) {
+  auto directive = *builtin_format_directive(type);
+  if (!type.is_float()) {
+    out.format += directive;
+    out.args.push_back(type.type_kind == TypeKind::Bool
+                           ? boolText(location, value)
+                           : value);
+  } else if (digits.handedOn) {
+    // Known only when it runs: handed to printf beside the float.
+    out.format += "%.*f";
+    out.args.push_back(digits.handedOn);
+    out.args.push_back(value);
+  } else {
+    out.format += digits.said ? "%." + std::to_string(*digits.said) + "f"
+                              : std::string(directive);
+    out.args.push_back(value);
+  }
+}
+
+// Writes into `out` what `place` holds, of `type`, as its instance of
+// Format does. What the compiler prints by a directive is read out of the
+// place. A tuple and an array print part by part, each part where it is. Any
+// other is a program's instance: what was gathered is written, then its
+// method is called with a Formatter, the stream and the digits, and a view
+// of the place if its class takes one (`lends`), so the value stays.
+mlir::LogicalResult MIRLowering::writePlace(mlir::Location location,
                                             FormatOutput &out,
-                                            const Type &type,
-                                            mlir::Value value,
-                                            const Digits &digits) {
-  if (auto directive = builtin_format_directive(type)) {
-    if (!type.is_float()) {
-      out.format += *directive;
-      out.args.push_back(type.type_kind == TypeKind::Bool
-                             ? boolText(location, value)
-                             : value);
-    } else if (digits.handedOn) {
-      // Known only when it runs: handed to printf beside the float.
-      out.format += "%.*f";
-      out.args.push_back(digits.handedOn);
-      out.args.push_back(value);
-    } else {
-      out.format += digits.said ? "%." + std::to_string(*digits.said) + "f"
-                                : std::string(*directive);
-      out.args.push_back(value);
-    }
+                                            const Type &type, mlir::Value place,
+                                            const Digits &digits, bool lends) {
+  if (builtin_format_directive(type)) {
+    writeScalar(location, out, type, read(location, place), digits);
     return mlir::success();
   }
   if (auto *tuple = std::get_if<TupleType>(&type.type_data)) {
@@ -356,10 +365,11 @@ mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
         return mlir::failure();
       if (i)
         out.format += ", ";
-      if (mlir::failed(writeValue(
+      if (mlir::failed(writePlace(
               location, out, tuple->get_element(i),
-              smn::ExtractOp::create(builder_, location, *element, value, i),
-              digits)))
+              smn::FieldOp::create(builder_, location, placeOf(*element),
+                                   place, i),
+              digits, lends)))
         return mlir::failure();
     }
     out.format += ")";
@@ -373,13 +383,15 @@ mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
     auto i64 = builder_.getI64Type();
     auto size = static_cast<int64_t>(array->get_size());
     auto at = [&](mlir::Value index) {
-      return smn::ElementOp::create(builder_, location, *element, value, index)
+      return smn::ElemOp::create(builder_, location, placeOf(*element), place,
+                                 index)
           .getResult();
     };
     out.format += "[";
-    if (size > 0 && mlir::failed(writeValue(location, out, elementType,
-                                            at(intConstant(location, i64, 0)),
-                                            digits)))
+    if (size > 0 &&
+        mlir::failed(writePlace(location, out, elementType,
+                                at(intConstant(location, i64, 0)), digits,
+                                lends)))
       return mlir::failure();
     // The rest, each after a comma, in a loop: an array can be long.
     if (size > 1) {
@@ -399,8 +411,8 @@ mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
       mlir::cf::CondBranchOp::create(builder_, location, more, body, after);
       builder_.setInsertionPointToStart(body);
       out.format += ", ";
-      if (mlir::failed(
-              writeValue(location, out, elementType, at(index), digits)))
+      if (mlir::failed(writePlace(location, out, elementType, at(index),
+                                  digits, lends)))
         return mlir::failure();
       flush(location, out);
       auto next = mlir::arith::AddIOp::create(builder_, location, index,
@@ -421,14 +433,17 @@ mlir::LogicalResult MIRLowering::writeValue(mlir::Location location,
       mlir::ValueRange{out.stream, digitsValue(location, digits)});
   auto method = MonomorphizedKey::instance(kFormatClass, {type})
                     .to_typeclass_name(std::string(kFormatClass));
-  smn::CallOp::create(builder_, location, mlir::TypeRange{},
-                      props_.symbol(method),
-                      mlir::ValueRange{value, formatter.getResult()}, "{}");
+  smn::CallOp::create(
+      builder_, location, mlir::TypeRange{}, props_.symbol(method),
+      mlir::ValueRange{lends ? lend(place, location) : read(location, place),
+                       formatter.getResult()},
+      "{}");
   return mlir::success();
 }
 
-// Format<T>(value, formatter), the compiler's, called by name: the value
-// written to the Formatter's stream, with the digits it hands on.
+// Format<T>(value, formatter), the compiler's, called by name: the value,
+// or what the view it is given of one shows, written to the Formatter's
+// stream, with the digits it hands on.
 mlir::LogicalResult MIRLowering::writeBuiltin(mlir::Location location,
                                               mlir::Value formatter,
                                               const Type &type,
@@ -440,14 +455,27 @@ mlir::LogicalResult MIRLowering::writeBuiltin(mlir::Location location,
   Digits digits{std::nullopt,
                 smn::ExtractOp::create(builder_, location, parts[1], formatter,
                                        1)};
-  if (mlir::failed(writeValue(location, out, type, value, digits)))
+  auto held = types_.mirType(type);
+  if (!held)
+    return mlir::failure();
+  // A class that takes a view of the value is given one by name too.
+  bool viewed = value.getType() == viewOf(*held);
+  mlir::Value place;
+  if (viewed) {
+    place = smn::DerefOp::create(builder_, location, value).getResult();
+  } else {
+    place = smn::LocalOp::create(builder_, location, placeOf(*held), "")
+                .getResult();
+    smn::StoreOp::create(builder_, location, value, place);
+  }
+  if (mlir::failed(writePlace(location, out, type, place, digits, viewed)))
     return mlir::failure();
   flush(location, out);
   return mlir::success();
 }
 
 // print, eprint, write, format and panic. The format becomes C's, text as
-// it is and each `{}` what writeValue makes of its argument, and is written
+// it is and each `{}` what writePlace makes of its argument, and is written
 // to a C stream with fprintf: stdout for print, stderr for eprint and
 // panic, the Formatter's for write, and for format one that keeps its
 // text, which is the value. panic writes `file:line:col: panic: ` first and
@@ -500,10 +528,21 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerFormat(FormatExprAST *ast) {
     if (next >= ast->arguments.size())
       return mlir::failure();
     auto *arg = ast->arguments[next++].get();
-    auto value = lowerValue(arg);
-    if (mlir::failed(value) ||
-        mlir::failed(writeValue(loc(arg), out, arg->get_type(), *value,
-                                Digits{piece.precision, {}})))
+    auto type = arg->get_type();
+    Digits digits{piece.precision, {}};
+    // A value printed by a directive is all that is needed of it; any
+    // other prints where it is, or from a slot of its own.
+    if (builtin_format_directive(type)) {
+      auto value = lowerValue(arg);
+      if (mlir::failed(value))
+        return mlir::failure();
+      writeScalar(loc(arg), out, type, *value, digits);
+      continue;
+    }
+    auto place = lentPlace(arg);
+    if (mlir::failed(place) ||
+        mlir::failed(
+            writePlace(loc(arg), out, type, *place, digits, fp->lends)))
       return mlir::failure();
   }
   if (panics) {

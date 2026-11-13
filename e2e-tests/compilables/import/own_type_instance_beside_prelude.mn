@@ -12,7 +12,7 @@
 struct Range<T> { a: T, b: T, c: T, };
 
 instance Hash<Range<i32>> {
-  let Hash(r: Range<i32>) -> u64 { 7u64 }
+  let Hash(r: ptr<Range<i32>>) -> u64 { 7u64 }
 }
 
 let main() -> i32 {

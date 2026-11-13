@@ -22,9 +22,9 @@ export instance<T> Indexer<Vec<T>, T> {
   }
 }
 
-// A Vec prints through a view, print("{}", &v), as an array does: each of
-// its values, with the digits it was given, between brackets.
-export instance<T> Format<ptr<Vec<T>>> {
+// A Vec prints as an array does: each of its values, with the digits it
+// was given, between brackets.
+export instance<T> Format<Vec<T>> {
   let unsafe Format(v: ptr<Vec<T>>, f: Formatter) -> unit {
     write(f, "[");
     for i in 0i64..(*v).length {

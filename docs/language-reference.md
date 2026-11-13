@@ -336,7 +336,7 @@ print("{{}} is a placeholder, 100%\n");    // {} is a placeholder, 100%
   `false`), `char`, `string`, and an integer-backed enum (its integer). A
   tuple and an array print part by part, `(1, true)` and `[1, 2, 3]`, if
   each part prints. The prelude gives `Option<T>` an instance (`Some(4)`,
-  `None`) and `vec` gives `Vec<T>` one, through a view (`print("{}", &v)`).
+  `None`) and `vec` gives `Vec<T>` one.
   Nothing in the format says the type again, so nothing can say it wrong. A
   type with no instance is an error ("print() can't print 'P': no instance of
   Format<P>").
@@ -368,8 +368,8 @@ says.
 struct Point { x: i32, y: i32, };
 
 instance Format<Point> {
-  let Format(p: Point, f: Formatter) -> unit {
-    write(f, "({}, {})", p.x, p.y)
+  let Format(p: ptr<Point>, f: Formatter) -> unit {
+    write(f, "({}, {})", (*p).x, (*p).y)
   }
 }
 
@@ -387,17 +387,18 @@ to a float's prints the float with them, as a tuple's, an array's and an
 struct Money { amount: f64, };
 
 instance Format<Money> {
-  let Format(m: Money, f: Formatter) -> unit {
+  let Format(m: ptr<Money>, f: Formatter) -> unit {
     write(f, "$");
-    Format<f64>(m.amount, f)
+    Format<f64>((*m).amount, f)
   }
 }
 
 print("{} {.2}\n", m, m);                 // $2.500000 $2.50
 ```
 
-A value that owns memory prints through a view, as it compares through one:
-`str` gives `Format<ptr<String>>`, so a `String` prints as `print("{}", &s)`.
+Printing only looks at a value, so an instance takes a view of it, `ptr<T>`,
+and `print` lends the value: a `String` prints as `print("{}", s)` and is
+still the program's afterwards (see Typeclasses).
 
 ### Panic
 
@@ -915,17 +916,17 @@ An instance is written in the module of its class, or of one of the types it
 is for. A program has one instance for a class and its types, so were any
 module free to write it, two libraries could each write the same one, and no
 program could use both. A type counts through pointers to it
-(`Format<ptr<Point>>` is `Point`'s module's to write), and a type no module
+(`Convert<ptr<Point>, i64>` is `Point`'s module's to write), and a type no module
 defines, a number, a string, a tuple or an array, is no module's: only the
 class's module writes an instance for those alone.
 
 ```sammine
 import vec;
 
-instance Format<ptr<vec::Vec<bool>>> { ... }   // error: Format is the prelude's, Vec is vec's
+instance Format<vec::Vec<bool>> { ... }   // error: Format is the prelude's, Vec is vec's
 
-struct Flags { bits: vec::Vec<bool>, };        // a type of this module's
-instance Format<ptr<Flags>> { ... }            // its instance to write
+struct Flags { bits: vec::Vec<bool>, };   // a type of this module's
+instance Format<Flags> { ... }            // its instance to write
 ```
 
 ### Multi-Parameter Typeclasses
@@ -960,11 +961,22 @@ print("{}\n", Sized<char>());    // 1
 struct Point { x: i32, y: i32, };
 
 instance Hash<Point> {
-  let Hash(val: Point) -> u64 { 42u64 }
+  let Hash(val: ptr<Point>) -> u64 { Hash<i32>((*val).x) ^ Hash<i32>((*val).y) }
 }
 
 let h = Hash<Point>(Point { x: 1, y: 2 });
 ```
+
+**A class that only looks at a value takes a view of it.** `Hash`, the
+comparisons and `Format` are declared over `ptr<T>`: `Hash(val: ptr<T>)`,
+`Less(a: ptr<T>, b: ptr<T>)`. The instance is still written for the type,
+`Hash<Point>`, and what calls its method, an operator, a `{}` or the
+method's name, gives the value and lends it, as `v[i]` lends `v` to
+`Indexer`. So hashing, comparing and printing use nothing up, and a type that
+owns memory, as `str::String`, has the same instances a number has: `a < b`,
+`print("{}", a)`. A view is given as it is: inside an instance, `Less<T>(b, a)`
+hands on the views it was given. `Add` and the other arithmetic classes take
+their operands by value, as they make a new one of them.
 
 **`Add<T>`**, **`Sub<T>`**, **`Mul<T>`**, **`Div<T>`**, **`Mod<T>`** -- operator overloading:
 
@@ -985,14 +997,15 @@ print("{} {}\n", v3.x, v3.y);     // 30 40
 
 The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
 
-**`Less<T>`**, **`Greater<T>`**, **`LessEqual<T>`**, **`GreaterEqual<T>`**, **`Equal<T>`**, **`NotEqual<T>`** -- comparison, used by `<`, `>`, `<=`, `>=`, `==` and `!=`. Each method takes two `T`s and returns `bool`. They are built in for the number types and `char`, and `Equal` and `NotEqual` also for `bool`, pointers, arrays of those, and enums whose payloads have them. Each operator only needs its own instance:
+**`Less<T>`**, **`Greater<T>`**, **`LessEqual<T>`**, **`GreaterEqual<T>`**, **`Equal<T>`**, **`NotEqual<T>`** -- comparison, used by `<`, `>`, `<=`, `>=`, `==` and `!=`. Each method takes views of two `T`s and returns `bool`. They are built in for the number types and `char`, and `Equal` and `NotEqual` also for `bool`, pointers, arrays of those, and enums whose payloads have them. Each operator only needs its own instance:
 
 ```sammine
 struct Version { major: i32, minor: i32, };
 
 instance Less<Version> {
-  let Less(a: Version, b: Version) -> bool {
-    a.major < b.major || (a.major == b.major && a.minor < b.minor)
+  let Less(a: ptr<Version>, b: ptr<Version>) -> bool {
+    (*a).major < (*b).major ||
+        ((*a).major == (*b).major && (*a).minor < (*b).minor)
   }
 }
 
@@ -1445,7 +1458,7 @@ A generic function is compiled in each module that uses it, for the types it is 
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
 - **`map`** -- provides `Map<K, V>`, a hash table (see below)
 - **`set`** -- provides `Set<T>`, a set of values over `Map<T, bool>` (see below)
-- **`str`** -- provides `String` type with `new` and `delete`; `str::push(s, c)` and `str::append(s, "...")` give `s` with a `char` or a C string after it, growing it as `Vec`'s push does; `str::length(&s)`; `str::get(&s, i)` is `s[i]` giving `Option<char>`, `None` out of bounds; `str::eq(&a, &b)` compares what two strings hold; `s[i]` is byte `i` of `s` as a `char`, for an `i64` index in `0..s.length` (the terminator isn't among them), and any other panics, as `v[i]` does for a `Vec`, through `Indexer<String, char>`. It also orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`, and `&a < &b`, `>`, `<=` and `>=` compare through views (instances on `ptr<String>`), since a comparison only reads the strings. `==` on views still compares addresses, as for any pointer
+- **`str`** -- provides `String` type with `new` and `delete`; `str::push(s, c)` and `str::append(s, "...")` give `s` with a `char` or a C string after it, growing it as `Vec`'s push does; `str::length(&s)`; `str::get(&s, i)` is `s[i]` giving `Option<char>`, `None` out of bounds; `str::eq(&a, &b)` compares what two strings hold; `s[i]` is byte `i` of `s` as a `char`, for an `i64` index in `0..s.length` (the terminator isn't among them), and any other panics, as `v[i]` does for a `Vec`, through `Indexer<String, char>`. It also orders strings byte by byte as C's `strcmp` does: `str::compare(&a, &b)` gives a negative, zero or positive `i32`; strings compare by what they hold, `a == b` and `a < b` (the comparison classes' instances on `String`: a comparison is lent the strings and uses neither up), hash as their text does, and print, `print("{}", s)`. `==` on views of them still compares addresses, as for any pointer
 
 ---
 
