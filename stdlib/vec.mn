@@ -4,16 +4,21 @@ export struct Vec<T> {
   cap: i64,
 };
 
+// Ends the program unless i is one of a Vec's first n values.
+let check_index(i: i64, n: i64) -> unit {
+  if i < 0i64 || i >= n {
+    panic("index %lld out of bounds for a Vec of length %lld", i, n)
+  } else {
+    ()
+  }
+}
+
 // v[i]: element i of the first v.length. An index outside them ends the
 // program.
 export instance<T> Indexer<Vec<T>, T> {
   let unsafe Indexer(v: ptr<Vec<T>>, i: i64) -> T {
-    if i < 0i64 || i >= (*v).length {
-      panic("index %lld out of bounds for a Vec of length %lld", i,
-            (*v).length)
-    } else {
-      (*v).data[i]
-    }
+    check_index(i, (*v).length);
+    (*v).data[i]
   }
 }
 
@@ -72,13 +77,10 @@ export let unsafe pop<T>(v: Vec<T>) -> (Vec<T>, Option<T>) {
 // v with value i replaced by val, the value it held dropped. An index
 // outside 0..length(v) ends the program, as v[i] does.
 export let unsafe set<T>(v: Vec<T>, i: i64, val: T) -> Vec<T> {
-  if i < 0i64 || i >= v.length {
-    panic("index %lld out of bounds for a Vec of length %lld", i, v.length)
-  } else {
-    drop(v.data[i]);
-    v.data[i] = val;
-    Vec<T> { data: v.data, length: v.length, cap: v.cap }
-  }
+  check_index(i, v.length);
+  drop(v.data[i]);
+  v.data[i] = val;
+  v
 }
 
 // A Vec's drop drops the values it holds, then its buffer: the buffer's

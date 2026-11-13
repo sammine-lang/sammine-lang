@@ -38,11 +38,11 @@
 | `std.mn` | `export reuse printf(...)` → `std::printf` |
 | `io.mn` | Typed print/println, file I/O (`File`, a struct over C's `FILE *`, ended by `close`), stdin readers, stderr |
 | `str.mn` | `String` struct (data, length, cap), new/delete, `compare`, and `Less`/`Greater`/`LessEqual`/`GreaterEqual` instances on `ptr<String>` (views: an instance on `String` itself would own, and have to free, its operands). No `Equal`: `ptr<T>` has a built-in address `==` |
-| `vec.mn` | Generic `Vec<T>` (data: 'buf<T>, length, cap), new/push/delete; internal grow_buf |
+| `vec.mn` | Generic `Vec<T>` (data: 'buf<T>, length, cap), new/push/delete; internal grow_buf, and check_index, the bounds check `v[i]` and `set` share |
 | `definitions.mn` | The prelude: typeclasses (Sized, Add, Sub, Mul, Div, Mod, Convert, Hash, Indexer, Iterator), exported Sized/Iterator<Range> instances, `type Option<T>`, `struct Range<T>`. Compiled to definitions.so/.a first; other stdlib modules depend on it |
 | `io_runtime.c` | C runtime for io module |
 
 - Stdlib dir: `<binary>/../lib/sammine/`
 - Prelude: `Resolver::Resolve` imports `definitions` into every module (libraries too) unless compiling definitions.mn itself. Its names get no module prefix (`NameResolver::kPrelude`, the one exception, in `qualify`), in its own library too, so `Iterator<Range<i32>, i32>::next` matches on both sides
 - `for` calls `Iterator<Range<T>, T>::next`, defined in definitions.so; the importer's `available_externally` copy is inlined, so loops cost what they did when the prelude was compiled into each program
-- Stdlib `.mn` files copied to build dir by CMake; generic stdlib code in `STDLIB_COPIED` (can't be pre-compiled)
+- Every stdlib module is compiled to `.so`/`.a` and its `.mn` copied to the build dir by CMake (`STDLIB_COMPILED`), one whose code is all generic too: its generic code, compiled where it is used, links to the module's functions that aren't (`vec`'s `check_index`)

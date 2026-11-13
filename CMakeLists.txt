@@ -77,9 +77,11 @@ add_subdirectory(src)
 add_subdirectory(tools)
 
 # --- Standard library ---
-# Each compiled module produces .so, .a, and a copied .mn source in
-# build/lib/sammine/.  Modules with a C runtime (e.g. io) list their
-# .c file in STDLIB_C_RUNTIME_<mod>.
+# Each module produces .so, .a, and a copied .mn source in
+# build/lib/sammine/: one whose code is all generic too, compiled where it is
+# used, since its generic code may call functions of its own that aren't.
+# Modules with a C runtime (e.g. io) list their .c file in
+# STDLIB_C_RUNTIME_<mod>.
 set(STDLIB_DIR ${CMAKE_BINARY_DIR}/lib/sammine)
 file(MAKE_DIRECTORY ${STDLIB_DIR})
 
@@ -87,10 +89,10 @@ file(MAKE_DIRECTORY ${STDLIB_DIR})
 # compiled first.
 set(STDLIB_PRELUDE definitions)
 # A module comes after the modules it imports, listed in STDLIB_IMPORTS_<mod>.
-set(STDLIB_COMPILED std str io range buffer map)
-set(STDLIB_COPIED vec.mn set.mn)
+set(STDLIB_COMPILED std str io range buffer map vec set)
 set(STDLIB_C_RUNTIME_io io_runtime.c)
 set(STDLIB_IMPORTS_buffer range)
+set(STDLIB_IMPORTS_set map)
 
 # Helper: compile a C runtime file to a PIC object in STDLIB_DIR.
 function(stdlib_compile_c_runtime src out_var)
@@ -146,16 +148,6 @@ foreach(mod ${STDLIB_COMPILED})
          ${STDLIB_DIR}/${dep}.mn)
   endforeach()
   stdlib_add_module(${mod} "${_extra_deps}")
-endforeach()
-
-foreach(file ${STDLIB_COPIED})
-  add_custom_command(
-    OUTPUT ${STDLIB_DIR}/${file}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/stdlib/${file} ${STDLIB_DIR}/${file}
-    DEPENDS ${CMAKE_SOURCE_DIR}/stdlib/${file}
-    COMMENT "Copying stdlib/${file}"
-  )
-  list(APPEND STDLIB_OUTPUTS ${STDLIB_DIR}/${file})
 endforeach()
 
 add_custom_target(stdlib ALL DEPENDS ${STDLIB_OUTPUTS})
