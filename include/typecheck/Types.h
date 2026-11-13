@@ -532,6 +532,22 @@ struct Type {
     return found;
   }
 
+  /// Whether a value of this type has a function value in it: is one, or
+  /// holds one in a field, an element or a payload. One it only points at
+  /// isn't in it.
+  bool holdsFunctionValue() const {
+    if (type_kind == TypeKind::Function)
+      return true;
+    if (type_kind == TypeKind::Pointer)
+      return false;
+    bool found = false;
+    forEachInnerType([&](const Type &inner) {
+      if (inner.holdsFunctionValue())
+        found = true;
+    });
+    return found;
+  }
+
   /// Recursively checks if this type or any nested type is a TypeParam.
   bool containsTypeParam() const {
     if (type_kind == TypeKind::TypeParam)

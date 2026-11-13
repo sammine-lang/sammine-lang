@@ -31,11 +31,6 @@ public:
       : builder_(builder), props_(props), locator_(locator),
         types_(builder.getContext()) {}
 
-  /// Function types carry what `layouts` says their closures bind.
-  void setClosureLayouts(const ClosureLayouts *layouts) {
-    types_.setClosureLayouts(layouts);
-  }
-
   /// Lowers `ast` to a new function with its MIR signature and body, marked
   /// `smn::kMirAttr`, which replaces `decl`, its declaration. Returns false,
   /// leaving `decl` untouched, if `ast` uses something MIR can't lower.

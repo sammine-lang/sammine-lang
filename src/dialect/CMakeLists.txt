@@ -45,6 +45,7 @@ add_library(SammineDialectTransforms STATIC
   ${CMAKE_CURRENT_LIST_DIR}/OwnershipAnalysis.cpp
   ${CMAKE_CURRENT_LIST_DIR}/OwnershipCheck.cpp
   ${CMAKE_CURRENT_LIST_DIR}/ViewCheck.cpp
+  ${CMAKE_CURRENT_LIST_DIR}/SizeClosures.cpp
   ${CMAKE_CURRENT_LIST_DIR}/LambdaSets.cpp
   ${CMAKE_CURRENT_LIST_DIR}/SpecializeLambdaSets.cpp
   ${CMAKE_CURRENT_LIST_DIR}/ElaborateDrops.cpp

@@ -1,5 +1,4 @@
 #include "codegen/MIRTypes.h"
-#include "codegen/ClosureLayouts.h"
 #include "dialect/SammineDialect.h"
 
 namespace sammine_lang {
@@ -83,12 +82,7 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
     auto signature = mirFunctionType(fn);
     if (fn.is_var_arg() || !signature)
       return std::nullopt;
-    if (!layouts_)
-      return smn::FnType::get(ctx_, *signature, 0);
-    auto words = layouts_->words(type, *this);
-    if (!words)
-      return std::nullopt;
-    return smn::FnType::get(ctx_, *signature, *words);
+    return smn::FnType::get(ctx_, *signature, 0);
   }
   case TypeKind::Array: {
     auto &array = std::get<ArrayType>(type.type_data);

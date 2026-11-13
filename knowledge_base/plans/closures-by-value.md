@@ -49,11 +49,22 @@ calls stay indirect, through the code, which is passed a pointer to the
 data. A named function binds nothing; a type no partial application makes
 has `k = 0` and is a code pointer.
 
-- **Sizes before MIR.** An enum's payload size is part of its MIR type, so
-  a closure's size must be known before any MIR type is made. A pass over
-  the type-checked AST finds every partial application, with the types it
-  binds (the callee's parameters, so a lent owned pointer is a view), and
-  `!sammine.fn<sig, k>` carries `k`.
+- **Sizes from MIR.** `!sammine.fn<sig, k>` carries `k`, and the AST is
+  lowered with `k = 0` everywhere. `sizeClosures`
+  (`src/dialect/SizeClosures.cpp`), the last step of making the module,
+  reads every `sammine.closure` in it, with the types it binds (the
+  callee's parameters, so a lent owned pointer is a view), gives each
+  function type its words, and rewrites every type holding one: an enum's
+  payload size, part of its type, and the offsets its `variant`s and
+  `payload`s carry follow. The closures that size a type are the ones
+  lowered, so the two can't disagree; lowering to LLVM only refuses a
+  closure held in its maker's frame whose type has no word for the pointer.
+- **C sees no function value inside a value.** A C binding declares its
+  LLVM types before any body is lowered, so before sizes are known, and a
+  struct holding a function value has no layout C could be written
+  against anyway: taking or returning one by value is a type error
+  (`check_c_signature`). A function parameter is a pointer to its code,
+  and a pointer to such a struct is a pointer.
 - **What a closure binds can't own memory.** The type checker already
   rejects binding an owned value ("the closure can be called more than
   once"), so copying a closure's data never duplicates an owner, and there

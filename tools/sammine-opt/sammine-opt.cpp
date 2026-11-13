@@ -7,6 +7,7 @@
 #include "dialect/MIRToLLVM.h"
 #include "dialect/OwnershipCheck.h"
 #include "dialect/SammineDialect.h"
+#include "dialect/SizeClosures.h"
 #include "dialect/ViewCheck.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -18,14 +19,15 @@
 
 int main(int argc, char **argv) {
   sammine_lang::registerMIRToLLVMPass();
+  sammine_lang::registerSizeClosuresPass();
   sammine_lang::registerSpecializeLambdaSetsPass();
   sammine_lang::registerLowerLambdaSetsPass();
   sammine_lang::registerCheckOwnershipPass();
   sammine_lang::registerCheckViewsPass();
   sammine_lang::registerElaborateDropsPass();
+  sammine_lang::registerExpandDropsPass();
   mlir::DialectRegistry registry;
   // MIR meets the LLVM dialect where it calls, or is called from, code that
-  sammine_lang::registerExpandDropsPass();
   // didn't go through it.
   registry.insert<sammine_lang::smn::SammineDialect, mlir::func::FuncDialect,
                   mlir::arith::ArithDialect, mlir::cf::ControlFlowDialect,

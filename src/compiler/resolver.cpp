@@ -217,7 +217,7 @@ void Resolver::inject_definitions(
   // copies to inline (emitted available_externally).
   // So does the body of a function taking or giving a value that holds a
   // function value: how big a function value is depends on the closures of
-  // the unit that makes it (ClosureLayouts), so one must not cross from one
+  // the unit that makes it (sizeClosures), so one must not cross from one
   // unit's code into another's. Compiled here, it is this module's own copy.
   auto holders = functionHolders(DefinitionVec);
   for (auto it = DefinitionVec.rbegin(); it != DefinitionVec.rend(); ++it) {

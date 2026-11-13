@@ -36,33 +36,10 @@ namespace {
 
 // --- Shapes ---------------------------------------------------------------
 
-/// The types a type's own is built of, in pre-order.
-llvm::SmallVector<mlir::Type> partsOf(mlir::Type type) {
-  if (auto ptr = mlir::dyn_cast<smn::PtrType>(type))
-    return {ptr.getPointee()};
-  if (auto place = mlir::dyn_cast<smn::PlaceType>(type))
-    return {place.getValueType()};
-  if (auto st = mlir::dyn_cast<smn::StructType>(type))
-    return llvm::to_vector(st.getFields());
-  if (auto tuple = mlir::dyn_cast<smn::TupleType>(type))
-    return llvm::to_vector(tuple.getElements());
-  if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
-    return {array.getElement()};
-  if (auto en = mlir::dyn_cast<smn::EnumType>(type))
-    return llvm::to_vector(en.getVariants());
-  if (auto fn = mlir::dyn_cast<smn::FnType>(type)) {
-    auto parts = llvm::to_vector(fn.getSignature().getInputs());
-    parts.append(fn.getSignature().getResults().begin(),
-                 fn.getSignature().getResults().end());
-    return parts;
-  }
-  return {};
-}
-
 /// How many function types `type` has, itself included.
 unsigned fnCount(mlir::Type type) {
   unsigned count = mlir::isa<smn::FnType>(type) ? 1 : 0;
-  for (auto part : partsOf(type))
+  for (auto part : smn::typeParts(type))
     count += fnCount(part);
   return count;
 }
@@ -70,7 +47,7 @@ unsigned fnCount(mlir::Type type) {
 /// Where part `i` of `type` starts among its function types.
 unsigned partOffset(mlir::Type type, unsigned i) {
   unsigned offset = mlir::isa<smn::FnType>(type) ? 1 : 0;
-  auto parts = partsOf(type);
+  auto parts = smn::typeParts(type);
   for (unsigned j = 0; j < i && j < parts.size(); ++j)
     offset += fnCount(parts[j]);
   return offset;
@@ -80,7 +57,7 @@ unsigned partOffset(mlir::Type type, unsigned i) {
 /// variables start if `type`'s start at `first`.
 template <typename Fn> void forEachPart(mlir::Type type, int first, Fn fn) {
   int at = first + (mlir::isa<smn::FnType>(type) ? 1 : 0);
-  for (auto [i, part] : llvm::enumerate(partsOf(type))) {
+  for (auto [i, part] : llvm::enumerate(smn::typeParts(type))) {
     fn(static_cast<unsigned>(i), part, at);
     at += static_cast<int>(fnCount(part));
   }
@@ -91,7 +68,7 @@ struct Span {
   int first = -1;
   unsigned count = 0;
   Span part(mlir::Type type, unsigned i) const {
-    auto parts = partsOf(type);
+    auto parts = smn::typeParts(type);
     return {first + static_cast<int>(partOffset(type, i)), fnCount(parts[i])};
   }
 };
@@ -238,7 +215,7 @@ private:
       stays_.push_back(false);
       signature_.push_back(fnCount(type) - 1);
     }
-    for (auto part : partsOf(type))
+    for (auto part : smn::typeParts(type))
       addVariables(part);
   }
   Span spanOf(mlir::Value value) {
@@ -574,10 +551,9 @@ mlir::Type LambdaSets::representation(int var) {
 mlir::Type LambdaSets::rebuild(mlir::Type type, int first) {
   if (fnCount(type) == 0)
     return type;
-  auto *ctx = type.getContext();
   if (mlir::isa<smn::FnType>(type))
     return byValue(first) ? representation(first) : type;
-  auto parts = partsOf(type);
+  auto parts = smn::typeParts(type);
   llvm::SmallVector<mlir::Type> rebuilt;
   forEachPart(type, first, [&](unsigned, mlir::Type part, int start) {
     rebuilt.push_back(rebuild(part, start));
@@ -586,19 +562,7 @@ mlir::Type LambdaSets::rebuild(mlir::Type type, int first) {
     return type;
   // A struct or enum holding other function values keeps its name: it is
   // another type by its fields, as MIR's types are told apart.
-  if (auto ptr = mlir::dyn_cast<smn::PtrType>(type))
-    return smn::PtrType::get(ctx, rebuilt[0], ptr.getOwnership());
-  if (mlir::isa<smn::PlaceType>(type))
-    return smn::PlaceType::get(ctx, rebuilt[0]);
-  if (auto st = mlir::dyn_cast<smn::StructType>(type))
-    return smn::StructType::get(ctx, st.getName(), st.getFieldNames(), rebuilt);
-  if (mlir::isa<smn::TupleType>(type))
-    return smn::TupleType::get(ctx, rebuilt);
-  if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
-    return smn::ArrayType::get(ctx, array.getSize(), rebuilt[0]);
-  if (auto en = mlir::dyn_cast<smn::EnumType>(type))
-    return smn::makeEnum(ctx, en.getName(), en.getVariantNames(), rebuilt);
-  return type;
+  return smn::withTypeParts(type, rebuilt);
 }
 
 // --- The rewrite -----------------------------------------------------------
@@ -720,17 +684,7 @@ void retype(LambdaSets &sets, mlir::func::FuncOp func) {
         type, sets.resultSpan(func, static_cast<unsigned>(i)).first));
   func.setFunctionType(mlir::FunctionType::get(
       func.getContext(), func.front().getArgumentTypes(), results));
-  func.walk([&](mlir::Operation *op) {
-    if (auto variant = mlir::dyn_cast<smn::VariantOp>(op)) {
-      variant.setOffsets(smn::payloadOffsets(
-          smn::variantFields(variant.getType(), variant.getIndex())));
-    } else if (auto payload = mlir::dyn_cast<smn::PayloadOp>(op)) {
-      auto fields = smn::variantFields(payload.getValue().getType(),
-                                       payload.getVariant());
-      payload.setOffset(static_cast<uint64_t>(
-          smn::payloadOffsets(fields)[payload.getField()]));
-    }
-  });
+  smn::refreshPayloadOffsets(func);
 }
 
 struct LowerLambdaSetsPass

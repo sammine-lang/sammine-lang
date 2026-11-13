@@ -13,18 +13,13 @@
 
 namespace sammine_lang {
 
-class ClosureLayouts;
-
 class MIRTypes {
 public:
   explicit MIRTypes(mlir::MLIRContext *ctx) : ctx_(ctx) {}
 
-  /// Function types carry as many words as `layouts` says a closure of
-  /// theirs binds. Without layouts they carry none: the type's shape.
-  void setClosureLayouts(const ClosureLayouts *layouts) { layouts_ = layouts; }
-
   /// The MIR type of `type`, or nullopt for one MIR has none for: (), a
-  /// type parameter, a C function's `...`.
+  /// type parameter, a C function's `...`. A function type carries no
+  /// words yet: the module's closures say how many (sizeClosures).
   std::optional<mlir::Type> mirType(const Type &type) const;
   /// A function type in MIR types, if MIR has a type for each part. A C
   /// function's `...` has none: this is what it declares. A function
@@ -37,7 +32,6 @@ public:
 
 private:
   mlir::MLIRContext *ctx_;
-  const ClosureLayouts *layouts_ = nullptr;
 };
 
 } // namespace sammine_lang

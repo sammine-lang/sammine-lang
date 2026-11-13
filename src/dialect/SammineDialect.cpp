@@ -164,6 +164,75 @@ llvm::ArrayRef<mlir::Type> variantFields(EnumType en, uint64_t i) {
   return mlir::cast<TupleType>(en.getVariants()[i]).getElements();
 }
 
+llvm::SmallVector<mlir::Type> typeParts(mlir::Type type) {
+  if (auto ptr = mlir::dyn_cast<PtrType>(type))
+    return {ptr.getPointee()};
+  if (auto place = mlir::dyn_cast<PlaceType>(type))
+    return {place.getValueType()};
+  if (auto fields = fieldTypes(type))
+    return llvm::to_vector(*fields);
+  if (auto array = mlir::dyn_cast<ArrayType>(type))
+    return {array.getElement()};
+  if (auto en = mlir::dyn_cast<EnumType>(type))
+    return llvm::to_vector(en.getVariants());
+  if (auto fn = mlir::dyn_cast<FnType>(type)) {
+    auto parts = llvm::to_vector(fn.getSignature().getInputs());
+    llvm::append_range(parts, fn.getSignature().getResults());
+    return parts;
+  }
+  return {};
+}
+
+mlir::Type withTypeParts(mlir::Type type, llvm::ArrayRef<mlir::Type> parts) {
+  auto *ctx = type.getContext();
+  if (auto ptr = mlir::dyn_cast<PtrType>(type))
+    return PtrType::get(ctx, parts[0], ptr.getOwnership());
+  if (mlir::isa<PlaceType>(type))
+    return PlaceType::get(ctx, parts[0]);
+  if (auto st = mlir::dyn_cast<StructType>(type))
+    return StructType::get(ctx, st.getName(), st.getFieldNames(), parts);
+  if (mlir::isa<TupleType>(type))
+    return TupleType::get(ctx, parts);
+  if (auto array = mlir::dyn_cast<ArrayType>(type))
+    return ArrayType::get(ctx, array.getSize(), parts[0]);
+  if (auto en = mlir::dyn_cast<EnumType>(type))
+    return makeEnum(ctx, en.getName(), en.getVariantNames(), parts);
+  if (auto fn = mlir::dyn_cast<FnType>(type)) {
+    auto inputs = fn.getSignature().getNumInputs();
+    return FnType::get(ctx,
+                       mlir::FunctionType::get(ctx, parts.take_front(inputs),
+                                               parts.drop_front(inputs)),
+                       fn.getWords());
+  }
+  return type;
+}
+
+mlir::Type mapType(mlir::Type type,
+                   llvm::function_ref<mlir::Type(mlir::Type)> fn) {
+  auto parts = typeParts(type);
+  llvm::SmallVector<mlir::Type> mapped;
+  for (auto part : parts) {
+    mapped.push_back(mapType(part, fn));
+    if (!mapped.back())
+      return {};
+  }
+  return fn(llvm::equal(parts, mapped) ? type : withTypeParts(type, mapped));
+}
+
+void refreshPayloadOffsets(mlir::Operation *root) {
+  root->walk([](mlir::Operation *op) {
+    if (auto variant = mlir::dyn_cast<VariantOp>(op)) {
+      variant.setOffsets(
+          payloadOffsets(variantFields(variant.getType(), variant.getIndex())));
+    } else if (auto payload = mlir::dyn_cast<PayloadOp>(op)) {
+      auto fields =
+          variantFields(payload.getValue().getType(), payload.getVariant());
+      payload.setOffset(
+          static_cast<uint64_t>(payloadOffsets(fields)[payload.getField()]));
+    }
+  });
+}
+
 void forEachBranchEdge(
     mlir::BranchOpInterface branch,
     llvm::function_ref<void(mlir::Value, mlir::BlockArgument)> fn) {

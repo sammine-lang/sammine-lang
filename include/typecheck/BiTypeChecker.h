@@ -315,9 +315,10 @@ public:
   /// calls it through a pointer to its code. Returns false if one isn't
   /// (reported here).
   bool check_c_call(CallExprAST *ast, std::span<const Type> params);
-  /// A C binding's function parameters: C calls the function back passing
-  /// only what C can pass it.
-  void check_c_callback_types(ExternAST *ast);
+  /// A C binding's signature: C calls a function it is given passing only
+  /// what C can pass it, and takes or returns no value holding a function
+  /// value, which has no layout C knows.
+  void check_c_signature(ExternAST *ast);
   ResolvedCall applied_call(CallExprAST *ast, std::string callee,
                             std::span<const Type> params, Type result,
                             std::optional<Type> signature);

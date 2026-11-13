@@ -257,7 +257,7 @@ void BiTypeCheckerVisitor::visit(ExternAST *ast) {
   }
   ast->Prototype->accept_vis(this);
   if (ast->is_c_function)
-    check_c_callback_types(ast);
+    check_c_signature(ast);
 }
 
 bool BiTypeCheckerVisitor::takes_c_callback(const std::string &name) const {
@@ -292,9 +292,25 @@ static bool c_passes(const Type &type) {
   }
 }
 
-void BiTypeCheckerVisitor::check_c_callback_types(ExternAST *ast) {
+void BiTypeCheckerVisitor::check_c_signature(ExternAST *ast) {
+  // A function C is given is a pointer to its code. One inside a value is
+  // a closure, as big as what the program's closures of its type bind:
+  // only the program knows its layout.
+  auto has_c_layout = [&](const Type &type, sammine_util::Location where) {
+    if (type.type_kind == TypeKind::Function || !type.holdsFunctionValue())
+      return;
+    this->add_error(
+        where, fmt::format("C can't take or return '{}' by value: it holds a "
+                           "function value, whose size depends on the "
+                           "closures the program makes. Pass a pointer to it",
+                           type.to_string()));
+  };
+  auto proto_type = ast->Prototype->get_type();
+  if (auto *fn = std::get_if<FunctionType>(&proto_type.type_data))
+    has_c_layout(fn->get_return_type(), ast->Prototype->get_location());
   for (auto &param : ast->Prototype->parameterVectors) {
     auto type = param->get_type();
+    has_c_layout(type, param->get_location());
     if (type.type_kind != TypeKind::Function)
       continue;
     auto &fn = std::get<FunctionType>(type.type_data);

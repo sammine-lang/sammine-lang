@@ -816,21 +816,24 @@ struct ClosureLowering : public mlir::OpConversionPattern<smn::ClosureOp> {
                                                     static_cast<int32_t>(i))));
         });
 
+    // Held in its maker's frame, what a closure binds is reached through a
+    // pointer in its words: sammine-size-closures gives its type one. With
+    // none, the pointer would be written past the closure.
+    if (!inline_ && op.getType().getWords() == 0)
+      return op.emitError() << op.getType()
+                            << " has no word for what this closure binds: "
+                               "sammine-size-closures sizes it";
     // The closure carries what it binds in its words: built in a slot,
     // where they are written as the wrapper reads them, then loaded whole.
+    // One with nothing to carry is its code.
     auto code = mlir::LLVM::AddressOfOp::create(rewriter, loc, ptrTy, name);
-    if (bound.empty()) {
+    if (bound.empty() || op.getType().getWords() == 0) {
       mlir::Value value = mlir::LLVM::PoisonOp::create(rewriter, loc, closure);
       value = mlir::LLVM::InsertValueOp::create(rewriter, loc, value, code,
                                                 llvm::ArrayRef<int64_t>{0});
       rewriter.replaceOp(op, value);
       return mlir::success();
     }
-    // ModuleGen sized the type by every closure of it; one it missed would
-    // write past the closure's words.
-    if (op.getType().getWords() == 0)
-      return op.emitError("the compiler sized '")
-             << op.getType() << "' without this closure, which binds values";
     auto slot = entrySlot(rewriter, op, closure);
     mlir::LLVM::StoreOp::create(rewriter, loc, code,
                                 fieldPtr(rewriter, loc, closure, slot, 0));
