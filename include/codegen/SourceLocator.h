@@ -7,6 +7,8 @@
 #include "mlir/IR/Location.h"
 
 #include <algorithm>
+#include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -33,24 +35,61 @@ public:
     auto &lines = linesOf(srcLoc);
     if ((srcLoc.source_start <= 0 && srcLoc.source_end <= 0) || lines.empty())
       return builder.getUnknownLoc();
-
-    // The line holding source_start: the last whose start is not after it.
-    auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
-    auto it = std::ranges::upper_bound(
-        lines, std::make_pair(srcLoc.source_start, std::string_view("")), cmp);
-    int64_t lineIdx = std::max(int64_t(it - lines.begin()), int64_t(1)) - 1;
-    int64_t col = srcLoc.source_start - lines[static_cast<size_t>(lineIdx)].first;
-
-    // FileLineColLoc uses 1-based line and 0-based column
+    auto [startLine, startCol] = lineAndColumn(lines, srcLoc.source_start);
+    auto [endLine, endCol] = lineAndColumn(lines, srcLoc.source_end);
     auto &file =
         srcLoc.source_info ? srcLoc.source_info->file_name : fileName_;
-    return mlir::FileLineColLoc::get(builder.getContext(), file,
-                                     static_cast<unsigned>(lineIdx + 1),
-                                     static_cast<unsigned>(col));
+    if (srcLoc.source_info)
+      importedFiles_.try_emplace(file, srcLoc.source_info);
+    // The whole span, so a diagnostic about the op underlines what the AST
+    // node covers. Lines are 1-based, columns 0-based.
+    return mlir::FileLineColRange::get(builder.getStringAttr(file), startLine,
+                                       startCol, endLine, endCol);
+  }
+
+  /// The source span `loc` stands for, as loc() made it; nullopt for a
+  /// location it didn't make.
+  std::optional<sammine_util::Location> location(mlir::Location loc) const {
+    if (auto name = mlir::dyn_cast<mlir::NameLoc>(loc))
+      return location(name.getChildLoc());
+    auto range = mlir::dyn_cast<mlir::FileLineColRange>(loc);
+    if (!range)
+      return std::nullopt;
+    auto file = range.getFilename().getValue();
+    std::shared_ptr<sammine_util::SourceInfo> sourceInfo;
+    if (file != fileName_) {
+      auto it = importedFiles_.find(file.str());
+      if (it == importedFiles_.end())
+        return std::nullopt;
+      sourceInfo = it->second;
+    }
+    sammine_util::Location result;
+    result.source_info = sourceInfo;
+    auto &lines = sourceInfo ? linesOf(result) : mainLines_;
+    auto offset = [&](unsigned line, unsigned col) {
+      return lines[line - 1].first + static_cast<int64_t>(col);
+    };
+    if (range.getStartLine() == 0 || range.getEndLine() > lines.size())
+      return std::nullopt;
+    result.source_start = offset(range.getStartLine(), range.getStartColumn());
+    result.source_end = offset(range.getEndLine(), range.getEndColumn());
+    return result;
   }
 
 private:
   using Lines = sammine_util::Reporter::DiagnosticData;
+
+  /// The 1-based line and 0-based column of byte `offset`.
+  static std::pair<unsigned, unsigned> lineAndColumn(const Lines &lines,
+                                                     int64_t offset) {
+    // The line holding offset: the last whose start is not after it.
+    auto cmp = [](const auto &a, const auto &b) { return a.first < b.first; };
+    auto it = std::ranges::upper_bound(
+        lines, std::make_pair(offset, std::string_view("")), cmp);
+    int64_t lineIdx = std::max(int64_t(it - lines.begin()), int64_t(1)) - 1;
+    int64_t col = offset - lines[static_cast<size_t>(lineIdx)].first;
+    return {static_cast<unsigned>(lineIdx + 1), static_cast<unsigned>(col)};
+  }
 
   /// The lines of the file `srcLoc` is in. An imported file's are split once
   /// and kept: codegen asks for a location for nearly every op.
@@ -70,6 +109,11 @@ private:
   /// those alive for as long as codegen runs.
   mutable std::unordered_map<const sammine_util::SourceInfo *, Lines>
       importedLines_;
+  /// Each imported file loc() located something in, by its name, so
+  /// location() can find its lines again.
+  mutable std::unordered_map<std::string,
+                             std::shared_ptr<sammine_util::SourceInfo>>
+      importedFiles_;
 };
 
 } // namespace sammine_lang
