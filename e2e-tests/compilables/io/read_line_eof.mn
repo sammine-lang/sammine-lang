@@ -5,8 +5,8 @@ import io;
 
 let main() -> i32 {
   case io::read_line() {
-    Line(line, n) => drop(line),
-    Eof => print("eof\n"),
+    Some(line) => drop(line),
+    None => print("eof\n"),
   };
   0
 }

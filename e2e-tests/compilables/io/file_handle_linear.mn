@@ -2,7 +2,6 @@
 // CHECK:      line written ok
 
 import io;
-import str;
 
 let main() -> i32 {
   let content = "line written ok\n";
@@ -12,11 +11,10 @@ let main() -> i32 {
 
   let (f, result) = io::file_read_line(f);
   case result {
-    Line(buf, n) => {
-      let text = str::String { data: buf, length: n, cap: n };
-      print("{}\n", &text);
+    Some(text) => {
+            print("{}\n", &text);
     },
-    Eof => print("eof\n"),
+    None => print("eof\n"),
   };
 
   io::close(f);

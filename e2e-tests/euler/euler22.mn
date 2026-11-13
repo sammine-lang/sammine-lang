@@ -54,8 +54,9 @@ let unsafe score_at(names: ptr<str::String>, order: ptr<i64>, k: i64) -> i64 {
 
 let unsafe main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
   case io::read_file(argv[1] as string) {
-    Line(file, n) => {
-      let buf = range::fold(0i64, n, file, blank_separator);
+    Some(file) => {
+      let n = file.length;
+      let buf = range::fold(0i64, n, file.data, blank_separator);
       let names = range::fold(0i64, n, vec::new<str::String>(16i64),
                               push_name(buf));
       let count = names.length;
@@ -68,7 +69,7 @@ let unsafe main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
       drop(buf);
       0
     },
-    Eof => {
+    None => {
       print("could not read the names\n");
       1
     },

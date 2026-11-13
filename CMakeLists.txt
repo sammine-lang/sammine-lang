@@ -91,6 +91,7 @@ set(STDLIB_PRELUDE definitions)
 # A module comes after the modules it imports, listed in STDLIB_IMPORTS_<mod>.
 set(STDLIB_COMPILED std str io range buffer map vec set)
 set(STDLIB_C_RUNTIME_io io_runtime.c)
+set(STDLIB_IMPORTS_io str)
 set(STDLIB_IMPORTS_buffer range)
 set(STDLIB_IMPORTS_set map)
 

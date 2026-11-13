@@ -3,7 +3,6 @@
 // CHECK-NEXT: eof
 
 import io;
-import str;
 
 let main() -> i32 {
   io::write_file("/tmp/sammine_test_eof.txt", "first\n", 6);
@@ -11,20 +10,18 @@ let main() -> i32 {
 
   let (f, first) = io::file_read_line(f);
   case first {
-    Line(line, n) => {
-      let text = str::String { data: line, length: n, cap: n };
-      print("{}\n", &text);
+    Some(text) => {
+            print("{}\n", &text);
     },
-    Eof => print("eof\n"),
+    None => print("eof\n"),
   };
 
   let (f, second) = io::file_read_line(f);
   case second {
-    Line(line, n) => {
-      let text = str::String { data: line, length: n, cap: n };
-      print("{}\n", &text);
+    Some(text) => {
+            print("{}\n", &text);
     },
-    Eof => print("eof\n"),
+    None => print("eof\n"),
   };
 
   io::close(f);
