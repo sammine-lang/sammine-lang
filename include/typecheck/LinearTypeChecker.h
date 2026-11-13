@@ -18,12 +18,14 @@
 namespace sammine_lang::AST {
 
 class LinearTypeChecker : public sammine_util::Reportee {
-  // What a parent expression does with a place it names.
-  enum class Use { Read, Write, TakeAddress };
+  // What a parent expression does with what a child gives it: takes it,
+  // reads it, or, for a place, writes it or takes its address.
+  enum class Use { Own, Read, Write, TakeAddress };
 
   void check_program(ProgramAST *ast);
   void check_func(FuncDefAST *ast);
-  void check_block(BlockAST *ast);
+  // A block's last statement is its value: owned if `result_type` is linear.
+  void check_block(BlockAST *ast, const Type &result_type);
   void check_expr(ExprAST *expr, Use use = Use::Read);
 
   // Reaching memory through a pointer: only an owner may write, and a plain

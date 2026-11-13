@@ -87,7 +87,7 @@
 
 ## Linear values
 - That every `'ptr<T>`, and every value holding one, is consumed exactly once is checked on MIR: see `codegen.md`, "The ownership check"
-- `LinearTypeChecker` (a pass after BiTypeChecker) keeps the rules that don't depend on control flow: a non-linear `ptr<T>` only as the whole type of a parameter or local (`check_placement`, a view of a view is fine); no writing through a `ptr<T>`, no address of memory a `'ptr` owns (`check_through_pointer`); no `&` of a linear value; no storing a view through a deref; no binding a linear value into a partial application; no wildcard arm over a variant with a linear payload; no returning a view, or a closure that captured one; and an open type argument its context never decided
+- `LinearTypeChecker` (a pass after BiTypeChecker) keeps the rules that don't depend on control flow: a non-linear `ptr<T>` only as the whole type of a parameter or local (`check_placement`, a view of a view is fine); no writing through a `ptr<T>`, no address of memory a `'ptr` owns (`check_through_pointer`); no `&` of a linear value; no storing a view through a deref; no binding a linear value into a partial application; no linear temporary where nothing takes it (`check_expr`'s `Use::Own`: a `let`, a return, a linear parameter, a literal's field, `free`, a store, a cast, a case's scrutinee, a block's value when its type is linear); no wildcard arm over a variant with a linear payload; no returning a view, or a closure that captured one; and an open type argument its context never decided
 
 ## Incompatibility Hints
 - `incompatibility_hint(expected, actual)` returns note explaining why types don't match

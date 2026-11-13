@@ -147,12 +147,24 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
   check_prototype_placement(ast->Prototype.get());
   closure_captures_.clear();
   if (ast->Block)
-    check_block(ast->Block.get());
+    check_block(ast->Block.get(),
+                std::get<FunctionType>(ast->Prototype->get_type().type_data)
+                    .get_return_type());
 }
 
-void LinearTypeChecker::check_block(BlockAST *ast) {
+void LinearTypeChecker::check_block(BlockAST *ast, const Type &result_type) {
   for (auto &stmt : ast->Statements)
-    check_expr(stmt.get());
+    check_expr(stmt.get(), stmt == ast->Statements.back() &&
+                                   result_type.containsLinearTypes()
+                               ? Use::Own
+                               : Use::Read);
+}
+
+// Places name existing storage and statements produce no value. Everything
+// else makes a new value, a temporary.
+static bool is_place_or_statement(const ExprAST *expr) {
+  return llvm::isa<VariableExprAST, FieldAccessExprAST, DerefExprAST,
+                   IndexExprAST, VarDefAST, ReturnStmtAST>(expr);
 }
 
 // ── Expressions ─────────────────────────────────────────────────────
@@ -182,24 +194,39 @@ variant_leaving_type_open(const ExprAST *expr, const ASTProperties *props) {
   return std::nullopt;
 }
 
-// Every expression is visited with what its parent does with it, when it
-// names a place: writing to it or taking its address reaches it through any
-// field or array element. A type argument still open here is one its
+// Every expression is visited with what its parent does with it. A linear
+// temporary has no name to be consumed by later, so it may only be where
+// it is taken. Writing to a place or taking its address reaches it through
+// any field or array element. A type argument still open here is one its
 // context never decided.
 void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   if (auto variant = variant_leaving_type_open(expr, props_))
     this->add_error(expr->get_location(),
                     open_type_message(expr->get_type(), variant));
+  if (use != Use::Own && !is_place_or_statement(expr) &&
+      expr->get_type().containsLinearTypes())
+    this->add_error(expr->get_location(),
+                    fmt::format("Temporary of linear type '{}' must not be "
+                                "discarded (bind it with 'let' first)",
+                                expr->get_type().to_string()));
 
   auto loc = expr->get_location();
   auto read = [&](ExprAST *child) {
     if (child)
       check_expr(child);
   };
-  auto read_all = [&](const std::vector<std::unique_ptr<ExprAST>> &children) {
-    for (auto &child : children)
-      read(child.get());
+  auto own = [&](ExprAST *child) {
+    if (child)
+      check_expr(child, Use::Own);
   };
+  auto own_all = [&](const std::vector<std::unique_ptr<ExprAST>> &children) {
+    for (auto &child : children)
+      own(child.get());
+  };
+  // Through a part of a place, writing or taking an address reaches the
+  // place; anything else reads it.
+  auto toward_place =
+      use == Use::Write || use == Use::TakeAddress ? use : Use::Read;
 
   using NK = NodeKind;
   // No default: a new node kind must be classified before this compiles.
@@ -208,7 +235,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     break;
   case NK::FieldAccessExprAST:
     check_expr(llvm::cast<FieldAccessExprAST>(expr)->object_expr.get(),
-               use == Use::Read ? Use::Read : use);
+               toward_place);
     break;
   case NK::VarDefAST:
     check_var_def(llvm::cast<VarDefAST>(expr));
@@ -227,7 +254,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     check_call(llvm::cast<CallExprAST>(expr));
     break;
   case NK::FreeExprAST:
-    read(llvm::cast<FreeExprAST>(expr)->operand.get());
+    own(llvm::cast<FreeExprAST>(expr)->operand.get());
     break;
   case NK::ReturnStmtAST:
     check_returned_value(llvm::cast<ReturnStmtAST>(expr));
@@ -235,9 +262,9 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::IfExprAST: {
     auto *ifExpr = llvm::cast<IfExprAST>(expr);
     read(ifExpr->bool_expr.get());
-    check_block(ifExpr->thenBlockAST.get());
+    check_block(ifExpr->thenBlockAST.get(), expr->get_type());
     if (ifExpr->elseBlockAST)
-      check_block(ifExpr->elseBlockAST.get());
+      check_block(ifExpr->elseBlockAST.get(), expr->get_type());
     break;
   }
   case NK::WhileExprAST: // rejected by the type checker, so never reached
@@ -246,7 +273,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     auto *forExpr = llvm::cast<ForExprAST>(expr);
     read(forExpr->start.get());
     read(forExpr->end.get());
-    check_block(forExpr->body.get());
+    check_block(forExpr->body.get(), Type::Unit());
     break;
   }
   case NK::CaseExprAST:
@@ -255,17 +282,17 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::StructLiteralExprAST:
     check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc,
                     "a struct value");
-    read_all(llvm::cast<StructLiteralExprAST>(expr)->field_values);
+    own_all(llvm::cast<StructLiteralExprAST>(expr)->field_values);
     break;
   case NK::ArrayLiteralExprAST:
     check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc,
                     "an array value");
-    read_all(llvm::cast<ArrayLiteralExprAST>(expr)->elements);
+    own_all(llvm::cast<ArrayLiteralExprAST>(expr)->elements);
     break;
   case NK::TupleLiteralExprAST:
     check_placement(expr->get_type(), /*ptr_allowed_here=*/false, loc,
                     "a tuple value");
-    read_all(llvm::cast<TupleLiteralExprAST>(expr)->elements);
+    own_all(llvm::cast<TupleLiteralExprAST>(expr)->elements);
     break;
   case NK::DerefExprAST:
     check_through_pointer(llvm::cast<DerefExprAST>(expr)->operand.get(), use,
@@ -278,7 +305,7 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
     if (base_kind == TypeKind::Pointer)
       check_through_pointer(base, use, loc);
     else if (base_kind == TypeKind::Array)
-      check_expr(base, use);
+      check_expr(base, toward_place);
     else
       // Through an Indexer instance, which is lent the collection.
       read(base);
@@ -303,9 +330,13 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::UnaryNegExprAST:
     read(llvm::cast<UnaryNegExprAST>(expr)->operand.get());
     break;
-  case NK::CastExprAST:
-    read(llvm::cast<CastExprAST>(expr)->operand.get());
+  case NK::CastExprAST: {
+    // A linear operand is passed to Convert, which takes it.
+    auto *operand = llvm::cast<CastExprAST>(expr)->operand.get();
+    check_expr(operand, operand->get_type().containsLinearTypes() ? Use::Own
+                                                                  : Use::Read);
     break;
+  }
   case NK::NumberExprAST:
   case NK::StringExprAST:
   case NK::BoolExprAST:
@@ -364,7 +395,7 @@ void LinearTypeChecker::check_var_def(VarDefAST *ast) {
   }
   if (!ast->Expression)
     return;
-  check_expr(ast->Expression.get());
+  check_expr(ast->Expression.get(), Use::Own);
   if (ast->is_tuple_destructure)
     return;
 
@@ -520,7 +551,7 @@ void LinearTypeChecker::check_store(BinaryExprAST *ast) {
     }
   }
   check_expr(ast->LHS.get(), Use::Write);
-  check_expr(ast->RHS.get());
+  check_expr(ast->RHS.get(), Use::Own);
 }
 
 // ── Calls ───────────────────────────────────────────────────────────
@@ -567,7 +598,7 @@ void LinearTypeChecker::check_call(CallExprAST *ast) {
                       arg->get_type().to_string(),
                       ast->written_name.mangled()));
     }
-    check_expr(arg);
+    check_expr(arg, takes_ownership ? Use::Own : Use::Read);
   }
 }
 
@@ -656,7 +687,7 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
                               "a closure that captured a non-linear pointer "
                               "(may dangle after return)",
                               v->variableName.mangled()));
-              check_expr(ast->return_expr.get());
+              check_expr(ast->return_expr.get(), Use::Own);
               return true;
             }
           }
@@ -693,7 +724,7 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
                           "(may dangle after return)",
                           call->functionName.mangled()));
           // Still walk args for other linear checks
-          check_expr(ast->return_expr.get());
+          check_expr(ast->return_expr.get(), Use::Own);
           return;
         }
       }
@@ -701,7 +732,7 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
   }
 
   // Walk into return expression
-  check_expr(ast->return_expr.get());
+  check_expr(ast->return_expr.get(), Use::Own);
 }
 
 // ── Case ────────────────────────────────────────────────────────────
@@ -738,12 +769,13 @@ void LinearTypeChecker::check_wildcard_arm(const CaseExprAST &ast,
 }
 
 void LinearTypeChecker::check_case(CaseExprAST *ast) {
-  check_expr(ast->scrutinee.get());
+  // A case takes its scrutinee apart.
+  check_expr(ast->scrutinee.get(), Use::Own);
   for (auto &arm : ast->arms) {
     if (arm.pattern.is_wildcard)
       check_wildcard_arm(*ast, arm);
     if (arm.body)
-      check_block(arm.body.get());
+      check_block(arm.body.get(), ast->get_type());
   }
 }
 
