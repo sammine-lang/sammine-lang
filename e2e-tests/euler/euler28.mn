@@ -1,0 +1,29 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 101 669171001
+
+// Project Euler Problem 28: Number spiral diagonals
+// Starting with 1 and spiralling clockwise outwards, the numbers on the
+// diagonals of a 5 by 5 spiral sum to 101. What is the sum of the numbers
+// on the diagonals of a 1001 by 1001 spiral?
+
+import std;
+import range;
+
+// The corners of ring k, the square of side s = 2k + 1 around the rings
+// inside it. Its top right corner is s^2, the last number written, and the
+// others step back from it by s - 1 each: 4s^2 - 6(s - 1).
+let corners(k: i64) -> i64 {
+  let s = 2 * k + 1;
+  4 * s * s - 6 * (s - 1)
+}
+
+// The diagonals of the side by side spiral: 1 at its centre, then the
+// corners of each ring around it.
+let diagonals(side: i64) -> i64 {
+  1 + range::sum(1, side / 2 + 1, corners)
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", diagonals(5), diagonals(1001));
+  0
+}
