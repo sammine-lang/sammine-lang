@@ -69,10 +69,11 @@ MIRLowering::mirSignature(FuncDefAST *ast) const {
 // The function is built on its own, outside the module, and only put in
 // place of `decl` once it is whole: a body MIR can't lower is dropped with
 // it, and `decl` was never touched.
-bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
+mlir::func::FuncOp MIRLowering::lowerFunction(FuncDefAST *ast,
+                                              mlir::func::FuncOp decl) {
   auto signature = mirSignature(ast);
   if (!signature)
-    return false;
+    return nullptr;
 
   mlir::OwningOpRef<mlir::func::FuncOp> func =
       mlir::func::FuncOp::create(loc(ast), decl.getSymName(), *signature);
@@ -82,7 +83,6 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   auto &entry = *func->addEntryBlock();
   builder_.setInsertionPointToStart(&entry);
 
-  module_ = decl->getParentOfType<mlir::ModuleOp>();
   names_.clear();
   AddressedBindings addressed(props_);
   ast->Block->accept_vis(&addressed);
@@ -95,14 +95,14 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   // function that returns nothing (FuncDefAST::body_value).
   auto value = lowerStatements(ast->Block.get());
   if (mlir::failed(value))
-    return false;
+    return nullptr;
   if (!terminated()) {
     if (signature->getNumResults() == 0)
       mlir::func::ReturnOp::create(builder_, loc(ast));
     else if (*value && value->getType() == signature->getResult(0))
       mlir::func::ReturnOp::create(builder_, loc(ast), *value);
     else
-      return false;
+      return nullptr;
   }
 
   // What its declaration says of it, it still is.
@@ -112,10 +112,11 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   (*func)->setAttr(smn::kMirAttr, builder_.getUnitAttr());
   if (ast->Prototype->is_unsafe)
     (*func)->setAttr(smn::kUnsafeAttr, builder_.getUnitAttr());
+  auto lowered = func.release();
   decl->getBlock()->getOperations().insert(mlir::Block::iterator(decl),
-                                           func.release());
+                                           lowered);
   decl.erase();
-  return true;
+  return lowered;
 }
 
 // A kernel's scalar code, as `lower` lowers it where the builder is, with

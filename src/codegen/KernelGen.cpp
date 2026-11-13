@@ -69,25 +69,23 @@ void KernelGen::declare(AST::KernelDefAST *kd) {
   auto unknown = builder_.getUnknownLoc();
   auto internal = internalName(kd);
   auto declarePrivate = [&](mlir::ModuleOp module, mlir::FunctionType type) {
-    if (module.lookupSymbol(internal))
-      internalError(fmt::format("two kernels are both linked as '{}'", internal));
     auto funcOp = mlir::func::FuncOp::create(unknown, internal, type);
     funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
     module.push_back(funcOp);
+    return funcOp;
   };
 
   if (!kernelModule_)
     kernelModule_ = mlir::ModuleOp::create(unknown);
   // The kernel, in tensor types.
-  declarePrivate(kernelModule_, kernelFunctionType(kd->Prototype.get()));
+  auto kernel =
+      declarePrivate(kernelModule_, kernelFunctionType(kd->Prototype.get()));
   // The kernel as its wrapper calls it, in memref types: replaced, when the
   // modules are merged, by its bufferized definition.
   declarePrivate(cpuModule_,
                  kernelFunctionType(kd->Prototype.get(), /*asMemref=*/true));
 
   auto name = publicName(kd);
-  if (cpuModule_.lookupSymbol(name))
-    internalError(fmt::format("two definitions are both linked as '{}'", name));
   auto wrapperType = wrapperFunctionType(kd->Prototype.get());
   auto funcOp = mlir::func::FuncOp::create(unknown, name, wrapperType);
   funcOp.setVisibility(library_ ? mlir::SymbolTable::Visibility::Public
@@ -103,6 +101,7 @@ void KernelGen::declare(AST::KernelDefAST *kd) {
     funcOp.setArgAttr(wrapperType.getNumInputs() - 1, smn::kResultBufferAttr,
                       builder_.getUnitAttr());
   cpuModule_.push_back(funcOp);
+  declared_[kd] = {kernel, funcOp};
 }
 
 // --- The kernel ---
@@ -112,8 +111,7 @@ mlir::LogicalResult KernelGen::define(AST::KernelDefAST *kd) {
     return mlir::success();
   auto location = loc(kd);
   auto kernelType = kernelFunctionType(kd->Prototype.get());
-  auto funcOp =
-      kernelModule_.lookupSymbol<mlir::func::FuncOp>(internalName(kd));
+  auto funcOp = declared_.lookup(kd).kernel;
   assert(funcOp && "a kernel is declared before it is defined");
 
   mlir::OpBuilder::InsertionGuard guard(builder_);
@@ -244,7 +242,7 @@ KernelGen::defineReduce(AST::KernelReduceExprAST *reduceExpr,
 // --- The wrapper, between the host and the kernel ---
 
 void KernelGen::defineWrapper(AST::KernelDefAST *kd, mlir::Location location) {
-  auto wrapperOp = cpuModule_.lookupSymbol<mlir::func::FuncOp>(publicName(kd));
+  auto wrapperOp = declared_.lookup(kd).wrapper;
   assert(wrapperOp && "a kernel's wrapper is declared before it is defined");
 
   auto &entryBlock = *wrapperOp.addEntryBlock();

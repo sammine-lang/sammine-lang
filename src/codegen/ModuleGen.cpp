@@ -138,12 +138,9 @@ private:
   std::string symbol(const sammine_util::QualifiedName &qn) const {
     return props_.symbol(qn);
   }
-  /// The function declared for `ast`: the one place a declared function is
-  /// fetched from the module, by the symbol it was declared with.
-  mlir::func::FuncOp function(AST::FuncDefAST *ast) {
-    return module_.lookupSymbol<mlir::func::FuncOp>(
-        symbol(ast->Prototype->functionName));
-  }
+  /// The function of each definition that has a body: its declaration,
+  /// then what MIR lowers it to. Nothing finds one in the module by symbol.
+  llvm::DenseMap<AST::FuncDefAST *, mlir::func::FuncOp> functions_;
   mlir::LLVM::LLVMPointerType llvmPtr() {
     return mlir::LLVM::LLVMPointerType::get(builder_.getContext());
   }
@@ -157,7 +154,7 @@ private:
   mlir::Type llvmType(const Type &type);
 
   void declareRuntime();
-  void declareFunction(AST::PrototypeAST *proto);
+  void declareFunction(AST::FuncDefAST *ast);
   /// Says on `function` what `proto` names it in source, for messages.
   void setSourceName(mlir::Operation *function, AST::PrototypeAST *proto);
   /// Marks `method` as what drops a value of its parameter's type, if `def`
@@ -188,7 +185,7 @@ mlir::ModuleOp ModuleGen::generate(AST::ProgramAST *program) {
       kernels_->declare(kd);
     else
       for (auto *fd : functionBodies(def.get())) {
-        declareFunction(fd->Prototype.get());
+        declareFunction(fd);
         markDrop(def.get(), fd);
       }
   }
@@ -275,20 +272,21 @@ void ModuleGen::declareRuntime() {
   module_.push_back(exit);
 }
 
-void ModuleGen::declareFunction(AST::PrototypeAST *proto) {
-  auto name = symbol(proto->functionName);
-  if (module_.lookupSymbol(name))
-    error(fmt::format("'{}' would be linked as '{}', as another definition is",
-                      proto->functionName.mangled(), name),
-          proto->get_location());
+// Two definitions never have one symbol; were they to, the module wouldn't
+// verify (generate), as MLIR allows a symbol once.
+void ModuleGen::declareFunction(AST::FuncDefAST *ast) {
+  auto *proto = ast->Prototype.get();
   // Private until it gets a body and its linkage. One that never gets a
   // body, an imported instance method, must stay private: MLIR doesn't
   // allow a public declaration.
-  auto funcOp = mlir::func::FuncOp::create(builder_.getUnknownLoc(), name,
-                                           mirFunctionType(proto));
+  auto funcOp =
+      mlir::func::FuncOp::create(builder_.getUnknownLoc(),
+                                 symbol(proto->functionName),
+                                 mirFunctionType(proto));
   funcOp.setVisibility(mlir::SymbolTable::Visibility::Private);
   setSourceName(funcOp, proto);
   module_.push_back(funcOp);
+  functions_[ast] = funcOp;
 }
 
 // A generic function's copy is written as the generic is: id, not id<i32>.
@@ -311,20 +309,17 @@ void ModuleGen::markDrop(AST::DefinitionAST *def, AST::FuncDefAST *method) {
     error(fmt::format("the compiler has no type for what '{}' drops",
                       method->Prototype->functionName.mangled()),
           method->Prototype->get_location());
-  function(method)->setAttr(smn::kDropsAttr, mlir::TypeAttr::get(*type));
+  functions_.lookup(method)->setAttr(smn::kDropsAttr,
+                                     mlir::TypeAttr::get(*type));
 }
 
 void ModuleGen::declareCBinding(AST::ExternAST *ast) {
-  // A C binding's symbol is its C name: std::printf is printf. The runtime
-  // or another module's binding may have declared it already.
+  // A C binding's symbol is its C name: std::printf is printf. C knows a
+  // function by that alone, so one the runtime or another module's binding
+  // declared already is this one, and is not declared again.
   auto name = symbol(ast->Prototype->functionName);
-  if (module_.lookupSymbol(name)) {
-    if (ast->is_c_function)
-      return;
-    error(fmt::format("'{}' would be linked as '{}', as another definition is",
-                      ast->Prototype->functionName.mangled(), name),
-          ast->Prototype->get_location());
-  }
+  if (ast->is_c_function && module_.lookupSymbol(name))
+    return;
 
   auto location = locator_.loc(builder_, ast);
   builder_.setInsertionPointToEnd(module_.getBody());
@@ -445,10 +440,9 @@ void ModuleGen::declareCBinding(AST::ExternAST *ast) {
 void ModuleGen::lowerBodies(AST::ProgramAST *program) {
   for (auto &def : program->DefinitionVec)
     for (auto *fd : functionBodies(def.get())) {
-      auto decl = function(fd);
-      if (!decl || !decl.isDeclaration())
-        continue;
-      if (!mir_.lowerFunction(fd, decl))
+      auto &function = functions_[fd];
+      function = mir_.lowerFunction(fd, function);
+      if (!function)
         error(fmt::format("the compiler can't compile '{}': MIR doesn't "
                           "lower what it does yet",
                           fd->Prototype->functionName.mangled()),
@@ -473,7 +467,7 @@ ModuleGen::Linkage ModuleGen::linkage(AST::DefinitionAST *def) const {
 }
 
 void ModuleGen::setLinkage(AST::FuncDefAST *ast, Linkage linkage) {
-  auto funcOp = function(ast);
+  auto funcOp = functions_.lookup(ast);
   if (props_.is_entry_point(ast->Prototype->functionName))
     linkage = Linkage::Global;
   funcOp.setVisibility(linkage == Linkage::Internal

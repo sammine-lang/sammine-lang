@@ -62,6 +62,13 @@ private:
   sammine_util::Reporter &reporter_;
   GPUMode gpuMode_;
   bool library_;
+  /// What declare made for each kernel: its own function, in the kernel
+  /// module, and its wrapper, in the CPU module.
+  struct Declared {
+    mlir::func::FuncOp kernel;
+    mlir::func::FuncOp wrapper;
+  };
+  llvm::DenseMap<AST::KernelDefAST *, Declared> declared_;
   /// The kernel being defined's parameters, as its function's arguments.
   llvm::StringMap<mlir::Value> params_;
 

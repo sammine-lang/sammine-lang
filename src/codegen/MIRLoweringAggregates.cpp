@@ -234,9 +234,6 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
 mlir::LogicalResult MIRLowering::fail(mlir::Location location,
                                       llvm::StringRef format,
                                       mlir::ValueRange args) {
-  if (!module_.lookupSymbol(runtime::kDprintf) ||
-      !module_.lookupSymbol(runtime::kExit))
-    return mlir::failure();
   auto i32 = builder_.getI32Type();
   auto message = smn::StringOp::create(builder_, location,
                                        viewOf(builder_.getI8Type()), format);

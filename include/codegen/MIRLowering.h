@@ -32,9 +32,10 @@ public:
         types_(builder.getContext()) {}
 
   /// Lowers `ast` to a new function with its MIR signature and body, marked
-  /// `smn::kMirAttr`, which replaces `decl`, its declaration. Returns false,
-  /// leaving `decl` untouched, if `ast` uses something MIR can't lower.
-  bool lowerFunction(AST::FuncDefAST *ast, mlir::func::FuncOp decl);
+  /// `smn::kMirAttr`, which replaces `decl`, its declaration: that function.
+  /// Null, leaving `decl` untouched, if `ast` uses something MIR can't lower.
+  mlir::func::FuncOp lowerFunction(AST::FuncDefAST *ast,
+                                   mlir::func::FuncOp decl);
 
   /// A kernel's scalar code where the builder is: the body of a map's lambda
   /// or a reduce's identity, `bindings` naming the lambda's parameters. It
@@ -53,8 +54,6 @@ private:
   const SourceLocator &locator_;
   /// Each sammine type's MIR type.
   MIRTypes types_;
-  /// The module the function being lowered goes in, where its callees are.
-  mlir::ModuleOp module_;
   /// What each name in the current function stands for: its parameters and
   /// `let`s so far. A later `let` of a name shadows the earlier one.
   llvm::StringMap<mlir::Value> names_;
