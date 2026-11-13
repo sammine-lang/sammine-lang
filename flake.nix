@@ -26,10 +26,17 @@
             pkgs.pkg-config
             (pkgs.python3.withPackages (ps: [ ps.lit ]))
             pkgs.git
+          ] ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             pkgs.mold
           ] ++ pkgs.lib.optionals cudaSupported [
             pkgs.cudaPackages.cudatoolkit
           ];
+
+          # On Linux every link in the shell goes through mold: LLVM's and the
+          # compiler's builds, and the programs sammine links with clang++.
+          # mold links only ELF, so macOS keeps its own linker. The compiler
+          # never names a linker.
+          NIX_CFLAGS_LINK = pkgs.lib.optionalString pkgs.stdenv.isLinux "-fuse-ld=mold";
 
           shellHook = ''
             export PATH="$PWD/build/bin:$PATH"

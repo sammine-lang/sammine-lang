@@ -19,7 +19,6 @@ llvm:
         -DLLVM_TARGETS_TO_BUILD="X86;AArch64;NVPTX" \
         -DMLIR_ENABLE_CUDA_RUNNER=ON \
         -DLLVM_CCACHE_BUILD=true \
-        -DLLVM_USE_LINKER=mold \
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DLLVM_ENABLE_PROJECTS="mlir;llvm" \
         -DCMAKE_C_COMPILER=clang \
@@ -34,8 +33,6 @@ _configure dir type *FLAGS:
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DLLVM_DIR={{llvm_build_dir}}/lib/cmake/llvm \
         -DMLIR_DIR={{llvm_build_dir}}/lib/cmake/mlir \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=mold" \
-        -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=mold" \
         -DSAMMINE_TEST=ON \
         {{FLAGS}}
 
