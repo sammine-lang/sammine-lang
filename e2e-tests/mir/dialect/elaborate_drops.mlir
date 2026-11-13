@@ -59,10 +59,10 @@ func.func @moved_on_one_side(%c: i1, %n: i32) attributes {sammine.mir} {
 
 // -----
 
-// Made in a loop's body, dropped at the end of each turn.
+// Bound in a loop's body, dropped at the end of each turn.
 // CHECK-LABEL: func.func @each_turn(
 // CHECK: ^bb2:
-// CHECK: %[[T:[0-9]+]] = sammine.alloc
+// CHECK: %[[T:[0-9]+]] = sammine.let "t"
 // CHECK-NEXT: sammine.drop %[[T]] implicit
 // CHECK-NEXT: cf.br ^bb1
 func.func @each_turn(%n: i32) attributes {sammine.mir} {
@@ -71,7 +71,8 @@ func.func @each_turn(%n: i32) attributes {sammine.mir} {
 ^bb1:
   cf.cond_br %c, ^bb2, ^bb3
 ^bb2:
-  %t = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %t = sammine.let "t" %0 : !sammine.ptr<i32, owned>
   cf.br ^bb1
 ^bb3:
   return
@@ -95,17 +96,20 @@ func.func @slot(%n: i32) attributes {sammine.mir} {
 // A box drops what it points at first, then is freed; once what it points
 // at is moved out, it is only freed.
 // CHECK-LABEL: func.func @box_of_owner(
-// CHECK-NEXT: %[[AT:[0-9]+]] = sammine.deref %arg0
+// CHECK-NEXT: %[[PP:[0-9]+]] = sammine.let "pp" %arg0
+// CHECK-NEXT: %[[AT:[0-9]+]] = sammine.deref %[[PP]]
 // CHECK-NEXT: %[[IN:[0-9]+]] = sammine.move %[[AT]]
 // CHECK-NEXT: sammine.drop %[[IN]] implicit : !sammine.ptr<i32, owned>
-// CHECK-NEXT: sammine.drop %arg0 implicit
+// CHECK-NEXT: sammine.drop %[[PP]] implicit
 // CHECK-NEXT: return
 // CHECK-LABEL: func.func @box_emptied(
-// CHECK: sammine.drop %arg0 implicit : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
-func.func @box_of_owner(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+// CHECK: sammine.drop %{{[0-9]+}} implicit : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+func.func @box_of_owner(%arg: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+  %pp = sammine.let "pp" %arg : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
 }
-func.func @box_emptied(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+func.func @box_emptied(%arg: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+  %pp = sammine.let "pp" %arg : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
   %p = sammine.move %place : <!sammine.ptr<i32, owned>>
   sammine.drop %p : !sammine.ptr<i32, owned>
@@ -117,12 +121,13 @@ func.func @box_emptied(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attri
 // A struct without a Drop instance drops field by field, and only what is
 // still there.
 // CHECK-LABEL: func.func @fields(
-// CHECK: %[[B:[0-9]+]] = sammine.extract %arg0[1]
+// CHECK: %[[B:[0-9]+]] = sammine.extract %{{[0-9]+}}[1]
 // CHECK-NEXT: sammine.drop %[[B]] implicit
 // CHECK-NOT: sammine.drop
 // CHECK: return
 func.func private @take(!sammine.ptr<i32, owned>)
-func.func @fields(%s: !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+func.func @fields(%arg: !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+  %s = sammine.let "s" %arg : !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)>
   %a = sammine.extract %s[0] : !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !sammine.ptr<i32, owned>)> -> !sammine.ptr<i32, owned>
   sammine.call @take(%a) : (!sammine.ptr<i32, owned>) -> ()
   return
@@ -133,14 +138,17 @@ func.func @fields(%s: !sammine.struct<"Two", (a: !sammine.ptr<i32, owned>, b: !s
 // One with a Drop instance drops whole, through it, but not in its own
 // Drop, which would call itself: there, field by field.
 // CHECK-LABEL: func.func @"Drop<Res>::Drop"(
-// CHECK: sammine.extract %arg0[0]
+// CHECK: sammine.extract %{{[0-9]+}}[0]
 // CHECK: sammine.drop %{{[0-9]+}} implicit : !sammine.ptr<i32, owned>
 // CHECK-LABEL: func.func @whole(
-// CHECK-NEXT: sammine.drop %arg0 implicit : !sammine.struct<"Res"
-func.func @"Drop<Res>::Drop"(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+// CHECK-NEXT: %[[R:[0-9]+]] = sammine.let "r"
+// CHECK-NEXT: sammine.drop %[[R]] implicit : !sammine.struct<"Res"
+func.func @"Drop<Res>::Drop"(%arg: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+  %r = sammine.let "r" %arg : !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>
   return
 }
-func.func @whole(%r: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+func.func @whole(%arg: !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>) attributes {sammine.mir} {
+  %r = sammine.let "r" %arg : !sammine.struct<"Res", (p: !sammine.ptr<i32, owned>)>
   return
 }
 
@@ -171,7 +179,21 @@ func.func @before_box_drop(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) a
 
 // An array drops whole: its elements move only with it.
 // CHECK-LABEL: func.func @array(
-// CHECK-NEXT: sammine.drop %arg0 implicit : !sammine.array<2, !sammine.ptr<i32, owned>>
-func.func @array(%a: !sammine.array<2, !sammine.ptr<i32, owned>>) attributes {sammine.mir} {
+// CHECK-NEXT: %[[A:[0-9]+]] = sammine.let "a"
+// CHECK-NEXT: sammine.drop %[[A]] implicit : !sammine.array<2, !sammine.ptr<i32, owned>>
+func.func @array(%arg: !sammine.array<2, !sammine.ptr<i32, owned>>) attributes {sammine.mir} {
+  %a = sammine.let "a" %arg : !sammine.array<2, !sammine.ptr<i32, owned>>
+  return
+}
+
+// -----
+
+// A temporary nothing took has no owner: it isn't dropped, and the check
+// reports it.
+// CHECK-LABEL: func.func @temporary(
+// CHECK-NOT: sammine.drop
+// CHECK: return
+func.func @temporary(%n: i32) attributes {sammine.mir} {
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   return
 }

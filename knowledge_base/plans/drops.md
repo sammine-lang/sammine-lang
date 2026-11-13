@@ -177,9 +177,11 @@ Two rules place every drop but the ones at stores:
 - Before a store into a place that still owns something, and before `let`
   shadows, the old value is dropped. ("Reassigning linear variable … without
   consuming its previous value" goes.)
-- A temporary that owns memory and isn't taken, `f(alloc<i32>(1) == p)`, is
-  dropped at the end of its statement. ("Temporary owning memory must not
-  be discarded", the ownership check's since the AST checker went, goes.)
+- Not a temporary: a value that owns memory and that nothing takes,
+  `big();` or `*boxed(7)`, has no owner, and is an error ("Temporary owning
+  memory must not be discarded (bind it with 'let' first)"), as it was. A
+  linear value must have an owner: bound, it is dropped. (Dropping
+  temporaries, as first planned and done, was undone.)
 - Not before `exit`, a `panic` or `sammine.unreachable`: the process ends.
 
 A value whose type has a `Drop` instance moves and drops whole, but its
@@ -209,7 +211,7 @@ variant's payload inline.
 | "must be consumed before scope exit" | dropped; no error |
 | "consumed in some branches but not others" | dropped on the other edges; no error |
 | "Reassigning … without consuming its previous value" | old value dropped |
-| "Temporary owning memory must not be discarded" | dropped at statement end |
+| "Temporary owning memory must not be discarded" | stays: a linear value must have an owner |
 | "Cannot consume … inside a loop" | stays |
 | "Cannot use … already moved/freed" | stays, "moved/dropped" |
 | "no owned value is known to be stored there" | narrows to `alloc`'s pointer before a store; passing one on is the new error |

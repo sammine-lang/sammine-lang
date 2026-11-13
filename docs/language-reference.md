@@ -845,8 +845,11 @@ Assignment only writes through a pointer: `*p`, `p[i]`, and any field or
 element reached from them, such as `(*p).x`, `p[i].x` or `(*p)[i][j]`. Variables,
 array values and struct values can't be assigned to.
 
-A value that owns memory and goes out of use with nothing taking it is
-dropped there: at a return, at the end of the arm or loop turn that made
+A value that owns memory must have an owner: a temporary nothing takes,
+such as `make_ptr();` as a statement, is an error ("Temporary owning memory
+must not be discarded (bind it with 'let' first)"). A value bound with `let`,
+or a parameter, that goes out of use with nothing taking it is dropped
+there: at a return, at the end of the arm or loop turn that made
 it, or, where one branch moved it and another didn't, on the other branch.
 Dropping a `'ptr<T>` drops what it points at, then frees it; a `'buf<T>` is
 freed; a struct or tuple drops field by field. Using a value after it moved

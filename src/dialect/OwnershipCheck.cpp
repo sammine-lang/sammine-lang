@@ -265,10 +265,10 @@ private:
     auto &owner = owners.at(path);
     auto name = nameOf(path);
     if (name.empty()) {
-      // The error underlines the temporary; its type isn't spelled, as MIR's
-      // integers carry no sign to spell u32 by.
-      error(definedAt(path.root),
-            "Temporary owning memory is still owned where it goes out of use");
+      // A value nothing took has no owner. The error underlines it; its type
+      // isn't spelled, as MIR's integers carry no sign to spell u32 by.
+      error(definedAt(path.root), "Temporary owning memory must not be "
+                                  "discarded (bind it with 'let' first)");
     } else if (owner.isPartlyFilled()) {
       error(owner.definedAt, "'" + name +
                                  "' is still owned where it goes out of use: "

@@ -161,13 +161,16 @@ private:
   /// The parts of `owners` live at `at` to drop, those `keep` accepts,
   /// last bound first, a pointee before its box. Only of values defined on
   /// every path to `at`: a state keeps a value defined on one side of a
-  /// join past it, where nothing could drop it.
+  /// join past it, where nothing could drop it. And only of values a
+  /// binding owns: a temporary nothing took has no owner, which the check
+  /// reports, as a linear value must have one.
   llvm::SmallVector<Path>
   droppable(const Owners &owners, mlir::Operation *at,
             llvm::function_ref<bool(const Path &)> keep) {
     llvm::SmallVector<Path> live, paths;
     for (auto &[path, owner] : owners)
-      if (path.steps.empty() && dominance_.dominates(path.root, at))
+      if (path.steps.empty() && bindingName(path.root) &&
+          dominance_.dominates(path.root, at))
         collect(owners, path, live);
     for (auto &path : live)
       if (keep(path))

@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: must not be discarded
+
+let a1() -> 'buf<i32> { alloc_buf<i32>(1) }
+
+let unsafe main() -> i32 {
+  let x = a1()[0];
+  return 0;
+}

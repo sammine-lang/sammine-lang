@@ -200,7 +200,7 @@ func.func @free_buffer_of_owners(%n: i32) attributes {sammine.mir} {
 // A parameter's pointee holds a value: its caller put one there. Freeing
 // only the outer pointer leaks it.
 func.func @param_pointee_live(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
-  // expected-error @-1 {{Temporary owning memory is still owned where it goes out of use}}
+  // expected-error @-1 {{Temporary owning memory must not be discarded (bind it with 'let' first)}}
   sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return
 }
