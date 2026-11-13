@@ -1,0 +1,37 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 2783915460
+
+// Project Euler Problem 24: Lexicographic permutations
+// The permutations of 0, 1 and 2 in lexicographic order are 012, 021, 102,
+// 120, 201 and 210. What is the millionth permutation of the digits 0 to 9?
+
+import std;
+
+let factorial(n: i64) -> i64 {
+  if n < 2 { 1 } else { n * factorial(n - 1) }
+}
+
+// The k-th digit, from 0, at or after d that `used` has no bit for.
+let nth_unused(used: i64, k: i64, d: i64) -> i64 {
+  if ((used >> d) & 1) == 1 { nth_unused(used, k, d + 1) }
+  else if k == 0 { d }
+  else { nth_unused(used, k - 1, d + 1) }
+}
+
+// acc followed by the n-th permutation, from 0, of the `left` digits that
+// `used` has no bit for. Each choice of the first of them leads
+// (left - 1)! permutations, so n / (left - 1)! picks it, and n mod
+// (left - 1)! is where among those the rest falls.
+let permutation(n: i64, left: i64, used: i64, acc: i64) -> i64 {
+  if left == 0 { acc }
+  else {
+    let block = factorial(left - 1);
+    let d = nth_unused(used, n / block, 0);
+    permutation(n % block, left - 1, used | (1 << d), acc * 10 + d)
+  }
+}
+
+let main() -> i32 {
+  std::printf("%ld\n", permutation(999999, 10, 0, 0));
+  0
+}
