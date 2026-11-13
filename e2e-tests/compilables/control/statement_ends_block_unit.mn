@@ -1,0 +1,32 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK:      got 4
+// CHECK-NEXT: then
+// CHECK-NEXT: 4 7 3
+
+// A block ending in a statement, `{ a; }`, gives (): what the statement
+// gives is dropped, as at the end of a function's body. So an arm or a
+// branch that only prints fits beside one that does nothing. A block
+// ending in an expression, `{ a; b }`, gives b's value, and so does an
+// arm's bare expression and an `else if`.
+
+import std;
+
+let digits(n: i32) -> i32 {
+  if n < 10 { 1 } else if n < 100 { 2 } else { 3 }
+}
+
+let main() -> i32 {
+  let o = Option<i32>::Some(4);
+  case o {
+    Some(v) => { std::printf("got %d\n", v); },
+    None => {},
+  };
+  // A () bound, and passed on.
+  let u = if true { std::printf("then\n"); } else { };
+  let w = u;
+  let k = case o { Some(v) => { std::printf(""); v }, None => 0 };
+  let j = case o { Some(v) => v + 3, None => 0 };
+  std::printf("%d %d %d\n", k, j, digits(500));
+  0
+}

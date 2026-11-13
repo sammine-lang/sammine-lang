@@ -1229,7 +1229,10 @@ auto Parser::ParseIfExpr() -> p<ExprAST> {
   auto x = tokStream->peek();
   if (x->tok_type == TokenType::TokIf) {
     auto [else_if_expr, else_if_result] = ParseIfExpr();
+    // `else if`: a block whose value is the inner if's.
     auto else_block = std::make_unique<BlockAST>();
+    if (else_if_expr)
+      else_if_expr->is_statement = false;
     else_block->Statements.push_back(std::move(else_if_expr));
     return {std::make_unique<IfExprAST>(std::move(cond), std::move(then_block),
                                         std::move(else_block)),
@@ -1402,8 +1405,10 @@ auto Parser::ParseCaseExpr() -> p<ExprAST> {
                             arrow->get_location());
         return {nullptr, FAILED};
       }
+      // `Some(x) => x`: a block whose value is the expression.
       auto block = std::make_unique<BlockAST>();
       block->join_location(expr.get());
+      expr->is_statement = false;
       block->Statements.push_back(std::move(expr));
       arm.body = std::move(block);
     }

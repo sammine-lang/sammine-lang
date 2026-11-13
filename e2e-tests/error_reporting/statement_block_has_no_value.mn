@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Type mismatch: expression has type (), but variable declared as i32
+
+// `{ 2; }` ends in a statement: its value is (), not 2.
+let main() -> i32 {
+  let x: i32 = if true { 2; } else { 3; };
+  x
+}

@@ -175,9 +175,11 @@ bool MIRLowering::terminated() const {
          block->back().hasTrait<mlir::OpTrait::IsTerminator>();
 }
 
-// A block's statements in order, its value the last one's. The names its
-// `let`s make end with it. Once one returns, the rest never run and aren't
-// lowered: the result is then a null value, and `terminated()` is true.
+// A block's statements in order, its value the last one's if that is an
+// expression, not followed by `;`: else none, as the block's type is (). The
+// names its `let`s make end with it. Once one returns, the rest never run
+// and aren't lowered: the result is then a null value, and `terminated()`
+// is true.
 mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
   NameScope scope(*this);
   mlir::Value last;
@@ -195,7 +197,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerStatements(BlockAST *block) {
       value = lowerExpr(stmt.get());
     if (mlir::failed(value))
       return mlir::failure();
-    last = *value;
+    last = stmt->is_statement ? mlir::Value() : *value;
   }
   return last;
 }
@@ -208,6 +210,15 @@ mlir::LogicalResult MIRLowering::lowerVarDef(VarDefAST *def) {
   if (def->Expression->get_type().is_never()) {
     auto value = lowerExpr(def->Expression.get());
     return mlir::success(mlir::succeeded(value) && terminated());
+  }
+  // `let u = ()`, or of what gives (): the name means (), no value, as a
+  // `()` expression is.
+  if (!def->is_tuple_destructure &&
+      def->get_type().type_kind == TypeKind::Unit) {
+    if (mlir::failed(lowerExpr(def->Expression.get())))
+      return mlir::failure();
+    names_[def->TypedVar->name] = mlir::Value();
+    return mlir::success();
   }
   // A `let (a, b) = t` is typed (); t's type is checked as it is lowered.
   if (!def->is_tuple_destructure && !types_.mirType(def->get_type()))
@@ -394,6 +405,9 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerVariable(VariableExprAST *var) {
   auto it = names_.find(var->variableName.mangled());
   if (it == names_.end())
     return lowerFunctionValue(var);
+  // A binding of (), no value.
+  if (!it->second)
+    return mlir::Value();
   // A binding in a slot is read from it.
   if (mlir::isa<smn::PlaceType>(it->second.getType()))
     return read(loc(var), it->second);

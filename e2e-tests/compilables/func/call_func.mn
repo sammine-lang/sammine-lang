@@ -5,9 +5,9 @@ import std;
 
 let main() -> i32 {
   let x = if true {
-    2;
+    2
   } else {
-    3;
+    3
   };
   std::printf("%d", x);
   return 0;

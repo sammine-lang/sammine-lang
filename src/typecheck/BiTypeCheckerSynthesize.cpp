@@ -1209,8 +1209,9 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
   // 1. Type each statement in order
   // 2. If any statement has type ! (Never) and is not the return , stop: the
   // block's type is !
-  // 3. Otherwise, the block's type is the type of the last expression
-  // 4. If there is no final expression, the type is ()
+  // 3. Otherwise, the block's type is the type of its last expression, if
+  // the block ends in one: `{ a; b }`
+  // 4. If it ends in a statement, `{ a; b; }`, or in nothing, it is ()
 
   if (ast->Statements.empty()) {
     return ast->set_type(Type::Unit());
@@ -1228,8 +1229,12 @@ Type BiTypeCheckerVisitor::synthesize(BlockAST *ast) {
   if (is_never)
     return ast->set_type(Type::Never());
 
-  // Block's type is the type of the last expression
-  return ast->set_type(ast->Statements.back()->get_type());
+  // A last expression followed by `;` is a statement, its value dropped, as
+  // a function body's is (FuncDefAST::body_value).
+  auto &last = ast->Statements.back();
+  if (last->is_statement)
+    return ast->set_type(Type::Unit());
+  return ast->set_type(last->get_type());
 }
 Type BiTypeCheckerVisitor::synthesize(UnitExprAST *ast) {
   if (ast->synthesized())

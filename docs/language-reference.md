@@ -146,6 +146,18 @@ let fib(x: i32) -> i32 {
 }
 ```
 
+The same holds for any block, a branch's or a case arm's: its value is its
+last expression, if no `;` follows it. A block ending in a statement,
+`{ f(x); }`, gives `()`, whatever `f` returns, so an arm that only prints
+fits beside one that does nothing:
+
+```sammine
+case o {
+  Some(v) => { std::printf("%d\n", v); },   // (), printf's i32 dropped
+  None => {},
+};
+```
+
 ### Recursion and Mutual Recursion
 
 Functions can call themselves or each other. Forward declarations are handled automatically:
