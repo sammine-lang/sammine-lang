@@ -1,7 +1,8 @@
 # Plan: closures carry what they bind
 
 Status: stage 1 done; stage 2a (monovariant lambda sets) done; stage 2b
-(specialization per lambda set) done, except for SCCs of several functions.
+(specialization per lambda set) done. Sets that hold themselves (`μ`)
+stay stage 1, by design (below).
 
 ## Goal
 
@@ -118,12 +119,16 @@ rewrite. A higher-order function is copied per lambda set it is used
 with, as generics are per type: `apply(add(1))` and `apply(mul(2))` call
 two copies, each calling its one closure's function directly.
 
-- **Copy per place, callers first.** Over the SCCs of the call graph
-  (calls and closures), callers before callees, each place naming a
-  private function that takes or gives function values gets its own copy;
-  the first keeps the function. A copy's own places are copied in turn
-  when the callee's turn comes, and a function calling itself calls its
-  own copy.
+- **Copy per place, callers first.** The unit copied is an SCC of the
+  call graph (calls and closures), the functions calling each other: a
+  copy of it calls its own copies, so their sets are the copy's (the
+  paper's 6.3). Most are one function, calling itself in its own copy.
+  Callers before callees, each place naming a function of a private SCC
+  of which one takes or gives function values gets its own copy of the
+  SCC; the first keeps it. A copy's own places are copied in turn when
+  the callee's turn comes. Within a copy the sets are one, as in the
+  paper: a member calling back in with a closure of its own adds it to
+  the copy's set.
 - **Merge per set.** When a function's turn comes, all its callers are
   done: its copies whose signatures are described alike
   (`describeSignatures`: per function value, the functions its closures
@@ -141,9 +146,7 @@ two copies, each calling its one closure's function directly.
   between closures that do the same.
 - **Not copied:** a public function (another unit calls it with values as
   they are), a Drop instance (found by its name), a function named other
-  than by a call or a closure, and an SCC of several functions, which
-  shares its sets as in stage 2a. The paper generalizes per SCC; copying
-  an SCC whole per place is left for when a program needs it.
+  than by a call or a closure, and an SCC holding any of them.
 - **Bounded.** Copies may add at most `kCopyBudget` ops; past it, places
   share a function, as without this step.
 
@@ -156,7 +159,7 @@ specializes. sammine's checker is bidirectional, and by MIR every type is
 known and every generic is monomorphized, so only the sets are left to
 infer. That is the same unification, done on MIR after typing, and the
 polymorphism comes from copying per place and merging per set rather than
-from generalized schemes: the same instances, for SCCs of one function.
+from generalized schemes.
 
 ### Against the paper
 
@@ -181,14 +184,18 @@ Section numbers are the paper's (`3591260.pdf`).
   that unifies a parameter with a closure of its own adds to its caller's
   set, which the opaque description misses, so two copies may merge that
   the paper keeps apart. It stays sound; the merged copy switches.
-- **Different: recursive sets.** The paper solves a set that holds itself
-  as `μa.σ` (4.2.2, 5.1.1) and lowers it to a recursive sum. sammine keeps
-  such a set stage 1, `{code, words}`, its self-binding closures in their
-  maker's frame.
-- **Not done: SCCs of several functions** (6.3): copied whole per place in
-  the paper, shared here.
+- **Different, by design: recursive sets.** The paper solves a set that
+  holds itself as `μa.σ` (4.2.2, 5.1.1) and lowers it to a recursive sum,
+  which has no size without a box on the heap. sammine keeps such a set
+  stage 1, `{code, words}`, its self-binding closures in their maker's
+  frame, and a closure of one can't leave that call
+  (`error_reporting/closure_holds_itself_escapes.mn`). Boxing it would make
+  a closure own memory: dropped, and moved or counted rather than copied.
+  The language keeps closures to what costs what it looks like, nothing
+  allocated or counted behind them, so this stays.
+- **Same: SCCs of several functions** (6.3) are copied whole.
 - **Not needed: delayed substitution** (6.2): nothing is substituted;
-  copies are re-analysed, once per function with copies.
+  copies are re-analysed, once per SCC with copies.
 
 ## Threads
 

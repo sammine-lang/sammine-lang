@@ -1,0 +1,63 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// CHECK: even 4 8 odd 8
+// CHECK-NEXT: ping 4 8 8 1435304465
+
+// Functions calling each other, an SCC, are copied whole per set they are
+// used with (the paper's 6.3): each copy of even and odd calls its own
+// partner, and its closure's function directly.
+// IR-LABEL: define internal i32 @even(
+// IR-NOT: switch i32
+// IR: call i32 @odd(
+// IR-LABEL: define internal i32 @even.spec{{[0-9]+}}(
+// IR-NOT: switch i32
+// IR: call i32 @odd.spec{{[0-9]+}}(
+// IR-LABEL: define internal i32 @odd(
+// IR-NOT: switch i32
+// IR: call i32 @even(
+// IR-LABEL: define internal i32 @odd.spec{{[0-9]+}}(
+// IR-NOT: switch i32
+// IR: call i32 @even.spec{{[0-9]+}}(
+
+import std;
+
+let add(x: i32, y: i32) -> i32 { x + y }
+let mul(x: i32, y: i32) -> i32 { x * y }
+let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
+
+let even(f: (i32) -> i32, n: i32, x: i32) -> i32 {
+  if n == 0 { x } else { odd(f, n - 1, f(x)) }
+}
+let odd(f: (i32) -> i32, n: i32, x: i32) -> i32 {
+  if n == 0 { x } else { even(f, n - 1, f(x)) }
+}
+
+// Three in one SCC: ping and pong take f; tick doesn't, and calls back in
+// with a closure of its own, which joins the set of the copy it is in.
+let ping(f: (i32) -> i32, n: i32, x: i32) -> i32 {
+  if n == 0 { x } else { pong(f, n - 1, apply(f, x)) }
+}
+let pong(f: (i32) -> i32, n: i32, x: i32) -> i32 {
+  if n == 0 {
+    x
+  } else if n == 50 {
+    tick(n) + x
+  } else {
+    ping(f, n - 1, f(x))
+  }
+}
+let tick(n: i32) -> i32 { ping(add(100), n - 1, 0) }
+
+let main() -> i32 {
+  // Entered at even and at odd with sets alike: one copy, and mul's another.
+  std::printf("even %d %d odd %d\n", even(add(1), 4, 0), odd(add(2), 4, 0),
+              odd(mul(2), 3, 1));
+  let p = ping(add(1), 4, 0);
+  let q = pong(add(2), 4, 0);
+  // A closure of a member is a place too.
+  let k = ping(mul(2), 3);
+  // Wraps past i32, as it should.
+  std::printf("ping %d %d %d %d\n", p, q, k(1), ping(mul(3), 52, 1));
+  0
+}

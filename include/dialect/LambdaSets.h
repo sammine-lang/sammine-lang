@@ -51,11 +51,11 @@ bool holdsFunctionValue(mlir::Type type);
 std::map<mlir::Operation *, std::string>
 describeSignatures(mlir::ModuleOp module, const llvm::StringSet<> &opaque = {});
 
-/// Copies each private function taking or giving function values per place
-/// that calls it or makes a closure of it, then merges the copies whose
-/// signatures are described alike (the paper's specialization, per
-/// function rather than per SCC of several). Run after the checks, before
-/// lowerLambdaSets, whose sets are then one per copy.
+/// Copies each private SCC of the call graph with a function taking or
+/// giving function values, whole, per place that calls one of its functions
+/// or makes a closure of it, then merges the copies whose signatures are
+/// described alike (the paper's specialization, per SCC). Run after the
+/// checks, before lowerLambdaSets, whose sets are then one per copy.
 mlir::LogicalResult specializeLambdaSets(mlir::ModuleOp module);
 
 /// `sammine-specialize-lambda-sets`: specializeLambdaSets as a pass.

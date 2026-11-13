@@ -66,3 +66,41 @@ func.func @main(%x: i32) -> i32 attributes {sammine.mir} {
   %e = sammine.call @times(%g, %two, %d) : (!sammine.fn<(i32) -> i32, 1>, i32, i32) -> i32
   return %e : i32
 }
+
+// Functions calling each other are copied together: the copy of @ev calls
+// the copy of @od, which calls it back.
+// CHECK-LABEL: func.func private @ev(
+// CHECK: sammine.call @add(
+// CHECK: sammine.call @od(
+// CHECK-LABEL: func.func private @ev.spec[[N:[0-9]+]](
+// CHECK: sammine.call @mul(
+// CHECK: sammine.call @od.spec[[N]](
+// CHECK-LABEL: func.func private @od(
+// CHECK: sammine.call @add(
+// CHECK: sammine.call @ev(
+// CHECK-LABEL: func.func private @od.spec[[N]](
+// CHECK: sammine.call @mul(
+// CHECK: sammine.call @ev.spec[[N]](
+func.func private @ev(%f: !sammine.fn<(i32) -> i32, 1>, %x: i32) -> i32 attributes {sammine.mir} {
+  %y = sammine.call_indirect %f(%x) : !sammine.fn<(i32) -> i32, 1>, (i32) -> i32
+  %r = sammine.call @od(%f, %y) : (!sammine.fn<(i32) -> i32, 1>, i32) -> i32
+  return %r : i32
+}
+func.func private @od(%f: !sammine.fn<(i32) -> i32, 1>, %x: i32) -> i32 attributes {sammine.mir} {
+  %y = sammine.call_indirect %f(%x) : !sammine.fn<(i32) -> i32, 1>, (i32) -> i32
+  %r = sammine.call @ev(%f, %y) : (!sammine.fn<(i32) -> i32, 1>, i32) -> i32
+  return %r : i32
+}
+
+// CHECK-LABEL: func.func @pair
+// CHECK: sammine.call @ev(
+// CHECK: sammine.call @od.spec{{[0-9]+}}(
+func.func @pair(%x: i32) -> i32 attributes {sammine.mir} {
+  %one = arith.constant 1 : i32
+  %two = arith.constant 2 : i32
+  %f = sammine.closure @add(%one) : (i32) -> !sammine.fn<(i32) -> i32, 1>
+  %g = sammine.closure @mul(%two) : (i32) -> !sammine.fn<(i32) -> i32, 1>
+  %a = sammine.call @ev(%f, %x) : (!sammine.fn<(i32) -> i32, 1>, i32) -> i32
+  %b = sammine.call @od(%g, %a) : (!sammine.fn<(i32) -> i32, 1>, i32) -> i32
+  return %b : i32
+}

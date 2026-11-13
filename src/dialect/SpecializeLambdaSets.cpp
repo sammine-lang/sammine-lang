@@ -23,19 +23,20 @@
 //! per lambda set it is used with, as generics are per type, so a call
 //! through a function value in each copy is one direct call, not a switch.
 //!
-//! Functions are taken callers first. Each place that calls a private
-//! function taking or giving function values, or makes a closure of it,
-//! gets its own copy; when the function's turn comes, all its callers are
-//! done, and its copies whose signatures have alike sets
-//! (describeSignatures) are merged before their own places are copied, so
-//! copies follow the sets a function is used with, not every path to it.
-//! The functions not yet taken are opaque to that description: their
-//! places, all naming the one function yet, would mix the sets of each.
-//! Once all are taken, copies are merged again, with every call followed,
-//! until none are alike.
+//! The unit copied is an SCC of the call graph, the functions calling each
+//! other (the paper's 6.3): a copy of it calls its own copies, so their
+//! sets are the copy's. Most are one function, which then calls itself in
+//! its own copy.
 //!
-//! Functions calling each other (an SCC of several) are left whole, sharing
-//! their sets, and a function calling itself does so in its own copy.
+//! SCCs are taken callers first. Each place that calls a function of a
+//! private SCC taking or giving function values, or makes a closure of it,
+//! gets its own copy of the SCC; when the SCC's turn comes, all its callers
+//! are done, and its copies whose signatures have alike sets
+//! (describeSignatures) are merged before their own places are copied, so
+//! copies follow the sets an SCC is used with, not every path to it. The
+//! SCCs not yet taken are opaque to that description: their places, all
+//! naming the one SCC yet, would mix the sets of each. Once all are taken,
+//! copies are merged again, with every call followed, until none are alike.
 
 namespace sammine_lang {
 
@@ -44,8 +45,8 @@ namespace {
 using Func = mlir::func::FuncOp;
 
 /// The most ops copies may add, so a long chain of higher-order calls
-/// doesn't grow the module without end: past it, places share a function,
-/// as without this step.
+/// doesn't grow the module without end: past it, places share an SCC, as
+/// without this step.
 constexpr int64_t kCopyBudget = 100000;
 
 /// The function a call or a closure names, or null for any other op.
@@ -55,6 +56,13 @@ mlir::FlatSymbolRefAttr calleeOf(mlir::Operation *op) {
   if (auto closure = mlir::dyn_cast<smn::ClosureOp>(op))
     return closure.getCalleeAttr();
   return {};
+}
+
+/// An SCC's functions, or a copy's: member i of a copy copies member i.
+using Group = llvm::SmallVector<Func, 1>;
+
+bool inGroup(const Group &group, mlir::Operation *op) {
+  return llvm::any_of(group, [&](Func f) { return f->isAncestor(op); });
 }
 
 /// Per function name: the calls and closures naming it, so that merging
@@ -92,13 +100,15 @@ public:
     for (auto *site : moved)
       retarget(site, to.getNameAttr());
   }
-  /// Whether anything outside `func` names it.
-  bool usedOutside(Func func) {
-    auto it = by_.find(func.getName());
-    return it != by_.end() &&
-           llvm::any_of(it->second, [&](mlir::Operation *site) {
-             return !func->isAncestor(site);
-           });
+  /// Whether anything outside `group` names one of its functions.
+  bool usedOutside(const Group &group) {
+    return llvm::any_of(group, [&](Func func) {
+      auto it = by_.find(func.getName());
+      return it != by_.end() &&
+             llvm::any_of(it->second, [&](mlir::Operation *site) {
+               return !inGroup(group, site);
+             });
+    });
   }
 
 private:
@@ -108,11 +118,7 @@ private:
 class Specializer {
 public:
   explicit Specializer(mlir::ModuleOp module)
-      : module_(module), symbols_(module) {
-    for (auto func : module.getOps<Func>())
-      if (defined(func))
-        copies_[func].push_back(func);
-  }
+      : module_(module), symbols_(module) {}
 
   void run() {
     findNamedOtherwise();
@@ -123,30 +129,30 @@ public:
       eraseUnused();
       merged = false;
       auto described = describeSignatures(module_);
-      for (auto &[op, _] : copies_)
-        merged |= mergeCopies(op, described);
+      for (unsigned scc = 0; scc < copies_.size(); ++scc)
+        merged |= mergeCopies(scc, described);
     }
   }
 
 private:
   mlir::ModuleOp module_;
   mlir::SymbolTable symbols_;
-  /// Per function MIR defines: it, then its copies.
-  llvm::MapVector<mlir::Operation *, llvm::SmallVector<Func>> copies_;
-  /// Per copy: the function it copies.
-  llvm::DenseMap<mlir::Operation *, Func> origins_;
-  /// The functions that were copied.
-  llvm::DenseSet<mlir::Operation *> copiedFrom_;
-  /// Per function: its SCC of the call graph, an index into sccs_, which
-  /// has callees before callers.
-  llvm::DenseMap<mlir::Operation *, unsigned> scc_;
-  std::vector<llvm::SmallVector<Func>> sccs_;
+  /// The SCCs of the call graph among the functions MIR defines, callees
+  /// before callers.
+  std::vector<Group> sccs_;
+  /// Per function, copies too: its SCC, an index into sccs_ and copies_,
+  /// and which member of it it is.
+  llvm::DenseMap<mlir::Operation *, std::pair<unsigned, unsigned>> member_;
+  /// Per SCC: it, then its copies.
+  std::vector<llvm::SmallVector<Group>> copies_;
+  /// The SCCs that were copied.
+  llvm::DenseSet<unsigned> copied_;
   /// Functions something other than a call or a closure names: copies
   /// wouldn't be found from there.
   llvm::DenseSet<mlir::StringAttr> namedOtherwise_;
   Sites sites_;
   int64_t budget_ = kCopyBudget;
-  unsigned copied_ = 0;
+  unsigned numbered_ = 0;
 
   static bool defined(Func func) {
     return func && !func.isDeclaration() && func->hasAttr(smn::kMirAttr);
@@ -154,10 +160,6 @@ private:
   Func lookup(mlir::FlatSymbolRefAttr name) {
     auto func = symbols_.lookup<Func>(name.getValue());
     return defined(func) ? func : Func();
-  }
-  Func originOf(Func func) {
-    auto it = origins_.find(func);
-    return it == origins_.end() ? func : it->second;
   }
 
   /// The calls and closures in `func` naming a function MIR defines.
@@ -170,27 +172,30 @@ private:
     return sites;
   }
 
-  /// Whether a copy of `func` per place could have other sets: it takes or
-  /// gives function values, only this module's calls and closures name it,
-  /// and it calls no function that calls it back.
-  bool specializable(Func func) {
-    // A Drop instance is also found by its name.
-    if (!func.isPrivate() || func.getName().starts_with("Drop<") ||
-        namedOtherwise_.count(func.getNameAttr()))
-      return false;
-    if (sccs_[scc_.lookup(func)].size() != 1)
-      return false;
-    auto type = func.getFunctionType();
-    return llvm::any_of(type.getInputs(), holdsFunctionValue) ||
-           llvm::any_of(type.getResults(), holdsFunctionValue);
+  /// Whether a copy of SCC `scc` per place could have other sets: one of
+  /// its functions takes or gives function values, and only this module's
+  /// calls and closures name them.
+  bool specializable(unsigned scc) {
+    bool takesFunctions = false;
+    for (auto func : sccs_[scc]) {
+      // A Drop instance is also found by its name.
+      if (!func.isPrivate() || func.getName().starts_with("Drop<") ||
+          namedOtherwise_.count(func.getNameAttr()))
+        return false;
+      auto type = func.getFunctionType();
+      takesFunctions |= llvm::any_of(type.getInputs(), holdsFunctionValue) ||
+                        llvm::any_of(type.getResults(), holdsFunctionValue);
+    }
+    return takesFunctions;
   }
 
   void findNamedOtherwise();
   void findSccs();
-  Func copyOf(Func func);
+  Group copyOf(unsigned scc);
   void copy();
-  bool mergeCopies(mlir::Operation *origin,
+  bool mergeCopies(unsigned scc,
                    std::map<mlir::Operation *, std::string> &described);
+  void erase(const Group &group);
   void eraseUnused();
 };
 
@@ -225,90 +230,114 @@ void Specializer::findSccs() {
     }
     if (low[op] != index[op])
       return;
-    llvm::SmallVector<Func> scc;
+    Group scc;
     Func member;
     do {
       member = stack.pop_back_val();
       onStack.erase(member);
-      scc_[member] = static_cast<unsigned>(sccs_.size());
+      member_[member] = {static_cast<unsigned>(sccs_.size()),
+                         static_cast<unsigned>(scc.size())};
       scc.push_back(member);
     } while (member != func);
-    sccs_.push_back(std::move(scc));
+    sccs_.push_back(scc);
+    copies_.push_back({scc});
   };
-  for (auto &[op, _] : copies_)
-    if (!index.count(op))
-      visit(mlir::cast<Func>(op));
+  for (auto func : module_.getOps<Func>())
+    if (defined(func) && !index.count(func))
+      visit(func);
 }
 
-Func Specializer::copyOf(Func func) {
-  auto copy = func.clone();
-  std::string name;
-  do
-    name = (func.getName() + ".spec" + llvm::Twine(++copied_)).str();
-  while (symbols_.lookup(name));
-  copy.setName(name);
-  symbols_.insert(copy, std::next(mlir::Block::iterator(func)));
-  sites_.addIn(copy);
-  // Calling itself, it calls itself: the copy.
-  for (auto *site : sitesIn(copy))
-    if (calleeOf(site).getValue() == func.getName())
-      sites_.retarget(site, copy.getNameAttr());
-  func.walk([&](mlir::Operation *) { --budget_; });
-  origins_[copy] = func;
-  copiedFrom_.insert(func);
-  copies_[func].push_back(copy);
+Group Specializer::copyOf(unsigned scc) {
+  // Every member is copied, and named apart by one number.
+  auto &original = sccs_[scc];
+  ++numbered_;
+  Group copy;
+  for (auto [i, func] : llvm::enumerate(original)) {
+    auto clone = func.clone();
+    std::string name;
+    do
+      name = (func.getName() + ".spec" + llvm::Twine(numbered_)).str();
+    while (symbols_.lookup(name));
+    clone.setName(name);
+    symbols_.insert(clone, std::next(mlir::Block::iterator(func)));
+    member_[clone] = {scc, static_cast<unsigned>(i)};
+    func.walk([&](mlir::Operation *) { --budget_; });
+    copy.push_back(clone);
+  }
+  // Calling a member, a copy calls its own copy of it.
+  for (auto clone : copy) {
+    sites_.addIn(clone);
+    for (auto *site : sitesIn(clone))
+      for (auto [i, func] : llvm::enumerate(original))
+        if (calleeOf(site).getValue() == func.getName())
+          sites_.retarget(site, copy[i].getNameAttr());
+  }
+  copied_.insert(scc);
+  copies_[scc].push_back(copy);
   return copy;
 }
 
 void Specializer::copy() {
-  // A function keeps its first place; each other place gets a copy.
-  llvm::DenseSet<mlir::Operation *> placed;
+  // An SCC keeps its first place; each other place gets a copy.
+  llvm::DenseSet<unsigned> placed;
   // The functions to be copied whose turn hasn't come.
   llvm::StringSet<> waiting;
-  for (auto &[op, _] : copies_)
-    if (specializable(mlir::cast<Func>(op)))
-      waiting.insert(mlir::cast<Func>(op).getName());
+  for (unsigned scc = 0; scc < sccs_.size(); ++scc)
+    if (specializable(scc))
+      for (auto func : sccs_[scc])
+        waiting.insert(func.getName());
 
-  for (auto &scc : llvm::reverse(sccs_)) {
-    for (auto func : scc)
+  for (unsigned scc = static_cast<unsigned>(sccs_.size()); scc-- > 0;) {
+    for (auto func : sccs_[scc])
       waiting.erase(func.getName());
-    for (auto func : scc) {
-      if (copies_[func].size() > 1) {
-        auto described = describeSignatures(module_, waiting);
-        mergeCopies(func, described);
-      }
-      auto all = copies_[func];
-      for (auto from : all)
-        for (auto *site : sitesIn(from)) {
-          auto callee = originOf(lookup(calleeOf(site)));
-          if (scc_.lookup(callee) == scc_.lookup(func) ||
-              !specializable(callee) || placed.insert(callee).second ||
-              budget_ <= 0)
-            continue;
-          sites_.retarget(site, copyOf(callee).getNameAttr());
-        }
+    if (copies_[scc].size() > 1) {
+      auto described = describeSignatures(module_, waiting);
+      mergeCopies(scc, described);
     }
+    auto groups = copies_[scc];
+    for (auto &group : groups)
+      for (auto from : group)
+        for (auto *site : sitesIn(from)) {
+          auto [callee, which] = member_.lookup(lookup(calleeOf(site)));
+          if (callee == scc || !specializable(callee) ||
+              placed.insert(callee).second || budget_ <= 0)
+            continue;
+          sites_.retarget(site, copyOf(callee)[which].getNameAttr());
+        }
   }
 }
 
+void Specializer::erase(const Group &group) {
+  for (auto func : group)
+    sites_.removeIn(func);
+  for (auto func : group)
+    symbols_.erase(func);
+}
+
 bool Specializer::mergeCopies(
-    mlir::Operation *origin,
-    std::map<mlir::Operation *, std::string> &described) {
-  auto &all = copies_[origin];
+    unsigned scc, std::map<mlir::Operation *, std::string> &described) {
+  auto &all = copies_[scc];
   if (all.size() < 2)
     return false;
   bool merged = false;
-  std::map<std::string, Func> kept;
-  llvm::SmallVector<Func> alive;
-  for (auto func : all) {
-    auto [it, fresh] = kept.try_emplace(described[func], func);
+  std::map<std::string, Group> kept;
+  llvm::SmallVector<Group> alive;
+  for (auto &group : all) {
+    std::string key;
+    for (auto func : group)
+      key += described[func] + ";";
+    auto [it, fresh] = kept.try_emplace(key, group);
     if (fresh) {
-      alive.push_back(func);
+      alive.push_back(group);
       continue;
     }
-    sites_.removeIn(func);
-    sites_.redirect(func, it->second);
-    symbols_.erase(func);
+    // Its own places go with it; others name the kept copy's members.
+    for (auto func : group)
+      sites_.removeIn(func);
+    for (auto [func, into] : llvm::zip(group, it->second))
+      sites_.redirect(func, into);
+    for (auto func : group)
+      symbols_.erase(func);
     merged = true;
   }
   all = std::move(alive);
@@ -318,22 +347,21 @@ bool Specializer::mergeCopies(
 void Specializer::eraseUnused() {
   for (bool erased = true; erased;) {
     erased = false;
-    for (auto &[op, all] : copies_) {
-      // Only a function that was copied, and its copies: others are as the
+    for (unsigned scc = 0; scc < copies_.size(); ++scc) {
+      // Only an SCC that was copied, and its copies: others are as the
       // program had them.
-      if (!copiedFrom_.count(op))
+      if (!copied_.count(scc))
         continue;
-      llvm::SmallVector<Func> alive;
-      for (auto func : all) {
-        if (func.isPrivate() && !sites_.usedOutside(func)) {
-          sites_.removeIn(func);
-          symbols_.erase(func);
+      llvm::SmallVector<Group> alive;
+      for (auto &group : copies_[scc]) {
+        if (!sites_.usedOutside(group)) {
+          erase(group);
           erased = true;
         } else {
-          alive.push_back(func);
+          alive.push_back(group);
         }
       }
-      all = std::move(alive);
+      copies_[scc] = std::move(alive);
     }
   }
 }
