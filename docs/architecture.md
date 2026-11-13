@@ -162,7 +162,6 @@ Type information and per-node metadata are stored externally in `ASTProperties` 
 - `VariableProps` -- enum unit variant flag and variant index
 - `BinaryProps` -- resolved typeclass operator method name
 - `TypeAliasProps` -- the resolved underlying type
-- `TypeClassInstanceProps` -- concrete type arguments
 - Node types -- the `Type` assigned to each node during type checking
 
 ---

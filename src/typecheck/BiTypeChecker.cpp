@@ -814,8 +814,6 @@ void BiTypeCheckerVisitor::register_typeclass_instance(
   auto types = resolve_instance_types(ast);
   if (!types)
     return;
-  props_.type_class_instance(ast->id()).concrete_types = *types;
-
   auto it = type_class_defs.find(ast->class_name);
   if (it == type_class_defs.end()) {
     this->add_error(ast->get_location(),

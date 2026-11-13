@@ -46,10 +46,6 @@ struct TypeAliasProps {
   Type resolved_type = Type::NonExistent();
 };
 
-struct TypeClassInstanceProps {
-  std::vector<Type> concrete_types;
-};
-
 struct ForProps {
   /// The `Range` struct definition this loop iterates with.
   std::optional<Type> range_type;
@@ -62,7 +58,6 @@ class ASTProperties {
   std::unordered_map<NodeId, CastProps> cast_props_;
   std::unordered_map<NodeId, IndexProps> index_props_;
   std::unordered_map<NodeId, TypeAliasProps> type_alias_props_;
-  std::unordered_map<NodeId, TypeClassInstanceProps> type_class_instance_props_;
   std::unordered_map<NodeId, ForProps> for_props_;
   std::unordered_map<NodeId, Type> node_types_;
   std::unordered_map<std::string, std::string> symbols_;
@@ -76,9 +71,6 @@ public:
   IndexProps &index(NodeId id) { return index_props_[id]; }
   TypeAliasProps &type_alias(NodeId id) { return type_alias_props_[id]; }
   ForProps &for_loop(NodeId id) { return for_props_[id]; }
-  TypeClassInstanceProps &type_class_instance(NodeId id) {
-    return type_class_instance_props_[id];
-  }
 
   // Const accessors — return pointer (nullptr if missing)
   const CallProps *call(NodeId id) const {
@@ -109,10 +101,6 @@ public:
     auto it = for_props_.find(id);
     return it != for_props_.end() ? &it->second : nullptr;
   }
-  const TypeClassInstanceProps *type_class_instance(NodeId id) const {
-    auto it = type_class_instance_props_.find(id);
-    return it != type_class_instance_props_.end() ? &it->second : nullptr;
-  }
 
   //! The symbol the definition named `name` is linked as, which NameResolver
   //! decides: a C binding's is its C name, in every module that binds it
@@ -134,7 +122,6 @@ public:
     auto it = node_types_.find(id);
     return it != node_types_.end() ? it->second : Type::NonExistent();
   }
-  bool has_type(NodeId id) const { return node_types_.contains(id); }
 };
 
 } // namespace AST
