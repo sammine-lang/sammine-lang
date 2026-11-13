@@ -1,0 +1,40 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 0 10 20 30
+// CHECK: first 7
+// CHECK: len 3
+
+// A 'buf<T> from alloc_buf<T>(n) holds n values: unsafe code writes and
+// reads them by index, a ptr<T> parameter is lent it, generic code takes it
+// as 'buf<T>, and dropping it frees it. `buf` stays an ordinary name.
+
+import std;
+
+let unsafe fill(b: 'buf<i64>, n: i64) -> 'buf<i64> {
+  for i in 0i64..n { b[i] = i * 10i64; };
+  b
+}
+
+let unsafe at(b: ptr<i64>, i: i64) -> i64 { b[i] }
+
+let id<T>(b: 'buf<T>) -> 'buf<T> { b }
+let unsafe first<T>(b: ptr<T>) -> T { b[0] }
+
+reuse strlen(s: ptr<char>) -> i64;
+
+let unsafe main() -> i32 {
+  let buf = fill(alloc_buf<i64>(4i64), 4i64);
+  std::printf("%lld %lld %lld %lld\n", at(buf, 0i64), at(buf, 1i64),
+              at(buf, 2i64), at(buf, 3i64));
+  drop(buf);
+
+  let b = id<i32>(alloc_buf<i32>(2));
+  b[0] = 7;
+  std::printf("first %d\n", first<i32>(b));
+  drop(b);
+
+  let s = alloc_buf<char>(4);
+  s[0] = 'a'; s[1] = 'b'; s[2] = 'c'; s[3] = '\0';
+  std::printf("len %lld\n", strlen(s));
+  drop(s);
+  0
+}

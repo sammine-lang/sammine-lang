@@ -69,6 +69,7 @@ Formal grammar for the sammine language, derived from `src/Parser.cpp`.
 **type** ::= **simple_type**
   | `ptr` `<` **type** `>`                     *pointer*
   | `'ptr` `<` **type** `>`                    *linear pointer*
+  | `'buf` `<` **type** `>`                    *linear buffer*
   | `[` **type** `;` INTEGER `]`               *fixed-size array*
   | `(` **type** (`,` **type**)+ `)`           *tuple type*
   | `(` (**type** (`,` **type**)*)? `)` `->` **type**  *function type*
@@ -142,6 +143,7 @@ Operator precedence (low to high). `as` binds tighter than all of these:
   | ID (`<` **type** (`,` **type**)* `>`)? `{` **field_init** (`,` **field_init**)* `}`  *struct literal*
   | `[` **expr** (`,` **expr**)* `]`          *array literal*
   | `alloc` `<` **type** `>` `(` **expr** `)` *heap allocation*
+  | `alloc_buf` `<` **type** `>` `(` **expr** `)` *heap buffer*
   | `drop` `(` **expr** `)`                   *deallocation*
   | `len` `(` **expr** `)`                    *array length*
 

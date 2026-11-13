@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: proposed, not started.
+Status: in progress. Steps 1 (`drop`) and 2 (`'buf<T>`) are done.
 
 ## Goal
 
@@ -46,6 +46,12 @@ Today's uses move over: `Vec<T>`'s `data`, `String`'s `data`, `io`'s read
 buffer and `str`'s `malloc` become `'buf`. Of 250 `alloc` calls in `.mn`
 files, 229 allocate one value and stay `alloc`.
 
+`io`'s file handle, a `'ptr<char>` holding C's `FILE *`, is neither: its
+drop must call `close`, not `free`. Before pointers drop on their own
+(step 6), it becomes a struct, `io::File`, which nothing drops until it
+has a `Drop` instance that closes it (step 8): until then a `File` not
+closed is still an error.
+
 ## What dropping a value does
 
 | Type | Drop |
@@ -82,8 +88,10 @@ export instance<T> Drop<Vec<T>> {
 With drops, freeing is what dropping a pointer does, and more. So `free`
 becomes `drop(x)`, for a value of any type that owns memory: it consumes
 `x` and drops it there, instead of where it goes out of use. Afterwards `x`
-is moved, as after any move, and no drop is inserted for it. `drop` of a
-value that owns nothing is an error, as `free` of a non-pointer is today.
+is moved, as after any move, and no drop is inserted for it. Once `drop`
+takes any type (step 9), `drop` of a value that owns nothing does nothing,
+as Rust's: generic code drops a `T` that may be `i32`, as `Vec<T>`'s
+instance does. Until then it takes pointers only, as `free` did.
 The keyword, the token and `FreeExprAST` are renamed; MIR's `sammine.free`
 stays, as what a pointer's drop lowers to. 269 calls in 164 `.mn` files
 change.
@@ -211,28 +219,30 @@ print.
 Each a commit, the suite passing after each.
 
 1. `free` becomes `drop`, for owned pointers only still. A mechanical
-   rename of the tests and the stdlib.
+   rename of the tests and the stdlib. (Done.)
 2. `'buf<T>`: the type (lexer, types, MIR's `buffer` kind), `alloc_buf`,
    unsafe indexing, `drop(b)` frees. `Vec`, `String`, `io` and `str` move
-   their buffers to it; `grow_buf` drops `old_d`.
+   their buffers to it; `grow_buf` drops `old_d`. (Done.)
 3. The box rule: a `'ptr` passed, returned or stored holds a value;
    parameters' and calls' pointees are live. The new error, its tests, and
    fixes to test code that breaks the rule.
 4. `sammine.drop`, its verifier and its lowering for `'buf<T>` and for
    `'ptr<T>` where `T` owns nothing. MIR tests.
-5. `sammine-elaborate-drops` at returns, for those; the check after it. The
-   leak tests for them become programs that run.
-6. Joins and loop turns.
-7. Structs, tuples, arrays: generated drop functions; partial moves;
-   `drop(x)` of any of them.
-8. Enums: by tag, or by the variant a case arm knows.
-9. `'ptr<T>` whose `T` owns memory: drop `*p`, then free.
-10. `Drop<T>`: the typeclass, the generated function calling it before the
-    fields, its two new errors; `Vec<T>`'s and `String`'s instances replace
-    their `delete`; the Monomorphizer copies a generic instance for each
-    type instantiated.
-11. Stores, shadowing, temporaries; the AST checker's temporary rule goes.
-12. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
+5. `io::File`: the file handle in a struct, so no pointer drop frees it.
+6. `sammine-elaborate-drops` at returns, for those pointers; the check
+   after it. The leak tests for them become programs that run.
+7. Joins and loop turns.
+8. `Drop<T>`: the typeclass, the generated function calling it before the
+   fields, its two new errors; a value with an instance drops; `File`'s
+   closes, `Vec<T>`'s and `String`'s replace their `delete`; the
+   Monomorphizer copies a generic instance for each type instantiated.
+   Before struct drops, so no `File` or `Vec` drops field by field.
+9. Structs, tuples, arrays: generated drop functions; partial moves;
+   `drop(x)` of any type, a no-op for one that owns nothing.
+10. Enums: by tag, or by the variant a case arm knows.
+11. `'ptr<T>` whose `T` owns memory: drop `*p`, then free.
+12. Stores, shadowing, temporaries; the AST checker's temporary rule goes.
+13. The leak diagnostics and their tests go; indexing a `'ptr` goes; "linear"
     becomes "owning" in the diagnostics that stay; docs.
 
 ## Decided
@@ -245,4 +255,4 @@ Each a commit, the suite passing after each.
   the drop pass sees concrete types. What it needs is the copy of a generic
   `Drop` instance for each type it drops, `Drop<Vec<'ptr<i32>>>`, which no
   source calls: the Monomorphizer instantiates a type's generic `Drop`
-  instance along with the type (step 10).
+  instance along with the type (step 8).

@@ -436,6 +436,8 @@ public:
       auto pointee = resolve_type_expr(ptr->pointee.get());
       if (pointee.is_poisoned())
         return pointee;
+      if (ptr->is_buffer)
+        return Type::Buffer(pointee);
       auto result = Type::Pointer(pointee);
       result.linearity =
           ptr->is_linear ? Linearity::Linear : Linearity::NonLinear;

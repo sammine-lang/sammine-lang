@@ -33,3 +33,12 @@ func.func @lend(%p: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) {
   sammine.call @look(%view) : (!sammine.ptr<!sammine.ptr<i32, owned>, view>) -> ()
   return
 }
+
+// CHECK-LABEL: func.func @buffer(
+func.func @buffer(%n: i64) {
+  // CHECK: sammine.alloc %arg0 : i64 -> !sammine.ptr<i32, buffer>
+  %b = sammine.alloc %n : i64 -> !sammine.ptr<i32, buffer>
+  // CHECK: sammine.free %0 : !sammine.ptr<i32, buffer>
+  sammine.free %b : !sammine.ptr<i32, buffer>
+  return
+}

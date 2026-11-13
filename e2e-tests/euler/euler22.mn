@@ -17,7 +17,7 @@ import buffer;
 
 // The file is "MARY","PATRICIA",...: each quote and comma becomes a NUL, so
 // each name is a C string in the buffer.
-let unsafe blank_separator(buf: 'ptr<char>, i: i64) -> 'ptr<char> {
+let unsafe blank_separator(buf: 'buf<char>, i: i64) -> 'buf<char> {
   if buf[i] == '"' || buf[i] == ',' { buf[i] = '\0'; };
   buf
 }

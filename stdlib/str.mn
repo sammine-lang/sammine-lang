@@ -1,13 +1,13 @@
-reuse malloc(size: i64) -> 'ptr<char>;
+reuse malloc(size: i64) -> 'buf<char>;
 // memcpy returns dst, so ownership of the buffer is handed back.
-reuse memcpy(dst: 'ptr<char>, src: ptr<char>, n: i64) -> 'ptr<char>;
+reuse memcpy(dst: 'buf<char>, src: ptr<char>, n: i64) -> 'buf<char>;
 reuse strlen(s: ptr<char>) -> i64;
 
 // `data` is always NUL-terminated. `cap` counts the characters that fit,
 // like Vec's cap; the buffer holds one more byte for the terminator, so
 // every allocation here is `cap + 1` bytes.
 export struct String {
-  data: 'ptr<char>,
+  data: 'buf<char>,
   length: i64,
   cap: i64,
 };

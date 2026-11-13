@@ -36,7 +36,7 @@
 | `std.mn` | `export reuse printf(...)` → `std::printf` |
 | `io.mn` | Typed print/println, file I/O, stdin readers, stderr |
 | `str.mn` | `String` struct (data, length, cap), new/delete, `compare`, and `Less`/`Greater`/`LessEqual`/`GreaterEqual` instances on `ptr<String>` (views: an instance on `String` itself would own, and have to free, its operands). No `Equal`: `ptr<T>` has a built-in address `==` |
-| `vec.mn` | Generic `Vec<T>` (data: 'ptr<T>, length, cap), new/push/delete; internal grow_buf |
+| `vec.mn` | Generic `Vec<T>` (data: 'buf<T>, length, cap), new/push/delete; internal grow_buf |
 | `definitions.mn` | The prelude: typeclasses (Sized, Add, Sub, Mul, Div, Mod, Convert, Hash, Indexer, Iterator), exported Sized/Iterator<Range> instances, `type Option<T>`, `struct Range<T>`. Compiled to definitions.so/.a first; other stdlib modules depend on it |
 | `io_runtime.c` | C runtime for io module |
 

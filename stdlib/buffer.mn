@@ -3,29 +3,29 @@
 
 import range;
 
-let unsafe set_index(xs: 'ptr<i64>, i: i64) -> 'ptr<i64> {
+let unsafe set_index(xs: 'buf<i64>, i: i64) -> 'buf<i64> {
   xs[i] = i;
   xs
 }
 
 // A new buffer holding 0, 1, ..., n - 1.
-export let indices(n: i64) -> 'ptr<i64> {
-  range::fold(0i64, n, alloc<i64>(n), set_index)
+export let indices(n: i64) -> 'buf<i64> {
+  range::fold(0i64, n, alloc_buf<i64>(n), set_index)
 }
 
-let unsafe set_to<T>(value: T, xs: 'ptr<T>, i: i64) -> 'ptr<T> {
+let unsafe set_to<T>(value: T, xs: 'buf<T>, i: i64) -> 'buf<T> {
   xs[i] = value;
   xs
 }
 
 // A new buffer of n elements, each value.
-export let filled<T>(n: i64, value: T) -> 'ptr<T> {
-  range::fold(0i64, n, alloc<T>(n), set_to(value))
+export let filled<T>(n: i64, value: T) -> 'buf<T> {
+  range::fold(0i64, n, alloc_buf<T>(n), set_to(value))
 }
 
 // Moves xs[j] down past every element `after` puts it before: one step of
 // insertion sort.
-let unsafe insert<T>(after: (T, T) -> bool, xs: 'ptr<T>, j: i64) -> 'ptr<T> {
+let unsafe insert<T>(after: (T, T) -> bool, xs: 'buf<T>, j: i64) -> 'buf<T> {
   if j > 0i64 && after(xs[j - 1i64], xs[j]) {
     let moved = xs[j];
     xs[j] = xs[j - 1i64];
@@ -35,17 +35,17 @@ let unsafe insert<T>(after: (T, T) -> bool, xs: 'ptr<T>, j: i64) -> 'ptr<T> {
 }
 
 // Sorts xs in place so that no element comes `after` the one following it.
-export let sort_by<T>(xs: 'ptr<T>, n: i64, after: (T, T) -> bool) -> 'ptr<T> {
+export let sort_by<T>(xs: 'buf<T>, n: i64, after: (T, T) -> bool) -> 'buf<T> {
   range::fold(1i64, n, xs, insert(after))
 }
 
-let unsafe give_at<T>(f: (T) -> unit, xs: 'ptr<T>, i: i64) -> 'ptr<T> {
+let unsafe give_at<T>(f: (T) -> unit, xs: 'buf<T>, i: i64) -> 'buf<T> {
   f(xs[i]);
   xs
 }
 
 // f(xs[0]), ..., f(xs[n - 1]), in order. Each element is moved into f, so
 // f can consume what it owns, as str::delete does.
-export let each<T>(xs: 'ptr<T>, n: i64, f: (T) -> unit) -> 'ptr<T> {
+export let each<T>(xs: 'buf<T>, n: i64, f: (T) -> unit) -> 'buf<T> {
   range::fold(0i64, n, xs, give_at(f))
 }

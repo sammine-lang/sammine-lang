@@ -203,7 +203,8 @@ std::string AddrOfExprAST::to_string() const {
 }
 
 std::string AllocExprAST::to_string() const {
-  return "alloc<" + type_arg->to_string() + ">(" + operand->to_string() + ")";
+  return std::string(buffer ? "alloc_buf<" : "alloc<") + type_arg->to_string() +
+         ">(" + operand->to_string() + ")";
 }
 
 std::string CastExprAST::to_string() const {

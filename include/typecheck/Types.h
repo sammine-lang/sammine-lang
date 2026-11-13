@@ -73,14 +73,17 @@ public:
   // Legacy: total_types = [params..., return_type]
   FunctionType(const std::vector<Type> &total_types, bool var_arg = false);
 };
-/// Pointer type: ptr<T> (non-linear) or 'ptr<T> (linear, must be freed).
+/// Pointer type: ptr<T> (a view), 'ptr<T> (owns one T, a box) or 'buf<T>
+/// (owns room for many T, a buffer: its owner says how many are there).
 class PointerType {
   TypePtr pointee;
+  bool buffer = false;
 
 public:
   bool operator==(const PointerType &t) const;
   Type get_pointee() const;
-  PointerType(Type pointee);
+  bool is_buffer() const { return buffer; }
+  explicit PointerType(Type pointee, bool buffer = false);
 };
 /// Fixed-size array type: [N]T. Bounds-checked at runtime.
 class ArrayType {
@@ -246,6 +249,17 @@ struct Type {
   static Type Pointer(Type pointee) {
     return Type{TypeKind::Pointer, PointerType(pointee)};
   }
+  /// 'buf<T>: an owned buffer of T.
+  static Type Buffer(Type pointee) {
+    Type result{TypeKind::Pointer, PointerType(pointee, /*buffer=*/true)};
+    result.linearity = Linearity::Linear;
+    return result;
+  }
+  /// Whether this is a 'buf<T>.
+  bool is_buffer() const {
+    return type_kind == TypeKind::Pointer &&
+           std::get<PointerType>(type_data).is_buffer();
+  }
   static Type Array(Type element, size_t size) {
     return Type{TypeKind::Array, ArrayType(element, size)};
   }
@@ -323,9 +337,12 @@ struct Type {
       return "bool";
     case TypeKind::Char:
       return "char";
-    case TypeKind::Pointer:
-      return (linearity == Linearity::Linear ? "'" : "") + std::string("ptr<") +
-             std::get<PointerType>(type_data).get_pointee().to_string() + ">";
+    case TypeKind::Pointer: {
+      auto &ptr = std::get<PointerType>(type_data);
+      auto spelled = ptr.is_buffer() ? "buf<" : "ptr<";
+      return (linearity == Linearity::Linear ? "'" : "") +
+             std::string(spelled) + ptr.get_pointee().to_string() + ">";
+    }
     case TypeKind::Array:
       return "[" + std::to_string(std::get<ArrayType>(type_data).get_size()) +
              "]" + std::get<ArrayType>(type_data).get_element().to_string();

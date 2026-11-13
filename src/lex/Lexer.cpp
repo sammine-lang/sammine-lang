@@ -96,6 +96,7 @@ std::optional<TokenType> keyword_token(std::string_view word) {
     {"export", TokExport},
     {"ptr", TokPtr},
     {"alloc", TokAlloc},
+    {"alloc_buf", TokAllocBuf},
     {"drop", TokDrop},
     {"len", TokLen},
     {"dim", TokDim},

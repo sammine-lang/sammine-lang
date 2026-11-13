@@ -1,0 +1,17 @@
+// RUN: %sammine --file %full --emit mlir | %check %full
+// A 'buf<T> is MIR's !sammine.ptr<T, buffer>: alloc_buf allocates one, b[i]
+// reaches a value in it, and drop frees it.
+
+// CHECK-LABEL: func.func @main
+// CHECK: %[[A:[0-9]+]] = sammine.alloc %{{.*}} : i32 -> !sammine.ptr<i32, buffer>
+// CHECK: %[[B:[0-9]+]] = sammine.let "b" %[[A]] : !sammine.ptr<i32, buffer>
+// CHECK: %[[P:[0-9]+]] = sammine.deref %[[B]] : <i32, buffer>
+// CHECK: sammine.ptr_elem %[[P]][%{{.*}}] : <i32>, i32
+// CHECK: sammine.free %[[B]] : !sammine.ptr<i32, buffer>
+
+let unsafe main() -> i32 {
+  let b = alloc_buf<i32>(2);
+  b[1] = 5;
+  drop(b);
+  0
+}

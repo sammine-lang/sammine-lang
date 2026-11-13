@@ -71,6 +71,7 @@ enum TokenType {
   TokStruct,    // struct
   TokPtr,       // ptr
   TokAlloc,     // alloc
+  TokAllocBuf,  // alloc_buf
   TokDrop,      // drop
   TokLen,       // len
   TokDim,       // dim
@@ -170,6 +171,7 @@ static const std::map<TokenType, std::string> TokenMap = {
     {TokStruct, "struct"},
     {TokPtr, "ptr"},
     {TokAlloc, "alloc"},
+    {TokAllocBuf, "alloc_buf"},
     {TokDrop, "drop"},
     {TokLen, "len"},
     {TokDim, "dim"},

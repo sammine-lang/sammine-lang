@@ -13,7 +13,8 @@ class Sammine_Type<string name, string typeMnemonic, list<Trait> traits = []>
 def Sammine_Ownership : I32EnumAttr<"Ownership",
     "whether a pointer owns what it points at", [
       I32EnumAttrCase<"Owned", 0, "owned">,
-      I32EnumAttrCase<"View", 1, "view">]> {
+      I32EnumAttrCase<"View", 1, "view">,
+      I32EnumAttrCase<"Buffer", 2, "buffer">]> {
   let cppNamespace = "::sammine_lang::smn";
   let genSpecializedAttr = 0;
 }
@@ -22,14 +23,21 @@ def Sammine_PtrType : Sammine_Type<"Ptr", "ptr"> {
   let summary = "a pointer that owns what it points at, or a view of it";
   let description = [{
     `!sammine.ptr<i32, owned>` is sammine's `'ptr<i32>`: whoever holds it
-    must free it or hand it on. `!sammine.ptr<i32, view>` is `ptr<i32>`: it
-    only looks at memory someone else owns.
+    must free it or hand it on, and it holds one i32, which the ownership
+    check follows. `!sammine.ptr<i32, buffer>` is `'buf<i32>`: owned as
+    well, but holding as many i32 as its owner says, which the check
+    doesn't follow. `!sammine.ptr<i32, view>` is `ptr<i32>`: it only looks
+    at memory someone else owns.
   }];
   let parameters = (ins "::mlir::Type":$pointee,
                         EnumParameter<Sammine_Ownership>:$ownership);
   let assemblyFormat = "`<` $pointee `,` $ownership `>`";
   let extraClassDeclaration = [{
-    bool isOwned() const { return getOwnership() == Ownership::Owned; }
+    /// Whether whoever holds it must free it or hand it on: a box or a
+    /// buffer.
+    bool isOwned() const { return getOwnership() != Ownership::View; }
+    /// Whether it owns exactly one value, what it points at.
+    bool isBox() const { return getOwnership() == Ownership::Owned; }
   }];
 }
 

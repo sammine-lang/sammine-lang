@@ -179,3 +179,18 @@ func.func @through_held_pointer(%n: i32) attributes {sammine.mir} {
   sammine.free %pp : !sammine.ptr<!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
   return
 }
+
+// -----
+
+// A buffer's values are its owner's to count, so the check doesn't follow
+// them: freeing a buffer of owned pointers reports nothing, unlike freeing a
+// box whose pointer is still there (@free_with_live_pointee).
+func.func @free_buffer_of_owners(%n: i32) attributes {sammine.mir} {
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, buffer>
+  %b = sammine.let "b" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, buffer>
+  %1 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
+  %place = sammine.deref %b : <!sammine.ptr<i32, owned>, buffer>
+  sammine.store %1, %place : <!sammine.ptr<i32, owned>>
+  sammine.free %b : !sammine.ptr<!sammine.ptr<i32, owned>, buffer>
+  return
+}

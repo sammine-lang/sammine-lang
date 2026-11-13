@@ -1,0 +1,13 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Argument 1 to 'take': expected 'ptr<i32>, got 'buf<i32>
+// CHECK: ╰─ note: 'ptr<i32> owns one value and 'buf<i32> a buffer of them: they are different types
+
+// A box and a buffer of the same type are different types.
+
+let take(p: 'ptr<i32>) -> unit { drop(p) }
+
+let main() -> i32 {
+  let b = alloc_buf<i32>(2);
+  take(b);
+  0
+}

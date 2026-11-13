@@ -105,7 +105,7 @@ std::unique_ptr<TypeExprAST> Monomorphizer::clone_type_expr(TypeExprAST *expr) {
   case ParseKind::Pointer: {
     auto *ptr = llvm::cast<PointerTypeExprAST>(expr);
     return std::make_unique<PointerTypeExprAST>(
-        clone_type_expr(ptr->pointee.get()), ptr->is_linear);
+        clone_type_expr(ptr->pointee.get()), ptr->is_linear, ptr->is_buffer);
   }
   case ParseKind::Array: {
     auto *arr = llvm::cast<ArrayTypeExprAST>(expr);
@@ -295,8 +295,9 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   case NodeKind::AllocExprAST: {
     auto *alloc = llvm::cast<AllocExprAST>(expr);
     result = std::make_unique<AllocExprAST>(
-        make_tok("alloc"), clone_type_expr(alloc->type_arg.get()),
-        clone_expr(alloc->operand.get()));
+        make_tok(alloc->buffer ? "alloc_buf" : "alloc"),
+        clone_type_expr(alloc->type_arg.get()),
+        clone_expr(alloc->operand.get()), alloc->buffer);
     break;
   }
   case NodeKind::CastExprAST: {

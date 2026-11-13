@@ -1,5 +1,5 @@
 export struct Vec<T> {
-  data: 'ptr<T>,
+  data: 'buf<T>,
   length: i64,
   cap: i64,
 };
@@ -21,12 +21,12 @@ export instance<T> Indexer<Vec<T>, T> {
 }
 
 export let new<T>(cap: i64) -> Vec<T> {
-  Vec<T> { data: alloc<T>(cap), length: 0i64, cap: cap }
+  Vec<T> { data: alloc_buf<T>(cap), length: 0i64, cap: cap }
 }
 
-let unsafe grow_buf<T>(old_d: 'ptr<T>, l: i64, old_c: i64) -> 'ptr<T> {
+let unsafe grow_buf<T>(old_d: 'buf<T>, l: i64, old_c: i64) -> 'buf<T> {
   let new_c = old_c * 2i64;
-  let new_d = alloc<T>(new_c);
+  let new_d = alloc_buf<T>(new_c);
   for i in 0i64..l {
     new_d[i] = old_d[i];
   };

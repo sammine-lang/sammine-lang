@@ -505,32 +505,41 @@ auto Parser::ParseTypeExprTopLevel() -> std::unique_ptr<TypeExprAST> {
 }
 
 // Parse a type annotation. Builds a TypeExprAST tree (NOT in the visitor
-// pattern). Handles: ptr<T>, 'ptr<T>, [T;N], (T,U)->V, (T,U), Name<T>, and
-// simple names.
+// pattern). Handles: ptr<T>, 'ptr<T>, 'buf<T>, [T;N], (T,U)->V, (T,U),
+// Name<T>, and simple names.
 auto Parser::ParseTypeExpr() -> std::unique_ptr<TypeExprAST> {
-  // Parse pointer types: ptr<T> or 'ptr<T> (linear)
+  // Parse pointer types: ptr<T>, 'ptr<T> (owns one T) or 'buf<T> (owns a
+  // buffer of them). `buf` is a name anywhere but after a tick.
   auto tick = expect(TokenType::TokTick);
   if (tick || tokStream->peek()->tok_type == TokenType::TokPtr) {
     auto ptr_tok = expect(TokenType::TokPtr);
+    if (!ptr_tok && tick && tokStream->peek()->tok_type == TokenType::TokID &&
+        tokStream->peek()->lexeme == "buf")
+      ptr_tok = expect(TokenType::TokID);
     if (!ptr_tok) {
-      report_error("Expected 'ptr' after tick (') for linear pointer type",
+      report_error("Expected 'ptr' or 'buf' after tick (') for an owning "
+                   "pointer type",
                    tick->get_location());
       return nullptr;
     }
-    EXPECT_ERROR_OF(_lt, TokLESS, "Expected '<' after 'ptr'",
+    auto spelled = ptr_tok->lexeme;
+    EXPECT_ERROR_OF(_lt, TokLESS,
+                    fmt::format("Expected '<' after '{}'", spelled),
                     ptr_tok->get_location(), nullptr);
     auto inner = ParseTypeExpr();
     if (!inner) {
-      report_error("Expected type inside 'ptr<...>'", ptr_tok->get_location());
+      report_error(fmt::format("Expected type inside '{}<...>'", spelled),
+                   ptr_tok->get_location());
       return nullptr;
     }
     if (!consumeClosingAngleBracket()) {
-      report_error("Expected '>' to close 'ptr<...>'", ptr_tok->get_location());
+      report_error(fmt::format("Expected '>' to close '{}<...>'", spelled),
+                   ptr_tok->get_location());
       return nullptr;
     }
     bool is_linear = tick != nullptr;
-    auto result =
-        std::make_unique<PointerTypeExprAST>(std::move(inner), is_linear);
+    auto result = std::make_unique<PointerTypeExprAST>(
+        std::move(inner), is_linear, ptr_tok->tok_type == TokenType::TokID);
     result->location =
         is_linear ? tick->get_location() : ptr_tok->get_location();
     return result;
@@ -717,35 +726,47 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
   return {std::make_unique<NodeT>(kw_tok, std::move(operand)), SUCCESS};
 }
 
+// alloc<T>(count), an owned pointer to one T, or alloc_buf<T>(count), a
+// buffer of count of them.
 auto Parser::ParseAllocExpr() -> p<ExprAST> {
-  EXPECT(kw_tok, TokAlloc);
-  REQUIRE(_lt, TokLESS, "Expected '<' after 'alloc'", kw_tok->get_location());
+  auto kw_tok = expect(TokAlloc);
+  if (!kw_tok)
+    kw_tok = expect(TokAllocBuf);
+  if (!kw_tok)
+    return {nullptr, NONCOMMITTED};
+  auto name = kw_tok->lexeme;
+  bool buffer = kw_tok->tok_type == TokAllocBuf;
+  REQUIRE(_lt, TokLESS, fmt::format("Expected '<' after '{}'", name),
+          kw_tok->get_location());
 
   auto type_arg = ParseTypeExpr();
   if (!type_arg) {
-    report_error("Expected type in alloc<...>", kw_tok->get_location());
+    report_error(fmt::format("Expected type in {}<...>", name),
+                 kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (!consumeClosingAngleBracket()) {
-    report_error("Expected '>' to close alloc<...>", kw_tok->get_location());
+    report_error(fmt::format("Expected '>' to close {}<...>", name),
+                 kw_tok->get_location());
     return {nullptr, FAILED};
   }
 
   // Parse (count_expr)
-  REQUIRE(_lp, TokLeftParen, "Expected '(' after alloc<T>",
+  REQUIRE(_lp, TokLeftParen, fmt::format("Expected '(' after {}<T>", name),
           kw_tok->get_location());
   auto [operand, result] = ParseExpr();
   if (result == NONCOMMITTED) {
-    report_error("Expected expression inside alloc<T>()",
+    report_error(fmt::format("Expected expression inside {}<T>()", name),
                  kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (result != SUCCESS)
     return {nullptr, FAILED};
-  REQUIRE(_rp, TokRightParen, "Expected ')' to close alloc<T>()",
+  REQUIRE(_rp, TokRightParen,
+          fmt::format("Expected ')' to close {}<T>()", name),
           kw_tok->get_location());
   return {std::make_unique<AllocExprAST>(kw_tok, std::move(type_arg),
-                                         std::move(operand)),
+                                         std::move(operand), buffer),
           SUCCESS};
 }
 

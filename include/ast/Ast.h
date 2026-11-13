@@ -93,20 +93,22 @@ public:
   std::string to_string() const override { return name.mangled(); }
 };
 
+/// ptr<T>, 'ptr<T> (is_linear) or 'buf<T> (is_linear and is_buffer).
 class PointerTypeExprAST : public TypeExprAST {
 public:
   std::unique_ptr<TypeExprAST> pointee;
   bool is_linear = false;
+  bool is_buffer = false;
   explicit PointerTypeExprAST(std::unique_ptr<TypeExprAST> pointee_,
-                              bool is_linear_ = false)
+                              bool is_linear_ = false, bool is_buffer_ = false)
       : TypeExprAST(ParseKind::Pointer), pointee(std::move(pointee_)),
-        is_linear(is_linear_) {}
+        is_linear(is_linear_), is_buffer(is_buffer_) {}
   static bool classof(const TypeExprAST *node) {
     return node->getKind() == ParseKind::Pointer;
   }
   std::string to_string() const override {
-    return (is_linear ? "'" : "") + std::string("ptr<") + pointee->to_string() +
-           ">";
+    return (is_linear ? "'" : "") + std::string(is_buffer ? "buf<" : "ptr<") +
+           pointee->to_string() + ">";
   }
 };
 
@@ -715,15 +717,17 @@ public:
   std::string to_string() const override;
   AST_NODE_METHODS("AddrOfExprAST", NodeKind::AddrOfExprAST)
 };
+/// alloc<T>(count), a 'ptr<T>, or alloc_buf<T>(count), a 'buf<T>.
 class AllocExprAST : public ExprAST {
 public:
   std::unique_ptr<TypeExprAST> type_arg; // the T in alloc<T>(count)
   std::unique_ptr<ExprAST> operand;      // the count expression
+  bool buffer = false;                   // alloc_buf
   explicit AllocExprAST(std::shared_ptr<Token> tok,
                         std::unique_ptr<TypeExprAST> type_arg_,
-                        std::unique_ptr<ExprAST> operand_)
+                        std::unique_ptr<ExprAST> operand_, bool buffer_ = false)
       : ExprAST(NodeKind::AllocExprAST), type_arg(std::move(type_arg_)),
-        operand(std::move(operand_)) {
+        operand(std::move(operand_)), buffer(buffer_) {
     this->join_location(tok)->join_location(this->operand.get());
   }
   std::string to_string() const override;

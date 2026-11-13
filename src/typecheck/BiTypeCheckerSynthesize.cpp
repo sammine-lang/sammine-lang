@@ -1189,6 +1189,14 @@ Type BiTypeCheckerVisitor::synthesize(DerefExprAST *ast) {
                                 operand_type.to_string()));
     return ast->set_type(Type::Poisoned());
   }
+  // A buffer holds no one value to name: its owner says how many it holds.
+  if (operand_type.is_buffer()) {
+    this->add_error(ast->get_location(),
+                    fmt::format("Cannot dereference {}, a buffer: index it "
+                                "in an unsafe function",
+                                operand_type.to_string()));
+    return ast->set_type(Type::Poisoned());
+  }
 
   auto pointee = std::get<PointerType>(operand_type.type_data).get_pointee();
 
@@ -1254,12 +1262,11 @@ Type BiTypeCheckerVisitor::synthesize(AllocExprAST *ast) {
     return ast->set_type(Type::Poisoned());
   }
 
-  {
-    auto t = Type::Pointer(element_type);
-    t.linearity = Linearity::Linear;
-    ast->set_type(t);
-  } // alloc always produces linear pointers
-  return ast->get_type();
+  if (ast->buffer)
+    return ast->set_type(Type::Buffer(element_type));
+  auto t = Type::Pointer(element_type);
+  t.linearity = Linearity::Linear;
+  return ast->set_type(t);
 }
 
 // `x as T` goes through the instance Convert<From, T>. A literal, which has

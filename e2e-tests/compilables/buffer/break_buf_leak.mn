@@ -1,0 +1,9 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Linear variable 'b' must be consumed before scope exit (use drop() to deallocate)
+
+// A buffer is owned like a box: it has to be dropped or handed on.
+
+let main() -> i32 {
+  let b = alloc_buf<i32>(2);
+  0
+}

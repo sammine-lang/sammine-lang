@@ -2,7 +2,7 @@
 
 ## Lexer
 - Reused tokens: `*` (deref/mul), `&` (addr-of/logical-and), `<`/`>` (generics/comparison)
-- `TokTick` = `'` (linear pointer prefix `'ptr<T>`)
+- `TokTick` = `'` (linear pointer prefix `'ptr<T>`, `'buf<T>`; `buf` is an identifier, a type name only after the tick)
 - `TokFloorDiv` (`/_`), `TokCeilDiv` (`/^`) — defined but not in precedence table yet
 - `TokEllipsis` (`...`) — varargs and range syntax
 - Number suffixes consumed as part of lexeme (`42i32`, `3.14f64`)

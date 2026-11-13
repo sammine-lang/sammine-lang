@@ -48,8 +48,10 @@ static Type substitute_parts(const Type &type, const TypeBindings &bindings) {
     return type;
   }
   case TypeKind::Pointer: {
-    auto pointee = std::get<PointerType>(type.type_data).get_pointee();
-    return Type::Pointer(substitute(pointee, bindings));
+    auto &ptr = std::get<PointerType>(type.type_data);
+    return Type{
+        TypeKind::Pointer,
+        PointerType(substitute(ptr.get_pointee(), bindings), ptr.is_buffer())};
   }
   case TypeKind::Array: {
     auto &arr = std::get<ArrayType>(type.type_data);
@@ -245,9 +247,12 @@ static bool unify_impl(const Type &pattern_in, const Type &concrete_in,
 
   switch (pattern.type_kind) {
   case TypeKind::Pointer: {
-    auto pp = std::get<PointerType>(pattern.type_data).get_pointee();
-    auto cp = std::get<PointerType>(concrete.type_data).get_pointee();
-    return unify_impl(pp, cp, bindings, both_sides);
+    auto &pp = std::get<PointerType>(pattern.type_data);
+    auto &cp = std::get<PointerType>(concrete.type_data);
+    // A box isn't a buffer; a view, ptr<T>, may be lent either.
+    if (pattern.is_linear_v() && pp.is_buffer() != cp.is_buffer())
+      return false;
+    return unify_impl(pp.get_pointee(), cp.get_pointee(), bindings, both_sides);
   }
   case TypeKind::Array: {
     auto &pa = std::get<ArrayType>(pattern.type_data);

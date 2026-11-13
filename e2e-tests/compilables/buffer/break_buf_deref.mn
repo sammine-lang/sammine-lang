@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Cannot dereference 'buf<i32>, a buffer: index it in an unsafe function
+
+// A buffer holds no one value for *b to name.
+
+let main() -> i32 {
+  let b = alloc_buf<i32>(2);
+  let x = *b;
+  drop(b);
+  x
+}

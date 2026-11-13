@@ -921,6 +921,30 @@ author: when a program crashes, look at its unsafe functions first. This holds
 for every pointer, owned or a view, including string literals (`"hi"[0]`).
 Fixed arrays are bounds-checked and can be indexed anywhere.
 
+### Buffers
+
+A `'ptr<T>` owns one value. Memory holding many, as `Vec<T>` and `String`
+keep, is a buffer, `'buf<T>`: `alloc_buf<T>(n)` allocates room for `n` values.
+A buffer is owned like a `'ptr<T>`, moved, lent to a `ptr<T>` parameter and
+dropped the same way, but it has no single value to dereference: `*b` is an
+error, and its values are reached by index, in an unsafe function. How many of
+them hold a value is up to the code that owns the buffer, so the compiler
+doesn't follow them: dropping a buffer frees the memory and nothing in it.
+
+```sammine
+reuse strlen(s: ptr<char>) -> i64;
+
+let unsafe main() -> i32 {
+  let s = alloc_buf<char>(3);
+  s[0] = 'h'; s[1] = 'i'; s[2] = '\0';
+  std::printf("%lld\n", strlen(s));   // 2: s is lent
+  drop(s);
+  return 0;
+}
+```
+
+`'ptr<T>` and `'buf<T>` are different types.
+
 An unsafe function is called like any other function. Callers need no marker,
 so `vec::push` is unsafe inside but used from safe code:
 

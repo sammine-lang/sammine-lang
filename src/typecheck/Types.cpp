@@ -24,10 +24,10 @@ std::span<const Type> FunctionType::get_params_types() const {
 
 Type FunctionType::get_return_type() const { return *return_type; }
 
-PointerType::PointerType(Type pointee_)
-    : pointee(std::make_shared<Type>(std::move(pointee_))) {}
+PointerType::PointerType(Type pointee_, bool buffer_)
+    : pointee(std::make_shared<Type>(std::move(pointee_))), buffer(buffer_) {}
 bool PointerType::operator==(const PointerType &t) const {
-  return *pointee == *t.pointee;
+  return buffer == t.buffer && *pointee == *t.pointee;
 }
 Type PointerType::get_pointee() const { return *pointee; }
 
@@ -171,9 +171,12 @@ size_t std::hash<Type>::operator()(const Type &t) const {
     hash_combine(h,
                  std::hash<std::string>{}(std::get<std::string>(t.type_data)));
     break;
-  case TypeKind::Pointer:
-    hash_combine(h, (*this)(std::get<PointerType>(t.type_data).get_pointee()));
+  case TypeKind::Pointer: {
+    auto &ptr = std::get<PointerType>(t.type_data);
+    hash_combine(h, (*this)(ptr.get_pointee()));
+    hash_combine(h, std::hash<bool>{}(ptr.is_buffer()));
     break;
+  }
   case TypeKind::Array: {
     auto &at = std::get<ArrayType>(t.type_data);
     hash_combine(h, (*this)(at.get_element()));
@@ -247,6 +250,16 @@ std::optional<std::string> incompatibility_hint(const Type &expected,
     return fmt::format("note: {} is an owning pointer and {} a view of one: "
                        "they are different types",
                        owning.to_string(), view.to_string());
+  }
+  // A box and a buffer of the same type.
+  if (expected.type_kind == TypeKind::Pointer &&
+      actual.type_kind == TypeKind::Pointer &&
+      expected.is_buffer() != actual.is_buffer()) {
+    auto &buffer = expected.is_buffer() ? expected : actual;
+    auto &box = expected.is_buffer() ? actual : expected;
+    return fmt::format("note: {} owns one value and {} a buffer of them: they "
+                       "are different types",
+                       box.to_string(), buffer.to_string());
   }
 
   // Signed/unsigned mismatch
@@ -386,7 +399,12 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
 
   // The same type, but for its own linearity: qualifier_compatible() decides
   // whether that flows, as an owning 'ptr<T> lent where ptr<T> is expected.
+  // A view is a view of a box's value or of a buffer's first one alike.
   auto unqualified = to;
+  if (to.type_kind == TypeKind::Pointer && !to.is_linear_v() &&
+      from.is_buffer())
+    unqualified =
+        Type::Buffer(std::get<PointerType>(to.type_data).get_pointee());
   unqualified.linearity = from.linearity;
   return unqualified == from;
 }

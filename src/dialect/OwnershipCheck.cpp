@@ -246,7 +246,8 @@ llvm::SmallVector<Step> partsOf(mlir::Type type) {
     if (smn::ownsMemory(array.getElement()))
       parts.push_back({Step::Element});
   } else if (auto ptr = mlir::dyn_cast<smn::PtrType>(type)) {
-    if (ptr.isOwned() && smn::ownsMemory(ptr.getPointee()))
+    // A buffer's values are its owner's to count: only a box's is followed.
+    if (ptr.isBox() && smn::ownsMemory(ptr.getPointee()))
       parts.push_back({Step::Pointee});
   }
   return parts;

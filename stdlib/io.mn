@@ -3,15 +3,15 @@ reuse sammine_io_eprint(s: ptr<char>) -> unit;
 reuse sammine_io_eprintln(s: ptr<char>) -> unit;
 // C hands back what it reads as new values: a buffer and its length, plus
 // the file handle for a file read. It never writes into sammine memory.
-reuse sammine_io_read_line() -> ('ptr<char>, i64);
+reuse sammine_io_read_line() -> ('buf<char>, i64);
 reuse sammine_io_read_i32() -> i32;
 reuse sammine_io_read_i64() -> i64;
 reuse sammine_io_read_f64() -> f64;
 reuse sammine_io_open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char>;
 reuse sammine_io_close(handle: 'ptr<char>) -> unit;
-reuse sammine_io_file_read_line(handle: 'ptr<char>) -> ('ptr<char>, 'ptr<char>, i64);
+reuse sammine_io_file_read_line(handle: 'ptr<char>) -> ('ptr<char>, 'buf<char>, i64);
 reuse sammine_io_file_write(handle: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char>;
-reuse sammine_io_read_file(path: ptr<char>) -> ('ptr<char>, i64);
+reuse sammine_io_read_file(path: ptr<char>) -> ('buf<char>, i64);
 reuse sammine_io_write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 reuse sammine_io_append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 
@@ -28,11 +28,11 @@ export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }
 
 // What a read produced: a buffer the caller owns and its length, or Eof when
 // there was nothing to read.
-export type ReadResult = Line('ptr<char>, i64) | Eof;
+export type ReadResult = Line('buf<char>, i64) | Eof;
 
 // The runtime signals "nothing to read" with a NULL buffer and a negative
-// length. Freeing NULL does nothing, but it consumes the owned pointer.
-let to_read_result(buf: 'ptr<char>, n: i64) -> ReadResult {
+// length. Dropping NULL frees nothing, but it consumes the owned buffer.
+let to_read_result(buf: 'buf<char>, n: i64) -> ReadResult {
   if n < 0i64 { drop(buf); Eof } else { Line(buf, n) }
 }
 

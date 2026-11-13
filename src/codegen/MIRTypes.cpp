@@ -35,14 +35,16 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
   case TypeKind::Char:
     return mlir::IntegerType::get(ctx_, 8);
   case TypeKind::Pointer: {
-    // 'ptr<T> owns what it points at; ptr<T> is a view of it.
+    // 'ptr<T> owns what it points at, 'buf<T> a buffer of them; ptr<T> is a
+    // view of either.
     auto pointee = mirType(std::get<PointerType>(type.type_data).get_pointee());
     if (!pointee)
       return std::nullopt;
-    return smn::PtrType::get(ctx_, *pointee,
-                             type.linearity == Linearity::Linear
-                                 ? smn::Ownership::Owned
-                                 : smn::Ownership::View);
+    auto ownership = type.is_buffer() ? smn::Ownership::Buffer
+                     : type.linearity == Linearity::Linear
+                         ? smn::Ownership::Owned
+                         : smn::Ownership::View;
+    return smn::PtrType::get(ctx_, *pointee, ownership);
   }
   case TypeKind::Struct: {
     // No type refers to itself, through a pointer or not: the type checker
