@@ -1,0 +1,54 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 4 100
+
+// Project Euler Problem 33: Digit cancelling fractions
+// 49/98 = 4/8, as if the 9s cancelled. There are four such fractions less
+// than one with two digits above and two below, not counting those like
+// 30/50 that cancel 0s. Find the denominator of their product in its lowest
+// terms.
+
+import std;
+import range;
+
+struct Fraction { num: i64, den: i64, };
+
+let gcd(a: i64, b: i64) -> i64 { if b == 0 { a } else { gcd(b, a % b) } }
+
+// The digit of a two-digit x at place i: 0 its units, 1 its tens.
+let digit(x: i64, i: i64) -> i64 { if i == 0 { x % 10 } else { x / 10 } }
+
+// Whether striking n's digit at i and d's at j, the same digit and not 0,
+// leaves a fraction equal to n/d.
+let cancels(n: i64, d: i64, i: i64, j: i64) -> bool {
+  digit(n, i) == digit(d, j) && digit(n, i) != 0 &&
+    digit(n, 1 - i) * d == digit(d, 1 - j) * n
+}
+
+// Whether n/d keeps its value when some digit of n is struck with the same
+// digit of d.
+let curious(d: i64, n: i64) -> bool {
+  cancels(n, d, 0, 0) || cancels(n, d, 0, 1) ||
+    cancels(n, d, 1, 0) || cancels(n, d, 1, 1)
+}
+
+// The two-digit numerators under d that make a curious fraction over it.
+let curious_over(d: i64) -> i64 { range::count(10, d, curious(d)) }
+
+let times_if_curious(d: i64, acc: Fraction, n: i64) -> Fraction {
+  if curious(d, n) {
+    Fraction { num: acc.num * n, den: acc.den * d }
+  } else { acc }
+}
+
+// acc times each curious fraction over d.
+let times_curious_over(acc: Fraction, d: i64) -> Fraction {
+  range::fold(10, d, acc, times_if_curious(d))
+}
+
+let main() -> i32 {
+  let product = range::fold(11, 100, Fraction { num: 1, den: 1 },
+                            times_curious_over);
+  print("{} {}\n", range::sum(11, 100, curious_over),
+        product.den / gcd(product.num, product.den));
+  0
+}
