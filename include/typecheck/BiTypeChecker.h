@@ -270,10 +270,11 @@ public:
   void report_open_type(const ExprAST *expr);
 
   /// Binds the type parameters `params` by unifying each of `args` with its
-  /// parameter in `patterns`, on top of `bindings`. A parameter whose type
-  /// is already decided is left for check_call_argument, so a literal takes
-  /// that type. Returns the index of the first argument that is poisoned or
-  /// doesn't match, for the caller to report.
+  /// parameter in `patterns`, on top of `bindings`. Numeric literal
+  /// arguments bind last, so the others decide their type. A parameter whose
+  /// type is already decided is left for check_call_argument, so a literal
+  /// takes that type. Returns the index of the first argument that is
+  /// poisoned or doesn't match, for the caller to report.
   std::optional<size_t>
   infer_type_args(std::span<const std::unique_ptr<ExprAST>> args,
                   std::span<const Type> patterns,

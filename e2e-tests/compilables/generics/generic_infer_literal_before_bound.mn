@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 3000000000 7 7
+
+import std;
+
+// A literal leaves T to the other arguments, wherever it sits: 2 is any
+// integer, so it takes the type 3000000000i64 or twice binds, not i32.
+let pick<T>(a: T, b: T) -> T { b }
+
+let apply<T>(x: T, f: (T) -> T) -> T { f(x) }
+
+let twice_plus_one(x: i64) -> i64 { x * 2 + 1 }
+
+// An enum's payload is inferred the same way.
+type Pair<T> = Both(T, T);
+
+let second(p: Pair<i64>) -> i64 {
+  case p { Both(a, b) => b, }
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld %ld\n", pick(2, 3000000000i64), apply(3, twice_plus_one),
+              second(Both(1, 7i64)));
+  0
+}

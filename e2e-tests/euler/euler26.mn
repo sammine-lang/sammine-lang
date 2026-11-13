@@ -32,6 +32,6 @@ let longer(best: i64, d: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", range::fold(2, 1000, 2i64, longer));
+  std::printf("%ld\n", range::fold(2, 1000, 2, longer));
   0
 }

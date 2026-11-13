@@ -601,6 +601,15 @@ let main() -> i32 {
 }
 ```
 
+A literal argument takes its type from the other arguments when they decide
+`T`, wherever it sits; only a literal nothing else decides defaults, as `42`
+to `i32` above:
+
+```sammine
+let pick<T>(a: T, b: T) -> T { b }
+let c = pick(2, 3000000000i64);   // inferred: pick<i64>, 2 as an i64
+```
+
 ### Explicit Type Arguments
 
 ```sammine

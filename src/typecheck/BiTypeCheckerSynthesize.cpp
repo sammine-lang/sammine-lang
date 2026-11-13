@@ -357,21 +357,34 @@ std::optional<size_t> BiTypeCheckerVisitor::infer_type_args(
     std::span<const std::unique_ptr<ExprAST>> args,
     std::span<const Type> patterns, const std::vector<std::string> &params,
     TypeBindings &bindings) {
-  for (size_t i = 0; i < args.size() && i < patterns.size(); i++) {
+  auto count = std::min(args.size(), patterns.size());
+  // A literal argument says least of the type it is: 2 is any integer. The
+  // other arguments bind first, so fold(2, 1000, 2, longer) takes T from
+  // longer, and only a literal nothing else decides defaults, as 2 to i32.
+  auto is_literal = [&](size_t i) {
     auto arg_type = args[i]->get_type();
-    if (arg_type.is_poisoned())
-      return i;
+    return default_polymorphic_type(arg_type) != arg_type;
+  };
+  auto bind = [&](size_t i) {
     bool decided = std::ranges::none_of(params, [&](const std::string &tp) {
       return !bindings.contains(tp) && contains_type_param(patterns[i], tp);
     });
     if (decided)
-      continue;
-    // Default polymorphic literals before generic unification
-    arg_type = default_polymorphic_type(arg_type);
+      return true;
+    auto arg_type = default_polymorphic_type(args[i]->get_type());
     resolve_literal_type(args[i].get(), arg_type);
-    if (!unify(patterns[i], arg_type, bindings))
+    return unify(patterns[i], arg_type, bindings);
+  };
+
+  for (size_t i = 0; i < count; i++) {
+    if (args[i]->get_type().is_poisoned())
+      return i;
+    if (!is_literal(i) && !bind(i))
       return i;
   }
+  for (size_t i = 0; i < count; i++)
+    if (is_literal(i) && !bind(i))
+      return i;
   return std::nullopt;
 }
 
