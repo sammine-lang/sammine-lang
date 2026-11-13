@@ -6,8 +6,6 @@
 #include "mlir/IR/SymbolTable.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
 
-#include <string>
-
 #include "SammineDialect.h.inc"
 
 #include "SammineEnums.h.inc"
@@ -25,17 +23,10 @@ constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 /// kernel's wrapper fills one it is passed last with an array it returns.
 constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
 
-/// Why an op takes the values it is given, where its kind doesn't say: a
-/// call made for `x as T` converts x. For the ownership check's messages.
-constexpr llvm::StringLiteral kReasonAttr = "sammine.reason";
-
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);
 
-/// `type` as sammine writes it, for messages: `'ptr<i32>`, `vec::Vec<i32>`.
-/// MIR's integers have no sign, so `u32` reads as `i32`.
-std::string spelling(mlir::Type type);
 } // namespace sammine_lang::smn
 
 #define GET_OP_CLASSES

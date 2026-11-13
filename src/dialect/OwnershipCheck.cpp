@@ -412,20 +412,21 @@ public:
            reaches(b->getBlock(), a->getBlock());
   }
 
-  /// A part reported at a use, or still owned at an earlier return, isn't
-  /// reported again as still owned, nor is any part of it.
-  void reported(const Path &path) { leaked_.insert(path); }
-  bool firstLeak(const Path &path) {
-    if (llvm::any_of(leaked_,
+  /// Whether nothing about `path` was reported yet: one report per
+  /// mistake. A value reported once, at a use or as still owned, isn't
+  /// reported again, nor is any part of it, as what a freed pointer pointed
+  /// at went with it.
+  bool first(const Path &path) {
+    if (llvm::any_of(reported_,
                      [&](const Path &done) { return done.contains(path); }))
       return false;
-    leaked_.insert(path);
+    reported_.insert(path);
     return true;
   }
 
 private:
   bool failed_ = false;
-  std::set<Path> leaked_;
+  std::set<Path> reported_;
   llvm::DenseMap<mlir::Block *, llvm::DenseSet<mlir::Block *>> reach_;
 
   /// Whether control can go from `from` to `to` through at least one edge.
@@ -452,8 +453,6 @@ private:
 
 /// Why `op` takes the values it is given.
 llvm::StringRef reasonFor(mlir::Operation *op) {
-  if (auto reason = op->getAttrOfType<mlir::StringAttr>(smn::kReasonAttr))
-    return reason.getValue();
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::VariantOp>(op))
     return "passed to function";
   if (mlir::isa<smn::FreeOp>(op))
@@ -541,16 +540,8 @@ private:
       return true;
     if (!reports_)
       return false;
-    // Through a pointer that isn't live, the deref that reached the part
-    // reported the pointer, which is the mistake: what it pointed at went
-    // with it.
-    for (size_t i = 0; i < path.steps.size(); ++i)
-      if (path.steps[i].kind == Step::Pointee) {
-        Path pointer{path.root, {path.steps.begin(), path.steps.begin() + i}};
-        if (auto *p = lookup(pointer); p && p->kind != Owner::Live)
-          return false;
-      }
-    reports_->reported(path);
+    if (!reports_->first(path))
+      return false;
     auto name = "'" + nameOf(path) + "'";
     auto prefix = "Cannot " + verb.str() + " " + name + " — ";
     if (owner->isEmpty()) {
@@ -653,16 +644,16 @@ private:
   }
 
   void reportLeak(const Path &path) {
-    if (!reports_ || !reports_->firstLeak(path))
+    if (!reports_ || !reports_->first(path))
       return;
     auto &owner = owners_[path];
     auto name = nameOf(path);
     if (name.empty()) {
+      // The error underlines the temporary; its type isn't spelled, as MIR's
+      // integers carry no sign to spell u32 by.
       reports_->error(definedAt(path.root),
-                      "Temporary of linear type '" +
-                          smn::spelling(path.root.getType()) +
-                          "' must not be discarded (bind it with 'let' "
-                          "first)");
+                      "Temporary owning memory must not be discarded (bind "
+                      "it with 'let' first)");
     } else if (owner.kind == Owner::MaybeMoved) {
       reports_->error(mlir::Location(owner.definedAt),
                       "Linear variable '" + name +

@@ -1,13 +1,18 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: as_linear_converted_twice.mn:25:14
-// CHECK-NEXT:   23|let main() -> i32 {
-// CHECK-NEXT:   24|  let b = Boxed { p: alloc<i32>(1) };
-// CHECK-NEXT:   25|  let first = b as Plain;
+// CHECK:          |as_linear_converted_twice.mn:30:14
+// CHECK-NEXT:   28|let main() -> i32 {
+// CHECK-NEXT:   29|  let b = Boxed { p: alloc<i32>(1) };
+// CHECK-NEXT:   30|  let first = b as Plain;
 // CHECK-NEXT:     |              ─────────┬
-// CHECK-NEXT:     |                       ╰─ 'b' was converted here
-// CHECK-NEXT:   26|  let second = b as Plain;
+// CHECK-NEXT:     |                       ╰─ 'b' was passed to function here
+// CHECK-NEXT:   31|  let second = b as Plain;
 // CHECK-NEXT:     |               ─────────┬
-// CHECK-NEXT:     |                        ╰─ Cannot use linear variable 'b' — it was already converted previously
+// CHECK-NEXT:     |                        ╰─ Cannot use linear variable 'b' — it was already passed to function previously
+// CHECK-NEXT:   32|  return 0;
+// CHECK-NEXT:   33|}
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
 
 struct Boxed { p: 'ptr<i32>, };
 struct Plain { n: i32, };

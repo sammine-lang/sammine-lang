@@ -77,7 +77,7 @@ func.func @leak(%n: i32) attributes {sammine.mir} {
 // -----
 
 func.func @discarded(%n: i32) attributes {sammine.mir} {
-  // expected-error @+1 {{Temporary of linear type ''ptr<i32>' must not be discarded (bind it with 'let' first)}}
+  // expected-error @+1 {{Temporary owning memory must not be discarded (bind it with 'let' first)}}
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   return
 }
