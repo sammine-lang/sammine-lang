@@ -1,0 +1,31 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      true false true
+// CHECK-NEXT: true false true true
+// CHECK-NEXT: true false
+// CHECK-NEXT: 5 0
+// CHECK-NEXT: 2 31 none
+
+// Strings compare by what they say, not by where they are kept, and hash
+// by it too: a string is a Map's key.
+
+import str;
+import map;
+
+let same(a: string, b: string) -> bool { a == b }
+
+let main() -> i32 {
+  let a = "pear";
+  print("{} {} {}\n", same(a, "pear"), a == "plum", a != "plum");
+  print("{} {} {} {}\n", "apple" < "pear", "pear" < "apple", "pear" <= a,
+        "plum" > a);
+  print("{} {}\n", Hash<string>(a) == Hash<string>("pear"),
+        Hash<string>(a) == Hash<string>("peas"));
+  print("{} {}\n", str::count("hello"), str::count(""));
+
+  let days = map::insert(map::insert(map::new<string, i32>(), "jan", 31),
+                         "feb", 28);
+  print("{} ", map::length(&days));
+  case map::get(&days, "jan") { Some(n) => print("{} ", n), None => print("none ") };
+  case map::get(&days, "mar") { Some(n) => print("{}\n", n), None => print("none\n") };
+  0
+}

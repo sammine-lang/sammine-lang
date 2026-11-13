@@ -31,6 +31,10 @@ export let delete(s: String) -> unit {
 // How many characters s holds, its terminator not counted.
 export let length(s: ptr<String>) -> i64 { (*s).length }
 
+// How many characters a string has: counted to its end, as it keeps no
+// length beside them.
+export let unsafe count(s: string) -> i64 { strlen(s) }
+
 // Character i of s, or None outside 0..length(s): s[i] that doesn't end
 // the program.
 export let unsafe get(s: ptr<String>, i: i64) -> Option<char> {

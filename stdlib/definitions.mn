@@ -73,6 +73,34 @@ export typeclass NotEqual<T> {
   NotEqual(a: T, b: T) -> bool;
 }
 
+// Strings compare by their chars, as C's strcmp orders them: two strings
+// are equal when they say the same, wherever each is kept.
+reuse strcmp(a: string, b: string) -> i32;
+
+export instance Equal<string> {
+  let unsafe Equal(a: string, b: string) -> bool { strcmp(a, b) == 0 }
+}
+
+export instance NotEqual<string> {
+  let unsafe NotEqual(a: string, b: string) -> bool { strcmp(a, b) != 0 }
+}
+
+export instance Less<string> {
+  let unsafe Less(a: string, b: string) -> bool { strcmp(a, b) < 0 }
+}
+
+export instance Greater<string> {
+  let unsafe Greater(a: string, b: string) -> bool { strcmp(a, b) > 0 }
+}
+
+export instance LessEqual<string> {
+  let unsafe LessEqual(a: string, b: string) -> bool { strcmp(a, b) <= 0 }
+}
+
+export instance GreaterEqual<string> {
+  let unsafe GreaterEqual(a: string, b: string) -> bool { strcmp(a, b) >= 0 }
+}
+
 // `x as To` converts through this. The compiler provides the instances
 // between the number types, and between char and the integer types.
 export typeclass Convert<From, To> {
@@ -113,6 +141,20 @@ export instance Hash<char> {
 
 export instance Hash<bool> {
   let Hash(val: bool) -> u64 { mix(if val { 1u64 } else { 0u64 }) }
+}
+
+// A string's hash is each of its chars mixed into the one before, so equal
+// strings hash alike and one char's difference moves every bit.
+let unsafe hash_chars(chars: ptr<char>, hash: u64) -> u64 {
+  if chars[0] == '\0' {
+    hash
+  } else {
+    hash_chars(&chars[1], mix(hash ^ (chars[0] as u64)))
+  }
+}
+
+export instance Hash<string> {
+  let unsafe Hash(val: string) -> u64 { hash_chars(val, 0u64) }
 }
 
 // coll[idx], for a coll that is neither an array nor a pointer. The

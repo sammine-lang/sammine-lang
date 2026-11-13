@@ -40,6 +40,10 @@ count(name);                             // or lent as one, to a ptr<char> param
 let unsafe text(p: ptr<char>) -> string { p as string }   // unsafe: p must end
 ```
 
+Strings compare by what they say (`==`, `!=`, `<` and the rest, in C's
+`strcmp` order) and hash by it, so a string is a `Map`'s key.
+`str::count(s)` is how many chars one has.
+
 `str::String` is text a program builds, owned and growable (see the `str`
 module).
 
