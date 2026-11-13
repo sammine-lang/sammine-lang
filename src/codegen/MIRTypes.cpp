@@ -75,8 +75,11 @@ std::optional<mlir::Type> MIRTypes::mirType(const Type &type) const {
       payloadSize = std::max(payloadSize,
                              layout::variantPayloadSize(variant.payload_types));
     }
+    llvm::SmallVector<mlir::StringAttr> names;
+    for (auto &variant : et.get_variants())
+      names.push_back(mlir::StringAttr::get(ctx_, variant.name));
     return smn::EnumType::get(ctx_, et.get_name().mangled(), payloadSize,
-                              variants);
+                              names, variants);
   }
   case TypeKind::Function: {
     auto &fn = std::get<FunctionType>(type.type_data);

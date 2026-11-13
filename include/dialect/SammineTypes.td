@@ -98,8 +98,10 @@ def Sammine_EnumType : Sammine_Type<"Enum", "enum"> {
   }];
   let parameters = (ins StringRefParameter<"the enum's name">:$name,
                         "int64_t":$payloadSize,
+                        ArrayRefParameter<"::mlir::StringAttr", "variant names">:$variantNames,
                         ArrayRefParameter<"::mlir::Type", "variant payloads">:$variants);
-  let assemblyFormat = "`<` $name `,` $payloadSize `,` `(` custom<TypeList>($variants) `)` `>`";
+  let assemblyFormat = "`<` $name `,` $payloadSize `,` `(` custom<FieldList>($variantNames, $variants) `)` `>`";
+  let genVerifyDecl = 1;
   let extraClassDeclaration = [{
     /// The types of variant `index`'s payload.
     ::llvm::ArrayRef<::mlir::Type> getPayload(uint64_t index) const {

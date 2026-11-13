@@ -103,15 +103,15 @@ func.func @through_freed_pointer(%n: i32) attributes {sammine.mir} {
 // -----
 
 // Each arm has only its variant's payload, which its binding takes.
-func.func @case_arms(%e0: !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>) attributes {sammine.mir} {
-  %e = sammine.let "e" %e0 : !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>
-  %t = sammine.tag %e : <"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>
+func.func @case_arms(%e0: !sammine.enum<"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>) attributes {sammine.mir} {
+  %e = sammine.let "e" %e0 : !sammine.enum<"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
+  %t = sammine.tag %e : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
   cf.switch %t : i32, [
     default: ^none,
     0: ^some
   ]
 ^some:
-  %0 = sammine.payload %e[0, 0] at 0 : <"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)> -> !sammine.ptr<i32, owned>
+  %0 = sammine.payload %e[0, 0] at 0 : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)> -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
@@ -123,16 +123,16 @@ func.func @case_arms(%e0: !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<i
 
 // -----
 
-func.func @case_twice(%e0: !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>) attributes {sammine.mir} {
-  %e = sammine.let "e" %e0 : !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>
+func.func @case_twice(%e0: !sammine.enum<"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>) attributes {sammine.mir} {
+  %e = sammine.let "e" %e0 : !sammine.enum<"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
   // expected-note @+1 {{'e' was matched in case here}}
-  %t = sammine.tag %e : <"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>
+  %t = sammine.tag %e : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
   cf.switch %t : i32, [
     default: ^none,
     0: ^some
   ]
 ^some:
-  %0 = sammine.payload %e[0, 0] at 0 : <"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)> -> !sammine.ptr<i32, owned>
+  %0 = sammine.payload %e[0, 0] at 0 : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)> -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
@@ -140,7 +140,7 @@ func.func @case_twice(%e0: !sammine.enum<"Opt", 8, (!sammine.tuple<!sammine.ptr<
   cf.br ^done
 ^done:
   // expected-error @+1 {{Cannot use linear variable 'e' — it was already matched in case previously}}
-  %t2 = sammine.tag %e : <"Opt", 8, (!sammine.tuple<!sammine.ptr<i32, owned>>, !sammine.tuple<>)>
+  %t2 = sammine.tag %e : <"Opt", 8, (Some: !sammine.tuple<!sammine.ptr<i32, owned>>, None: !sammine.tuple<>)>
   return
 }
 

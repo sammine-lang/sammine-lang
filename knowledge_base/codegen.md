@@ -22,7 +22,7 @@
 | struct | `!sammine.struct<"name", (field: T, ...)>`, its fields named | identified `sammine.struct.<name>` |
 | tuple | `!sammine.tuple<...>` | literal struct |
 | `[N]T` | `!sammine.array<N, T>` | `!llvm.array<N x T>` |
-| enum with payloads | `!sammine.enum<"name", N, (payload tuples)>` | identified `sammine.enum.<name>`, `{i32 tag, [N x i8]}` |
+| enum with payloads | `!sammine.enum<"name", N, (Variant: payload tuple, ...)>`, its variants named | identified `sammine.enum.<name>`, `{i32 tag, [N x i8]}` |
 | integer-backed enum | its backing integer | same |
 | function value | `!sammine.fn<(A) -> R>` | identified `sammine.closure`, `{code, env}` |
 

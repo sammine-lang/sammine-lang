@@ -390,7 +390,12 @@ std::string nameOf(const Path &path) {
         name += "." + std::to_string(step.a);
       break;
     case Step::Payload:
-      name += "." + std::to_string(step.a) + "." + std::to_string(step.b);
+      name += "." +
+              mlir::cast<smn::EnumType>(type)
+                  .getVariantNames()[static_cast<size_t>(step.a)]
+                  .getValue()
+                  .str() +
+              "." + std::to_string(step.b);
       break;
     case Step::Pointee:
       name = "*" + name;

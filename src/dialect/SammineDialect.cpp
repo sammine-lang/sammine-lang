@@ -136,6 +136,20 @@ StructType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
   return mlir::success();
 }
 
+mlir::LogicalResult
+EnumType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
+                 llvm::StringRef enumName, int64_t,
+                 llvm::ArrayRef<mlir::StringAttr> names,
+                 llvm::ArrayRef<mlir::Type> variants) {
+  if (names.size() != variants.size())
+    return emitError() << "enum '" << enumName << "' names " << names.size()
+                       << " variants but has " << variants.size();
+  if (!llvm::all_of(variants, llvm::IsaPred<TupleType>))
+    return emitError() << "enum '" << enumName
+                       << "' has a payload that isn't a tuple";
+  return mlir::success();
+}
+
 std::string spelling(mlir::Type type) {
   auto list = [](llvm::ArrayRef<mlir::Type> types) {
     std::string s;

@@ -5,7 +5,7 @@
 // tag, each arm binding its payload with sammine.payload.
 // CHECK-LABEL: func.func private @wrap(
 // CHECK-SAME: sammine.mir
-// CHECK-NEXT: sammine.variant 1(%arg0, %arg1) at [0, 8] : (i8, i64) -> !sammine.enum<"Shape", 16, (!sammine.tuple<>, !sammine.tuple<i8, i64>)>
+// CHECK-NEXT: sammine.variant 1(%arg0, %arg1) at [0, 8] : (i8, i64) -> !sammine.enum<"Shape", 16, (Dot: !sammine.tuple<>, Tagged: !sammine.tuple<i8, i64>)>
 // CHECK-LABEL: func.func private @size(
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.tag %arg0
