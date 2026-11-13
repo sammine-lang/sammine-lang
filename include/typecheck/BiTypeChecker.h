@@ -142,6 +142,10 @@ public:
   virtual void visit(PrototypeAST *ast) override;
   virtual void visit(CallExprAST *ast) override;
   virtual void visit(ReturnStmtAST *ast) override;
+  /// `value`, of type `type`, returned from the function being checked,
+  /// by a return or by the body running off its end.
+  void check_returned(ExprAST *value, const Type &type,
+                      sammine_util::Location loc);
   virtual void visit(BinaryExprAST *ast) override;
   virtual void visit(NumberExprAST *ast) override;
   virtual void visit(StringExprAST *ast) override;

@@ -246,12 +246,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
   case NodeKind::ReturnStmtAST: {
     auto *ret = llvm::cast<ReturnStmtAST>(expr);
-    if (ret->is_implicit)
-      result =
-          std::make_unique<ReturnStmtAST>(clone_expr(ret->return_expr.get()));
-    else
-      result = std::make_unique<ReturnStmtAST>(
-          make_tok("return"), clone_expr(ret->return_expr.get()));
+    result = std::make_unique<ReturnStmtAST>(
+        make_tok("return"), clone_expr(ret->return_expr.get()));
     break;
   }
   case NodeKind::VarDefAST: {
@@ -407,6 +403,8 @@ std::unique_ptr<ExprAST> Monomorphizer::clone_expr(ExprAST *expr) {
   }
 
   result->set_location(orig_loc);
+  // A copy is used as its original is: a value, or a statement.
+  result->is_statement = expr->is_statement;
   return result;
 }
 

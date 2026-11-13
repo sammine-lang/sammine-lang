@@ -35,7 +35,7 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 - Function values: `sammine.closure @f(bound...)` is f with its first arguments bound. A function named as a value binds none: `__wrap_<f>`, null env. A partial application keeps what it binds in a stack slot of the function making it, read by a `__partial_N` wrapper
 
 ### Control flow
-- `lowerStatements` lowers a block's statements, stopping once one returns (`terminated()`). A body that runs off its end returns `()`, or its last value: GeneralSemanticsVisitor adds no implicit return to a function that writes `-> unit` (`returnsUnit()` means none written)
+- `lowerStatements` lowers a block's statements, stopping once one returns (`terminated()`). A body that runs off its end returns its last value (`FuncDefAST::body_value`), or `()` when the function writes no return type (`returnsUnit()`)
 - `if`: `cf.cond_br` to a block per side; `case` on an enum with payloads: `cf.switch` on its tag, each arm binding its payload; a `case` on an integer-backed enum or on literals: `cf.switch` on the value (`lowerScalarCase`). With no wildcard, other values go to the last arm. Arms join in a block taking the value (`lowerArms`); none if every arm returns. `&&`/`||` short-circuit through a block taking an i1. Every switch goes through `branchOn`, which makes one with no cases a plain branch (MLIR's translation crashes on it: `upstream/mlir-switch-no-cases-phi`)
 - `for i in a..b` (`lowerFor`): `Range { a, b }` is a header block's argument; each turn calls `Iterator<Range<T>, T>::next` and branches on its tag; Some binds i and goes round with the next range. The Option type and `next`'s name come from `rangeIteration`
 

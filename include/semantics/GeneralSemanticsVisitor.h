@@ -5,18 +5,12 @@
 #include "ast/AstDecl.h"
 #include "util/LexicalContext.h"
 #include "util/Utilities.h"
-#include <map>
 //! \file GeneralSemanticsVisitor.h
 //! \brief Defines GeneralSemanticsVisitor, an ASTVisitor that enforces general
-//! semantic rules for scoped definitions, detecting duplicates,
-//! and ensuring correct return usage in blocks.
+//! semantic rules on names: identifiers reserved for C interop.
 namespace sammine_lang::AST {
 /// General
 class GeneralSemanticsVisitor : public ScopedASTVisitor {
-  // Maps function blocks to whether they return unit (true) or a value (false)
-  std::map<BlockAST *, bool> func_blocks;
-  bool returned = false;
-
 public:
   // A simple scoping class, doesn't differentiate between different names, like
   // variable name, func name and all that
@@ -41,15 +35,12 @@ public:
   // Only non-empty overrides
   using ScopedASTVisitor::preorder_walk;
   virtual void preorder_walk(FuncDefAST *ast) override;
-  virtual void preorder_walk(BlockAST *ast) override;
-  virtual void preorder_walk(ReturnStmtAST *ast) override;
   virtual void preorder_walk(VarDefAST *ast) override;
   virtual void preorder_walk(StructDefAST *ast) override;
   virtual void preorder_walk(EnumDefAST *ast) override;
   virtual void preorder_walk(TypeAliasDefAST *ast) override;
 
   using ScopedASTVisitor::postorder_walk;
-  virtual void postorder_walk(BlockAST *ast) override;
 
   using ScopedASTVisitor::visit;
   virtual void visit(TypeClassDeclAST *ast) override {}

@@ -1,0 +1,24 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |return_body_value_after_early_return.mn:19:2
+// CHECK-NEXT:   17|let f(c: bool) -> i32 {
+// CHECK-NEXT:   18|  if c { return 1; };
+// CHECK-NEXT:   19|  true
+// CHECK-NEXT:     |  ───┬
+// CHECK-NEXT:     |     ╰─ Wrong return type for function f, expected i32 but got bool
+// CHECK-NEXT:   20|}
+// CHECK-NEXT:   21|
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+// A body's last value is what it returns when it runs off its end, even in
+// a function that returns early elsewhere.
+
+let f(c: bool) -> i32 {
+  if c { return 1; };
+  true
+}
+
+let main() -> i32 {
+  f(true)
+}

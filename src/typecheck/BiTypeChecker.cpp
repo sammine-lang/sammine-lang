@@ -137,9 +137,17 @@ void BiTypeCheckerVisitor::visit(FuncDefAST *ast) {
   if (ast->Prototype->is_generic()) {
     monomorphizer.generic_funcs.register_def(
         ast->Prototype->functionName.mangled(), ast);
-  } else {
-    ast->Block->accept_vis(this);
+    return;
   }
+  ast->Block->accept_vis(this);
+  // A body that runs off its end returns its value; one ending in a
+  // statement returns (), which must be what the function returns.
+  if (ast->returnsUnit() || ast->Block->get_type().is_never())
+    return;
+  if (auto *value = ast->body_value())
+    check_returned(value, value->get_type(), value->get_location());
+  else
+    check_returned(nullptr, Type::Unit(), ast->Block->get_location());
 }
 
 void BiTypeCheckerVisitor::visit(PrototypeAST *ast) {
@@ -719,6 +727,11 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
     ast->return_expr->accept_vis(this);
   ast->accept_synthesis(this);
   auto t = ast->return_expr->accept_synthesis(this);
+  check_returned(ast->return_expr.get(), t, ast->get_location());
+}
+
+void BiTypeCheckerVisitor::check_returned(ExprAST *value, const Type &t,
+                                          sammine_util::Location loc) {
   auto scope_fn = this->ctx().enclosing_function;
   auto fn_type = std::get<FunctionType>(scope_fn->get_type().type_data);
   auto return_type = fn_type.get_return_type();
@@ -726,14 +739,14 @@ void BiTypeCheckerVisitor::visit(ReturnStmtAST *ast) {
   if (t.is_poisoned() || return_type.is_poisoned())
     return;
   if (!type_map_ordering.compatible_to_from(return_type, t)) {
-    report_type_mismatch(ast->get_location(),
+    report_type_mismatch(loc,
                          fmt::format("Wrong return type for function {}, "
                                      "expected {} but got {}",
                                      scope_fn->getFunctionName(),
                                      return_type.to_string(), t.to_string()),
                          return_type, t);
-  } else {
-    resolve_literal_type(ast->return_expr.get(), return_type);
+  } else if (value) {
+    resolve_literal_type(value, return_type);
   }
 }
 

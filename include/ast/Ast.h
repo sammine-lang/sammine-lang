@@ -396,6 +396,13 @@ public:
 
   bool returnsUnit() const { return Prototype->returnsUnit(); }
 
+  /// What the body returns when it runs off its end: its last expression,
+  /// when the function writes its return type and that expression is a
+  /// value rather than a statement or a return. Null otherwise: a function
+  /// that writes no return type returns (), and one ending in a statement
+  /// returns () too.
+  ExprAST *body_value() const;
+
   std::string to_string() const;
 
   AST_NODE_METHODS("FuncDefAST", NodeKind::FuncDefAST)
@@ -574,13 +581,10 @@ public:
 class ReturnStmtAST : public ExprAST {
 
 public:
-  bool is_implicit; // true when generated from last expression in a block (no
-                    // `return` keyword)
   std::unique_ptr<ExprAST> return_expr;
   ReturnStmtAST(std::shared_ptr<Token> return_tok,
                 std::unique_ptr<ExprAST> return_expr_)
-      : ExprAST(NodeKind::ReturnStmtAST), is_implicit(false),
-        return_expr(std::move(return_expr_)) {
+      : ExprAST(NodeKind::ReturnStmtAST), return_expr(std::move(return_expr_)) {
     if (this->return_expr == nullptr) {
       this->join_location(return_tok);
     } else if (return_tok == nullptr) {
@@ -588,12 +592,6 @@ public:
     } else if (return_tok && this->return_expr) {
       this->join_location(return_tok)->join_location(this->return_expr.get());
     }
-  }
-
-  ReturnStmtAST(std::unique_ptr<ExprAST> return_expr_)
-      : ExprAST(NodeKind::ReturnStmtAST), is_implicit(true),
-        return_expr(std::move(return_expr_)) {
-    this->join_location(this->return_expr.get());
   }
 
   std::string to_string() const override;

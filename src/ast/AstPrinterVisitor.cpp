@@ -278,8 +278,7 @@ void AstPrinterVisitor::visit(BoolExprAST *ast) {
 }
 
 void AstPrinterVisitor::visit(ReturnStmtAST *ast) {
-  generic_preprint(ast);
-  add_to_rep(fmt::format("{}\n", ast->is_implicit ? "implicit" : "explicit"));
+  generic_preprintln(ast);
   safeguard_visit(ast->return_expr.get(), "!!nullptr!! ExprAST\n");
   generic_postprint();
 }

@@ -2,6 +2,7 @@
 #include "ast/Ast.h"
 #include "fmt/format.h"
 #include "typecheck/Types.h"
+#include "llvm/ADT/STLExtras.h"
 #include <algorithm>
 
 //! \file LinearTypeChecker.cpp
@@ -146,10 +147,20 @@ void LinearTypeChecker::check_func(FuncDefAST *ast) {
     return;
   check_prototype_placement(ast->Prototype.get());
   closure_captures_.clear();
-  if (ast->Block)
+  if (!ast->Block)
+    return;
+  auto *value = ast->body_value();
+  if (!value) {
     check_block(ast->Block.get(),
                 std::get<FunctionType>(ast->Prototype->get_type().type_data)
                     .get_return_type());
+    return;
+  }
+  // A body that runs off its end returns its last expression.
+  auto &statements = ast->Block->Statements;
+  for (auto &stmt : llvm::drop_end(statements))
+    check_expr(stmt.get(), Use::Read);
+  check_returned_value(value, value->get_location());
 }
 
 void LinearTypeChecker::check_block(BlockAST *ast, const Type &result_type) {
@@ -256,9 +267,11 @@ void LinearTypeChecker::check_expr(ExprAST *expr, Use use) {
   case NK::FreeExprAST:
     own(llvm::cast<FreeExprAST>(expr)->operand.get());
     break;
-  case NK::ReturnStmtAST:
-    check_returned_value(llvm::cast<ReturnStmtAST>(expr));
+  case NK::ReturnStmtAST: {
+    auto *ret = llvm::cast<ReturnStmtAST>(expr);
+    check_returned_value(ret->return_expr.get(), ret->get_location());
     break;
+  }
   case NK::IfExprAST: {
     auto *ifExpr = llvm::cast<IfExprAST>(expr);
     read(ifExpr->bool_expr.get());
@@ -636,22 +649,22 @@ void LinearTypeChecker::record_closure_captures(CallExprAST *ast,
 
 // ── Returns ─────────────────────────────────────────────────────────
 
-void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
-  if (!ast->return_expr)
+void LinearTypeChecker::check_returned_value(ExprAST *value,
+                                             sammine_util::Location loc) {
+  if (!value)
     return;
 
-  if (auto *var = llvm::dyn_cast<VariableExprAST>(ast->return_expr.get())) {
+  if (auto *var = llvm::dyn_cast<VariableExprAST>(value)) {
     // Returning a linear value hands it to the caller.
     if (var->get_type().containsLinearTypes())
       return;
     // Returning a type that contains a non-linear pointer — error (may dangle)
     auto path = find_nonlinear_pointer_path(var->get_type());
     if (path) {
-      this->add_error(ast->get_location(),
-                      fmt::format("Cannot return '{}' of type '{}': {} "
-                                  "(may reference a local variable)",
-                                  var->variableName.mangled(),
-                                  var->get_type().to_string(), *path));
+      this->add_error(loc, fmt::format("Cannot return '{}' of type '{}': {} "
+                                       "(may reference a local variable)",
+                                       var->variableName.mangled(),
+                                       var->get_type().to_string(), *path));
       return;
     }
     // Returning a closure — check if any captured arg contains a pointer
@@ -660,11 +673,10 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
       for (auto &captured : it->second) {
         if (captured.containsNonLinearPtr()) {
           this->add_error(
-              ast->get_location(),
-              fmt::format(
-                  "Cannot return '{}' — it is a closure that captured a "
-                  "non-linear pointer (may dangle after return)",
-                  var->variableName.mangled()));
+              loc, fmt::format(
+                       "Cannot return '{}' — it is a closure that captured a "
+                       "non-linear pointer (may dangle after return)",
+                       var->variableName.mangled()));
           return;
         }
       }
@@ -682,12 +694,12 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
           for (auto &captured : it->second) {
             if (captured.containsNonLinearPtr()) {
               this->add_error(
-                  ast->get_location(),
+                  loc,
                   fmt::format("Cannot return a value containing '{}' — it is "
                               "a closure that captured a non-linear pointer "
                               "(may dangle after return)",
                               v->variableName.mangled()));
-              check_expr(ast->return_expr.get(), Use::Own);
+              check_expr(value, Use::Own);
               return true;
             }
           }
@@ -696,21 +708,19 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
     }
     return false;
   };
-  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(ast->return_expr.get())) {
+  if (auto *sl = llvm::dyn_cast<StructLiteralExprAST>(value)) {
     if (check_elements_for_tainted_closure(sl->field_values))
       return;
-  } else if (auto *tl =
-                 llvm::dyn_cast<TupleLiteralExprAST>(ast->return_expr.get())) {
+  } else if (auto *tl = llvm::dyn_cast<TupleLiteralExprAST>(value)) {
     if (check_elements_for_tainted_closure(tl->elements))
       return;
-  } else if (auto *al =
-                 llvm::dyn_cast<ArrayLiteralExprAST>(ast->return_expr.get())) {
+  } else if (auto *al = llvm::dyn_cast<ArrayLiteralExprAST>(value)) {
     if (check_elements_for_tainted_closure(al->elements))
       return;
   }
 
   // Returning a partial application directly (e.g. return some_func(&x))
-  if (auto *call = llvm::dyn_cast<CallExprAST>(ast->return_expr.get())) {
+  if (auto *call = llvm::dyn_cast<CallExprAST>(value)) {
     auto *cp = props_ ? props_->call(call->id()) : nullptr;
     if (cp && cp->is_partial && cp->callee_func_type) {
       auto &func_type = std::get<FunctionType>(cp->callee_func_type->type_data);
@@ -718,13 +728,12 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
       for (size_t i = 0; i < call->arguments.size() && i < params.size(); i++) {
         if (params[i].containsNonLinearPtr()) {
           this->add_error(
-              ast->get_location(),
-              fmt::format("Cannot return partial application of '{}' — it "
-                          "captures a non-linear pointer "
-                          "(may dangle after return)",
-                          call->functionName.mangled()));
+              loc, fmt::format("Cannot return partial application of '{}' — it "
+                               "captures a non-linear pointer "
+                               "(may dangle after return)",
+                               call->functionName.mangled()));
           // Still walk args for other linear checks
-          check_expr(ast->return_expr.get(), Use::Own);
+          check_expr(value, Use::Own);
           return;
         }
       }
@@ -732,7 +741,7 @@ void LinearTypeChecker::check_returned_value(ReturnStmtAST *ast) {
   }
 
   // Walk into return expression
-  check_expr(ast->return_expr.get(), Use::Own);
+  check_expr(value, Use::Own);
 }
 
 // ── Case ────────────────────────────────────────────────────────────

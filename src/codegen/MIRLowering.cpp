@@ -90,9 +90,8 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
     bind(param->name, arg, loc(param.get()));
 
-  // GeneralSemanticsVisitor makes a body's implicit return explicit, but
-  // not in a function that writes `-> unit`: one that runs off its end
-  // returns (), or its last value.
+  // A body that runs off its end returns its last value, or () in a
+  // function that returns nothing (FuncDefAST::body_value).
   auto value = lowerStatements(ast->Block.get());
   if (mlir::failed(value))
     return false;

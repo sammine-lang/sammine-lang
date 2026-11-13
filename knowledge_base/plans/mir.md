@@ -305,8 +305,11 @@ sret. Then the fallback went: a function MIR can't lower is an error.
 Done: the AST codegen for function bodies (`MLIRGenExpr.cpp` and the
 statement, call and closure code of `MLIRGen.cpp` and
 `MLIRGenFunction.cpp`, ~2,500 lines). The flow parts of `LinearTypeChecker`, which
-the ownership check on MIR replaced. Left: the side tables MIR replaces,
-and the implicit-return rewrite.
+the ownership check on MIR replaced. The implicit-return rewrite: a body's
+value is `FuncDefAST::body_value`, read by each pass, and the AST isn't
+mutated. The side tables stay as what the type checker hands MIR lowering,
+their one reader besides the linear checker's static rules; the entries
+nothing read any more (`TypeClassInstanceProps`, `has_type`) are gone.
 
 ### Review checkpoints
 

@@ -1,0 +1,25 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK:          |return_body_ends_in_statement.mn:19:15
+// CHECK-NEXT:   17|// returns i32 doesn't.
+// CHECK-NEXT:   18|
+// CHECK-NEXT:   19|let f() -> i32 {
+// CHECK-NEXT:     |               ┬
+// CHECK-NEXT:     |               ╰─ Wrong return type for function f, expected i32 but got ()
+// CHECK-NEXT:   20|  let x = 1;
+// CHECK-NEXT:   21|}
+// CHECK-NEXT:   22|
+// CHECK-NEXT:   23|let main() -> i32 {
+// CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
+// CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
+// CHECK-NEXT: --------------------------------------------------------------------------
+
+// A body that ends in a statement returns (), which a function that says it
+// returns i32 doesn't.
+
+let f() -> i32 {
+  let x = 1;
+}
+
+let main() -> i32 {
+  f()
+}

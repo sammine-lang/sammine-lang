@@ -35,7 +35,8 @@ class LinearTypeChecker : public sammine_util::Reportee {
   void check_var_def(VarDefAST *ast);
   void check_store(BinaryExprAST *ast);
   void check_call(CallExprAST *ast);
-  void check_returned_value(ReturnStmtAST *ast);
+  // `value` returned, by a return at `loc` or by a body running off its end.
+  void check_returned_value(ExprAST *value, sammine_util::Location loc);
   void check_case(CaseExprAST *ast);
   void check_addr_of(AddrOfExprAST *ast);
 
