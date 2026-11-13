@@ -190,8 +190,6 @@ private:
   std::map<std::string, unsigned> setNames_;
   std::map<int, unsigned> setNumbers_;
   unsigned setNumber(int var);
-  /// Per struct or enum name and the fields it is rebuilt with: its new name.
-  llvm::DenseMap<std::pair<mlir::StringAttr, mlir::Type>, std::string> renamed_;
 
   int find(int v) {
     while (parent_[at(v)] != v)
@@ -586,30 +584,20 @@ mlir::Type LambdaSets::rebuild(mlir::Type type, int first) {
   });
   if (llvm::equal(parts, rebuilt))
     return type;
-  // A struct's or enum's LLVM type is identified by its name: one holding
-  // other function values is another type, named apart. Its Drop instance
-  // is found by what comes before the `#`.
-  auto rename = [&](llvm::StringRef name) {
-    auto &slot = renamed_[{mlir::StringAttr::get(ctx, name),
-                           smn::TupleType::get(ctx, rebuilt)}];
-    if (slot.empty())
-      slot = (name + "#" + std::to_string(renamed_.size())).str();
-    return slot;
-  };
+  // A struct or enum holding other function values keeps its name: it is
+  // another type by its fields, as MIR's types are told apart.
   if (auto ptr = mlir::dyn_cast<smn::PtrType>(type))
     return smn::PtrType::get(ctx, rebuilt[0], ptr.getOwnership());
   if (mlir::isa<smn::PlaceType>(type))
     return smn::PlaceType::get(ctx, rebuilt[0]);
   if (auto st = mlir::dyn_cast<smn::StructType>(type))
-    return smn::StructType::get(ctx, rename(st.getName()), st.getFieldNames(),
-                                rebuilt);
+    return smn::StructType::get(ctx, st.getName(), st.getFieldNames(), rebuilt);
   if (mlir::isa<smn::TupleType>(type))
     return smn::TupleType::get(ctx, rebuilt);
   if (auto array = mlir::dyn_cast<smn::ArrayType>(type))
     return smn::ArrayType::get(ctx, array.getSize(), rebuilt[0]);
   if (auto en = mlir::dyn_cast<smn::EnumType>(type))
-    return smn::makeEnum(ctx, rename(en.getName()), en.getVariantNames(),
-                         rebuilt);
+    return smn::makeEnum(ctx, en.getName(), en.getVariantNames(), rebuilt);
   return type;
 }
 

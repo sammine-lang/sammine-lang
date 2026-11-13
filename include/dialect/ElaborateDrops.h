@@ -21,8 +21,13 @@ namespace sammine_lang {
 /// instance, or, with none, the drops of its parts: a struct's or tuple's
 /// fields, an enum's payload, the variant its tag picks, an array's
 /// elements, in a loop. What is left drops pointers, which lower to free.
-/// Run before lowering to LLVM.
+/// Run after the checks and before the lambda-set passes, which then see a
+/// Drop instance called as any function is.
 void expandDrops(mlir::ModuleOp module);
+
+/// `sammine-expand-drops`: expandDrops as a pass.
+std::unique_ptr<mlir::Pass> createExpandDropsPass();
+void registerExpandDropsPass();
 
 /// Elaborates the drops of every function MIR defines (marked
 /// `sammine.mir`) in `module`.

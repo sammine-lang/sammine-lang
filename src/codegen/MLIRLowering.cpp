@@ -1,6 +1,7 @@
 #include "codegen/MLIRLowering.h"
 #include "codegen/LinalgReduceToGpu.h"
 #include "compiler/Compiler.h"
+#include "dialect/ElaborateDrops.h"
 #include "dialect/LambdaSets.h"
 #include "dialect/LowerSammineOps.h"
 #include "dialect/MIRToLLVM.h"
@@ -195,6 +196,7 @@ std::unique_ptr<llvm::Module> lowerMLIRToLLVMIR(mlir::ModuleOp cpuModule,
   // Phase 2: Lower everything to LLVM (on the merged CPU module)
   {
     mlir::PassManager pm(context);
+    pm.addPass(createExpandDropsPass());
     pm.addPass(createSpecializeLambdaSetsPass());
     pm.addPass(createLowerLambdaSetsPass());
     pm.addPass(createMIRToLLVMPass());

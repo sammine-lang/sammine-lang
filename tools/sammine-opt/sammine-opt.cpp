@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
   sammine_lang::registerElaborateDropsPass();
   mlir::DialectRegistry registry;
   // MIR meets the LLVM dialect where it calls, or is called from, code that
+  sammine_lang::registerExpandDropsPass();
   // didn't go through it.
   registry.insert<sammine_lang::smn::SammineDialect, mlir::func::FuncDialect,
                   mlir::arith::ArithDialect, mlir::cf::ControlFlowDialect,

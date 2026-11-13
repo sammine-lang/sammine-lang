@@ -186,9 +186,6 @@ mlir::FunctionOpInterface dropFunction(mlir::ModuleOp module, mlir::Type type) {
     name = en.getName();
   else
     return {};
-  // A type holding function values of other lambda sets is named apart,
-  // after a `#` (LambdaSets); its instance is its source type's.
-  name = name.take_until([](char c) { return c == '#'; });
   return module.lookupSymbol<mlir::FunctionOpInterface>(
       ("Drop<" + name + ">::Drop").str());
 }

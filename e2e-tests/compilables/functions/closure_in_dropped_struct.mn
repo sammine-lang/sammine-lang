@@ -1,0 +1,48 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// RUN: %sammine --file %full --emit llvm | %check %full --check-prefix IR
+// REQUIRES: asan
+// CHECK:      11 60
+// CHECK-NEXT: drop job 42
+// CHECK-NEXT: drop job 6
+// IR: call void @"Drop<Job>::Drop"(
+// IR: call void @"Drop<Job>::Drop.spec
+
+// A struct with a Drop instance, holding closures of two lambda sets: each
+// is its own type once closures are what they bind, and a drop of each
+// calls a copy of the instance for its set, as any function called with
+// both is copied. Drops are calls before lambda sets are found.
+
+import std;
+
+struct Job { f: (i32) -> i32, box: 'ptr<i32>, };
+
+instance Drop<Job> {
+  let unsafe Drop(j: Job) -> unit {
+    let f = j.f;
+    std::printf("drop job %d\n", f(*j.box));
+    drop(j.box);
+  }
+}
+
+let add(a: i32, b: i32) -> i32 { a + b }
+let mul(a: i32, b: i32, c: i32) -> i32 { a * b * c }
+
+let boxed(n: i32) -> 'ptr<i32> {
+  let p = alloc<i32>(1);
+  *p = n;
+  p
+}
+
+let run(j: ptr<Job>) -> i32 {
+  let f = (*j).f;
+  f(10)
+}
+
+let main() -> i32 {
+  let a = Job { f: add(1), box: boxed(5) };
+  let m = Job { f: mul(2, 3), box: boxed(7) };
+  std::printf("%d %d\n", run(&a), run(&m));
+  0
+}

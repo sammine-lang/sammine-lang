@@ -105,11 +105,14 @@ What it gave:
 `markLambdaSets` runs before the checks and marks each closure of a set
 that becomes what it binds (`sammine.by_value`): the escape check only
 keeps in their frame the stage-1 closures that `bindsInline` says can't
-carry what they bind. `lowerLambdaSets` runs first in the lowering to LLVM.
-A struct or enum holding a lowered value is renamed `<name>#<n>` (its LLVM
-struct is identified by name; `dropFunction` looks up the part before `#`),
-and an enum's payload size and the offsets of its `variant`s and
-`payload`s are recomputed. A value of no size, a closure binding nothing,
+carry what they bind. In the lowering to LLVM, `expandDrops` runs first,
+so a Drop instance is called as any function is and its parameter is in
+the dropped value's set; then specialization, then `lowerLambdaSets`.
+A struct or enum holding a lowered value keeps its name: MIR tells the two
+apart by their fields, and `sammine-mir-to-llvm` names the LLVM struct of
+each body after the first `<name>.<n>` (`identifiedStruct`). An enum's
+payload size and the offsets of its `variant`s and `payload`s are
+recomputed. A value of no size, a closure binding nothing,
 is neither written to nor read from a payload.
 
 ## Stage 2b: specialization (done)
@@ -145,8 +148,9 @@ two copies, each calling its one closure's function directly.
   places in different callers pass the same type, and no switch picks
   between closures that do the same.
 - **Not copied:** a public function (another unit calls it with values as
-  they are), a Drop instance (found by its name), a function named other
-  than by a call or a closure, and an SCC holding any of them.
+  they are), a function named other than by a call or a closure, and an
+  SCC holding any of them. A Drop instance is copied like any function:
+  drops are calls of it by then.
 - **Bounded.** Copies may add at most `kCopyBudget` ops; past it, places
   share a function, as without this step.
 

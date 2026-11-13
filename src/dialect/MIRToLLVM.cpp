@@ -1,7 +1,6 @@
 #include "dialect/MIRToLLVM.h"
 #include "cabi/CABI.h"
 #include "cabi/KernelABI.h"
-#include "dialect/ElaborateDrops.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -59,6 +58,23 @@ mlir::Value fieldPtr(mlir::OpBuilder &builder, mlir::Location loc,
                                    mlir::LLVM::GEPNoWrapFlags::inbounds);
 }
 
+/// The LLVM struct identified by `name` whose fields are `body`. MIR tells
+/// two structs of one name apart by their fields, as the copies of one
+/// holding function values of different lambda sets are; LLVM, by name, so
+/// each body after the first is `name.<n>`.
+mlir::LLVM::LLVMStructType identifiedStruct(mlir::MLIRContext *ctx,
+                                            const llvm::Twine &name,
+                                            llvm::ArrayRef<mlir::Type> body) {
+  for (unsigned n = 0;; ++n) {
+    auto type = mlir::LLVM::LLVMStructType::getIdentified(
+        ctx, n == 0 ? name.str() : (name + "." + llvm::Twine(n)).str());
+    if (!type.isInitialized())
+      (void)type.setBody(body, /*isPacked=*/false);
+    if (type.getBody() == body)
+      return type;
+  }
+}
+
 /// MIR's types as LLVM's: a pointer, owned or a view, and a place are each an
 /// !llvm.ptr; a struct is the identified LLVM struct `sammine.struct.<name>`,
 /// which declarations of functions taking or giving one use too, and a
@@ -75,32 +91,22 @@ public:
       return llvmPtr(type.getContext());
     });
     addConversion([this](smn::StructType type) -> std::optional<mlir::Type> {
-      // Identified by name, so the same type as declarations use, whose
-      // fields may be set already.
-      auto llvmType = mlir::LLVM::LLVMStructType::getIdentified(
-          type.getContext(), ("sammine.struct." + type.getName()).str());
-      if (llvmType.isInitialized())
-        return llvmType;
+      // Identified by name, so the same type as declarations use.
       llvm::SmallVector<mlir::Type> fields;
-      if (mlir::failed(convertTypes(type.getFields(), fields)) ||
-          mlir::failed(llvmType.setBody(fields, /*isPacked=*/false)))
+      if (mlir::failed(convertTypes(type.getFields(), fields)))
         return std::nullopt;
-      return llvmType;
+      return identifiedStruct(type.getContext(),
+                              "sammine.struct." + type.getName(), fields);
     });
     addConversion([](smn::EnumType type) -> mlir::Type {
       // { i32 tag, [N x i8] payload }, or just the tag with no payload.
       auto *ctx = type.getContext();
-      auto llvmType = mlir::LLVM::LLVMStructType::getIdentified(
-          ctx, ("sammine.enum." + type.getName()).str());
-      if (llvmType.isInitialized())
-        return llvmType;
       llvm::SmallVector<mlir::Type, 2> fields{mlir::IntegerType::get(ctx, 32)};
       if (type.getPayloadSize() > 0)
         fields.push_back(mlir::LLVM::LLVMArrayType::get(
             mlir::IntegerType::get(ctx, 8),
             static_cast<uint64_t>(type.getPayloadSize())));
-      (void)llvmType.setBody(fields, /*isPacked=*/false);
-      return llvmType;
+      return identifiedStruct(ctx, "sammine.enum." + type.getName(), fields);
     });
     addConversion([this](smn::ArrayType type) -> std::optional<mlir::Type> {
       auto element = convertType(type.getElement());
@@ -196,12 +202,15 @@ struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
   }
 };
 
-// Dropping an owned pointer frees its memory.
+// Dropping an owned pointer frees its memory. Any other drop is a call or
+// the drops of its parts by now (sammine-expand-drops).
 struct DropLowering : public mlir::OpConversionPattern<smn::DropOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
   matchAndRewrite(smn::DropOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
+    if (!mlir::isa<smn::PtrType>(op.getValue().getType()))
+      return rewriter.notifyMatchFailure(op, "drops no pointer");
     auto ptrTy = llvmPtr(op.getContext());
     declareCFunction(
         op->getParentOfType<mlir::ModuleOp>(), rewriter, "free",
@@ -924,9 +933,6 @@ struct MIRToLLVMPass
   void runOnOperation() override {
     auto &context = getContext();
     MIRTypeConverter converter;
-    // A struct's drop is its Drop instance's call or its fields' drops.
-    expandDrops(getOperation());
-
     mlir::RewritePatternSet patterns(&context);
     mlir::populateCallOpTypeConversionPattern(patterns, converter);
     mlir::populateReturnOpTypeConversionPattern(patterns, converter);

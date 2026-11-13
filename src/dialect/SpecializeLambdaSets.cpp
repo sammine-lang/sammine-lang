@@ -175,9 +175,7 @@ private:
   bool specializable(unsigned scc) {
     bool takesFunctions = false;
     for (auto func : sccs_[scc]) {
-      // A Drop instance is also found by its name.
-      if (!func.isPrivate() || func.getName().starts_with("Drop<") ||
-          namedOtherwise_.count(func.getNameAttr()))
+      if (!func.isPrivate() || namedOtherwise_.count(func.getNameAttr()))
         return false;
       auto type = func.getFunctionType();
       takesFunctions |= llvm::any_of(type.getInputs(), holdsFunctionValue) ||

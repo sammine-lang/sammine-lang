@@ -394,6 +394,21 @@ struct ElaborateDropsPass
   void runOnOperation() override { elaborateDrops(getOperation()); }
 };
 
+struct ExpandDropsPass
+    : public mlir::PassWrapper<ExpandDropsPass,
+                               mlir::OperationPass<mlir::ModuleOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ExpandDropsPass)
+
+  llvm::StringRef getArgument() const override {
+    return "sammine-expand-drops";
+  }
+  llvm::StringRef getDescription() const override {
+    return "Make each drop of a struct, tuple, enum or array a call of its "
+           "Drop instance or the drops of its parts";
+  }
+  void runOnOperation() override { expandDrops(getOperation()); }
+};
+
 } // namespace
 
 void elaborateDrops(mlir::ModuleOp module) {
@@ -409,5 +424,11 @@ std::unique_ptr<mlir::Pass> createElaborateDropsPass() {
 void registerElaborateDropsPass() {
   mlir::PassRegistration<ElaborateDropsPass>();
 }
+
+std::unique_ptr<mlir::Pass> createExpandDropsPass() {
+  return std::make_unique<ExpandDropsPass>();
+}
+
+void registerExpandDropsPass() { mlir::PassRegistration<ExpandDropsPass>(); }
 
 } // namespace sammine_lang
