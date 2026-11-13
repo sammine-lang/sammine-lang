@@ -1,14 +1,16 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK:          |break_branch_if_no_else_consume.mn:22:6
-// CHECK-NEXT:   20|let main() -> i32 {
-// CHECK-NEXT:   21|  let p = alloc<i32>(1);
-// CHECK-NEXT:   22|  if (1 == 1) {
-// CHECK-NEXT:     |      ────────┬
-// CHECK-NEXT:     |              ╰─ Linear variable 'p' is consumed in some branches but not others
-// CHECK-NEXT:   23|    free(p);
-// CHECK-NEXT:   24|  };
-// CHECK-NEXT:   25|  return 0;
-// CHECK-NEXT:   26|}
+// CHECK:          |break_branch_if_no_else_consume.mn:23:2
+// CHECK-NEXT:   21|
+// CHECK-NEXT:   22|let main() -> i32 {
+// CHECK-NEXT:   23|  let p = alloc<i32>(1);
+// CHECK-NEXT:     |  ───────────────────┬
+// CHECK-NEXT:     |                     ╰─ Linear variable 'p' is consumed in some branches but not others
+// CHECK-NEXT:   24|  if (1 == 1) {
+// CHECK-NEXT:   25|    free(p);
+// CHECK-NEXT:     |    ─────┬
+// CHECK-NEXT:     |         ╰─ 'p' was freed here
+// CHECK-NEXT:   26|  };
+// CHECK-NEXT:   27|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
 // CHECK-NEXT: --------------------------------------------------------------------------
