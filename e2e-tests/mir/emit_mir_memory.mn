@@ -16,13 +16,13 @@
 // CHECK-LABEL: func.func private @release(%arg0: !sammine.ptr<i32, owned>{{.*}}) attributes
 // CHECK-SAME: sammine.mir
 // CHECK-NEXT: %0 = sammine.let "p" %arg0 : !sammine.ptr<i32, owned>
-// CHECK-NEXT: sammine.free %0 : !sammine.ptr<i32, owned>
+// CHECK-NEXT: sammine.drop %0 : !sammine.ptr<i32, owned>
 // CHECK-NEXT: return
 // CHECK-LABEL: func.func private @roundtrip(
 // CHECK: sammine.alloc %{{.*}} : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
 // CHECK: sammine.store %0
 // CHECK: sammine.move %{{.*}} : <!sammine.ptr<i32, owned>>
-// CHECK: sammine.free
+// CHECK: sammine.drop
 
 let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
 let bump(p: 'ptr<i32>) -> 'ptr<i32> { *p = *p + 1; p }

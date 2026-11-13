@@ -164,10 +164,11 @@ struct AllocLowering : public mlir::OpConversionPattern<smn::AllocOp> {
   }
 };
 
-struct FreeLowering : public mlir::OpConversionPattern<smn::FreeOp> {
+// Dropping an owned pointer frees its memory.
+struct DropLowering : public mlir::OpConversionPattern<smn::DropOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
-  matchAndRewrite(smn::FreeOp op, OpAdaptor adaptor,
+  matchAndRewrite(smn::DropOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     auto ptrTy = llvmPtr(op.getContext());
     declareCFunction(
@@ -175,7 +176,7 @@ struct FreeLowering : public mlir::OpConversionPattern<smn::FreeOp> {
         mlir::LLVM::LLVMFunctionType::get(
             mlir::LLVM::LLVMVoidType::get(op.getContext()), {ptrTy}));
     mlir::LLVM::CallOp::create(rewriter, op.getLoc(), mlir::TypeRange{}, "free",
-                               mlir::ValueRange{adaptor.getPtr()});
+                               mlir::ValueRange{adaptor.getValue()});
     rewriter.eraseOp(op);
     return mlir::success();
   }
@@ -788,7 +789,7 @@ struct MIRToLLVMPass
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
         patterns, converter);
     patterns.add<
-        AllocLowering, FreeLowering, LetLowering, ThroughLowering,
+        AllocLowering, DropLowering, LetLowering, ThroughLowering,
         SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
         SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
         ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,

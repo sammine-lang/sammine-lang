@@ -7,7 +7,7 @@
 // CHECK: %[[B:[0-9]+]] = sammine.let "b" %[[A]] : !sammine.ptr<i32, buffer>
 // CHECK: %[[P:[0-9]+]] = sammine.deref %[[B]] : <i32, buffer>
 // CHECK: sammine.ptr_elem %[[P]][%{{.*}}] : <i32>, i32
-// CHECK: sammine.free %[[B]] : !sammine.ptr<i32, buffer>
+// CHECK: sammine.drop %[[B]] : !sammine.ptr<i32, buffer>
 
 let unsafe main() -> i32 {
   let b = alloc_buf<i32>(2);

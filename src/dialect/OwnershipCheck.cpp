@@ -31,7 +31,7 @@ llvm::StringRef reasonFor(mlir::Operation *op) {
     return "converted";
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::VariantOp>(op))
     return "passed to function";
-  if (mlir::isa<smn::FreeOp>(op))
+  if (mlir::isa<smn::DropOp>(op))
     return "dropped";
   if (mlir::isa<mlir::func::ReturnOp>(op))
     return "returned";

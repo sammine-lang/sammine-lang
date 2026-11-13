@@ -19,12 +19,12 @@ func.func @f(%n: i32, %pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) -> i32
   // CHECK: llvm.load %{{.*}} : !llvm.ptr -> i32
   %v = sammine.copy %place : !sammine.place<i32>
   // CHECK: llvm.call @free(
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   %inner = sammine.deref %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   // CHECK: llvm.load %arg1 : !llvm.ptr -> !llvm.ptr
   %q = sammine.move %inner : !sammine.place<!sammine.ptr<i32, owned>>
-  sammine.free %q : !sammine.ptr<i32, owned>
-  sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  sammine.drop %q : !sammine.ptr<i32, owned>
+  sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   // CHECK-NOT: sammine.
   return %v : i32
 }

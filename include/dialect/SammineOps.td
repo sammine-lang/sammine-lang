@@ -58,10 +58,14 @@ def LetOp : Sammine_Op<"let", [Pure, AllTypesMatch<["value", "result"]>]> {
   let assemblyFormat = "$name $value attr-dict `:` type($value)";
 }
 
-def FreeOp : Sammine_Op<"free", [MemoryEffects<[MemFree]>]> {
-  let summary = "give back the memory an owned pointer holds";
-  let arguments = (ins Sammine_OwnedPtr:$ptr);
-  let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
+def DropOp : Sammine_Op<"drop", [MemoryEffects<[MemFree]>]> {
+  let summary = "end a value that owns memory: `drop(x)`, or where it goes out of use";
+  let description = [{
+    Takes the value. For an owned pointer, a box or a buffer, gives back
+    the memory it holds; what a box points at must hold nothing by then.
+  }];
+  let arguments = (ins Sammine_OwnedPtr:$value);
+  let assemblyFormat = "$value attr-dict `:` type($value)";
 }
 
 def DerefOp : Sammine_Op<"deref", [Pure,

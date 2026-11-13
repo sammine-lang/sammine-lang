@@ -6,7 +6,7 @@
 func.func @freed(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return
 }
 
@@ -33,9 +33,9 @@ func.func @double_free(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   // expected-note @+1 {{'p' was dropped here}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   // expected-error @+1 {{Cannot use linear variable 'p' — it was already dropped previously}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return
 }
 
@@ -45,7 +45,7 @@ func.func @deref_after_free(%n: i32) -> i32 attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   // expected-note @+1 {{'p' was dropped here}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   // expected-error @+1 {{Cannot dereference 'p' — it was already dropped previously}}
   %1 = sammine.deref %p : <i32, owned>
   %2 = sammine.copy %1 : <i32>
@@ -90,10 +90,10 @@ func.func @both_branches(%c: i1, %n: i32) attributes {sammine.mir} {
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^a, ^b
 ^a:
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^b:
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
   return
@@ -107,10 +107,10 @@ func.func @branch_returns(%c: i1, %n: i32) -> i32 attributes {sammine.mir} {
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^a, ^b
 ^a:
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return %n : i32
 ^b:
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return %n : i32
 }
 
@@ -123,7 +123,7 @@ func.func @one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   cf.cond_br %c, ^a, ^done
 ^a:
   // expected-note @+1 {{'p' was dropped here}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
   return
@@ -137,11 +137,11 @@ func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   cf.cond_br %c, ^a, ^done
 ^a:
   // expected-note @+1 {{'p' was dropped here}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
   // expected-error @+1 {{Cannot use linear variable 'p' — it was dropped in some branches}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return
 }
 
@@ -156,7 +156,7 @@ func.func @constant_condition(%n: i32) attributes {sammine.mir} {
   cf.cond_br %false, ^a, ^done
 ^a:
   // expected-note @+1 {{'p' was dropped here}}
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
   return
@@ -172,14 +172,14 @@ func.func @joined(%c: i1, %n: i32) attributes {sammine.mir} {
   %b = sammine.let "b" %1 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^left, ^right
 ^left:
-  sammine.free %b : !sammine.ptr<i32, owned>
+  sammine.drop %b : !sammine.ptr<i32, owned>
   cf.br ^done(%a : !sammine.ptr<i32, owned>)
 ^right:
-  sammine.free %a : !sammine.ptr<i32, owned>
+  sammine.drop %a : !sammine.ptr<i32, owned>
   cf.br ^done(%b : !sammine.ptr<i32, owned>)
 ^done(%r: !sammine.ptr<i32, owned>):
   %x = sammine.let "x" %r : !sammine.ptr<i32, owned>
-  sammine.free %x : !sammine.ptr<i32, owned>
+  sammine.drop %x : !sammine.ptr<i32, owned>
   return
 }
 

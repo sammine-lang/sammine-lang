@@ -23,7 +23,7 @@ states: "still owned at a return" is where a drop goes.
 
 An `Owner` was a kind, where it got its value, and where, by what op and
 why it was moved: a string. The why is a function of the op that moved it
-(`sammine.let` moves, `sammine.free` drops, a call passes, ...), so the
+(`sammine.let` moves, `sammine.drop` drops, a call passes, ...), so the
 owner keeps the op and the words are found when reporting. "Never held a
 value" was "moved, with no reason"; it is "moved by no op".
 

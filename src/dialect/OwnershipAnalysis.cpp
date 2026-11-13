@@ -367,14 +367,14 @@ void Transfer::apply(mlir::Operation *op) {
     markMoved(*place, op);
     return;
   }
-  if (auto free = mlir::dyn_cast<smn::FreeOp>(op)) {
-    auto path = pathOf(free.getPtr());
+  if (auto drop = mlir::dyn_cast<smn::DropOp>(op)) {
+    auto path = pathOf(drop.getValue());
     if (path && lookup(*path) && lookup(*path)->kind == Owner::Live)
-      // Freeing an owner frees only its own memory: what it points at must
+      // Dropping an owner frees only its own memory: what it points at must
       // hold nothing by now.
       for (auto step : partsOf(typeOf(*path)))
         checkOwned(path->child(step), op);
-    take(free.getPtr(), op);
+    take(drop.getValue(), op);
     return;
   }
   if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {

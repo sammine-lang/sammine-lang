@@ -18,9 +18,9 @@ func.func @move_plain(%p: !sammine.ptr<i32, view>) {
 
 // -----
 
-func.func @free_view(%p: !sammine.ptr<i32, view>) {
+func.func @drop_view(%p: !sammine.ptr<i32, view>) {
   // expected-error @+1 {{owned pointer}}
-  sammine.free %p : !sammine.ptr<i32, view>
+  sammine.drop %p : !sammine.ptr<i32, view>
   return
 }
 

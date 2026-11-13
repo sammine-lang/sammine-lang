@@ -12,13 +12,13 @@ func.func @f(%n: i64, %pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) -> i32
   sammine.store %c, %place : !sammine.place<i32>
   // CHECK: sammine.copy %1 : <i32>
   %v = sammine.copy %place : !sammine.place<i32>
-  // CHECK: sammine.free %0 : !sammine.ptr<i32, owned>
-  sammine.free %p : !sammine.ptr<i32, owned>
+  // CHECK: sammine.drop %0 : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   %inner = sammine.deref %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   // CHECK: sammine.move %{{.*}} : <!sammine.ptr<i32, owned>>
   %q = sammine.move %inner : !sammine.place<!sammine.ptr<i32, owned>>
-  sammine.free %q : !sammine.ptr<i32, owned>
-  sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  sammine.drop %q : !sammine.ptr<i32, owned>
+  sammine.drop %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
   return %v : i32
 }
 
@@ -38,7 +38,7 @@ func.func @lend(%p: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) {
 func.func @buffer(%n: i64) {
   // CHECK: sammine.alloc %arg0 : i64 -> !sammine.ptr<i32, buffer>
   %b = sammine.alloc %n : i64 -> !sammine.ptr<i32, buffer>
-  // CHECK: sammine.free %0 : !sammine.ptr<i32, buffer>
-  sammine.free %b : !sammine.ptr<i32, buffer>
+  // CHECK: sammine.drop %0 : !sammine.ptr<i32, buffer>
+  sammine.drop %b : !sammine.ptr<i32, buffer>
   return
 }

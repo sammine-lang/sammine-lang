@@ -18,11 +18,11 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerAlloc(AllocExprAST *alloc) {
   return smn::AllocOp::create(builder_, loc(alloc), *type, *count).getResult();
 }
 
-mlir::FailureOr<mlir::Value> MIRLowering::lowerDrop(DropExprAST *free) {
-  auto ptr = lowerValue(free->operand.get());
-  if (mlir::failed(ptr))
+mlir::FailureOr<mlir::Value> MIRLowering::lowerDrop(DropExprAST *drop) {
+  auto value = lowerValue(drop->operand.get());
+  if (mlir::failed(value))
     return mlir::failure();
-  smn::FreeOp::create(builder_, loc(free), *ptr);
+  smn::DropOp::create(builder_, loc(drop), *value);
   return mlir::Value();
 }
 

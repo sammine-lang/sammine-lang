@@ -92,9 +92,9 @@ is moved, as after any move, and no drop is inserted for it. Once `drop`
 takes any type (step 9), `drop` of a value that owns nothing does nothing,
 as Rust's: generic code drops a `T` that may be `i32`, as `Vec<T>`'s
 instance does. Until then it takes pointers only, as `free` did.
-The keyword, the token and `FreeExprAST` are renamed; MIR's `sammine.free`
-stays, as what a pointer's drop lowers to. 269 calls in 164 `.mn` files
-change.
+The keyword, the token and `FreeExprAST` are renamed, and MIR's
+`sammine.free` is `sammine.drop`, the one op that ends a value, written
+or inserted. 269 calls in 164 `.mn` files change.
 
 `Vec`'s `grow_buf` copies `old_d[0..l]` to a new buffer and drops `old_d`:
 dropping a `'buf` frees it without touching the values copied out, so no
@@ -146,18 +146,28 @@ with many, is a `'buf`.
 
 ## Where drops go
 
-A MIR pass, `sammine-elaborate-drops`, runs the ownership analysis and
-inserts `sammine.drop` where the check would report a value still owned.
-The check runs after it, so what it still reports is misuse, not leaks.
+The ownership check runs first, on the program as written, and reports
+misuse: a use of what is moved, on every path or some. A value still owned
+where it goes out of use is no error for a type that drops. Then a MIR
+pass, `sammine-elaborate-drops`, run only on a program the check passed,
+inserts `sammine.drop` for each, from the ownership analysis' states, as
+Rust elaborates drops after borrow checking. Inserting them first would
+turn "moved in some branches" into "already dropped", at a drop the
+program doesn't show.
+
+Two rules place every drop but the ones at stores:
 
 - At each `return`: every live part, by binding, in reverse order of
   binding. A partly moved value drops only the parts still live, which the
   analysis knows exactly.
-- On an edge into a join: a part moved on another edge but live on this
-  one is dropped on this edge, in a block of its own. The analysis knows
-  every edge's state, so no runtime drop flags are needed. This replaces
-  "consumed in some branches but not others" for values that drop.
-- At the end of a loop's turn: what the body bound and still owns.
+- On each edge into a block: a part live at the end of the edge but not
+  live where the block starts, because another edge moved it, or because
+  the block is past where its value is defined (a `let` in an arm, at the
+  join; a loop body's, at the back edge to the header). It is dropped on
+  the edge, before a branch with one successor or in a block of its own.
+  The analysis knows every edge's state, so no runtime drop flags are
+  needed. This covers joins, the end of a loop's turn and the end of an
+  arm, and replaces "consumed in some branches but not others".
 - Before a store into a place that still owns something, and before `let`
   shadows, the old value is dropped. ("Reassigning linear variable … without
   consuming its previous value" goes.)
@@ -229,11 +239,13 @@ Each a commit, the suite passing after each.
    fixed a value stored in some branches only being taken for empty:
    dropped, overwritten or returned so, it leaked unreported.)
 4. `sammine.drop`, its verifier and its lowering for `'buf<T>` and for
-   `'ptr<T>` where `T` owns nothing. MIR tests.
+   `'ptr<T>` where `T` owns nothing. MIR tests. (Done: `sammine.free`
+   renamed, as `drop(x)` lowers to it.)
 5. `io::File`: the file handle in a struct, so no pointer drop frees it.
-6. `sammine-elaborate-drops` at returns, for those pointers; the check
-   after it. The leak tests for them become programs that run.
-7. Joins and loop turns.
+6. `sammine-elaborate-drops`, at returns and on edges, for those
+   pointers, after the check, which no longer reports them still owned.
+   The leak tests for them become programs that run.
+7. (Folded into 6: joins and loop turns are edges.)
 8. `Drop<T>`: the typeclass, the generated function calling it before the
    fields, its two new errors; a value with an instance drops; `File`'s
    closes, `Vec<T>`'s and `String`'s replace their `delete`; the

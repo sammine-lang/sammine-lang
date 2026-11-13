@@ -41,7 +41,7 @@ func.func @fine(%n: i32) attributes {sammine.mir} {
   %x = sammine.local "x" : <i32>
   sammine.store %c, %x : <i32>
   %view = sammine.addr %x : <i32>
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return
 }
 
@@ -54,7 +54,7 @@ func.func @addr_of_owned_memory(%n: i32) attributes {sammine.mir} {
   // expected-error @+1 {{Cannot take the address of memory owned by a linear pointer — it could dangle after drop}}
   %at = sammine.deref %p : <i32, owned>
   %view = sammine.addr %at : <i32>
-  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.drop %p : !sammine.ptr<i32, owned>
   return
 }
 
