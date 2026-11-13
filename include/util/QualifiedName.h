@@ -23,6 +23,12 @@ struct CasePattern;
 
 namespace sammine_util {
 
+/// The two ways a name is spelled. Written is as source writes it, for
+/// messages: a program's own and the prelude's without their module. Linked
+/// is the name whole, the types it is applied to as well, so no two names
+/// are spelled alike: what a symbol is.
+enum class NameForm { Written, Linked };
+
 /// What a definition is called: its path, each part with the types it is
 /// applied to. `vec::push<i32>` is [vec, push applied to (i32)], and
 /// `Drop<Vec<i32>>::Drop` is [Drop applied to (Vec<i32>), Drop]. Two names
@@ -45,6 +51,7 @@ struct QualifiedName {
     std::vector<Type> type_args;
     /// `name`, then `<A, B>` if it is applied to types.
     std::string mangled() const;
+    std::string spelled(NameForm form) const;
     bool operator==(const Part &other) const;
   };
 
@@ -115,12 +122,11 @@ public:
   /// own and the prelude's are written without a module: `helper`, `Option`.
   std::string mangled() const;
   /// The symbol a definition of this name is linked as: every part,
-  /// `a::b<T>::c`, a program's own as `::helper`.
+  /// `a::b<T>::c`, a program's own as `::helper`, and the types in it by
+  /// their whole names too, `definitions::Hash<::Mine>::Hash`.
   std::string symbol() const;
-
-private:
-  /// The parts from `first` on, `::` between them.
-  std::string joined(size_t first) const;
+  /// The name in `form`, `::` between its parts.
+  std::string spelled(NameForm form) const;
 };
 
 /// A name as text, for a message.

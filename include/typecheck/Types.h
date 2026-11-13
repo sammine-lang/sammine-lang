@@ -313,7 +313,16 @@ struct Type {
 
   bool operator!=(const Type &other) const;
 
+  /// The type as source writes it, for messages.
   std::string to_string() const {
+    return spelled(sammine_util::NameForm::Written);
+  }
+  /// The type as it stands in a symbol: every struct and enum by its whole
+  /// name, so two types written alike in different modules differ.
+  std::string symbol() const { return spelled(sammine_util::NameForm::Linked); }
+
+private:
+  std::string spelled(sammine_util::NameForm form) const {
     switch (type_kind) {
     case TypeKind::I32_t:
       return "i32";
@@ -330,9 +339,9 @@ struct Type {
     case TypeKind::Unit:
       return "()";
     case TypeKind::Struct:
-      return std::get<StructType>(type_data).get_name().mangled();
+      return std::get<StructType>(type_data).get_name().spelled(form);
     case TypeKind::Enum:
-      return std::get<EnumType>(type_data).get_name().mangled();
+      return std::get<EnumType>(type_data).get_name().spelled(form);
     case TypeKind::Bool:
       return "bool";
     case TypeKind::Char:
@@ -341,22 +350,22 @@ struct Type {
       auto &ptr = std::get<PointerType>(type_data);
       auto spelled = ptr.is_buffer() ? "buf<" : "ptr<";
       return (linearity == Linearity::Linear ? "'" : "") +
-             std::string(spelled) + ptr.get_pointee().to_string() + ">";
+             std::string(spelled) + ptr.get_pointee().spelled(form) + ">";
     }
     case TypeKind::Array:
       return "[" + std::to_string(std::get<ArrayType>(type_data).get_size()) +
-             "]" + std::get<ArrayType>(type_data).get_element().to_string();
+             "]" + std::get<ArrayType>(type_data).get_element().spelled(form);
     case TypeKind::Function: {
       std::string res = "(";
       auto fn_type = std::get<FunctionType>(type_data);
       auto param = fn_type.get_params_types();
       for (size_t i = 0; i < param.size(); i++) {
-        res += param[i].to_string();
+        res += param[i].spelled(form);
         if (i != param.size() - 1)
           res += ", ";
       }
       res += ") -> ";
-      res += fn_type.get_return_type().to_string();
+      res += fn_type.get_return_type().spelled(form);
 
       return res;
     }
@@ -364,7 +373,7 @@ struct Type {
       std::string res = "(";
       auto &tt = std::get<TupleType>(type_data);
       for (size_t i = 0; i < tt.size(); i++) {
-        res += tt.get_element(i).to_string();
+        res += tt.get_element(i).spelled(form);
         if (i != tt.size() - 1)
           res += ", ";
       }
@@ -397,6 +406,7 @@ struct Type {
                         "convert to string, blame Jasmine (badumbatish)!!!!!");
   }
 
+public:
   bool is_poisoned() const { return this->type_kind == TypeKind::Poisoned; }
 
   /// Returns true for types that can appear as literal values (scalars +
@@ -748,13 +758,18 @@ struct TypeMapOrdering {
 
 namespace sammine_util {
 
-inline std::string QualifiedName::Part::mangled() const {
+inline std::string QualifiedName::Part::spelled(NameForm form) const {
   if (type_args.empty())
     return name;
   std::string result = name + "<";
   for (size_t i = 0; i < type_args.size(); i++)
-    result += (i ? ", " : "") + type_args[i].to_string();
+    result += (i ? ", " : "") + (form == NameForm::Linked
+                                     ? type_args[i].symbol()
+                                     : type_args[i].to_string());
   return result + ">";
+}
+inline std::string QualifiedName::Part::mangled() const {
+  return spelled(NameForm::Written);
 }
 inline bool QualifiedName::Part::operator==(const Part &other) const {
   return name == other.name && type_args == other.type_args;
@@ -813,16 +828,21 @@ inline QualifiedName QualifiedName::qualifier() const {
 inline bool QualifiedName::operator==(const QualifiedName &other) const {
   return parts_ == other.parts_;
 }
-inline std::string QualifiedName::joined(size_t first) const {
-  std::string result = parts_[first].mangled();
+inline std::string QualifiedName::spelled(NameForm form) const {
+  // A program's own and the prelude's are written without their module.
+  size_t first =
+      form == NameForm::Written && (is_of_program() || is_of_prelude()) ? 1 : 0;
+  std::string result = parts_[first].spelled(form);
   for (size_t i = first + 1; i < parts_.size(); i++)
-    result += "::" + parts_[i].mangled();
+    result += "::" + parts_[i].spelled(form);
   return result;
 }
 inline std::string QualifiedName::mangled() const {
-  return joined(is_of_program() || is_of_prelude() ? 1 : 0);
+  return spelled(NameForm::Written);
 }
-inline std::string QualifiedName::symbol() const { return joined(0); }
+inline std::string QualifiedName::symbol() const {
+  return spelled(NameForm::Linked);
+}
 inline std::string name_text(const QualifiedName &name) {
   return name.mangled();
 }

@@ -6,8 +6,8 @@
 // CHECK:      11 60
 // CHECK-NEXT: drop job 42
 // CHECK-NEXT: drop job 6
-// IR: call void @"definitions::Drop<Job>::Drop"(
-// IR: call void @"definitions::Drop<Job>::Drop.spec
+// IR: call void @"definitions::Drop<::Job>::Drop"(
+// IR: call void @"definitions::Drop<::Job>::Drop.spec
 
 // A struct with a Drop instance, holding closures of two lambda sets: each
 // is its own type once closures are what they bind, and a drop of each
