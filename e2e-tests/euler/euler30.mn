@@ -1,0 +1,42 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 19316 443839
+
+// Project Euler Problem 30: Digit fifth powers
+// 1634, 8208 and 9474 are the only numbers that are the sums of the fourth
+// powers of their digits, and they sum to 19316 (1 is not a sum, so not
+// counted). Find the sum of all the numbers that can be written as the sum
+// of the fifth powers of their digits.
+
+import std;
+import range;
+
+let pow(x: i64, p: i64) -> i64 {
+  if p == 0 { 1 } else { x * pow(x, p - 1) }
+}
+
+let digit_power_sum(p: i64, n: i64) -> i64 {
+  if n == 0 { 0 } else { pow(n % 10, p) + digit_power_sum(p, n / 10) }
+}
+
+// The digits past which no number is the sum: d digits sum to at most
+// d * 9^p, short of the least d-digit number, 10^(d - 1), once d is large.
+let most_digits(p: i64, d: i64) -> i64 {
+  if d * pow(9, p) < pow(10, d - 1) { d - 1 } else { most_digits(p, d + 1) }
+}
+
+// n, when it is the sum of its digits' p-th powers.
+let if_sum(p: i64, n: i64) -> i64 {
+  if digit_power_sum(p, n) == n { n } else { 0 }
+}
+
+// The numbers past 1, a sum of one digit and so no sum, that are the sum
+// of their digits' p-th powers; none has more than most_digits digits, or
+// is past that many 9s' p-th powers.
+let digit_power_numbers(p: i64) -> i64 {
+  range::sum(2, most_digits(p, 1) * pow(9, p) + 1, if_sum(p))
+}
+
+let main() -> i32 {
+  std::printf("%ld %ld\n", digit_power_numbers(4), digit_power_numbers(5));
+  0
+}
