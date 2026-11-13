@@ -31,7 +31,12 @@ public:
   mlir::Location loc(mlir::Builder &builder, const AST::AstBase *ast) const {
     if (!ast)
       return builder.getUnknownLoc();
-    auto srcLoc = ast->get_location();
+    return loc(builder, ast->get_location());
+  }
+
+  /// A span of source that isn't an AST node's, as a case pattern's.
+  mlir::Location loc(mlir::Builder &builder,
+                     const sammine_util::Location &srcLoc) const {
     auto &lines = linesOf(srcLoc);
     if ((srcLoc.source_start <= 0 && srcLoc.source_end <= 0) || lines.empty())
       return builder.getUnknownLoc();

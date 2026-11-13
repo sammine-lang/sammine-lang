@@ -59,7 +59,8 @@ func.func private @take(!sammine.ptr<i32, owned>, !sammine.ptr<i32, owned>)
 func.func @twice_in_one_call(%n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Cannot use linear variable 'p' twice in one call}}
+  // expected-error @+2 {{Cannot use linear variable 'p' — it was already passed to function previously}}
+  // expected-note @+1 {{'p' was passed to function here}}
   sammine.call @take(%p, %p) : (!sammine.ptr<i32, owned>, !sammine.ptr<i32, owned>) -> ()
   return
 }
@@ -117,7 +118,7 @@ func.func @branch_returns(%c: i1, %n: i32) -> i32 attributes {sammine.mir} {
 
 func.func @one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Linear variable 'p' is consumed on some paths but not others}}
+  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %c, ^a, ^done
 ^a:
@@ -139,7 +140,7 @@ func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
   sammine.free %p : !sammine.ptr<i32, owned>
   cf.br ^done
 ^done:
-  // expected-error @+1 {{Cannot use linear variable 'p' — it was freed on some paths}}
+  // expected-error @+1 {{Cannot use linear variable 'p' — it was freed in some branches}}
   sammine.free %p : !sammine.ptr<i32, owned>
   return
 }
@@ -150,7 +151,7 @@ func.func @use_after_one_branch(%c: i1, %n: i32) attributes {sammine.mir} {
 func.func @constant_condition(%n: i32) attributes {sammine.mir} {
   %false = arith.constant false
   %0 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
-  // expected-error @+1 {{Linear variable 'p' is consumed on some paths but not others}}
+  // expected-error @+1 {{Linear variable 'p' is consumed in some branches but not others}}
   %p = sammine.let "p" %0 : !sammine.ptr<i32, owned>
   cf.cond_br %false, ^a, ^done
 ^a:
@@ -194,8 +195,7 @@ func.func @moved_in_loop(%c: i1, %n: i32) attributes {sammine.mir} {
 ^head:
   cf.cond_br %c, ^body, ^exit
 ^body:
-  // expected-error @+2 {{Cannot use linear variable 'p' — it was passed to function in an earlier turn of the loop}}
-  // expected-note @+1 {{'p' was passed to function here}}
+  // expected-error @+1 {{Cannot use linear variable 'p' — it was passed to function in an earlier turn of the loop}}
   sammine.call @consume(%p) : (!sammine.ptr<i32, owned>) -> ()
   cf.br ^head
 ^exit:

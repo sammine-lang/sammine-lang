@@ -25,6 +25,10 @@ constexpr llvm::StringLiteral kMirAttr = "sammine.mir";
 /// kernel's wrapper fills one it is passed last with an array it returns.
 constexpr llvm::StringLiteral kResultBufferAttr = "sammine.result_buffer";
 
+/// Why an op takes the values it is given, where its kind doesn't say: a
+/// call made for `x as T` converts x. For the ownership check's messages.
+constexpr llvm::StringLiteral kReasonAttr = "sammine.reason";
+
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);

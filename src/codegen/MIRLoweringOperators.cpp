@@ -25,9 +25,13 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCast(CastExprAST *cast) {
   auto &key = *cp->instance;
   if (is_builtin_instance(key))
     return lowerBuiltinInstance(loc(cast), key, *value, cast->get_type());
-  return callMethod(loc(cast),
-                    key.to_typeclass_name(std::string(kConvertClass)), *value,
-                    cast->get_type());
+  auto converted =
+      callMethod(loc(cast), key.to_typeclass_name(std::string(kConvertClass)),
+                 *value, cast->get_type());
+  if (mlir::succeeded(converted))
+    converted->getDefiningOp()->setAttr(smn::kReasonAttr,
+                                        builder_.getStringAttr("converted"));
+  return converted;
 }
 
 mlir::FailureOr<mlir::Value> MIRLowering::lowerNegation(UnaryNegExprAST *neg) {

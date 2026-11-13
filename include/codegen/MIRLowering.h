@@ -104,6 +104,9 @@ private:
   mlir::Location loc(const AST::AstBase *ast) const {
     return locator_.loc(builder_, ast);
   }
+  mlir::Location loc(const sammine_util::Location &location) const {
+    return locator_.loc(builder_, location);
+  }
   /// `ast`'s signature in MIR types, if MIR has a type for each part.
   std::optional<mlir::FunctionType> mirSignature(AST::FuncDefAST *ast) const;
 

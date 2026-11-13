@@ -88,7 +88,7 @@ bool MIRLowering::lowerFunction(FuncDefAST *ast, mlir::func::FuncOp decl) {
   addressed_ = std::move(addressed.names);
   for (auto [param, arg] :
        llvm::zip(ast->Prototype->parameterVectors, entry.getArguments()))
-    bind(param->name, arg, loc(ast));
+    bind(param->name, arg, loc(param.get()));
 
   // GeneralSemanticsVisitor makes a body's implicit return explicit, but
   // not in a function that writes `-> unit`: one that runs off its end

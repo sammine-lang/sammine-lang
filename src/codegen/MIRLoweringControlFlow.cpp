@@ -143,7 +143,7 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerCase(CaseExprAST *caseExpr) {
                      smn::PayloadOp::create(builder_, location, mirPayload[i],
                                             scrutinee, pattern.variant_index, i,
                                             static_cast<uint64_t>(at)),
-                     location);
+                     loc(pattern.location));
               }
             }});
   }
