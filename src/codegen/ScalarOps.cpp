@@ -1,4 +1,4 @@
-#include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/ScalarOps.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
@@ -43,7 +43,8 @@ static const CmpPredicates *lookupCmpPredicate(TokenType tok) {
 mlir::Value emitNegation(mlir::OpBuilder &builder, mlir::Location location,
                          mlir::Value value) {
   if (auto intType = mlir::dyn_cast<mlir::IntegerType>(value.getType())) {
-    auto zero = mlir::arith::ConstantIntOp::create(builder, location, intType, 0);
+    auto zero =
+        mlir::arith::ConstantIntOp::create(builder, location, intType, 0);
     return mlir::arith::SubIOp::create(builder, location, zero, value)
         .getResult();
   }

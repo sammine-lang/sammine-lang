@@ -4,6 +4,10 @@
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/Value.h"
 
+//! \file ScalarOps.h
+//! \brief Arithmetic, comparison, negation, float constants and number
+//! conversion on scalars, as MIR lowers operators and kernels reduce.
+
 namespace sammine_lang {
 
 /// Emit an integer arithmetic/bitwise op. Returns nullptr if the token

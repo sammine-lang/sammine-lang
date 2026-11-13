@@ -9,7 +9,7 @@
 
 #include "codegen/KernelGen.h"
 #include "cabi/KernelABI.h"
-#include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/ScalarOps.h"
 #include "dialect/SammineDialect.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"

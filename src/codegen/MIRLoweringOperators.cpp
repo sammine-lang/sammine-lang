@@ -1,5 +1,5 @@
 #include "codegen/MIRLowering.h"
-#include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/ScalarOps.h"
 #include "codegen/TypeLayout.h"
 #include "typecheck/BuiltinInstances.h"
 

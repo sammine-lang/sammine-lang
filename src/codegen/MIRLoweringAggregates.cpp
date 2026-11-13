@@ -1,5 +1,5 @@
 #include "codegen/MIRLowering.h"
-#include "codegen/MLIRGenImpl.h"
+#include "codegen/Runtime.h"
 #include "codegen/TypeLayout.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -228,7 +228,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerArrayIndex(IndexExprAST *index) {
 // in a block of its own.
 mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
                                              mlir::Value offset, int64_t size) {
-  if (!module_.lookupSymbol(kDprintfFunc) || !module_.lookupSymbol(kExitFunc))
+  if (!module_.lookupSymbol(runtime::kDprintf) ||
+      !module_.lookupSymbol(runtime::kExit))
     return mlir::failure();
   auto i32 = builder_.getI32Type();
   auto i64 = builder_.getI64Type();
@@ -253,10 +254,11 @@ mlir::LogicalResult MIRLowering::checkBounds(mlir::Location location,
       builder_, location, viewOf(builder_.getI8Type()),
       "index %lld out of bounds for an array of length %lld\n");
   auto stderrFd = intConstant(location, i32, 2);
-  smn::CallOp::create(builder_, location, mlir::TypeRange{i32}, kDprintfFunc,
+  smn::CallOp::create(builder_, location, mlir::TypeRange{i32},
+                      runtime::kDprintf,
                       mlir::ValueRange{stderrFd, message, wide, sizeValue});
   auto one = intConstant(location, i32, 1);
-  smn::CallOp::create(builder_, location, mlir::TypeRange{}, kExitFunc,
+  smn::CallOp::create(builder_, location, mlir::TypeRange{}, runtime::kExit,
                       mlir::ValueRange{one});
   smn::UnreachableOp::create(builder_, location);
 

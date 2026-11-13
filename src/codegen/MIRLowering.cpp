@@ -1,5 +1,5 @@
 #include "codegen/MIRLowering.h"
-#include "codegen/MLIRGenBinaryOps.h"
+#include "codegen/ScalarOps.h"
 #include "util/Utilities.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"

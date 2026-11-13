@@ -5,10 +5,10 @@
 #include "compiler/Compiler.h"
 #include "ast/Ast.h"
 #include "codegen/LLVMRes.h"
-#include "codegen/MLIRGen.h"
 #include "codegen/MLIRLowering.h"
-#include "dialect/SammineDialect.h"
+#include "codegen/ModuleGen.h"
 #include "compiler/Options.h"
+#include "dialect/SammineDialect.h"
 #include "fmt/color.h"
 #include "fmt/core.h"
 #include "lex/Lexer.h"
@@ -320,7 +320,7 @@ void Compiler::codegen() {
 }
 
 // MLIR codegen: registers dialects (Arith, Func, LLVM, SCF, CF), generates MLIR
-// from AST via mlirGen(), then lowers MLIR→LLVM IR. Transfers data
+// from AST via generateModules(), then lowers MLIR→LLVM IR. Transfers data
 // layout/triple from the template LLVMRes module to the newly lowered module.
 void Compiler::codegen_mlir() {
   // Check if any kernel definitions exist in the AST.
@@ -403,8 +403,8 @@ void Compiler::codegen_mlir() {
   std::string moduleName = library_name();
 
   auto mlirResult =
-      mlirGen(mlirCtx, programAST.get(), moduleName, options_.file_arg,
-              options_.str_arg, props_, options_.gpu);
+      generateModules(mlirCtx, programAST.get(), moduleName, options_.file_arg,
+                      options_.str_arg, props_, options_.gpu);
   if (!mlirResult.cpuModule) {
     fmt::print(stderr, sammine_util::styled(fmt::terminal_color::red),
                "MLIR generation failed\n");

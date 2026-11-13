@@ -9,7 +9,7 @@ lex → parse → imports → semantics → typecheck → linear_check → dump_
 - `imports`: every module implicitly imports the prelude `definitions` (except definitions.mn itself), then its own imports
 - `semantics`: ScopeGenerator → GeneralSemantics (two sub-passes)
 - `typecheck`: BiTypeChecker + monomorphized def injection at front of DefinitionVec
-- `codegen`: init 10 MLIR dialects (Arith, Func, LLVM, SCF, CF, MemRef, Linalg, Tensor, Bufferization, Affine) + bufferization interfaces → `mlirGen()` → `lowerMLIRToLLVMIR()`
+- `codegen`: init 10 MLIR dialects (Arith, Func, LLVM, SCF, CF, MemRef, Linalg, Tensor, Bufferization, Affine) + bufferization interfaces → `generateModules()` → `lowerMLIRToLLVMIR()`
 - `optimize`: LLVM PassBuilder with O2
 - `emit_library`: writes the `.so`/`.a`
 - `link`: `clang++` (fallback `g++`) with `io_runtime.o`
@@ -20,7 +20,7 @@ lex → parse → imports → semantics → typecheck → linear_check → dump_
 - Libraries: `--lib=static` → `.a` (fat, bundles transitive deps); `--lib` → `.so`
 
 ## 2-Module Architecture
-- `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernels)
+- `generateModules()` → `GeneratedModules{cpuModule, kernelModule}` (kernel null if no kernels)
 - Kernel module bufferized separately → merged into CPU module → unified MLIR→LLVM lowering
 - See `codegen.md` for full lowering pipeline
 

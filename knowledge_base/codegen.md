@@ -1,9 +1,9 @@
 # Codegen — MLIR Emission & Lowering
 
 ## Architecture
-- `mlirGen()` → `MLIRGenResult{cpuModule, kernelModule}` (kernel null if no kernel defs); `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
-- `MLIRGenImpl` builds the module around the code: a declaration of every function in MIR types (`forwardDeclareFunc`, `mirFunctionType`), C bindings (`emitExtern`), kernels (`KernelGen`). Every function body goes through MIR: `lowerThroughMIR` gives each declaration its body through `MIRLowering::lowerFunction`, before any definition is emitted; one MIR can't lower is an error (`imm_error`). `emitFunction` only sets linkage
-- Files: `MLIRGen.cpp` (generate, types, definitions), `MLIRGenFunction.cpp` (declarations, C bindings, linkage), `KernelGen.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR: statements, the dispatch over expressions, literals; `MIRLowering{Calls,ControlFlow,Aggregates,Places,Operators}.cpp` the rest, by concern), `MIRTypes.cpp` (each sammine type's MIR type), `MLIRGenBinaryOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
+- `generateModules()` → `GeneratedModules{cpuModule, kernelModule}` (kernel null if no kernel defs); `lowerMLIRToLLVMIR()` → `unique_ptr<llvm::Module>`
+- `ModuleGen` (private to `ModuleGen.cpp`) builds the module around the code: the runtime's functions (`declareRuntime`; their names in `Runtime.h`), a declaration of every function in MIR types (`declareFunction`, `mirFunctionType`), C bindings (`declareCBinding`), kernels (`KernelGen`). Every function body goes through MIR: `lowerBodies` gives each declaration its body through `MIRLowering::lowerFunction`, before any kernel is defined; one MIR can't lower is an error. `setLinkage` only sets linkage
+- Files: `ModuleGen.cpp` (generate, declarations, C bindings, linkage), `KernelGen.cpp` (kernels), `MIRLowering.cpp` (bodies and kernels' scalar code → MIR: statements, the dispatch over expressions, literals; `MIRLowering{Calls,ControlFlow,Aggregates,Places,Operators}.cpp` the rest, by concern), `MIRTypes.cpp` (each sammine type's MIR type), `ScalarOps.cpp` (arith helpers: arithmetic, comparison, negation, conversion), `TypeLayout.cpp` (enum payload layout), `RangeIteration.cpp` (what `for` calls), `MLIRLowering.cpp` (passes); `src/dialect/` (MIR, `sammine-mir-to-llvm`); `src/cabi/` (C's and kernels' calling conventions)
 - `SourceLocator` maps AST byte offsets to MLIR locations
 
 ## MIR (see `plans/mir.md`)
@@ -45,7 +45,7 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 - `sammine.call_indirect` calls through a function value, env first. A method of an instance the program declares (an operator, `as` through Convert, `x[i]` through an Indexer, which lends x's place or a slot holding a temporary) is a `sammine.call` (`callMethod`)
 
 ### Operators
-- Through a built-in instance, by the operands' sammine type (`lowerOperator`): integers, chars (signed), bools and integer-backed enums (`integerKind`) take integer ops, bitwise ones too; floats float ops; pointers compare their addresses (`sammine.address`, signed); arrays and enums with payloads take `==`/`!=` (`lowerEquality`: a loop over `sammine.element`, or tags, then a branch on the tag to compare that variant's payload). `x as T` through a built-in Convert is `emitNumberConversion`; an explicit call like `Add<i32>::Add(a, b)` goes through `lowerOperator` too. Comparison, negation and float constants come from `MLIRGenBinaryOps`
+- Through a built-in instance, by the operands' sammine type (`lowerOperator`): integers, chars (signed), bools and integer-backed enums (`integerKind`) take integer ops, bitwise ones too; floats float ops; pointers compare their addresses (`sammine.address`, signed); arrays and enums with payloads take `==`/`!=` (`lowerEquality`: a loop over `sammine.element`, or tags, then a branch on the tag to compare that variant's payload). `x as T` through a built-in Convert is `emitNumberConversion`; an explicit call like `Add<i32>::Add(a, b)` goes through `lowerOperator` too. Comparison, negation and float constants come from `ScalarOps`
 
 ### Memory
 - `sammine.alloc`/`sammine.free` lower to `malloc` (size from the data layout, count widened to i64) and `free`; a place is its pointer, a view lent or taken of it the same pointer; `sammine.local`, and what calls to C or kernels pass through memory, are stack slots at the top of the function (`entrySlot`)
@@ -58,14 +58,14 @@ There is one mapping from sammine types to LLVM's: `MIRTypes`, then the pass's `
 ## Forward Declarations (`generate()`)
 1. Forward-declare: all FuncDef/ExternAST/TypeClassInstance methods, in MIR types
 2. (If kernels) 3 declarations per kernel: `__kernel_` in kernel module (tensor), `__kernel_` in CPU module (memref placeholder), wrapper in CPU module (public)
-3. `lowerThroughMIR` replaces each function's declaration with its MIR definition
+3. `lowerBodies` replaces each function's declaration with its MIR definition
 
 ## C Functions
-- `emitExtern` declares a C binding under its C name (`std::printf` is `printf`). A variadic one, or one taking or giving a struct, is an `llvm.func`; any other is a `func.func`
+- `declareCBinding` declares a C binding under its C name (`std::printf` is `printf`). A variadic one, or one taking or giving a struct, is an `llvm.func`; any other is a `func.func`
 - The calling conventions live in `SammineCABI` (`include/cabi/`, `src/cabi/`): `registerType`/`registersFor` say how a struct travels (registers, or memory as sret/byval); `callC` calls C with sammine's values given a way to make stack slots; `emitCall` makes the `llvm.call`, promoting arguments through `...` (f32 to f64, char sign-extended and bool zero-extended to i32) and copying the declaration's argument attributes (sret, byval, signext, zeroext) onto the call; `createString` makes a C string's constant global; `kernel_abi::memrefOfPointer` makes a kernel's memref of an array's address
 
 ## Symbols
-- `emitFunction(ast, Linkage)`. `Global`: in a library every function and instance method, private ones too (its generic code compiled in another module may call them; privacy is a naming rule); in an executable only `main`. `Internal`: an executable's functions, and generic instantiations (`FuncDefAST::is_instantiation`) everywhere, so two modules can both instantiate `vec::push<i32>`. `AvailableExternally`: an imported instance's methods, copies to inline; MLIRLowering adds `inlinehint` (without it `Iterator<Range>::next` costs 245 against a threshold of 225)
+- `setLinkage(ast, Linkage)`. `Global`: in a library every function and instance method, private ones too (its generic code compiled in another module may call them; privacy is a naming rule); in an executable only `main`. `Internal`: an executable's functions, and generic instantiations (`FuncDefAST::is_instantiation`) everywhere, so two modules can both instantiate `vec::push<i32>`. `AvailableExternally`: an imported instance's methods, copies to inline; MLIRLowering adds `inlinehint` (without it `Iterator<Range>::next` costs 245 against a threshold of 225)
 - Forward declarations start private: an imported instance method is never given a body, and MLIR rejects a public declaration
 - A function an IR test inspects must be in a library (no `main`), or the optimizer may inline or remove it
 

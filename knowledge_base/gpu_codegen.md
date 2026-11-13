@@ -23,7 +23,7 @@ for both CPU and GPU — `--gpu=cuda` just changes where it runs.
 The first step was wiring up the infrastructure without changing any behavior.
 
 - Added `--gpu={cuda,amd}` flag via CLI11. The value flows through
-  `compiler_option_enum::GPU` → `mlirGen()` → `MLIRGenImpl::gpuTarget` →
+  `compiler_option_enum::GPU` → `generateModules()` → `KernelGen`'s GPU mode →
   `lowerMLIRToLLVMIR(gpuTarget)`.
 - Rebuilt LLVM with `NVPTX` in `LLVM_TARGETS_TO_BUILD`. This is the only LLVM
   build change needed — `MLIR_ENABLE_CUDA_RUNNER` is only needed later for the
@@ -218,7 +218,7 @@ time via a `MLIR_LLVM_LIB_DIR` compile definition.
 | `src/compiler/Compiler.cpp` | Early registry registration, GPU dialect loading, GPU link flags |
 | `CMakeLists.txt` | `MLIR_LLVM_LIB_DIR` define |
 | `src/codegen/CMakeLists.txt` | GPU CMake targets |
-| `include/codegen/MLIRGen.h` | `gpuTarget` parameter on `mlirGen()` |
+| `include/codegen/ModuleGen.h` | GPU mode parameter on `generateModules()` |
 | `src/codegen/KernelGen.cpp` | GPU wrapper codegen, `wrapperFunctionType`, `gpuDealloc` |
 | `src/dialect/MIRToLLVM.cpp` | Call site `!llvm.ptr` → memref conversion for GPU (`callKernel`) |
 | `include/codegen/MLIRLowering.h` | `gpuTarget` parameter |

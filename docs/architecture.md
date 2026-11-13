@@ -24,7 +24,7 @@ The prelude, `definitions.mn`, is imported this way by every module, library or 
 
 **dump_ast** -- With `--emit ast`, the AST is pretty-printed via `ASTPrinter::print()` and the compiler stops. If any prior stage set the error flag, the compiler aborts here with exit code 1.
 
-**codegen** -- `MLIRGenImpl` (`src/codegen/MLIRGen.cpp`, `MLIRGenFunction.cpp`) builds the MLIR module: function declarations, C bindings, and kernels through `KernelGen` (`KernelGen.cpp`). Every function body goes through MIR, a mid-level IR in the `sammine` dialect (`MIRLowering.cpp`), which is lowered to the LLVM dialect first thing in the lowering to LLVM IR. See Section 6 for details.
+**codegen** -- `generateModules` (`src/codegen/ModuleGen.cpp`) builds the MLIR module: function declarations, C bindings, and kernels through `KernelGen` (`KernelGen.cpp`). Every function body goes through MIR, a mid-level IR in the `sammine` dialect (`MIRLowering.cpp`), which is lowered to the LLVM dialect first thing in the lowering to LLVM IR. See Section 6 for details.
 
 **optimize** -- The LLVM IR module (produced by MLIR lowering) is run through LLVM's `O2` optimization pipeline using the new pass manager. `--emit llvm`, `--emit llvm-opt` and `--emit llvm-diff` print the IR before optimization, after it, or a diff of the two, then stop. `--emit mlir` prints the MLIR module before it is lowered to LLVM IR.
 
@@ -54,8 +54,8 @@ Headers in `include/` mirror the directory structure of implementations in `src/
 | `include/semantics/` | `ScopeGeneratorVisitor.h`, `GeneralSemanticsVisitor.h` | Visitor declarations. |
 | `src/typecheck/` | `BiTypeChecker.cpp`, `BiTypeCheckerSynthesize.cpp`, `LinearTypeChecker.cpp`, `Monomorphizer.cpp`, `Types.cpp` | Type checking, synthesis, linear checking, generic instantiation, type utilities. |
 | `include/typecheck/` | `BiTypeChecker.h`, `LinearTypeChecker.h`, `Monomorphizer.h`, `Types.h` | Type system definitions, checker/monomorphizer declarations. |
-| `src/codegen/` | `MLIRGen.cpp`, `MLIRGenFunction.cpp`, `KernelGen.cpp`, `MIRLowering*.cpp`, `MIRTypes.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (types, declarations, C bindings, kernels), function bodies to MIR (split by concern: calls, control flow, aggregates, places, operators), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
-| `include/codegen/` | `MLIRGen.h`, `MLIRGenImpl.h`, `MIRLowering.h`, `MIRTypes.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
+| `src/codegen/` | `ModuleGen.cpp`, `KernelGen.cpp`, `MIRLowering*.cpp`, `MIRTypes.cpp`, `ScalarOps.cpp`, `MLIRLowering.cpp`, `SammineJIT.cpp` | The module (declarations, C bindings, linkage), kernels, function bodies to MIR (split by concern: calls, control flow, aggregates, places, operators), MLIR-to-LLVM-IR lowering, JIT infrastructure. |
+| `include/codegen/` | `ModuleGen.h`, `KernelGen.h`, `MIRLowering.h`, `MIRTypes.h`, `MLIRLowering.h`, `LLVMRes.h`, `SammineJIT.h` | Codegen classes, LLVM resource wrapper, JIT declarations. |
 | `src/dialect/`, `include/dialect/` | `SammineOps.td`, `SammineTypes.td`, `MIRToLLVM.cpp` | The `sammine` dialect, MIR's types and ops, and its lowering to the LLVM dialect. |
 | `src/cabi/`, `include/cabi/` | `CABI.cpp`, `KernelABI.cpp` | Calling conventions: how C takes structs and variadic arguments, how a kernel's wrapper takes arrays. |
 | `src/compiler/` | `Compiler.cpp` | Pipeline orchestration (the `Compiler` class is defined and implemented entirely in this file). |
@@ -268,7 +268,7 @@ Nodes invoke synthesis through `accept_synthesis(TypeCheckerVisitor*)`, which ca
 
 ## 6. MLIR Codegen
 
-The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/codegen/MLIRGenImpl.h`, with method bodies split across `MLIRGen.cpp` and `MLIRGenFunction.cpp`; kernels are `KernelGen`'s, `KernelGen.cpp`). It builds the module around the code; function bodies go through MIR (`MIRLowering`, `knowledge_base/plans/mir.md`).
+The MLIR code generator's entry point is `generateModules` (`include/codegen/ModuleGen.h`); `ModuleGen.cpp` builds the module, and kernels are `KernelGen`'s (`KernelGen.cpp`). It builds the module around the code; function bodies go through MIR (`MIRLowering`, `knowledge_base/plans/mir.md`).
 
 ### MIR
 
@@ -285,15 +285,15 @@ The MLIR code generator is implemented in `MLIRGenImpl` (declared in `include/co
 
 ### Generation Phases
 
-`MLIRGenImpl::generate()` runs several phases:
+`ModuleGen::generate()` runs several phases:
 
 1. **Runtime function declarations.** Declares `malloc`, `free`, `exit` and `dprintf`, for allocation and bounds-check reports.
 
 2. **Forward-declare functions.** Iterates over all `FuncDefAST` and `TypeClassInstanceAST` nodes to emit `func.func` symbol declarations (without bodies) in MIR types (`MIRTypes`), and C bindings. This enables mutual recursion and function-as-value references. `sammine-mir-to-llvm` converts a declaration's MIR types as it does a definition's. A C binding that is an `llvm.func` needs LLVM types already: it gets them from its MIR types through `llvmTypeOf`, the pass's own conversion, so there is one mapping from sammine types to LLVM's.
 
-3. **MIR.** `lowerThroughMIR` gives every function declaration its body through MIR.
+3. **MIR.** `lowerBodies` gives every function declaration its body through MIR.
 
-4. **Definition emission.** Iterates again, calling `emitDefinition()` for each node: functions get their linkage; kernels are emitted; struct/enum/type-alias/typeclass-decl nodes are no-ops (already handled).
+4. **Linkage and kernels.** Iterates again: functions get their linkage (`setLinkage`); kernels and their wrappers are defined (`KernelGen::define`); C bindings, struct, enum, type alias and typeclass declarations have nothing more to emit, and any other definition is an error.
 
 ### Lowering Pipeline
 
@@ -366,7 +366,7 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
    - `GeneralSemanticsVisitor` -- semantic validation
    - `BiTypeCheckerVisitor` -- `visit()` + `synthesize()` methods
 8. Add to the `Monomorphizer` clone methods if the node can appear inside generic function bodies.
-9. Lower it to MIR in `MIRLowering::lowerExpr()` (an expression), or emit it in `emitDefinition()` (a definition).
+9. Lower it to MIR in `MIRLowering::lowerExpr()` (an expression), or handle it in `ModuleGen::generate()` (a definition).
 10. Add `to_string()` in `src/ast/AstToString.cpp` and printer support in `AstPrinterVisitor.cpp`.
 11. Add parser rules in `src/Parser.cpp`.
 
@@ -383,6 +383,6 @@ Methods `add_error()`, `add_warn()`, and `add_diagnostics()` append reports. The
 2. Add parsing in `Parser.cpp`, called from the top-level definition loop.
 3. In `ScopeGeneratorVisitor::preorder_walk(ProgramAST*)`, register the definition's name.
 4. In `BiTypeCheckerVisitor::visit(ProgramAST*)`, add the definition to the appropriate registration pass (first pass for type defs, second for function signatures, third for full checking).
-5. In `MLIRGenImpl::emitDefinition()`, add a `dyn_cast` branch for the new definition type.
+5. In `ModuleGen::generate()`, declare or emit the new definition type, or add it to the definitions with nothing to emit.
 6. In `Monomorphizer`, add cloning support if the definition can be generic.
 7. Consider import system implications: update `resolve_imports()` in `Compiler.cpp` if the definition should be importable/exportable.
