@@ -44,15 +44,21 @@ export let read_i32() -> i32 { sammine_io_read_i32() }
 export let read_i64() -> i64 { sammine_io_read_i64() }
 export let read_f64() -> f64 { sammine_io_read_f64() }
 
-export let open(path: ptr<char>, mode: ptr<char>) -> 'ptr<char> { sammine_io_open(path, mode) }
-export let close(f: 'ptr<char>) -> unit { sammine_io_close(f) }
-// Returns the file handle back with the next line.
-export let file_read_line(f: 'ptr<char>) -> ('ptr<char>, ReadResult) {
-  let (handle, buf, n) = sammine_io_file_read_line(f);
-  (handle, to_read_result(buf, n))
+// An open file: C's FILE *, which close closes. It is a struct of its own,
+// not the pointer, so that nothing drops it as a pointer it would free.
+export struct File { handle: 'ptr<char>, };
+
+export let open(path: ptr<char>, mode: ptr<char>) -> File {
+  File { handle: sammine_io_open(path, mode) }
 }
-export let file_write(f: 'ptr<char>, content: ptr<char>, nbytes: i64) -> 'ptr<char> {
-  sammine_io_file_write(f, content, nbytes)
+export let close(f: File) -> unit { sammine_io_close(f.handle) }
+// Returns the file back with the next line.
+export let file_read_line(f: File) -> (File, ReadResult) {
+  let (handle, buf, n) = sammine_io_file_read_line(f.handle);
+  (File { handle: handle }, to_read_result(buf, n))
+}
+export let file_write(f: File, content: ptr<char>, nbytes: i64) -> File {
+  File { handle: sammine_io_file_write(f.handle, content, nbytes) }
 }
 
 // Eof if the file cannot be read.

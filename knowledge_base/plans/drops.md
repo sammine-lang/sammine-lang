@@ -242,6 +242,7 @@ Each a commit, the suite passing after each.
    `'ptr<T>` where `T` owns nothing. MIR tests. (Done: `sammine.free`
    renamed, as `drop(x)` lowers to it.)
 5. `io::File`: the file handle in a struct, so no pointer drop frees it.
+   (Done.)
 6. `sammine-elaborate-drops`, at returns and on edges, for those
    pointers, after the check, which no longer reports them still owned.
    The leak tests for them become programs that run.
