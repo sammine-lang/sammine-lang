@@ -11,7 +11,7 @@ import std;
 
 let main() -> i32 {
   let m = prelude_user::total(100i64);
-  std::printf("%ld\n", m.cents);
-  std::printf("%f\n", (m + prelude_user::Money { cents: 100i64 }) as f64);
+  print("{}\n", m.cents);
+  print("{}\n", (m + prelude_user::Money { cents: 100i64 }) as f64);
   return 0;
 }

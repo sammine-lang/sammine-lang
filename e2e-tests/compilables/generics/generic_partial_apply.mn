@@ -16,7 +16,7 @@ let main() -> i32 {
   let g = apply2(add);
   let h = apply2(mul, 2.5);
   let k = pick<i64>();
-  std::printf("%ld %f %ld %ld\n", g(1i64, 2i64), h(4.0), k(5i64, 6i64),
+  print("{} {} {} {}\n", g(1i64, 2i64), h(4.0), k(5i64, 6i64),
               call34(apply2(add)));
   0
 }

@@ -16,10 +16,10 @@ let to_u32(x: f64) -> u32 { x as u32 }
 let to_i64(x: f32) -> i64 { x as i64 }
 
 let main() -> i32 {
-  std::printf("%d %d\n", to_i32(2.9), to_i32(-2.9));
-  std::printf("%d\n", to_i32(0.0 / 0.0));
-  std::printf("%d %d\n", to_i32(100000000000.0), to_i32(-100000000000.0));
-  std::printf("%u %u\n", to_u32(-5.0), to_u32(100000000000.0));
-  std::printf("%ld\n", to_i64(1.0f32 / 0.0f32));
+  print("{} {}\n", to_i32(2.9), to_i32(-2.9));
+  print("{}\n", to_i32(0.0 / 0.0));
+  print("{} {}\n", to_i32(100000000000.0), to_i32(-100000000000.0));
+  print("{} {}\n", to_u32(-5.0), to_u32(100000000000.0));
+  print("{}\n", to_i64(1.0f32 / 0.0f32));
   return 0;
 }

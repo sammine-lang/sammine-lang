@@ -8,17 +8,17 @@ let main() -> i32 {
   let a : f64 = 3.14;
   let b : f64 = 2.72;
   if a != b {
-    std::printf("not equal\n");
+    print("not equal\n");
   } else {
-    std::printf("equal\n");
+    print("equal\n");
   };
 
   let c : f64 = 1.5;
   let d : f64 = 1.5;
   if c != d {
-    std::printf("not equal\n");
+    print("not equal\n");
   } else {
-    std::printf("equal\n");
+    print("equal\n");
   };
 
   return 0;

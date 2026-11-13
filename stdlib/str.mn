@@ -91,7 +91,7 @@ export let unsafe append(s: String, t: ptr<char>) -> String {
 export instance Indexer<String, char> {
   let unsafe Indexer(s: ptr<String>, i: i64) -> char {
     if i < 0i64 || i >= (*s).length {
-      panic("index %lld out of bounds for a String of length %lld", i,
+      panic("index {} out of bounds for a String of length {}", i,
             (*s).length)
     } else {
       (*s).data[i]

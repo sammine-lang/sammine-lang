@@ -6,7 +6,7 @@ import std;
 struct Vec2 { x: i32, y: i32, };
 
 let print_vec(v: Vec2) {
-  std::printf("x = %d, y = %d\n", v.x, v.y);
+  print("x = {}, y = {}\n", v.x, v.y);
   return;
 }
 

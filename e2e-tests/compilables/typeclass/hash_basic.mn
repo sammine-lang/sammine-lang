@@ -11,6 +11,6 @@ instance Hash<Point> {
 
 let main() -> i32 {
   let p: Point = Point { x: 1, y: 2 };
-  std::printf("%lu\n", Hash<Point>(p));
+  print("{}\n", Hash<Point>(p));
   return 0;
 }

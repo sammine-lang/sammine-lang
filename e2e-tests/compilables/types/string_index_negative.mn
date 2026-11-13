@@ -6,7 +6,7 @@ import str;
 
 let main() -> i32 {
   let s = str::new("hi");
-  std::printf("unreachable %c\n", s[0i64 - 1i64]);
+  print("unreachable {}\n", s[0i64 - 1i64]);
   str::delete(s);
   0
 }

@@ -15,6 +15,6 @@ let main() -> i32 {
     *q = 99;
   } else {
   };
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

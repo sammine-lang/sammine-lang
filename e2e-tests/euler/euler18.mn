@@ -43,6 +43,6 @@ let max_path(t: ptr<[120]i32>, row: i32, col: i32) -> i32 {
 
 let main() -> i32 {
   let data: [120]i32 = tri();
-  std::printf("%d\n", max_path(&data, 0, 0));
+  print("{}\n", max_path(&data, 0, 0));
   return 0;
 }

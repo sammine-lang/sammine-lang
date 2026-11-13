@@ -14,7 +14,7 @@ let second<T>(b: Box<T>) -> T { b[1] }
 
 let main() -> i32 {
   // CHECK: 7 c 7
-  std::printf("%d %c %d\n", first(Box<i32> { v: 7 }), first(Box<char> { v: 'c' }),
+  print("{} {} {}\n", first(Box<i32> { v: 7 }), first(Box<char> { v: 'c' }),
               second(Box<i32> { v: 7 }));
   return 0;
 }

@@ -21,7 +21,7 @@ struct Loud { id: i32, p: 'ptr<i32>, };
 
 instance Drop<Loud> {
   let unsafe Drop(l: Loud) -> unit {
-    std::printf("drop %d\n", l.id);
+    print("drop {}\n", l.id);
     drop(l.p)
   }
 }
@@ -36,6 +36,6 @@ let main() -> i32 {
   let pair = Pair { first: loud(3), second: loud(4) };
   let tuple = (loud(5), loud(6));
   let array = [loud(7), loud(8)];
-  std::printf("end of main\n");
+  print("end of main\n");
   0
 }

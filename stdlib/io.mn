@@ -15,13 +15,11 @@ reuse sammine_io_read_file(path: ptr<char>) -> ('buf<char>, i64);
 reuse sammine_io_write_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 reuse sammine_io_append_file(path: ptr<char>, content: ptr<char>, nbytes: i64) -> i32;
 
-export let print(s: ptr<char>) -> unit { printf("%s", s); }
-export let println(s: ptr<char>) -> unit { printf("%s\n", s); }
-export let print_i32(n: i32) -> unit { printf("%d", n); }
-export let print_i64(n: i64) -> unit { printf("%ld", n); }
-export let print_f64(n: f64) -> unit { printf("%f", n); }
-export let print_char(c: char) -> unit { printf("%c", c); }
-export let print_bool(b: bool) -> unit { if b { printf("true") } else { printf("false") }; }
+export let print_i32(n: i32) -> unit { print("{}", n); }
+export let print_i64(n: i64) -> unit { print("{}", n); }
+export let print_f64(n: f64) -> unit { print("{}", n); }
+export let print_char(c: char) -> unit { print("{}", c); }
+export let print_bool(b: bool) -> unit { print("{}", b); }
 
 export let eprint(s: ptr<char>) -> unit { sammine_io_eprint(s) }
 export let eprintln(s: ptr<char>) -> unit { sammine_io_eprintln(s) }

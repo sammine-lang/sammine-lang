@@ -50,6 +50,6 @@ let unsafe main() -> i32 {
   let f2 = buffer::filled(chunks(), 0i64);
   f1[0] = 1;
   f2[0] = 1;
-  std::printf("%ld\n", first_with(f1, f2, 2, 1000));
+  print("{}\n", first_with(f1, f2, 2, 1000));
   0
 }

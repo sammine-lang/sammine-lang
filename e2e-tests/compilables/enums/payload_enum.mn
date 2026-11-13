@@ -9,6 +9,6 @@ let main() -> i32 {
   let s: Shape = Shape::Circle(3.14);
   let r: Shape = Shape::Rect(2.0, 4.0);
   let p: Shape = Shape::Point;
-  std::printf("%d\n", 0);
+  print("{}\n", 0);
   return 0;
 }

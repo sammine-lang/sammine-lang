@@ -4,6 +4,6 @@
 import std;
 
 let main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
-  std::printf("argc = %d\n", argc);
+  print("argc = {}\n", argc);
   return 0;
 }

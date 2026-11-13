@@ -33,6 +33,6 @@ let h15(f: (i32) -> i32, x: i32) -> i32 { h14(f, h14(f, x)) }
 let h16(f: (i32) -> i32, x: i32) -> i32 { h15(f, h15(f, x)) }
 
 let main() -> i32 {
-  std::printf("%d %d\n", h16(add(1), 0), h2(mul(2), 4));
+  print("{} {}\n", h16(add(1), 0), h2(mul(2), 4));
   0
 }

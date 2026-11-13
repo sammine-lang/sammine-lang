@@ -28,17 +28,17 @@ let id<T>(x: T) -> T { x }
 
 let main() -> i32 {
   let f: (i32) -> i32 = inc;
-  std::printf("%d\n", f(41));
+  print("{}\n", f(41));
   let g: (i32) -> i32 = inc;
-  std::printf("%d\n", g(42));
+  print("{}\n", g(42));
   let id: (i32) -> i32 = inc;
-  std::printf("%d\n", id(43));
+  print("{}\n", id(43));
   let show: (i32) -> i32 = inc;
-  std::printf("%d\n", show(44));
+  print("{}\n", show(44));
   // The prelude's names too: its Sized, and its Iterator's next.
   let Sized: (i32) -> i32 = inc;
-  std::printf("%d\n", Sized(45));
+  print("{}\n", Sized(45));
   let next: (i32) -> i32 = inc;
-  std::printf("%d\n", next(46));
+  print("{}\n", next(46));
   return 0;
 }

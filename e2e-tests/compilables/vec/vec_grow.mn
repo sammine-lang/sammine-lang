@@ -16,7 +16,7 @@ let main() -> i32 {
   let v8 = vec::push<i32>(v7, 7);
   let v9 = vec::push<i32>(v8, 8);
   let v10 = vec::push<i32>(v9, 9);
-  std::printf("%d %d %d %d %d %d %d %d %d %d",
+  print("{} {} {} {} {} {} {} {} {} {}",
     v10[0], v10[1], v10[2], v10[3], v10[4],
     v10[5], v10[6], v10[7], v10[8], v10[9]);
   vec::delete<i32>(v10);

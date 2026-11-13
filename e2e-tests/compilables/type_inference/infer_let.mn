@@ -9,7 +9,7 @@ let add(a: i32, b: i32) -> i32 { a + b }
 let main() -> i32 {
   let x = 42;
   let y = add(1, 2);
-  std::printf("%d\n", x);
-  std::printf("%d\n", y);
+  print("{}\n", x);
+  print("{}\n", y);
   return 0;
 }

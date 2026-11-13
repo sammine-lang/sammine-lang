@@ -12,6 +12,6 @@ let main() -> i32 {
     L(p) => { drop(p); },
     _ => { },
   };
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

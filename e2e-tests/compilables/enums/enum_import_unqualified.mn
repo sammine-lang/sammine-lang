@@ -10,19 +10,19 @@ let main() -> i32 {
   let y: dummy_enum::dummy = B;
   let z: dummy_enum::dummy = C;
   case x {
-    A => std::printf("got A\n"),
-    B => std::printf("got B\n"),
-    C => std::printf("got C\n"),
+    A => print("got A\n"),
+    B => print("got B\n"),
+    C => print("got C\n"),
   };
   case y {
-    A => std::printf("got A\n"),
-    B => std::printf("got B\n"),
-    C => std::printf("got C\n"),
+    A => print("got A\n"),
+    B => print("got B\n"),
+    C => print("got C\n"),
   };
   case z {
-    A => std::printf("got A\n"),
-    B => std::printf("got B\n"),
-    C => std::printf("got C\n"),
+    A => print("got A\n"),
+    B => print("got B\n"),
+    C => print("got C\n"),
   };
   return 0;
 }

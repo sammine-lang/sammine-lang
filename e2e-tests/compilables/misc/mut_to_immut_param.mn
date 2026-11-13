@@ -11,6 +11,6 @@ let f(x: i32) -> i32 {
 
 let main() -> i32 {
   let y: i32 = 5;
-  std::printf("%d\n", f(y));
+  print("{}\n", f(y));
   return 0;
 }

@@ -232,8 +232,8 @@ std::string LenExprAST::to_string() const {
   return "len(" + operand->to_string() + ")";
 }
 
-std::string PanicExprAST::to_string() const {
-  std::string out = "panic(";
+std::string FormatExprAST::to_string() const {
+  std::string out = std::string(keyword()) + "(";
   for (size_t i = 0; i < arguments.size(); ++i)
     out += (i ? ", " : "") + arguments[i]->to_string();
   return out + ")";

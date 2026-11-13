@@ -9,6 +9,6 @@ let main() -> i32 {
   let x : i32 = *p;
   let y : i32 = *p;
   drop(p);
-  std::printf("%d\n", x);
+  print("{}\n", x);
   return 0;
 }

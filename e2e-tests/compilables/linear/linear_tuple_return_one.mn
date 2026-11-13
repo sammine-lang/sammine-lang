@@ -19,6 +19,6 @@ let main() -> i32 {
   let r = pick_first((p, q));
   let v : i32 = *r;
   drop(r);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

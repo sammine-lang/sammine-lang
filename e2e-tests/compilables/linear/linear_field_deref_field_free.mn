@@ -11,6 +11,6 @@ let main() -> i32 {
   *o.p = S { a: alloc<i32>(1) };
   drop((*o.p).a);
   drop(o.p);
-  std::printf("ok\n");
+  print("ok\n");
   0
 }

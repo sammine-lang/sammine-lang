@@ -16,7 +16,7 @@ struct Outer {
 let main() -> i32 {
   let i : Inner = Inner { value: 42 };
   let o : Outer = Outer { inner: i, x: 10 };
-  std::printf("%d\n", o.x);
-  std::printf("%d\n", o.inner.value);
+  print("{}\n", o.x);
+  print("{}\n", o.inner.value);
   return 0;
 }

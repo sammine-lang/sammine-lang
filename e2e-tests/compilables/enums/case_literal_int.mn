@@ -7,9 +7,9 @@ import std;
 
 let describe(x: i32) -> i32 {
   case x {
-    0 => std::printf("zero\n"),
-    1 => std::printf("one\n"),
-    _ => std::printf("other\n"),
+    0 => print("zero\n"),
+    1 => print("one\n"),
+    _ => print("other\n"),
   };
   return 0;
 }

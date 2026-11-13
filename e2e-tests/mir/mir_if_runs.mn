@@ -3,8 +3,8 @@
 // circuits that skip a call, unsigned and float comparisons, an owned
 // pointer chosen by an if.
 // CHECK: 5 0 -1 0 1
-// CHECK-NEXT: 1 0 1
-// CHECK-NEXT: 1 0
+// CHECK-NEXT: true false true
+// CHECK-NEXT: true false
 // CHECK-NEXT: 2
 // CHECK-NEXT: never called: 0
 import std;
@@ -20,16 +20,16 @@ let keep(p: 'ptr<i32>, q: 'ptr<i32>, first: bool) -> 'ptr<i32> {
   if first { drop(q); p } else { drop(p); q }
 }
 let make(v: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = v; p }
-let loud() -> bool { std::printf("called!\n"); true }
+let loud() -> bool { print("called!\n"); true }
 let skips() -> i32 { if false && loud() { 1 } else { 0 } }
 
 let main() -> i32 {
-  std::printf("%d %d %d %d %d\n", pick(5), pick(-5), sign(-3), sign(0), sign(9));
-  std::printf("%d %d %d\n", both(true, 2), both(false, 2), both(false, 0));
-  std::printf("%d %d\n", below(1u32, 4000000000u32, 1.5), below(5u32, 4u32, 1.5));
+  print("{} {} {} {} {}\n", pick(5), pick(-5), sign(-3), sign(0), sign(9));
+  print("{} {} {}\n", both(true, 2), both(false, 2), both(false, 0));
+  print("{} {}\n", below(1u32, 4000000000u32, 1.5), below(5u32, 4u32, 1.5));
   let p = keep(make(1), make(2), false);
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   drop(p);
-  std::printf("never called: %d\n", skips());
+  print("never called: {}\n", skips());
   0
 }

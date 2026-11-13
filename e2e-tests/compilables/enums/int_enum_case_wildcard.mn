@@ -8,8 +8,8 @@ type Sig = HUP(1) | INT(2) | KILL(9) | TERM(15);
 
 let describe(s: Sig) -> i32 {
   case s {
-    Sig::KILL => std::printf("special\n"),
-    _ => std::printf("other\n"),
+    Sig::KILL => print("special\n"),
+    _ => print("other\n"),
   };
   return 0;
 }

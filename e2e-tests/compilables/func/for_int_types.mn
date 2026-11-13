@@ -14,16 +14,16 @@ import std;
 // would print different values.
 let main() -> i32 {
   for i in 0i32..2i32 {
-    std::printf("i32 %d\n", i);
+    print("i32 {}\n", i);
   };
   for i in 5000000000i64..5000000002i64 {
-    std::printf("i64 %ld\n", i);
+    print("i64 {}\n", i);
   };
   for i in 3000000000u32..3000000002u32 {
-    std::printf("u32 %u\n", i);
+    print("u32 {}\n", i);
   };
   for i in 5000000000u64..5000000002u64 {
-    std::printf("u64 %lu\n", i);
+    print("u64 {}\n", i);
   };
   return 0;
 }

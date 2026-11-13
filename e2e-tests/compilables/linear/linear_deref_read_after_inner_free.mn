@@ -9,6 +9,6 @@ let main() -> i32 {
   drop(*pp);
   let x = **pp;
   drop(pp);
-  std::printf("ok %d\n", x);
+  print("ok {}\n", x);
   0
 }

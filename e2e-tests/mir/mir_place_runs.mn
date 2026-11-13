@@ -3,7 +3,7 @@
 // parameter, &x.f, &a[i], a case arm's binding, the same view twice, and
 // x[i] through Indexer on a binding, a field, a temporary and a Vec.
 // CHECK: 3 8 2 5 7
-// CHECK-NEXT: 1 9 6
+// CHECK-NEXT: true 9 6
 // CHECK-NEXT: 10 20 30
 import std;
 import vec;
@@ -30,11 +30,11 @@ let twice(n: i32) -> bool { let x = n; same(&x, &x) }
 
 let main() -> i32 {
   let h = Holder { t: Trio { a: 1, b: 2, c: 3 } };
-  std::printf("%d %d %d %d %d\n", last(h.t), make()[1i64], h.t[1i64], elem_view([4, 5, 6], 1), in_arm(Maybe::Just(7)));
+  print("{} {} {} {} {}\n", last(h.t), make()[1i64], h.t[1i64], elem_view([4, 5, 6], 1), in_arm(Maybe::Just(7)));
   let n = 6;
-  std::printf("%d %d %d\n", twice(1), field_view(Trio { a: 0, b: 9, c: 0 }), look(&n));
+  print("{} {} {}\n", twice(1), field_view(Trio { a: 0, b: 9, c: 0 }), look(&n));
   let v = vec::push<i32>(vec::push<i32>(vec::new<i32>(1), 10), 20);
-  std::printf("%d %d %d\n", v[0], v[1], v[0] + v[1]);
+  print("{} {} {}\n", v[0], v[1], v[0] + v[1]);
   vec::delete<i32>(v);
   0
 }

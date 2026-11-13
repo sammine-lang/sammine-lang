@@ -51,6 +51,6 @@ let first10(n: i64) -> i64 {
 let main() -> i32 {
   let data: [100]i64 = nums();
   let s: i64 = sum_arr(&data, 0, 0);
-  std::printf("%lld\n", first10(s));
+  print("{}\n", first10(s));
   return 0;
 }

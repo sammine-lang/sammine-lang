@@ -15,9 +15,9 @@ let unsafe main() -> i32 {
   let s = "é";
   let x = s[0];
   let big = 7;
-  std::printf("char %d\n", c::char_to_int(x));
-  std::printf("bool %d\n", c::bool_to_int(big > 3));
-  std::printf("negated %d\n", c::char_to_int(c::negate_char(x)));
+  print("char {}\n", c::char_to_int(x));
+  print("bool {}\n", c::bool_to_int(big > 3));
+  print("negated {}\n", c::char_to_int(c::negate_char(x)));
   c::print_promoted(0, x, big > 3);
   0
 }

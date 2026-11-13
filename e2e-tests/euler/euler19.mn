@@ -35,6 +35,6 @@ let count_sundays(y: i32, m: i32, dow: i32, count: i32) -> i32 {
 
 let main() -> i32 {
   let result: i32 = count_sundays(1900, 1, 0, 0);
-  std::printf("%d\n", result);
+  print("{}\n", result);
   return 0;
 }

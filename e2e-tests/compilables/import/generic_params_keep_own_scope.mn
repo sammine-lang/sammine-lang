@@ -19,7 +19,7 @@ let main() -> i32 {
   let w = vec::push<i32>(vec::push<i32>(vec::new<i32>(cap(1)), v() + val()),
                          7);
   let first = case vec::get<i32>(&w, i() as i64) { Some(x) => x, None => 0 };
-  std::printf("%d %d %d %lld\n", first, w[1], v(), w.cap);
+  print("{} {} {} {}\n", first, w[1], v(), w.cap);
   vec::delete<i32>(w);
   0
 }

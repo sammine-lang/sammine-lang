@@ -9,13 +9,13 @@ type Flags = Read(1) | Write(2) | Exec(4);
 
 let main() -> i32 {
   let rw: Flags = Read | Write;
-  std::printf("%d\n", rw);
+  print("{}\n", rw);
 
   let all: Flags = Read | Write | Exec;
-  std::printf("%d\n", all);
+  print("{}\n", all);
 
   let wx: Flags = Write | Exec;
-  std::printf("%d\n", wx);
+  print("{}\n", wx);
 
   return 0;
 }

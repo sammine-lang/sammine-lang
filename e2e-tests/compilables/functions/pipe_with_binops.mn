@@ -6,7 +6,7 @@
 import std;
 
 let print_i32(x: i32) {
-  std::printf("%d\n", x);
+  print("{}\n", x);
 }
 
 let square(x: i32) -> i32 {

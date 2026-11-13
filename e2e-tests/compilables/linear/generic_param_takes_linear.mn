@@ -12,7 +12,7 @@ let unsafe main() -> i32 {
   let p = alloc_buf<i64>(1);
   p[0] = 42i64;
   let q = pass<'buf<i64>>(p);
-  std::printf("%ld\n", q[0]);
+  print("{}\n", q[0]);
   drop(q);
   0
 }

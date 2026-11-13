@@ -7,7 +7,7 @@ import std;
 
 let take(pp: 'ptr<'ptr<i32>>) -> unit {
   let p = *pp;
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   drop(p);
   drop(pp)
 }

@@ -14,7 +14,7 @@ instance Sized<T> {
 }
 
 let main() -> i32 {
-  printf("%ld\n", Sized<i32>());
-  printf("%ld\n", Sized<T>());
+  print("{}\n", Sized<i32>());
+  print("{}\n", Sized<T>());
   return 0;
 }

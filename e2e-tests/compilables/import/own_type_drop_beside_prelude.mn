@@ -15,20 +15,20 @@ struct Range<T> { current: T, end_val: T, };
 
 instance Drop<Range<'ptr<i32>>> {
   let unsafe Drop(r: Range<'ptr<i32>>) -> unit {
-    std::printf("own drop\n");
+    print("own drop\n");
     drop(r.current);
     drop(r.end_val);
   }
 }
 
 let main() -> i32 {
-  std::printf("start\n");
+  print("start\n");
   let a = alloc<i32>(1);
   *a = 1;
   let b = alloc<i32>(1);
   *b = 2;
   drops_prelude_range::make_and_drop<'ptr<i32>>(a, b);
-  std::printf("done\n");
+  print("done\n");
   let c = alloc<i32>(1);
   *c = 3;
   let d = alloc<i32>(1);

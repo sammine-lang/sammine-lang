@@ -11,19 +11,19 @@ let main() -> i32 {
   let (f, first) = io::file_read_line(f);
   case first {
     Line(line, n) => {
-      io::println(line);
+      print("{}\n", line);
       drop(line);
     },
-    Eof => io::println("eof"),
+    Eof => print("eof\n"),
   };
 
   let (f, second) = io::file_read_line(f);
   case second {
     Line(line, n) => {
-      io::println(line);
+      print("{}\n", line);
       drop(line);
     },
-    Eof => io::println("eof"),
+    Eof => print("eof\n"),
   };
 
   io::close(f);

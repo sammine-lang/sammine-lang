@@ -13,7 +13,7 @@ let pick(x : i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", pick(5));
-  std::printf("%d\n", pick(0));
+  print("{}\n", pick(5));
+  print("{}\n", pick(0));
   return 0;
 }

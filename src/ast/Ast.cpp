@@ -199,7 +199,7 @@ void ASTVisitor::visit(DimExprAST *ast) {
   ast->walk_with_postorder(this);
 }
 
-void ASTVisitor::visit(PanicExprAST *ast) {
+void ASTVisitor::visit(FormatExprAST *ast) {
   ast->walk_with_preorder(this);
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);

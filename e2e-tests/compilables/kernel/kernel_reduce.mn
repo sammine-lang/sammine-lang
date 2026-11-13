@@ -9,7 +9,7 @@ kernel sum_arr(a: [3]f64) -> f64 {
 let main() -> i32 {
   let a = [1.0, 2.0, 3.0];
   let s = sum_arr(a);
-  io::printf("%f\n", s);
+  print("{}\n", s);
   0
 }
 

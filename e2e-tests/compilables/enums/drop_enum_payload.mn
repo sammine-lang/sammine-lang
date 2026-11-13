@@ -27,6 +27,6 @@ let main() -> i32 {
   let v = vec::push(v, Some(boxed(3)));
   let v = vec::push(v, None);
   let v = vec::push(v, Some(boxed(4)));
-  std::printf("%lld\n", v.length);
+  print("{}\n", v.length);
   0
 }

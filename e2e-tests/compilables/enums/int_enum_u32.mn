@@ -11,8 +11,8 @@ let main() -> i32 {
   let r: Flags = Read;
   let w: Flags = Write;
   let e: Flags = Exec;
-  std::printf("%u\n", r);
-  std::printf("%u\n", w);
-  std::printf("%u\n", e);
+  print("{}\n", r);
+  print("{}\n", w);
+  print("{}\n", e);
   return 0;
 }

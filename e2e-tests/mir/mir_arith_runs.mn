@@ -10,7 +10,7 @@ let udiv(a: u32, b: u32) -> u32 { a / b }
 let local(a: i32) -> i32 { if a > 0 { inc(a) - 1 } else { 0 } }
 
 let main() -> i32 {
-  std::printf("%d %lld %u %d\n", inc(41), mix(5i64, 6i64),
+  print("{} {} {} {}\n", inc(41), mix(5i64, 6i64),
               udiv(4000000000u32, 3u32), local(9));
   0
 }

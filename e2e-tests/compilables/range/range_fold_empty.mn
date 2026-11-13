@@ -10,7 +10,7 @@ let plus(acc: i64, i: i64) -> i64 { acc + i }
 
 // An empty or backwards range folds to the starting accumulator.
 let main() -> i32 {
-  std::printf("%ld %ld %ld\n",
+  print("{} {} {}\n",
               range::fold(5i64, 5i64, 7i64, plus),
               range::sum(9i64, 3i64, id),
               range::count(0i64, 10i64, never));

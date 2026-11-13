@@ -8,7 +8,7 @@
 // CHECK-NEXT:    22|  *p = 7;
 // CHECK-NEXT:     |  ─┬
 // CHECK-NEXT:     |   ╰─ Cannot dereference 'p' — it was already dropped previously
-// CHECK-NEXT:   23|  std::printf("%d\n", 7);
+// CHECK-NEXT:   23|  print("{}\n", 7);
 // CHECK-NEXT:   24|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -20,6 +20,6 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   drop(p);
   *p = 7;
-  std::printf("%d\n", 7);
+  print("{}\n", 7);
   return 0;
 }

@@ -6,10 +6,10 @@ import std;
 
 let check_vowel(c: char) -> i32 {
   case c {
-    'a' => std::printf("vowel\n"),
-    'e' => std::printf("vowel\n"),
-    'i' => std::printf("vowel\n"),
-    _ => std::printf("other\n"),
+    'a' => print("vowel\n"),
+    'e' => print("vowel\n"),
+    'i' => print("vowel\n"),
+    _ => print("other\n"),
   };
   return 0;
 }

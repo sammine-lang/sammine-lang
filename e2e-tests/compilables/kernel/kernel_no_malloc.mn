@@ -15,8 +15,8 @@ kernel sum_arr(a: [3]f64) -> f64 {
 let main() -> i32 {
   let a = [1.0, 2.0, 3.0];
   let b = double_arr(a);
-  io::printf("%f\n", b[0]);
-  io::printf("%f\n", sum_arr(a));
+  print("{}\n", b[0]);
+  print("{}\n", sum_arr(a));
   0
 }
 

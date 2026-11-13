@@ -9,13 +9,13 @@ let main() -> i32 {
   let y: Option<i32> = Option<i32>::None;
 
   case x {
-    Some(v) => std::printf("has value: %d\n", v),
-    None => std::printf("no value\n"),
+    Some(v) => print("has value: {}\n", v),
+    None => print("no value\n"),
   };
 
   case y {
-    Some(v) => std::printf("has value: %d\n", v),
-    None => std::printf("no value\n"),
+    Some(v) => print("has value: {}\n", v),
+    None => print("no value\n"),
   };
 
   return 0;

@@ -11,11 +11,11 @@ import std;
 
 let main() -> i32 {
   let m = prelude_user::total(100i64);
-  std::printf("%ld\n", m.cents);
+  print("{}\n", m.cents);
   let more = m + prelude_user::Money { cents: 100i64 };
-  std::printf("%f\n", more as f64);
+  print("{}\n", more as f64);
   let a = case prelude_user::first_over(5i64, 7i64) { Some(x) => x, None => 0i64, };
   let b = case prelude_user::first_over(5i64, 3i64) { Some(x) => "some", None => "none", };
-  std::printf("%ld %s\n", a, b);
+  print("{} {}\n", a, b);
   return 0;
 }

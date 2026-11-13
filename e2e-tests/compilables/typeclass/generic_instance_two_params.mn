@@ -20,6 +20,6 @@ instance Second<i32, i32> {
 let main() -> i32 {
   let t = Two<i32, f64> { a: 1, b: 4.5 };
   // CHECK: 4.500000 6
-  std::printf("%f %d\n", Second<Two<i32, f64>, f64>(t), Second<i32, i32>(3));
+  print("{} {}\n", Second<Two<i32, f64>, f64>(t), Second<i32, i32>(3));
   return 0;
 }

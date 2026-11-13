@@ -15,7 +15,7 @@ let main() -> i32 {
   let x : i32 = 99;
   let p : ptr<i32> = &x;
   let w : Wrapper = Wrapper { data: p, tag: 7 };
-  std::printf("%d\n", *(w.data));
-  std::printf("%d\n", w.tag);
+  print("{}\n", *(w.data));
+  print("{}\n", w.tag);
   return 0;
 }

@@ -6,7 +6,7 @@ import str;
 
 let main() -> i32 {
   let s: str::String = str::new("hello");
-  std::printf("length = %ld\n", s.length);
+  print("length = {}\n", s.length);
   str::delete(s);
   return 0;
 }

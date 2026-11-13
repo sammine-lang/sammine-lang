@@ -14,7 +14,7 @@ let main() -> i32 {
   let f = io::open("/tmp/sammine_test_file_dropped.txt", "r");
   let (f, line) = io::file_read_line(f);
   case line {
-    Line(buf, n) => { std::printf("%s", buf); () },
+    Line(buf, n) => { print("{}", buf); () },
     Eof => { },
   };
   0

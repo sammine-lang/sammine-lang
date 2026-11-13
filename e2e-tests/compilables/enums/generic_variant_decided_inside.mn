@@ -18,7 +18,7 @@ let main() -> i32 {
     let x: Option<i64> = None;
   };
   let (a: Option<i64>, b: (i64, Option<i64>)) = (None, (9, None));
-  std::printf("%ld %ld %ld %ld %ld\n", take(none_of(5i64)),
+  print("{} {} {} {} {}\n", take(none_of(5i64)),
               take(first(6i64)), take(a), b.0, take(b.1));
   0
 }

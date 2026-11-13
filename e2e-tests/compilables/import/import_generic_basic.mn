@@ -6,6 +6,6 @@ import std;
 
 let main() -> i32 {
   let x: i32 = g::identity<i32>(42);
-  std::printf("%d\n", x);
+  print("{}\n", x);
   return 0;
 }

@@ -21,8 +21,8 @@ instance Indexer<IntList, i32> {
 let main() -> i32 {
   let list: IntList = IntList { a: 10, b: 20, c: 30 };
   let val: i32 = Indexer<IntList, i32>(&list, 2i64);
-  std::printf("%d\n", val);
+  print("{}\n", val);
   // list[1] calls the same method, lending it list.
-  std::printf("%d\n", list[1]);
+  print("{}\n", list[1]);
   return 0;
 }

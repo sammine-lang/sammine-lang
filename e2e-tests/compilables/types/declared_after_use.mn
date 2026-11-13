@@ -36,7 +36,7 @@ let main() -> i32 {
   let h: Shade = Shade::Green(Pt { x: 8 });
   let hv = case h { Green(p) => p.x, Red => 0, };
   let v = Vec2 { x: 1, y: 2 } + Vec2 { x: 3, y: 4 };
-  std::printf("%d %d %d %ld %d %d %d\n", g, s.m, s.b.val.x, s.w.val, hv,
+  print("{} {} {} {} {} {} {}\n", g, s.m, s.b.val.x, s.w.val, hv,
               v.x + v.y, describe<Vec2>(v));
   return 0;
 }

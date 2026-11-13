@@ -1,8 +1,8 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: panic()'s message must be a string literal: it is the format of what it prints, as printf's
+// CHECK: panic()'s format must be a string literal: the compiler reads it to print each argument
 
-// The message is printf's format: one from a binding could hold a % that
-// formats an argument it wasn't given.
+// The compiler reads the format to pair each {} with an argument: one
+// from a binding it can't read.
 let main() -> i32 {
   let m = "no";
   panic(m)

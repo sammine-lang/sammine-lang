@@ -8,9 +8,9 @@ type Mode = READ(0) | WRITE(1) | EXEC(2);
 
 let describe(m: Mode) -> i32 {
   case m {
-    READ => std::printf("read\n"),
-    WRITE => std::printf("write\n"),
-    EXEC => std::printf("exec\n"),
+    READ => print("read\n"),
+    WRITE => print("write\n"),
+    EXEC => print("exec\n"),
   };
   return 0;
 }

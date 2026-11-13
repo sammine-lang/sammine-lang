@@ -15,6 +15,6 @@ let main() -> i32 {
   let p = make_ptr();
   let v : i32 = *p;
   drop(p);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

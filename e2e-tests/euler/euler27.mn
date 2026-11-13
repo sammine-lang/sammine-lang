@@ -37,6 +37,6 @@ let best_for(best: (i64, i64), b: i64) -> (i64, i64) {
 let main() -> i32 {
   // n = 0 gives b itself, so only a prime b, and so a positive one, starts a run.
   let (_, product) = range::fold(2, 1001, (0, 0), best_for);
-  std::printf("%ld\n", product);
+  print("{}\n", product);
   0
 }

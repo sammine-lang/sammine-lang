@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let a : [5]i32 = [1, 2, 3, 4, 5];
-  std::printf("%d\n", len(a));
+  print("{}\n", len(a));
   return 0;
 }

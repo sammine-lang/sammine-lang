@@ -9,6 +9,6 @@ import c_private;
 import std;
 
 let main() -> i32 {
-  std::printf("%ld\n", c_private::length_of<i32>("hello", 0));
+  print("{}\n", c_private::length_of<i32>("hello", 0));
   return 0;
 }

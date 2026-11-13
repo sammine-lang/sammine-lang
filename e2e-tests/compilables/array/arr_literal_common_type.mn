@@ -11,7 +11,7 @@ let main() -> i32 {
   let b = [1, 2i64, 3];
   let a = [None, Some(1i64)];
   let c = [Some(2.5), None];
-  std::printf("%ld %ld %ld %f\n", b[0] + b[2], take(a[0]), take(a[1]),
+  print("{} {} {} {}\n", b[0] + b[2], take(a[0]), take(a[1]),
               case c[0] { Some(x) => x, None => 0.0, });
   0
 }

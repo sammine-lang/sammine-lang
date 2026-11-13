@@ -7,6 +7,6 @@ type IntAlias = i32;
 
 let main() -> i32 {
   let x: IntAlias = 42;
-  std::printf("%d\n", x);
+  print("{}\n", x);
   0
 }

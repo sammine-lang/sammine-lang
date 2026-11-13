@@ -19,7 +19,7 @@ instance MySize<i64> {
 }
 
 let main() -> i32 {
-  printf("%ld\n", MySize<i32>::mysize());
-  printf("%ld\n", MySize<i64>::mysize());
+  print("{}\n", MySize<i32>::mysize());
+  print("{}\n", MySize<i64>::mysize());
   return 0;
 }

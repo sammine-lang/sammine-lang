@@ -11,7 +11,7 @@ let main() -> i32 {
   for i in 0..10000 {
     *total_p = *total_p + sum_arr(a);
   };
-  io::printf("%f\n", *total_p);
+  print("{}\n", *total_p);
   drop(total_p);
   0
 }

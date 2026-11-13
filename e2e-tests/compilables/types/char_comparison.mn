@@ -25,9 +25,9 @@ let test_greater(a: char, b: char) -> i32 {
 let main() -> i32 {
   let a : char = 'A';
   let b : char = 'B';
-  std::printf("equal: %d\n", test_equal(a, a));
-  std::printf("not_equal: %d\n", test_not_equal(a, b));
-  std::printf("less: %d\n", test_less(a, b));
-  std::printf("greater: %d\n", test_greater(b, a));
+  print("equal: {}\n", test_equal(a, a));
+  print("not_equal: {}\n", test_not_equal(a, b));
+  print("less: {}\n", test_less(a, b));
+  print("greater: {}\n", test_greater(b, a));
   return 0;
 }

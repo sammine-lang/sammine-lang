@@ -12,6 +12,6 @@ instance Foo<i64> {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", foo<i64>(7));
+  print("{}\n", foo<i64>(7));
   return 0;
 }

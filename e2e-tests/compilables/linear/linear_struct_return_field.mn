@@ -25,6 +25,6 @@ let main() -> i32 {
   let r = pick_a(s);
   let v : i32 = *r;
   drop(r);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

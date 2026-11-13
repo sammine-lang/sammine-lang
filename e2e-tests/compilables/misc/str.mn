@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let x = "abc";
-  std::printf("%s\n", x);
+  print("{}\n", x);
   return 0;
 }

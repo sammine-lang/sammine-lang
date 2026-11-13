@@ -8,9 +8,9 @@ import std;
 
 let main() -> i32 {
   let a : [4]i32 = [0...3];
-  std::printf("%d\n", a[0]);
-  std::printf("%d\n", a[1]);
-  std::printf("%d\n", a[2]);
-  std::printf("%d\n", a[3]);
+  print("{}\n", a[0]);
+  print("{}\n", a[1]);
+  print("{}\n", a[2]);
+  print("{}\n", a[3]);
   return 0;
 }

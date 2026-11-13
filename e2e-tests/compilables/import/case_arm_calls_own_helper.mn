@@ -7,7 +7,7 @@ import case_arm_helper;
 import std;
 
 let main() -> i32 {
-  std::printf("%ld %ld\n", case_arm_helper::bump(Option<i64>::Some(41i64)),
+  print("{} {}\n", case_arm_helper::bump(Option<i64>::Some(41i64)),
               case_arm_helper::bump(Option<i64>::None));
   0
 }

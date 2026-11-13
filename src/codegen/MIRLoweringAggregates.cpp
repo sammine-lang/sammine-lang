@@ -1,5 +1,6 @@
 #include "codegen/MIRLowering.h"
 #include "codegen/Runtime.h"
+#include "util/FormatString.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
@@ -249,34 +250,119 @@ mlir::LogicalResult MIRLowering::fail(mlir::Location location,
   return mlir::success();
 }
 
-// panic(message, args...): `file:line:col: panic: ` and the message, with
-// a newline, is dprintf's format, and the arguments what it formats. The
-// block ends there, unreachable, so no drop is put after it and no path
-// through it joins the rest: its value is none.
-mlir::FailureOr<mlir::Value> MIRLowering::lowerPanic(PanicExprAST *panic) {
-  auto location = loc(panic);
-  auto *message = llvm::dyn_cast<StringExprAST>(panic->arguments.front().get());
-  if (!message)
-    return mlir::failure();
-  std::string format;
-  if (auto range = mlir::dyn_cast<mlir::FileLineColRange>(location)) {
-    // The file's name is printed as it is: a `%` in it isn't a format.
-    std::string where;
-    for (char c : range.getFilename().getValue())
-      where += c == '%' ? std::string("%%") : std::string(1, c);
-    format = where + ":" + std::to_string(range.getStartLine()) + ":" +
-             std::to_string(range.getStartColumn() + 1) + ": ";
+// "true" or "false", as `value` is: what a bool prints as.
+mlir::Value MIRLowering::boolText(mlir::Location location, mlir::Value value) {
+  auto text = viewOf(builder_.getI8Type());
+  auto *region = builder_.getInsertionBlock()->getParent();
+  auto *after = &region->emplaceBlock();
+  after->addArgument(text, location);
+  for (auto word : {"true", "false"}) {
+    auto *block = &region->emplaceBlock();
+    mlir::OpBuilder::InsertionGuard guard(builder_);
+    builder_.setInsertionPointToStart(block);
+    auto string = smn::StringOp::create(builder_, location, text, word);
+    mlir::cf::BranchOp::create(builder_, location, after,
+                               mlir::ValueRange{string.getResult()});
   }
-  format += "panic: " + message->string_content + "\n";
+  auto *yes = after->getNextNode();
+  mlir::cf::CondBranchOp::create(builder_, location, value, yes,
+                                 yes->getNextNode());
+  builder_.setInsertionPointToStart(after);
+  return after->getArgument(0);
+}
+
+// How C's printf prints a value of `type`, with `precision` digits after
+// the point if the placeholder says: the directive `{}` stands for.
+static std::string directive(const Type &type,
+                             std::optional<unsigned> precision) {
+  // An enum that is an integer prints as it.
+  auto kind = type.type_kind;
+  if (auto *en = std::get_if<EnumType>(&type.type_data))
+    kind = en->get_backing_type();
+  switch (kind) {
+  case TypeKind::I64_t:
+    return "%lld";
+  case TypeKind::U32_t:
+    return "%u";
+  case TypeKind::U64_t:
+    return "%llu";
+  case TypeKind::F32_t:
+  case TypeKind::F64_t:
+  case TypeKind::Flt:
+    return precision ? "%." + std::to_string(*precision) + "f" : "%f";
+  case TypeKind::Char:
+    return "%c";
+  case TypeKind::Bool:
+  case TypeKind::Pointer:
+    return "%s";
+  default: // i32, and an untyped integer literal, which is one
+    return "%d";
+  }
+}
+
+// print(format, args...) and panic(format, args...): the format becomes
+// C's, each `{}` the directive its argument's type prints by, and a `%` of
+// the text one that prints a `%`. print gives it to printf. panic puts
+// `file:line:col: panic: ` before it and a newline after, gives it to
+// dprintf for stderr, and ends the program: the block ends there,
+// unreachable, so no drop is put after it and no path through it joins the
+// rest. Neither has a value.
+mlir::FailureOr<mlir::Value> MIRLowering::lowerFormat(FormatExprAST *ast) {
+  auto location = loc(ast);
+  auto *literal = llvm::dyn_cast<StringExprAST>(ast->arguments.front().get());
+  if (!literal)
+    return mlir::failure();
+  auto parsed = sammine_util::FormatString::parse(literal->string_content);
+  if (!parsed)
+    return mlir::failure();
+  // Text is printed as it is: a `%` in it isn't a directive.
+  auto verbatim = [](llvm::StringRef text) {
+    std::string result;
+    for (char c : text)
+      result += c == '%' ? std::string("%%") : std::string(1, c);
+    return result;
+  };
+  bool panics = ast->kind == FormatExprAST::Kind::Panic;
+  std::string format;
+  if (auto range = mlir::dyn_cast<mlir::FileLineColRange>(location);
+      range && panics)
+    format = verbatim(range.getFilename().getValue()) + ":" +
+             std::to_string(range.getStartLine()) + ":" +
+             std::to_string(range.getStartColumn() + 1) + ": ";
+  if (panics)
+    format += "panic: ";
   llvm::SmallVector<mlir::Value> args;
-  for (auto &arg : llvm::drop_begin(panic->arguments)) {
-    auto value = lowerValue(arg.get());
+  auto next = std::next(ast->arguments.begin());
+  for (auto &piece : parsed->pieces) {
+    if (!piece.placeholder) {
+      format += verbatim(piece.text);
+      continue;
+    }
+    if (next == ast->arguments.end())
+      return mlir::failure();
+    auto *arg = (next++)->get();
+    // A string that owns its chars is lent: printing only reads it.
+    auto value = lowerVariadicArgument(arg);
     if (mlir::failed(value))
       return mlir::failure();
-    args.push_back(*value);
+    format += directive(arg->get_type(), piece.precision);
+    args.push_back(arg->get_type().type_kind == TypeKind::Bool
+                       ? boolText(loc(arg), *value)
+                       : *value);
   }
-  if (mlir::failed(fail(location, format, args)))
-    return mlir::failure();
+  if (panics) {
+    if (mlir::failed(fail(location, format + "\n", args)))
+      return mlir::failure();
+    return mlir::Value();
+  }
+  llvm::SmallVector<mlir::Value> operands{
+      smn::StringOp::create(builder_, location, viewOf(builder_.getI8Type()),
+                            format)
+          .getResult()};
+  operands.append(args.begin(), args.end());
+  smn::CallOp::create(builder_, location,
+                      mlir::TypeRange{builder_.getI32Type()}, runtime::kPrintf,
+                      operands);
   return mlir::Value();
 }
 

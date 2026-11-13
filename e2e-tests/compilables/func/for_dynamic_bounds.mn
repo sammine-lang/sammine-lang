@@ -15,6 +15,6 @@ let compute(n: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("sum: %ld\n", compute(5i64));
+  print("sum: {}\n", compute(5i64));
   return 0;
 }

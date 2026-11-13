@@ -10,16 +10,16 @@ import io;
 
 let main() -> i32 {
   io::print_i32(42);
-  io::printf("\n");
+  print("\n");
   io::print_i64(1000000);
-  io::printf("\n");
+  print("\n");
   io::print_f64(3.14);
-  io::printf("\n");
+  print("\n");
   io::print_char('A');
-  io::printf("\n");
+  print("\n");
   io::print_bool(true);
-  io::printf("\n");
+  print("\n");
   io::print_bool(false);
-  io::printf("\n");
+  print("\n");
   0
 }

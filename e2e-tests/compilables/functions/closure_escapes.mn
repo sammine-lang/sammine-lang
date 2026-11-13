@@ -54,23 +54,23 @@ let chain(n: i32) -> (i32) -> i32 { via(addl(n as i64 * 10i64)) }
 
 let main() -> i32 {
   let f = make();
-  std::printf("returned %d\n", f(2));
+  print("returned {}\n", f(2));
   let g = make_far2(6);
-  std::printf("two frames up %d\n", g(1));
-  std::printf("in a struct %d %d\n", run(job(2)) - 2, job(1).x);
+  print("two frames up {}\n", g(1));
+  print("in a struct {} {}\n", run(job(2)) - 2, job(1).x);
   let fs = pair(10, 11);
   let a = fs[0];
   let b = fs[1];
-  std::printf("in an array %d %d\n", a(1), b(2));
-  std::printf("in an enum %d\n", call_or(maybe(40), 2));
+  print("in an array {} {}\n", a(1), b(2));
+  print("in an enum {}\n", call_or(maybe(40), 2));
   let p = boxed(100);
   let h = *p;
-  std::printf("behind a pointer %d\n", h(3));
+  print("behind a pointer {}\n", h(3));
   drop(p);
   let big = pick(true);
   let small = pick(false);
-  std::printf("bigger and smaller %.0f %.1f\n", big(0.0), small(3.0));
+  print("bigger and smaller {.0} {.1}\n", big(0.0), small(3.0));
   let c = chain(2);
-  std::printf("binding a closure %d\n", c(1));
+  print("binding a closure {}\n", c(1));
   0
 }

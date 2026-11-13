@@ -10,16 +10,16 @@ import std;
 // does: k is an i64 in 1..n, so k * 3000000000 doesn't overflow.
 let main() -> i32 {
   let n = 3i64;
-  for k in 1..n { std::printf("%ld ", k * 3000000000); };
-  std::printf("\n");
+  for k in 1..n { print("{} ", k * 3000000000); };
+  print("\n");
   let m = 1i64;
-  for k in m..3 { std::printf("%ld ", k * 3000000000); };
-  std::printf("\n");
+  for k in m..3 { print("{} ", k * 3000000000); };
+  print("\n");
   let big = 6000000000u64;
-  for k in 5999999998..big { std::printf("%lu ", k); };
-  std::printf("\n");
+  for k in 5999999998..big { print("{} ", k); };
+  print("\n");
   // Two literals are i32s.
-  for k in 0..3 { std::printf("%d ", k); };
-  std::printf("\n");
+  for k in 0..3 { print("{} ", k); };
+  print("\n");
   0
 }

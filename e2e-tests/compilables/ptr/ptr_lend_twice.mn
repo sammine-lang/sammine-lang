@@ -10,7 +10,7 @@ let look(p: ptr<i32>) -> i32 {
 let main() -> i32 {
   let b = alloc<i32>(1);
   *b = 7;
-  std::printf("%d %d\n", look(b), look(b));
+  print("{} {}\n", look(b), look(b));
   drop(b);
   return 0;
 }

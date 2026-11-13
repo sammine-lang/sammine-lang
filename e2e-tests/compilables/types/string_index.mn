@@ -28,10 +28,10 @@ let count(s: ptr<str::String>, c: char) -> i32 {
 let main() -> i32 {
   let s = str::new("hello");
   let i: i32 = 1;
-  std::printf("hello: %c %c %c\n", s[0], s[i as i64], s[s.length - 1i64]);
+  print("hello: {} {} {}\n", s[0], s[i as i64], s[s.length - 1i64]);
   str::delete(s);
   let b = str::new("banana");
-  std::printf("first %c, %d a's\n", first(&b), count(&b, 'a'));
+  print("first {}, {} a's\n", first(&b), count(&b, 'a'));
   str::delete(b);
   0
 }

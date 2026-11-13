@@ -197,7 +197,7 @@ public:
   virtual void visit(IndexExprAST *ast) override;
   virtual void visit(LenExprAST *ast) override;
   virtual void visit(DimExprAST *ast) override;
-  virtual void visit(PanicExprAST *ast) override;
+  virtual void visit(FormatExprAST *ast) override;
   virtual void visit(UnaryNegExprAST *ast) override;
   virtual void visit(StructLiteralExprAST *ast) override;
   virtual void visit(FieldAccessExprAST *ast) override;
@@ -457,7 +457,7 @@ public:
   virtual Type synthesize(IndexExprAST *ast) override;
   virtual Type synthesize(LenExprAST *ast) override;
   virtual Type synthesize(DimExprAST *ast) override;
-  virtual Type synthesize(PanicExprAST *ast) override;
+  virtual Type synthesize(FormatExprAST *ast) override;
   virtual Type synthesize(UnaryNegExprAST *ast) override;
   virtual Type synthesize(StructLiteralExprAST *ast) override;
   virtual Type synthesize(FieldAccessExprAST *ast) override;

@@ -18,7 +18,7 @@ let main() -> i32 {
   let b : Box = Box { data: alloc<i32>(1), tag: 1 };
   *(b.data) = 99;
   let v : i32 = *(b.data);
-  std::printf("%d
+  print("{}
 ", v);
   return 0;
 }

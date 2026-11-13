@@ -19,7 +19,7 @@ struct Loud { id: i32, p: 'ptr<i32>, };
 
 instance Drop<Loud> {
   let unsafe Drop(l: Loud) -> unit {
-    std::printf("drop %d\n", l.id);
+    print("drop {}\n", l.id);
     drop(l.p)
   }
 }
@@ -36,8 +36,8 @@ let pick(bad: bool) -> i32 {
 
 let main() -> i32 {
   let outer = loud(9);
-  std::printf("picked %d\n", pick(false));
-  std::printf("picked %d\n", pick(true));
-  std::printf("never %d\n", outer.id);
+  print("picked {}\n", pick(false));
+  print("picked {}\n", pick(true));
+  print("never {}\n", outer.id);
   0
 }

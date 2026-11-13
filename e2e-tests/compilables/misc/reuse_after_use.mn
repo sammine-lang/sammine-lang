@@ -12,6 +12,6 @@ let use_sqrt() -> f64 {
 reuse sqrt(x: f64) -> f64;
 
 let main() -> i32 {
-  std::printf("%.1f\n", use_sqrt());
+  print("{.1}\n", use_sqrt());
   return 0;
 }

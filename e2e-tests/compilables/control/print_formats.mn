@@ -1,0 +1,40 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK:      -7 5000000000 4000000000 18000000000000000000
+// CHECK-NEXT: 2.500000 0.25 3
+// CHECK-NEXT: true false x
+// CHECK-NEXT: text and owned
+// CHECK-NEXT: {braces} 100% %d
+// CHECK-NEXT: 3 2.500000
+// CHECK-NEXT: Small 0 Large 4294967296
+// CHECK-NEXT: no arguments
+
+// print writes its format with each {} replaced by an argument, printed as
+// its type prints: no directive says the type again, so none can say it
+// wrong. {.N} is a float's digits after the point, {{ and }} a brace each,
+// and a % is a %.
+
+type Size: i64 = Large(4294967296) | Small(0);
+
+let unsafe owned_text() -> 'buf<char> {
+  let b = alloc_buf<char>(6);
+  b[0] = 'o'; b[1] = 'w'; b[2] = 'n'; b[3] = 'e'; b[4] = 'd'; b[5] = '\0';
+  b
+}
+
+let main() -> i32 {
+  print("{} {} {} {}\n", -7, 5000000000i64, 4000000000u32,
+        18000000000000000000u64);
+  print("{} {.2} {.0}\n", 2.5, 0.25, 3.0f32);
+  print("{} {} {}\n", true, 1 > 2, 'x');
+  let owned = owned_text();
+  print("{} and {}\n", "text", owned);
+  drop(owned);
+  print("{{braces}} 100% %d\n");
+  // Literals with no type written are an i32 and an f64.
+  print("{} {}\n", 3, 2.5);
+  let small: Size = Small;
+  let large: Size = Large;
+  print("Small {} Large {}\n", small, large);
+  print("no arguments\n");
+  0
+}

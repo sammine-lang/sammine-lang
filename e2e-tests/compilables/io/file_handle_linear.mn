@@ -12,10 +12,10 @@ let main() -> i32 {
   let (f, result) = io::file_read_line(f);
   case result {
     Line(buf, n) => {
-      io::println(buf);
+      print("{}\n", buf);
       drop(buf);
     },
-    Eof => io::println("eof"),
+    Eof => print("eof\n"),
   };
 
   io::close(f);

@@ -143,7 +143,7 @@ public:
 
   [[nodiscard]] auto ParseDerefExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseAllocExpr() -> p<ExprAST>;
-  [[nodiscard]] auto ParsePanicExpr() -> p<ExprAST>;
+  [[nodiscard]] auto ParseFormatExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseArrayLiteralExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseIdentifierExpr() -> p<ExprAST>;
   [[nodiscard]] auto ParseStructLiteralExpr(

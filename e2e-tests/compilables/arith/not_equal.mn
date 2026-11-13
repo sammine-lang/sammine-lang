@@ -8,17 +8,17 @@ let main() -> i32 {
   let a : i32 = 5;
   let b : i32 = 10;
   if a != b {
-    std::printf("not equal\n");
+    print("not equal\n");
   } else {
-    std::printf("equal\n");
+    print("equal\n");
   };
 
   let c : i32 = 7;
   let d : i32 = 7;
   if c != d {
-    std::printf("not equal\n");
+    print("not equal\n");
   } else {
-    std::printf("equal\n");
+    print("equal\n");
   };
 
   return 0;

@@ -8,6 +8,6 @@ let first<T>(arr: [3]T) -> T { arr[0] }
 let main() -> i32 {
   let a : [3]i32 = [10, 20, 30];
   let x = first(a);
-  std::printf("%d", x);
+  print("{}", x);
   return 0;
 }

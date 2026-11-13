@@ -14,8 +14,8 @@ let mk() -> M { L(alloc<i32>(1)) }
 let main() -> i32 {
   let m = mk();
   case m {
-    R(q) => { std::printf("r\n"); () },
-    _ => { std::printf("other\n"); () },
+    R(q) => { print("r\n"); () },
+    _ => { print("other\n"); () },
   };
   return 0;
 }

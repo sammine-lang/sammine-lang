@@ -14,6 +14,6 @@ let get_value(b: Box<i32>) -> i32 {
 let main() -> i32 {
   let b = Box<i32>{ value: 99 };
   let v = get_value(b);
-  std::printf("%d", v);
+  print("{}", v);
   return 0;
 }

@@ -9,7 +9,7 @@ import str;
 
 let main() -> i32 {
   let s = str::new("hello");
-  std::printf("unreachable %c\n", s[5]);
+  print("unreachable {}\n", s[5]);
   str::delete(s);
   0
 }

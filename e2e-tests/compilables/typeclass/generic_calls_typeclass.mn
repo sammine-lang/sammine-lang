@@ -11,7 +11,7 @@ let print_size<T>(x: T) -> i64 {
 }
 
 let main() -> i32 {
-  printf("%ld\n", print_size(42));
-  printf("%ld\n", print_size(3.14));
+  print("{}\n", print_size(42));
+  print("{}\n", print_size(3.14));
   return 0;
 }

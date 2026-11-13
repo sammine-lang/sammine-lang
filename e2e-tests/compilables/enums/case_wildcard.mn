@@ -10,11 +10,11 @@ type Color = Red | Green | Blue;
 let is_red(c: Color) -> i32 {
   case c {
     Color::Red => {
-      std::printf("is red\n");
+      print("is red\n");
       return 1;
     },
     _ => {
-      std::printf("not red\n");
+      print("not red\n");
       return 0;
     },
   }

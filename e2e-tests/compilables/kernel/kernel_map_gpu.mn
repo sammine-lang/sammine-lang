@@ -10,9 +10,9 @@ kernel double_arr(a: [3]f64) -> [3]f64 {
 let main() -> i32 {
   let a = [1.0, 2.0, 3.0];
   let b = double_arr(a);
-  io::printf("%f\n", b[0]);
-  io::printf("%f\n", b[1]);
-  io::printf("%f\n", b[2]);
+  print("{}\n", b[0]);
+  print("{}\n", b[1]);
+  print("{}\n", b[2]);
   0
 }
 

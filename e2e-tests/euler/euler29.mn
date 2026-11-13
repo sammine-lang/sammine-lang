@@ -48,6 +48,6 @@ let distinct_powers(limit: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld %ld\n", distinct_powers(5), distinct_powers(100));
+  print("{} {}\n", distinct_powers(5), distinct_powers(100));
   0
 }

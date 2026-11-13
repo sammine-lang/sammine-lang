@@ -35,6 +35,6 @@ let main() -> i32 {
   let te: [10]i32 = teens();
   let tn: [10]i32 = tens();
   let result: i32 = sum_letters(1, 0, &u, &te, &tn);
-  std::printf("%d\n", result);
+  print("{}\n", result);
   return 0;
 }

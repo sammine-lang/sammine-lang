@@ -24,6 +24,6 @@ let main() -> i32 {
   let g = leaves(5);
   let h = either(true);
   let k = either(false);
-  std::printf("%d %d %d\n", g(1), h(2), k(2));
+  print("{} {} {}\n", g(1), h(2), k(2));
   0
 }

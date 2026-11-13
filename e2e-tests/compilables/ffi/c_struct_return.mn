@@ -16,18 +16,18 @@ import std;
 
 let main() -> i32 {
   let t = c::make_two(5i64);
-  std::printf("two %ld %ld\n", t.a, t.b);
+  print("two {} {}\n", t.a, t.b);
   let th = c::make_three(10i64, 20i64);
-  std::printf("three %ld %ld %ld\n", th.a, th.b, th.c);
+  print("three {} {} {}\n", th.a, th.b, th.c);
   let f = c::make_four_i32();
-  std::printf("four_i32 %d %d %d %d\n", f.a, f.b, f.c, f.d);
+  print("four_i32 {} {} {} {}\n", f.a, f.b, f.c, f.d);
   let tf = c::make_three_f32();
-  std::printf("three_f32 %.1f %.1f %.1f\n", tf.x, tf.y, tf.z);
+  print("three_f32 {.1} {.1} {.1}\n", tf.x, tf.y, tf.z);
   let m = c::make_i32_f32();
-  std::printf("i32_f32 %d %.1f\n", m.a, m.x);
+  print("i32_f32 {} {.1}\n", m.a, m.x);
   let ch = c::make_chars();
-  std::printf("chars %c%c%c\n", ch.a, ch.b, ch.c);
+  print("chars {}{}{}\n", ch.a, ch.b, ch.c);
   let di = c::make_f64_i64();
-  std::printf("f64_i64 %.2f %ld\n", di.d, di.n);
+  print("f64_i64 {.2} {}\n", di.d, di.n);
   return 0;
 }

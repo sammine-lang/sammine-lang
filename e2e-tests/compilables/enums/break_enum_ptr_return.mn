@@ -10,8 +10,8 @@ type MaybePtr = Some(ptr<i32>) | None;
 
 let check(m: MaybePtr) -> i32 {
   case m {
-    MaybePtr::Some(p) => std::printf("got val: %d\n", *p),
-    MaybePtr::None => std::printf("got nothing\n"),
+    MaybePtr::Some(p) => print("got val: {}\n", *p),
+    MaybePtr::None => print("got nothing\n"),
   };
   return 0;
 }

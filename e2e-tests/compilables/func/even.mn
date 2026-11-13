@@ -14,8 +14,8 @@ let even(x : i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", even(4));
-  std::printf("%d\n", even(7));
-  std::printf("%d\n", even(0));
+  print("{}\n", even(4));
+  print("{}\n", even(7));
+  print("{}\n", even(0));
   return 0;
 }

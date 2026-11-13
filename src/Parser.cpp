@@ -774,17 +774,27 @@ auto Parser::ParseBuiltinCallExpr(TokenType keyword, const std::string &name)
   return {std::make_unique<NodeT>(kw_tok, std::move(operand)), SUCCESS};
 }
 
-// panic("message", args...): a message, then what it formats.
-auto Parser::ParsePanicExpr() -> p<ExprAST> {
-  EXPECT(kw_tok, TokPanic);
+// print("format", args...) or panic("format", args...): a format, then
+// what it formats.
+auto Parser::ParseFormatExpr() -> p<ExprAST> {
+  auto kw_tok = expect(TokPrint);
+  auto kind = FormatExprAST::Kind::Print;
+  if (!kw_tok) {
+    kw_tok = expect(TokPanic);
+    kind = FormatExprAST::Kind::Panic;
+  }
+  if (!kw_tok)
+    return {nullptr, NONCOMMITTED};
   auto [args, result] = ParseArguments();
   if (result == NONCOMMITTED) {
-    report_error("Expected '(' after 'panic'", kw_tok->get_location());
+    report_error(fmt::format("Expected '(' after '{}'", kw_tok->lexeme),
+                 kw_tok->get_location());
     return {nullptr, FAILED};
   }
   if (result != SUCCESS)
     return {nullptr, FAILED};
-  return {std::make_unique<PanicExprAST>(kw_tok, std::move(args)), SUCCESS};
+  return {std::make_unique<FormatExprAST>(kind, kw_tok, std::move(args)),
+          SUCCESS};
 }
 
 // alloc<T>(count), an owned pointer to one T, or alloc_buf<T>(count), a
@@ -925,7 +935,7 @@ auto Parser::ParsePrimaryExpr() -> p<ExprAST> {
 
   auto result = tryParsers<ExprAST>(
       neg, &Parser::ParseDerefExpr, addr, &Parser::ParseAllocExpr,
-      &Parser::ParsePanicExpr, drop_, len, dim, &Parser::ParseArrayLiteralExpr,
+      &Parser::ParseFormatExpr, drop_, len, dim, &Parser::ParseArrayLiteralExpr,
       &Parser::ParseIdentifierExpr, &Parser::ParseParenExpr,
       &Parser::ParseIfExpr, &Parser::ParseCaseExpr, &Parser::ParseWhileExpr,
       &Parser::ParseForExpr, num, bool_, chr, str);

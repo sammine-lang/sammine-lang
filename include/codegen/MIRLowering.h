@@ -173,7 +173,9 @@ private:
   /// the block ends, unreachable. Fails if the runtime isn't declared.
   mlir::LogicalResult fail(mlir::Location location, llvm::StringRef format,
                            mlir::ValueRange args);
-  mlir::FailureOr<mlir::Value> lowerPanic(AST::PanicExprAST *panic);
+  mlir::FailureOr<mlir::Value> lowerFormat(AST::FormatExprAST *ast);
+  /// "true" or "false", as the bool `value` is.
+  mlir::Value boolText(mlir::Location location, mlir::Value value);
   mlir::FailureOr<mlir::Value> lowerAlloc(AST::AllocExprAST *alloc);
   mlir::FailureOr<mlir::Value> lowerDrop(AST::DropExprAST *free);
   mlir::FailureOr<mlir::Value> lowerDerefPlace(AST::DerefExprAST *deref);

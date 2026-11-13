@@ -6,8 +6,8 @@
 import std;
 
 let main() -> i32 {
-  std::printf("%d\n", 10 % 3);
-  std::printf("%d\n", 6 % 2);
-  std::printf("%d\n", 3 % 5);
+  print("{}\n", 10 % 3);
+  print("{}\n", 6 % 2);
+  print("{}\n", 3 % 5);
   return 0;
 }

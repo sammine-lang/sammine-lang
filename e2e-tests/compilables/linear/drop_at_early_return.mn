@@ -16,6 +16,6 @@ let f(c: bool) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d %d\n", f(true), f(false));
+  print("{} {}\n", f(true), f(false));
   0
 }

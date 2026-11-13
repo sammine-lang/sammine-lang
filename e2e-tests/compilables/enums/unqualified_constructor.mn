@@ -13,19 +13,19 @@ let main() -> i32 {
   let y: Option<i32> = None;
 
   case c {
-    Red => std::printf("red\n"),
-    Green => std::printf("green\n"),
-    Blue => std::printf("blue\n"),
+    Red => print("red\n"),
+    Green => print("green\n"),
+    Blue => print("blue\n"),
   };
 
   case x {
-    Some(v) => std::printf("has value: %d\n", v),
-    None => std::printf("no value\n"),
+    Some(v) => print("has value: {}\n", v),
+    None => print("no value\n"),
   };
 
   case y {
-    Some(v) => std::printf("has value: %d\n", v),
-    None => std::printf("no value\n"),
+    Some(v) => print("has value: {}\n", v),
+    None => print("no value\n"),
   };
 
   return 0;

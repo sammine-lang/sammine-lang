@@ -19,6 +19,6 @@ instance Probe<i32> {
 
 let main() -> i32 {
   Probe<i32>(1);
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

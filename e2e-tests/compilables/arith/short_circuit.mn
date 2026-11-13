@@ -8,12 +8,12 @@ import std;
 
 let main() -> i32 {
   // false && true => false (right side may or may not be evaluated)
-  if false && true { std::printf("fail\n"); } else { std::printf("no_short\n"); };
+  if false && true { print("fail\n"); } else { print("no_short\n"); };
   // true || false => true (right side may or may not be evaluated)
-  if true || false { std::printf("yes_short\n"); } else { std::printf("fail\n"); };
+  if true || false { print("yes_short\n"); } else { print("fail\n"); };
   // true && true => true
-  if true && true { std::printf("and_both_true\n"); } else { std::printf("fail\n"); };
+  if true && true { print("and_both_true\n"); } else { print("fail\n"); };
   // false || false => false
-  if false || false { std::printf("fail\n"); } else { std::printf("or_both_false\n"); };
+  if false || false { print("fail\n"); } else { print("or_both_false\n"); };
   return 0;
 }

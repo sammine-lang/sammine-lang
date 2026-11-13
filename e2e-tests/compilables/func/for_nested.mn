@@ -11,7 +11,7 @@ import std;
 let main() -> i32 {
   for i in 0i64..3 {
     for j in 0i64..2 {
-      std::printf("%ld %ld\n", i, j);
+      print("{} {}\n", i, j);
     };
   };
   return 0;

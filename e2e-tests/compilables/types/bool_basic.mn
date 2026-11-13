@@ -7,7 +7,7 @@ import std;
 let main() -> i32 {
   let t : bool = true;
   let f : bool = false;
-  if t { std::printf("true_branch\n"); } else { std::printf("fail\n"); };
-  if f { std::printf("fail\n"); } else { std::printf("false_branch\n"); };
+  if t { print("true_branch\n"); } else { print("fail\n"); };
+  if f { print("fail\n"); } else { print("false_branch\n"); };
   return 0;
 }

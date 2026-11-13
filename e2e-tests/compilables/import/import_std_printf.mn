@@ -4,6 +4,6 @@
 import std;
 
 let main() -> i32 {
-  std::printf("hello from std %d\n", 42);
+  print("hello from std {}\n", 42);
   return 0;
 }

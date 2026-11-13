@@ -7,6 +7,6 @@ import std;
 let main() -> i32 {
   let a = [1, 2, 3];
   let i = 4294967296i64;
-  std::printf("unreachable %d\n", a[i]);
+  print("unreachable {}\n", a[i]);
   return 0;
 }

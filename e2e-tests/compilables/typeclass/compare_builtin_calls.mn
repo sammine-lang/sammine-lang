@@ -1,7 +1,7 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK:      1 0 1
-// CHECK-NEXT: 0 1
-// CHECK-NEXT: 1 1
+// CHECK:      true false true
+// CHECK-NEXT: false true
+// CHECK-NEXT: true true
 
 // The built-in comparison instances can be called by name, and do what the
 // operator does: u32 compares without a sign, so 4294967295 is the larger.
@@ -9,10 +9,10 @@
 import std;
 
 let main() -> i32 {
-  std::printf("%d %d %d\n", Less<i32>(1, 2), Greater<i32>(1, 2),
+  print("{} {} {}\n", Less<i32>(1, 2), Greater<i32>(1, 2),
               LessEqual<i32>(2, 2));
-  std::printf("%d %d\n", Less<u32>(4294967295u32, 1u32),
+  print("{} {}\n", Less<u32>(4294967295u32, 1u32),
               GreaterEqual<f64>(2.5, 1.0));
-  std::printf("%d %d\n", Equal<bool>(true, true), NotEqual<char>('a', 'b'));
+  print("{} {}\n", Equal<bool>(true, true), NotEqual<char>('a', 'b'));
   return 0;
 }

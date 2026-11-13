@@ -12,6 +12,6 @@ let main() -> i32 {
   drop(q);
   drop(*pp);
   drop(pp);
-  std::printf("ok\n");
+  print("ok\n");
   0
 }

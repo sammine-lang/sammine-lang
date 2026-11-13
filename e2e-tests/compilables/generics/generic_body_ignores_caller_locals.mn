@@ -15,6 +15,6 @@ let via_generic<T>(v: T) -> i32 { let nine = 0; call_nine<T>(v) }
 
 let main() -> i32 {
   let seven = 100;
-  std::printf("%d %d %d\n", call_seven<i32>(1), via_generic<i32>(1), seven);
+  print("{} {} {}\n", call_seven<i32>(1), via_generic<i32>(1), seven);
   return 0;
 }

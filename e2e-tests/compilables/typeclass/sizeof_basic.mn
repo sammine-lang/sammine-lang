@@ -6,9 +6,9 @@
 
 reuse printf(fmt : ptr<char>, ...) -> i32;
 let main() -> i32 {
-  printf("%ld\n", Sized<i32>());
-  printf("%ld\n", Sized<i64>());
-  printf("%ld\n", Sized<f64>());
-  printf("%ld\n", Sized<bool>());
+  print("{}\n", Sized<i32>());
+  print("{}\n", Sized<i64>());
+  print("{}\n", Sized<f64>());
+  print("{}\n", Sized<bool>());
   return 0;
 }

@@ -17,14 +17,14 @@ let unwrap<T>(m: Maybe<T>) -> T {
 }
 
 let positive(n: i32) -> i32 {
-  if n > 0 { n } else { panic("%d isn't positive", n) }
+  if n > 0 { n } else { panic("{} isn't positive", n) }
 }
 
 let checked(n: i32) -> i32 {
   if n < 100 {
     return n;
   };
-  let never = panic("too big: %d", n);
+  let never = panic("too big: {}", n);
   never
 }
 
@@ -41,15 +41,15 @@ let pair(n: i32) -> (i32, i64) {
   if n >= 0 {
     return (n, 2i64);
   };
-  let (a: i32, b: i64) = panic("no pair for %d", n);
+  let (a: i32, b: i64) = panic("no pair for {}", n);
   (a, b)
 }
 
 let main() -> i32 {
-  std::printf("%d %d %d %d\n", unwrap<i32>(Has(3)), positive(7), checked(9),
+  print("{} {} {} {}\n", unwrap<i32>(Has(3)), positive(7), checked(9),
               unwrap<i64>(Has(10i64)));
-  std::printf("unreached %d\n", unreachable_tail(true));
+  print("unreached {}\n", unreachable_tail(true));
   let (p, _q) = pair(3);
-  std::printf("pair %d\n", p);
+  print("pair {}\n", p);
   0
 }

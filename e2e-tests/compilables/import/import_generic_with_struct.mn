@@ -7,7 +7,7 @@ import std;
 
 let main() -> i32 {
   let p: lib::Point = lib::make_point<i32>(0);
-  std::printf("%d\n", p.x);
-  std::printf("%d\n", p.y);
+  print("{}\n", p.x);
+  print("{}\n", p.y);
   return 0;
 }

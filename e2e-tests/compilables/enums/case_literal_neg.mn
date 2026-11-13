@@ -7,10 +7,10 @@ import std;
 
 let sign(x: i32) -> i32 {
   case x {
-    -1 => std::printf("negative\n"),
-    0 => std::printf("zero\n"),
-    1 => std::printf("positive\n"),
-    _ => std::printf("other\n"),
+    -1 => print("negative\n"),
+    0 => print("zero\n"),
+    1 => print("positive\n"),
+    _ => print("other\n"),
   };
   return 0;
 }

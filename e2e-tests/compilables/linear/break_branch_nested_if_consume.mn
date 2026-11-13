@@ -17,6 +17,6 @@ let main() -> i32 {
   } else {
     drop(p);
   };
-  std::printf("ok\n");
+  print("ok\n");
   return 0;
 }

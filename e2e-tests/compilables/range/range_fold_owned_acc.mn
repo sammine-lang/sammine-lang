@@ -12,7 +12,7 @@ let unsafe set_double(xs: 'buf<i64>, i: i64) -> 'buf<i64> {
 
 let unsafe main() -> i32 {
   let xs = range::fold(0i64, 5i64, alloc_buf<i64>(5i64), set_double);
-  std::printf("%ld %ld %ld %ld %ld\n", xs[0], xs[1], xs[2], xs[3], xs[4]);
+  print("{} {} {} {} {}\n", xs[0], xs[1], xs[2], xs[3], xs[4]);
   drop(xs);
   0
 }

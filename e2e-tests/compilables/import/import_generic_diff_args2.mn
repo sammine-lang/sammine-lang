@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let result = has_generic_diff_args2::first_as_i32<f64>(3.14, 99);
-  std::printf("%d", result);
+  print("{}", result);
   return 0;
 }

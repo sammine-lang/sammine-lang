@@ -35,7 +35,7 @@ let first_square_over(limit: i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d %lld %u %d\n", sum(10), sum64(100i64), pairs(4u32), first_square_over(80));
-  std::printf("%d\n", first_square_over(5));
+  print("{} {} {} {}\n", sum(10), sum64(100i64), pairs(4u32), first_square_over(80));
+  print("{}\n", first_square_over(5));
   0
 }

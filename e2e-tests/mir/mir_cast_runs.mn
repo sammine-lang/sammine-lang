@@ -26,10 +26,10 @@ let sum(a: Vec2, b: Vec2) -> Vec2 { a + b }
 let named(a: i32, b: i32) -> i32 { Add<i32>::Add(a, b) }
 
 let main() -> i32 {
-  std::printf("%llu %d %.2f %u\n", widen(4000000000u32), trunc(-3.9), to_float(11), low_byte(-1));
-  std::printf("%.2f\n", dollars(Money { cents: 1234i64 }));
+  print("{} {} {.2} {}\n", widen(4000000000u32), trunc(-3.9), to_float(11), low_byte(-1));
+  print("{.2}\n", dollars(Money { cents: 1234i64 }));
   let v = sum(Vec2 { x: 1, y: 2 }, Vec2 { x: 3, y: 4 });
-  std::printf("%d %d\n", v.x, v.y);
-  std::printf("%d\n", named(3, 4));
+  print("{} {}\n", v.x, v.y);
+  print("{}\n", named(3, 4));
   0
 }

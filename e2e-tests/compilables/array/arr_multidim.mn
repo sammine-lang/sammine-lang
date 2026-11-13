@@ -13,9 +13,9 @@ let dims(a: [2][3]i32) -> (i32, i32) {
 let main() -> i32 {
   let a : [2][3]i32 = [[1, 2, 3], [4, 5, 6]];
   let (rows, cols) = dims(a);
-  std::printf("%d\n", rows);
-  std::printf("%d\n", cols);
-  std::printf("%d\n", a[1][0]);
-  std::printf("%d\n", a[1][2]);
+  print("{}\n", rows);
+  print("{}\n", cols);
+  print("{}\n", a[1][0]);
+  print("{}\n", a[1][2]);
   return 0;
 }

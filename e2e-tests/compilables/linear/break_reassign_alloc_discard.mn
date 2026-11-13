@@ -5,7 +5,7 @@
 // CHECK-NEXT:   20|  alloc<i32>(1);
 // CHECK-NEXT:     |  ───────────┬
 // CHECK-NEXT:     |             ╰─ Temporary owning memory must not be discarded (bind it with 'let' first)
-// CHECK-NEXT:   21|  std::printf("done\n");
+// CHECK-NEXT:   21|  print("done\n");
 // CHECK-NEXT:   22|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -18,6 +18,6 @@ import std;
 
 let main() -> i32 {
   alloc<i32>(1);
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

@@ -17,16 +17,16 @@ let unsafe main() -> i32 {
   xs[2] = 3.5;
   xs[3] = 1.5;
   let xs = buffer::sort_by(xs, 4i64, greater);
-  std::printf("%f %f %f %f\n", xs[0], xs[1], xs[2], xs[3]);
+  print("{} {} {} {}\n", xs[0], xs[1], xs[2], xs[3]);
   let xs = buffer::sort_by(xs, 4i64, less);
-  std::printf("%f %f %f %f\n", xs[0], xs[1], xs[2], xs[3]);
+  print("{} {} {} {}\n", xs[0], xs[1], xs[2], xs[3]);
   drop(xs);
   // Zero and one elements are already sorted.
   let ys = alloc_buf<i64>(1i64);
   ys[0] = 7i64;
   let ys = buffer::sort_by(ys, 0i64, gt_i64);
   let ys = buffer::sort_by(ys, 1i64, gt_i64);
-  std::printf("%ld %ld\n", ys[0], 7i64);
+  print("{} {}\n", ys[0], 7i64);
   drop(ys);
   0
 }

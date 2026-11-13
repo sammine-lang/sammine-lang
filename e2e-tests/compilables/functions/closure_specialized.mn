@@ -38,15 +38,15 @@ let fold(f: (i32, i32) -> i32, acc: i32, n: i32) -> i32 {
 let wrap(f: (i32) -> i32) -> (i32) -> i32 { apply(f) }
 
 let main() -> i32 {
-  std::printf("apply %d %d %d\n", apply(add(1), 5), apply(mul(2), 5),
+  print("apply {} {} {}\n", apply(add(1), 5), apply(mul(2), 5),
               apply(add(2), 5));
-  std::printf("twice %d %d\n", twice(add(1), 5), twice(mul(2), 5));
+  print("twice {} {}\n", twice(add(1), 5), twice(mul(2), 5));
   let p = apply(add(4));
   let q = apply(mul(4));
-  std::printf("made %d %d\n", p(5), q(4));
-  std::printf("fold %d %d\n", fold(add, 0, 5), fold(mul, 1, 5));
+  print("made {} {}\n", p(5), q(4));
+  print("fold {} {}\n", fold(add, 0, 5), fold(mul, 1, 5));
   let r = wrap(add(10));
   let s = wrap(mul(13));
-  std::printf("returned %d %d\n", r(3), s(2));
+  print("returned {} {}\n", r(3), s(2));
   0
 }

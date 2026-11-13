@@ -10,7 +10,7 @@ let main() -> i32 {
   let v0 = vec::new<Point>(4);
   let v1 = vec::push<Point>(v0, Point { x: 1, y: 2 });
   let v2 = vec::push<Point>(v1, Point { x: 3, y: 4 });
-  std::printf("%d %d %d %d", v2[0].x, v2[0].y, v2[1].x, v2[1].y);
+  print("{} {} {} {}", v2[0].x, v2[0].y, v2[1].x, v2[1].y);
   vec::delete<Point>(v2);
   return 0;
 }

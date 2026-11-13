@@ -15,6 +15,6 @@ import std;
 import greeter;
 
 let main() -> i32 {
-  std::printf("%d\n", greeter::greet_twice(21));
+  print("{}\n", greeter::greet_twice(21));
   0
 }

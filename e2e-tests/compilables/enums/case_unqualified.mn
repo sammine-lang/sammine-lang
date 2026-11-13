@@ -9,9 +9,9 @@ type Color = Red | Green | Blue;
 
 let color_name(c: Color) -> i32 {
   case c {
-    Red => std::printf("red\n"),
-    Green => std::printf("green\n"),
-    Blue => std::printf("blue\n"),
+    Red => print("red\n"),
+    Green => print("green\n"),
+    Blue => print("blue\n"),
   };
   return 0;
 }

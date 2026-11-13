@@ -12,7 +12,7 @@ let main() -> i32 {
   let a = Box { data: alloc<i32>(1), tag: 1 };
   *a.data = 42;
   let b = Box { data: a.data, tag: a.tag };
-  std::printf("%d", *b.data);
+  print("{}", *b.data);
   drop(b.data);
   return 0;
 }

@@ -263,6 +263,9 @@ void ModuleGen::declareRuntime() {
       builder_, unknown, runtime::kFree,
       mlir::LLVM::LLVMFunctionType::get(llvmVoid(), {llvmPtr()}));
   mlir::LLVM::LLVMFuncOp::create(
+      builder_, unknown, runtime::kPrintf,
+      mlir::LLVM::LLVMFunctionType::get(i32, {llvmPtr()}, /*isVarArg=*/true));
+  mlir::LLVM::LLVMFuncOp::create(
       builder_, unknown, runtime::kDprintf,
       mlir::LLVM::LLVMFunctionType::get(i32, {i32, llvmPtr()},
                                         /*isVarArg=*/true));

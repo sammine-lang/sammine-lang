@@ -23,6 +23,6 @@ let main() -> i32 {
   show("%d %c %d %f\n", 42, 'z', true, 2.5f32);
   let s = show_text("[%s]\n", empty());
   drop(s);
-  std::printf("%d\n", distance(2, 7));
+  print("{}\n", distance(2, 7));
   0
 }

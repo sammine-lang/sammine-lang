@@ -5,7 +5,7 @@
 // CHECK-NEXT: or true
 // CHECK-NEXT: right
 // CHECK-NEXT: or false
-// CHECK-NEXT: in bounds 0
+// CHECK-NEXT: in bounds false
 
 // && and || evaluate their right side only when the left doesn't decide:
 // the guard keeps xs[3] from being read.
@@ -13,12 +13,12 @@
 import std;
 
 let right(x: bool) -> bool {
-  std::printf("right\n");
+  print("right\n");
   x
 }
 
 let show(name: ptr<char>, x: bool) -> unit {
-  if x { std::printf("%s true\n", name); } else { std::printf("%s false\n", name); };
+  if x { print("{} true\n", name); } else { print("{} false\n", name); };
 }
 
 let main() -> i32 {
@@ -29,6 +29,6 @@ let main() -> i32 {
   let xs = [1i64, 2i64, 3i64];
   let i = 3i64;
   let ok = i < 3i64 && xs[i] > 0i64;
-  std::printf("in bounds %d\n", ok);
+  print("in bounds {}\n", ok);
   0
 }

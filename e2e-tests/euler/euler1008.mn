@@ -109,7 +109,7 @@ let unsafe coefficient(big_n: i64, m: i64, k: i64) -> i64 {
 }
 
 let unsafe main() -> i32 {
-  std::printf("%ld %ld\n", coefficient(2, 7, 1), coefficient(2, 7, 2));
-  std::printf("%ld\n", coefficient(10000000, 1000000007, 10));
+  print("{} {}\n", coefficient(2, 7, 1), coefficient(2, 7, 2));
+  print("{}\n", coefficient(10000000, 1000000007, 10));
   0
 }

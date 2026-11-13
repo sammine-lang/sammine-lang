@@ -5,7 +5,7 @@
 // CHECK-NEXT:   26|  make_ptr();
 // CHECK-NEXT:     |  ───────┬
 // CHECK-NEXT:     |         ╰─ Temporary owning memory must not be discarded (bind it with 'let' first)
-// CHECK-NEXT:   27|  std::printf("done\n");
+// CHECK-NEXT:   27|  print("done\n");
 // CHECK-NEXT:   28|  return 0;
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -24,6 +24,6 @@ let make_ptr() -> 'ptr<i32> {
 
 let main() -> i32 {
   make_ptr();
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

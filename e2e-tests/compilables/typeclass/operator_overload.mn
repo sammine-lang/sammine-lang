@@ -18,6 +18,6 @@ let main() -> i32 {
   let a: Vec2 = Vec2 { x: 10, y: 15 };
   let b: Vec2 = Vec2 { x: 20, y: 25 };
   let c: Vec2 = a + b;
-  std::printf("%d %d\n", c.x, c.y);
+  print("{} {}\n", c.x, c.y);
   return 0;
 }

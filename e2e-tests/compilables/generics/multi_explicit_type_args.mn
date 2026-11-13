@@ -9,6 +9,6 @@ let apply<T, U>(f: (T) -> U, x: T) -> U { f(x) }
 
 let main() -> i32 {
   let result = apply<i32, i32>(double, 5);
-  std::printf("%d", result);
+  print("{}", result);
   return 0;
 }

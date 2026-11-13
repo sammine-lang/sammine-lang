@@ -7,7 +7,7 @@ import vec;
 
 let main() -> i32 {
   let v = vec::push<i32>(vec::push<i32>(vec::new<i32>(4), 10), 20);
-  std::printf("unreachable %d\n", v[2]);
+  print("unreachable {}\n", v[2]);
   vec::delete<i32>(v);
   return 0;
 }

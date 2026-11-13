@@ -10,6 +10,6 @@ struct Pair<T, U> {
 
 let main() -> i32 {
   let p1 = Pair<i32, i32>{ first: 10, second: 20 };
-  std::printf("%d %d", p1.first, p1.second);
+  print("{} {}", p1.first, p1.second);
   return 0;
 }

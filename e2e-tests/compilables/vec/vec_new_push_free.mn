@@ -9,7 +9,7 @@ let main() -> i32 {
   let v1 = vec::push<i32>(v0, 10);
   let v2 = vec::push<i32>(v1, 20);
   let v3 = vec::push<i32>(v2, 30);
-  std::printf("%d %d %d", v3[0], v3[1], v3[2]);
+  print("{} {} {}", v3[0], v3[1], v3[2]);
   vec::delete<i32>(v3);
   return 0;
 }

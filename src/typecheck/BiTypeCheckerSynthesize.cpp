@@ -5,6 +5,7 @@
 #include "typecheck/BuiltinInstances.h"
 #include "typecheck/Types.h"
 #include "typecheck/UniSubst.h"
+#include "util/FormatString.h"
 #include "llvm/ADT/STLExtras.h"
 #include <charconv>
 
@@ -1712,50 +1713,91 @@ Type BiTypeCheckerVisitor::synthesize(LenExprAST *ast) {
   return ast->set_type(Type::I32_t());
 }
 
-// panic("message", args...) never gives a value: Never, which fits where
-// any is expected. The message is printf's format, so it is a literal, and
-// what it formats goes through dprintf's `...`: numbers, bools, chars and
-// strings, which own nothing, so ending the program drops nothing of them.
-Type BiTypeCheckerVisitor::synthesize(PanicExprAST *ast) {
+// print("format", args...) is (), and panic("format", args...) never gives
+// a value: Never, which fits where any is expected. The format is a
+// literal, read here: each `{}` in it takes an argument, a number, bool,
+// char or string, which prints as its type does. Those own nothing, so
+// ending the program drops nothing of them.
+Type BiTypeCheckerVisitor::synthesize(FormatExprAST *ast) {
   if (ast->synthesized())
     return ast->get_type();
 
   for (auto &arg : ast->arguments)
     arg->accept_vis(this);
 
+  auto keyword = ast->keyword();
   if (ast->arguments.empty()) {
     this->add_error(ast->get_location(),
-                    "panic() needs a message: panic(\"what went wrong\")");
+                    fmt::format("{0}() needs a format: {0}(\"what to say\")",
+                                keyword));
     return ast->set_type(Type::Poisoned());
   }
   bool ok = true;
-  if (!llvm::isa<StringExprAST>(ast->arguments.front().get())) {
+  std::vector<const sammine_util::FormatString::Piece *> placeholders;
+  auto *literal = llvm::dyn_cast<StringExprAST>(ast->arguments.front().get());
+  auto format = literal
+                    ? sammine_util::FormatString::parse(literal->string_content)
+                    : std::unexpected(std::string());
+  size_t given = ast->arguments.size() - 1;
+  if (!literal) {
     this->add_error(ast->arguments.front()->get_location(),
-                    "panic()'s message must be a string literal: it is the "
-                    "format of what it prints, as printf's");
+                    fmt::format("{}()'s format must be a string literal: the "
+                                "compiler reads it to print each argument",
+                                keyword));
+    ok = false;
+  } else if (!format) {
+    this->add_error(literal->get_location(),
+                    fmt::format("{}()'s format has {}", keyword,
+                                format.error()));
+    ok = false;
+  } else if (placeholders = format->placeholders();
+             placeholders.size() != given) {
+    this->add_error(ast->get_location(),
+                    fmt::format("{}() has {} placeholder{} but {} argument{}",
+                                keyword, placeholders.size(),
+                                placeholders.size() == 1 ? "" : "s", given,
+                                given == 1 ? "" : "s"));
     ok = false;
   }
-  for (auto &arg : llvm::drop_begin(ast->arguments)) {
+  for (auto [index, arg] : llvm::enumerate(llvm::drop_begin(ast->arguments))) {
     auto type = arg->accept_synthesis(this);
     if (type.is_poisoned()) {
       ok = false;
       continue;
     }
-    // A string is a ptr<char> it doesn't own, as a literal is.
+    // A type not whole yet is reported as that, where it is.
+    if (type.is_open())
+      continue;
+    // A string is a pointer to chars, a literal's or one that owns them:
+    // printing only reads it, so an owned one is lent.
     bool string =
-        type.type_kind == TypeKind::Pointer && !type.is_linear_v() &&
+        type.type_kind == TypeKind::Pointer &&
         std::get<PointerType>(type.type_data).get_pointee().type_kind ==
             TypeKind::Char;
-    if (type.is_numeric() || type.type_kind == TypeKind::Bool ||
-        type.type_kind == TypeKind::Char || string)
-      continue;
-    this->add_error(arg->get_location(),
-                    fmt::format("panic() prints numbers, bools, chars and "
-                                "strings, not '{}'",
-                                type.to_string()));
-    ok = false;
+    // An enum that is an integer prints as it.
+    auto *en = std::get_if<EnumType>(&type.type_data);
+    if (!(type.is_numeric() || type.type_kind == TypeKind::Bool ||
+          type.type_kind == TypeKind::Char || string ||
+          (en && en->is_integer_backed()))) {
+      this->add_error(arg->get_location(),
+                      fmt::format("{}() prints numbers, bools, chars and "
+                                  "strings, not '{}'",
+                                  keyword, type.to_string()));
+      ok = false;
+    } else if (index < placeholders.size() && placeholders[index]->precision &&
+               !type.is_float()) {
+      this->add_error(arg->get_location(),
+                      fmt::format("'{{.{}}}' gives a float's digits after "
+                                  "the point, and this is '{}'",
+                                  *placeholders[index]->precision,
+                                  type.to_string()));
+      ok = false;
+    }
   }
-  return ast->set_type(ok ? Type::Never() : Type::Poisoned());
+  if (!ok)
+    return ast->set_type(Type::Poisoned());
+  return ast->set_type(ast->kind == FormatExprAST::Kind::Panic ? Type::Never()
+                                                               : Type::Unit());
 }
 
 Type BiTypeCheckerVisitor::synthesize(DimExprAST *ast) {

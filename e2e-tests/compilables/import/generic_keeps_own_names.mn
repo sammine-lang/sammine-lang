@@ -11,6 +11,6 @@ import std;
 struct Point { y: i32, z: i32, };
 
 let main() -> i32 {
-  std::printf("%ld\n", geom::first_x<i32>(0));
+  print("{}\n", geom::first_x<i32>(0));
   return 0;
 }

@@ -9,6 +9,6 @@ let sum_array(a: [3]i32) -> i32 {
 
 let main() -> i32 {
   let result : i32 = sum_array([10, 20, 30]);
-  std::printf("%d\n", result);
+  print("{}\n", result);
   return 0;
 }

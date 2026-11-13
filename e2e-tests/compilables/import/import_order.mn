@@ -11,6 +11,6 @@ import std;
 
 let main() -> i32 {
   aliased_user::greet<i32>(0);
-  std::printf("and from main\n");
+  print("and from main\n");
   return 0;
 }

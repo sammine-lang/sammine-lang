@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let x = dummy_enum::dummy::A;
-  std::printf("%d", 0);
+  print("{}", 0);
   return 0;
 }

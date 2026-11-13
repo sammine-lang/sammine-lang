@@ -6,9 +6,9 @@ import std;
 
 let main() -> i32 {
   let a : [10]i32 = [1...10];
-  std::printf("%d\n", len(a));
+  print("{}\n", len(a));
 
   let b : [100]i32 = [1...100];
-  std::printf("%d\n", len(b));
+  print("{}\n", len(b));
   return 0;
 }

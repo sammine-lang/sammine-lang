@@ -9,6 +9,6 @@ import shapes_generic;
 import std;
 
 let main() -> i32 {
-  std::printf("%ld\n", shapes_generic::line_length<i32>(0));
+  print("{}\n", shapes_generic::line_length<i32>(0));
   return 0;
 }

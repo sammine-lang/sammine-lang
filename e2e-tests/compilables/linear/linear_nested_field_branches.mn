@@ -12,6 +12,6 @@ let main() -> i32 {
   let o = Out { i: In { a: alloc<i32>(1) } };
   let c = 1 > 0;
   if c { drop(o.i.a); } else { drop(o.i.a); };
-  std::printf("done\n");
+  print("done\n");
   0
 }

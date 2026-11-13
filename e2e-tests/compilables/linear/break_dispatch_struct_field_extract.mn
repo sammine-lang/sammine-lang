@@ -33,6 +33,6 @@ let main() -> i32 {
   let v : i32 = *q;
   drop(q);
   drop(r);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

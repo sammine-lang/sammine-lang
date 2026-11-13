@@ -11,6 +11,6 @@ let take(o: Option<i64>) -> i64 { case o { Some(v) => v, None => -1i64, } }
 let main() -> i32 {
   let (a: i64, b) = (5000000000, 2);
   let (c: Option<i64>, d) = (None, 3);
-  std::printf("%ld %d %ld\n", a, b, take(c));
+  print("{} {} {}\n", a, b, take(c));
   0
 }

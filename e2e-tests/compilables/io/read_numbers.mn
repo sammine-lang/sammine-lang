@@ -7,10 +7,10 @@ import io;
 
 let main() -> i32 {
   io::print_i32(io::read_i32());
-  io::print(" ");
+  print(" ");
   io::print_i64(io::read_i64());
-  io::print(" ");
+  print(" ");
   io::print_f64(io::read_f64());
-  io::println("");
+  print("\n");
   0
 }

@@ -70,7 +70,7 @@ void NeverValueCheck::preorder_walk(LenExprAST *ast) {
 void NeverValueCheck::preorder_walk(DimExprAST *ast) {
   check(ast->operand.get(), "measured");
 }
-void NeverValueCheck::preorder_walk(PanicExprAST *ast) {
+void NeverValueCheck::preorder_walk(FormatExprAST *ast) {
   check(ast->arguments, "printed");
 }
 void NeverValueCheck::preorder_walk(StructLiteralExprAST *ast) {

@@ -52,7 +52,7 @@ type IntAlias = i32;
 
 let main() -> i32 {
   let x: IntAlias = 42;
-  std::printf("%d\n", x);
+  print("{}\n", x);
   0
 }
 ```
@@ -86,11 +86,11 @@ A binding declared in a block ends with that block:
 let x = 5;
 if true {
   let x = 10;
-  std::printf("%d\n", x);    // 10
+  print("{}\n", x);    // 10
 } else {
-  std::printf("no\n");
+  print("no\n");
 };
-std::printf("%d\n", x);      // 5
+print("{}\n", x);      // 5
 ```
 
 ### Type Inference
@@ -117,7 +117,7 @@ let add(a: i32, b: i32) -> i32 {
 }
 
 let greet() {                    // return type omitted means unit
-  std::printf("hello\n");
+  print("hello\n");
 }
 ```
 
@@ -127,7 +127,7 @@ The `main` function can optionally accept command-line arguments:
 
 ```sammine
 let main(argc: i32, argv: ptr<ptr<char>>) -> i32 {
-  std::printf("argc = %d\n", argc);
+  print("argc = {}\n", argc);
   0
 }
 ```
@@ -153,7 +153,7 @@ fits beside one that does nothing:
 
 ```sammine
 case o {
-  Some(v) => { std::printf("%d\n", v); },   // (), printf's i32 dropped
+  Some(v) => { print("{}\n", v); },   // ()
   None => {},
 };
 ```
@@ -247,9 +247,9 @@ loads the file found, or `libSDL3.so` by name.
 ```sammine
 // As a statement
 if x > 3 {
-  std::printf("big\n");
+  print("big\n");
 } else {
-  std::printf("small\n");
+  print("small\n");
 };
 
 // As an expression (returns a value)
@@ -262,7 +262,7 @@ let sign = if x > 0 { 1 }
 
 ```sammine
 if x > 3 {
-  std::printf("yes\n");
+  print("yes\n");
 };
 ```
 
@@ -273,7 +273,7 @@ sammine has no `while` loop. Bindings are immutable, so a loop condition could o
 ```sammine
 let countdown(i: i32) -> unit {
   if i > 0 {
-    std::printf("%d\n", i);
+    print("{}\n", i);
     countdown(i - 1)
   }
 }
@@ -285,22 +285,48 @@ A `for` loop runs over an integer range. The end is exclusive:
 
 ```sammine
 for i in 0..3 {
-  std::printf("%d\n", i);    // 0, 1, 2
+  print("{}\n", i);    // 0, 1, 2
 };
 ```
 
+### Print
+
+`print("format", args...)` writes the format to stdout, with each `{}` in it
+replaced by an argument. It is `()`.
+
+```sammine
+print("{} of {} done\n", 3, 10);          // 3 of 10 done
+print("{.2} {} {}\n", 0.125, true, 'x');   // 0.13 true x
+print("{{}} is a placeholder, 100%\n");    // {} is a placeholder, 100%
+```
+
+- **An argument prints as its type prints**: `i32`, `i64`, `u32` and `u64`
+  as numbers, `f32` and `f64` with six digits after the point, `bool` as
+  `true` or `false`, `char` as the character, a pointer to `char` as a
+  string, an integer-backed enum as its integer. Nothing in the format says
+  the type again, so nothing can say it wrong. A string that owns its chars
+  (`'buf<char>`) is lent: printing only reads it. Any other type is an error.
+- **`{.N}`** prints a float with `N` digits after the point. **`{{`** and
+  **`}}`** are a brace each.
+- **The format is a string literal**, which the compiler reads: a
+  placeholder for each argument and an argument for each placeholder, or it
+  is an error ("print() has 2 placeholders but 1 argument").
+- **It needs no import and no unsafe function.** C's `printf` can still be
+  bound with `reuse`, and called from an unsafe function, for what `print`
+  doesn't say.
+
 ### Panic
 
-`panic("message", args...)` ends the program: it prints where it is and the
-message, formatted as `printf` formats it with the arguments, to stderr, and
-exits with status 1.
+`panic("format", args...)` ends the program: it prints where it is and the
+format, with its arguments as `print` prints them, to stderr, and exits with
+status 1.
 
 ```sammine
 let unwrap<T>(m: Maybe<T>) -> T {
   case m { Has(v) => v, Not => panic("unwrap of Not") }
 }
 let half(n: i32) -> i32 {
-  if n % 2 == 0 { n / 2 } else { panic("%d is odd", n) }
+  if n % 2 == 0 { n / 2 } else { panic("{} is odd", n) }
 }
 // half(7) prints: file.mn:5:34: panic: 7 is odd
 ```
@@ -310,9 +336,8 @@ let half(n: i32) -> i32 {
   without an annotation is then `Never` too). Its value can't be used,
   as an argument, an operand or an element: that is an error, as it is for an
   `if` whose branches all panic or return.
-- **The message is a string literal**, the format, and the arguments are
-  numbers, bools, chars and strings (`ptr<char>` not owned): a `%` in the
-  message formats one, `%%` prints one.
+- **The format is `print`'s**: a string literal, a `{}` for each argument,
+  the arguments numbers, bools, chars and strings.
 - **Nothing is dropped.** The program ends where it panics, as `exit()` ends
   it: values still owned, here or in the functions that called it, aren't
   dropped, and their `Drop` instances don't run. C's streams are flushed, so
@@ -330,8 +355,8 @@ let half(n: i32) -> i32 {
 ```sammine
 let a: i32 = 10;
 let b: i32 = 3;
-std::printf("%d\n", a + b);    // 13
-std::printf("%d\n", a % b);    // 1
+print("{}\n", a + b);    // 13
+print("{}\n", a % b);    // 1
 ```
 
 ### Comparison
@@ -339,8 +364,8 @@ std::printf("%d\n", a % b);    // 1
 `==`, `!=`, `<`, `>`, `<=`, `>=`. Return `bool`:
 
 ```sammine
-if a < b { std::printf("less\n"); }
-else { std::printf("not less\n"); };
+if a < b { print("less\n"); }
+else { print("not less\n"); };
 ```
 
 Each goes through its own typeclass, as `+` goes through `Add` (see [Builtin Typeclasses](#builtin-typeclasses)): `<` through `Less`, `>` through `Greater`, `<=` through `LessEqual`, `>=` through `GreaterEqual`, `==` through `Equal` and `!=` through `NotEqual`. Numbers and `char` can be compared every way, and `bool`, pointers, arrays of those and enums with `==` and `!=`. Two values of an enum are equal when they are the same variant with equal payloads, so `A(7) == B(7)` is false; an enum whose payloads can't be compared with `==` has no built-in `==` either. Any other type, such as a struct or tuple, needs an instance: comparing values without one is an error ("No instance of Equal<P>").
@@ -351,7 +376,7 @@ Each goes through its own typeclass, as `+` goes through `Add` (see [Builtin Typ
 
 ```sammine
 if x > 0 && x < 100 {
-  std::printf("in range\n");
+  print("in range\n");
 };
 ```
 
@@ -362,11 +387,11 @@ if x > 0 && x < 100 {
 ```sammine
 let a: i32 = 10;
 let b: i32 = 12;
-std::printf("%d\n", a & b);     // 8
-std::printf("%d\n", a | b);     // 14
-std::printf("%d\n", a ^ b);     // 6
-std::printf("%d\n", a << 2);    // 40
-std::printf("%d\n", a >> 2);    // 2
+print("{}\n", a & b);     // 8
+print("{}\n", a | b);     // 14
+print("{}\n", a ^ b);     // 6
+print("{}\n", a << 2);    // 40
+print("{}\n", a >> 2);    // 2
 ```
 
 ### Unary
@@ -375,8 +400,8 @@ std::printf("%d\n", a >> 2);    // 2
 
 ```sammine
 let x: i32 = 5;
-std::printf("%d\n", -x);        // -5
-std::printf("%d\n", -(-x));     // 5
+print("{}\n", -x);        // -5
+print("{}\n", -(-x));     // 5
 ```
 
 ### Conversions with `as`
@@ -446,8 +471,8 @@ struct Point { x: i32, y: f64, };
 
 let main() -> i32 {
   let p: Point = Point { x: 42, y: 3.14 };
-  std::printf("x = %d\n", p.x);
-  std::printf("y = %f\n", p.y);
+  print("x = {}\n", p.x);
+  print("y = {}\n", p.y);
   return 0;
 }
 ```
@@ -461,7 +486,7 @@ struct Outer { inner: Inner, x: i32, };
 let main() -> i32 {
   let i: Inner = Inner { value: 42 };
   let o: Outer = Outer { inner: i, x: 10 };
-  std::printf("%d\n", o.inner.value);    // 42
+  print("{}\n", o.inner.value);    // 42
   return 0;
 }
 ```
@@ -495,7 +520,7 @@ struct Box<T> {
 
 let main() -> i32 {
   let b = Box<i32>{ value: 42 };
-  std::printf("%d", b.value);       // 42
+  print("{}", b.value);       // 42
   return 0;
 }
 ```
@@ -570,9 +595,9 @@ type Color = Red | Green | Blue;
 
 let color_name(c: Color) -> i32 {
   case c {
-    Color::Red => std::printf("red\n"),
-    Color::Green => std::printf("green\n"),
-    Color::Blue => std::printf("blue\n"),
+    Color::Red => print("red\n"),
+    Color::Green => print("green\n"),
+    Color::Blue => print("blue\n"),
   };
   return 0;
 }
@@ -585,9 +610,9 @@ type Shape = Circle(i32) | Rect(i32, i32) | Point;
 
 let describe(s: Shape) -> i32 {
   case s {
-    Shape::Circle(r) => std::printf("circle r: %d\n", r),
-    Shape::Rect(w, h) => std::printf("rect w: %d, h: %d\n", w, h),
-    Shape::Point => std::printf("point\n"),
+    Shape::Circle(r) => print("circle r: {}\n", r),
+    Shape::Rect(w, h) => print("rect w: {}, h: {}\n", w, h),
+    Shape::Point => print("point\n"),
   };
   return 0;
 }
@@ -599,9 +624,9 @@ Unqualified variant names work when unambiguous, both in patterns and constructo
 let c: Color = Red;              // unqualified constructor (no Color:: needed)
 
 case s {
-  Circle(r) => std::printf("circle r: %d\n", r),
-  Rect(w, h) => std::printf("rect w: %d, h: %d\n", w, h),
-  Point => std::printf("point\n"),
+  Circle(r) => print("circle r: {}\n", r),
+  Rect(w, h) => print("rect w: {}, h: {}\n", w, h),
+  Point => print("point\n"),
 };
 ```
 
@@ -609,8 +634,8 @@ Wildcard `_` catches all remaining patterns:
 
 ```sammine
 case c {
-  Color::Red => { std::printf("is red\n"); return 1; },
-  _ => { std::printf("not red\n"); return 0; },
+  Color::Red => { print("is red\n"); return 1; },
+  _ => { print("not red\n"); return 0; },
 }
 ```
 
@@ -624,8 +649,8 @@ type Option<T> = Some(T) | None;
 let main() -> i32 {
   let x: Option<i32> = Option<i32>::Some(42);
   case x {
-    Some(v) => std::printf("%d\n", v),
-    None => std::printf("none\n"),
+    Some(v) => print("{}\n", v),
+    None => print("none\n"),
   };
   return 0;
 }
@@ -659,7 +684,7 @@ let identity<T>(x: T) -> T { x }
 let main() -> i32 {
   let a = identity(42);           // inferred: identity<i32>
   let b = identity(3.14);         // inferred: identity<f64>
-  std::printf("%d %.2f", a, b);   // 42 3.14
+  print("{} {.2}", a, b);   // 42 3.14
   return 0;
 }
 ```
@@ -710,7 +735,7 @@ let apply_identity<T>(x: T) -> T {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", apply_identity<i32>(42));
+  print("{}\n", apply_identity<i32>(42));
   return 0;
 }
 ```
@@ -741,8 +766,8 @@ instance MySize<i64> {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", mysize<i32>());    // 4
-  std::printf("%ld\n", mysize<i64>());    // 8
+  print("{}\n", mysize<i32>());    // 4
+  print("{}\n", mysize<i64>());    // 8
   return 0;
 }
 ```
@@ -821,11 +846,11 @@ instance Converter<Celsius, Fahrenheit> {
 **`Sized<T>`** -- returns the byte size of a type at compile time:
 
 ```sammine
-std::printf("%ld\n", Sized<i32>());     // 4
-std::printf("%ld\n", Sized<i64>());     // 8
-std::printf("%ld\n", Sized<f64>());     // 8
-std::printf("%ld\n", Sized<bool>());    // 1
-std::printf("%ld\n", Sized<char>());    // 1
+print("{}\n", Sized<i32>());     // 4
+print("{}\n", Sized<i64>());     // 8
+print("{}\n", Sized<f64>());     // 8
+print("{}\n", Sized<bool>());    // 1
+print("{}\n", Sized<char>());    // 1
 ```
 
 **`Hash<T>`** -- user-defined hash function:
@@ -854,7 +879,7 @@ instance Add<Vec2> {
 let v1: Vec2 = Vec2 { x: 10, y: 15 };
 let v2: Vec2 = Vec2 { x: 20, y: 25 };
 let v3: Vec2 = v1 + v2;                 // uses Add<Vec2>
-std::printf("%d %d\n", v3.x, v3.y);     // 30 40
+print("{} {}\n", v3.x, v3.y);     // 30 40
 ```
 
 The number types have these instances built in: `Add`, `Sub`, `Mul` and `Div` for `i32`, `i64`, `u32`, `u64`, `f32` and `f64`, and `Mod` for the integer types. They can be called by name like any instance, e.g. `Add<i32>(3, 4)`, and can't be redefined.
@@ -910,8 +935,8 @@ Tuple literals group multiple values. Destructure with pattern matching on `let`
 ```sammine
 let t = (42, true);          // type: (i32, bool)
 let (a, b) = t;              // destructuring
-std::printf("%d\n", a);      // 42
-std::printf("%d\n", b);      // 1 (true printed as integer)
+print("{}\n", a);      // 42
+print("{}\n", b);      // 1 (true printed as integer)
 ```
 
 ---
@@ -924,16 +949,16 @@ Fixed-size, stack-allocated arrays with compile-time known length.
 
 ```sammine
 let a: [i32; 3] = [10, 20, 30];
-std::printf("%d\n", a[0]);           // 10
-std::printf("%d\n", a[1]);           // 20
-std::printf("%d\n", a[2]);           // 30
+print("{}\n", a[0]);           // 10
+print("{}\n", a[1]);           // 20
+print("{}\n", a[2]);           // 30
 ```
 
 ### Array Length
 
 ```sammine
 let a: [i32; 5] = [1, 2, 3, 4, 5];
-std::printf("%d\n", len(a));         // 5
+print("{}\n", len(a));         // 5
 ```
 
 Array elements cannot be written to.
@@ -944,7 +969,7 @@ Out-of-bounds access with a constant index is caught at compile time:
 
 ```sammine
 let a: [i32; 3] = [10, 20, 30];
-std::printf("%d\n", a[5]);
+print("{}\n", a[5]);
 // Error: Array index out of bounds: index 5 on array of size 3
 ```
 
@@ -967,7 +992,7 @@ let p: 'ptr<i32> = alloc<i32>(1);    // allocate 1 element
 *p = 42;                              // write through pointer
 let y: i32 = *p;                      // dereference (read)
 drop(p);                              // deallocate (consumes p)
-std::printf("%d\n", y);               // 42
+print("{}\n", y);               // 42
 ```
 
 Assignment only writes through a pointer: `*p`, `p[i]`, and any field or
@@ -1011,7 +1036,7 @@ instance Drop<File> {
 let x: i32 = 42;
 let p: ptr<i32> = &x;
 let y: i32 = *p;                     // dereference
-std::printf("%d\n", y);              // 42
+print("{}\n", y);              // 42
 ```
 
 ### What a Non-Linear Pointer Can Do
@@ -1057,8 +1082,8 @@ let unsafe main() -> i32 {
   p[0] = 10;
   p[1] = 20;
   p[2] = 42;
-  std::printf("%d\n", p[0]);         // 10
-  std::printf("%d\n", p[2]);         // 42
+  print("{}\n", p[0]);         // 10
+  print("{}\n", p[2]);         // 42
   drop(p);
   return 0;
 }
@@ -1087,7 +1112,7 @@ reuse strlen(s: ptr<char>) -> i64;
 let unsafe main() -> i32 {
   let s = alloc_buf<char>(3);
   s[0] = 'h'; s[1] = 'i'; s[2] = '\0';
-  std::printf("%lld\n", strlen(s));   // 2: s is lent
+  print("{}\n", strlen(s));   // 2: s is lent
   drop(s);
   return 0;
 }
@@ -1140,7 +1165,7 @@ let main() -> i32 {
   let p = make_ptr();
   let v: i32 = *p;
   drop(p);            // caller must drop
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }
 ```
@@ -1154,7 +1179,7 @@ The pipe operator `|>` passes the left-hand value as the first argument to the r
 ```sammine
 let square(x: i32) -> i32 { x * x }
 
-std::printf("%d\n", 5 |> square);     // square(5) = 25
+print("{}\n", 5 |> square);     // square(5) = 25
 ```
 
 With additional arguments:
@@ -1162,7 +1187,7 @@ With additional arguments:
 ```sammine
 let add(a: i32, b: i32) -> i32 { a + b }
 
-std::printf("%d\n", 5 |> add(3));     // add(5, 3) = 8
+print("{}\n", 5 |> add(3));     // add(5, 3) = 8
 ```
 
 Pipes chain left-to-right:
@@ -1173,7 +1198,7 @@ let double(x: i32) -> i32 { x + x }
 let add(a: i32, b: i32) -> i32 { a + b }
 
 let result = 5 |> square |> double |> add(1);
-std::printf("%d\n", result);           // ((5*5)*2)+1 = 51
+print("{}\n", result);           // ((5*5)*2)+1 = 51
 ```
 
 ---
@@ -1186,8 +1211,8 @@ Calling a function with fewer arguments than it expects creates a closure:
 let add(a: i32, b: i32) -> i32 { a + b }
 
 let add5: (i32) -> i32 = add(5);     // partially apply first arg
-std::printf("%d\n", add5(3));         // 8
-std::printf("%d\n", add5(7));         // 12
+print("{}\n", add5(3));         // 8
+print("{}\n", add5(7));         // 12
 ```
 
 Multi-argument partial application:
@@ -1196,7 +1221,7 @@ Multi-argument partial application:
 let add3(a: i32, b: i32, c: i32) -> i32 { a + b + c }
 
 let add1_2: (i32) -> i32 = add3(1, 2);
-std::printf("%d\n", add1_2(7));       // 10
+print("{}\n", add1_2(7));       // 10
 ```
 
 Partial application works with higher-order functions:
@@ -1204,7 +1229,7 @@ Partial application works with higher-order functions:
 ```sammine
 let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 
-std::printf("%d\n", apply(add(10), 32));    // 42
+print("{}\n", apply(add(10), 32));    // 42
 ```
 
 A closure carries what it binds, by value, so it can go anywhere a value
@@ -1215,7 +1240,7 @@ pointer. Nothing is allocated for it:
 let make(n: i32) -> (i32) -> i32 { add(n) }
 
 let add5 = make(5);
-std::printf("%d\n", add5(3));         // 8
+print("{}\n", add5(3));         // 8
 ```
 
 The compiler works out which closures each function value can be, and a
@@ -1244,7 +1269,7 @@ Functions are first-class values. Function types are written as `(ParamTypes) ->
 let inc(x: i32) -> i32 { x + 1 }
 
 let f: (i32) -> i32 = inc;
-std::printf("%d\n", f(41));           // 42
+print("{}\n", f(41));           // 42
 ```
 
 ### Functions as Parameters
@@ -1254,7 +1279,7 @@ let square(x: i32) -> i32 { x * x }
 
 let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 
-std::printf("%d\n", apply(square, 5));    // 25
+print("{}\n", apply(square, 5));    // 25
 ```
 
 ### Generic Higher-Order Functions
@@ -1273,7 +1298,7 @@ let apply<T, U>(f: (T) -> U, x: T) -> U {
 
 ```sammine
 import std;                            // import the std module
-std::printf("hello %d\n", 42);        // qualified access
+print("hello {}\n", 42);        // qualified access
 ```
 
 ### Aliased Imports
@@ -1313,8 +1338,8 @@ A generic function is compiled in each module that uses it, for the types it is 
 ### Standard Library Modules
 
 - **`definitions`** (the prelude) -- imported by every module, library or program, without writing `import`, and its names are used without a prefix. A module's own definition of the same name hides the prelude's in that module's code. Provides builtin typeclasses (`Sized`, `Add`, `Sub`, `Mul`, `Div`, `Mod`, `Less`, `Greater`, `LessEqual`, `GreaterEqual`, `Equal`, `NotEqual`, `Convert`, `Hash`, `Indexer`, `Iterator`) with instances for primitive types, `Option<T>`, and `Range<T>`. `Hash` has instances for the integer types, `char` and `bool`, which mix every bit of the value into the hash (splitmix64's finalizer), so nearby keys land far apart in a table.
-- **`std`** -- provides `printf`
-- **`io`** -- provides `printf`, `print`, `println`, `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
+- **`std`** -- provides C's `printf`, for an unsafe function; `print` is built in
+- **`io`** -- provides `printf` (C's, for an unsafe function), `eprint`, `eprintln`, `print_i32`, `print_i64`, `print_f64`, `print_char`, `print_bool`, `read_line`, `read_i32`, `read_i64`, `read_f64`, file I/O (`open`, `close`, `file_read_line`, `file_write`, `read_file`, `write_file`, `append_file`). `open` gives an `io::File`, which `close` ends. `read_line()`, `read_file(path)` and `file_read_line(f)` return `io::ReadResult = Line('buf<char>, i64) | Eof`: the buffer, which the caller must drop, and its length, or `Eof` at end of input or when the file cannot be read. `file_read_line` and `file_write` hand the file back, as `(f, result)` and `f`.
 - **`vec`** -- provides `Vec<T>` dynamic array (see below)
 - **`map`** -- provides `Map<K, V>`, a hash table (see below)
 - **`set`** -- provides `Set<T>`, a set of values over `Map<T, bool>` (see below)
@@ -1335,7 +1360,7 @@ let main() -> i32 {
   let v1 = vec::push<i32>(v0, 10);       // push returns new Vec
   let v2 = vec::push<i32>(v1, 20);
   let v3 = vec::push<i32>(v2, 30);
-  std::printf("%d %d %d", v3[0], v3[1], v3[2]);  // 10 20 30
+  print("{} {} {}", v3[0], v3[1], v3[2]);  // 10 20 30
   vec::delete<i32>(v3);                   // must free (linear data pointer)
   return 0;
 }
@@ -1398,7 +1423,7 @@ let main() -> i32 {
   let m = map::insert<i32, i32>(map::new<i32, i32>(), 1, 10);
   let m = map::insert<i32, i32>(m, 1, 11);           // replaces 10
   let v = case map::get<i32, i32>(&m, 1) { Some(v) => v, None => 0 };
-  std::printf("%d\n", v);                            // 11
+  print("{}\n", v);                            // 11
   let (m, old) = map::remove<i32, i32>(m, 1);        // old: Some(11)
   map::delete<i32, i32>(m);
   0

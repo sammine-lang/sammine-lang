@@ -23,18 +23,18 @@ reuse strlen(s: ptr<char>) -> i64;
 
 let unsafe main() -> i32 {
   let buf = fill(alloc_buf<i64>(4i64), 4i64);
-  std::printf("%lld %lld %lld %lld\n", at(buf, 0i64), at(buf, 1i64),
+  print("{} {} {} {}\n", at(buf, 0i64), at(buf, 1i64),
               at(buf, 2i64), at(buf, 3i64));
   drop(buf);
 
   let b = id<i32>(alloc_buf<i32>(2));
   b[0] = 7;
-  std::printf("first %d\n", first<i32>(b));
+  print("first {}\n", first<i32>(b));
   drop(b);
 
   let s = alloc_buf<char>(4);
   s[0] = 'a'; s[1] = 'b'; s[2] = 'c'; s[3] = '\0';
-  std::printf("len %lld\n", strlen(s));
+  print("len {}\n", strlen(s));
   drop(s);
   0
 }

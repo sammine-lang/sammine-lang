@@ -25,8 +25,8 @@ let main() -> i32 {
   } else {
     1
   };
-  std::printf("%ld\n", from_let);
-  std::printf("%ld\n", from_return(1));
-  std::printf("%ld\n", nested);
+  print("{}\n", from_let);
+  print("{}\n", from_return(1));
+  print("{}\n", nested);
   return 0;
 }

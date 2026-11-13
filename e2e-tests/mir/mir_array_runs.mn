@@ -13,6 +13,6 @@ let build(x: i32) -> Grid { Grid { cells: [x, x + 1, x + 2, x + 3], n: 2 } }
 
 let main() -> i32 {
   let a: [3]i32 = [10, 20, 30];
-  std::printf("%d %d %d %d\n", sum3(a), size(a), corner(build(6)), corner(Grid { cells: [5, 8, 0, 0], n: 2 }));
+  print("{} {} {} {}\n", sum3(a), size(a), corner(build(6)), corner(Grid { cells: [5, 8, 0, 0], n: 2 }));
   0
 }

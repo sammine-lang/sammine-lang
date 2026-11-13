@@ -15,6 +15,6 @@ let main() -> i32 {
   let a = identity(42);
   let s: T = T { x: 99 };
   let b = get_x(s);
-  std::printf("%d %d", a, b);
+  print("{} {}", a, b);
   return 0;
 }

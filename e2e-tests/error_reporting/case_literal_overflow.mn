@@ -6,8 +6,8 @@ import std;
 let main() -> i32 {
   let x = 1;
   case x {
-    99999999999999999999 => std::printf("big\n"),
-    _ => std::printf("other\n"),
+    99999999999999999999 => print("big\n"),
+    _ => print("other\n"),
   };
   return 0;
 }

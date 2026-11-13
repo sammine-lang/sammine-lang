@@ -34,6 +34,6 @@ let amicable_sum(a: i32, limit: i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", amicable_sum(2, 10000));
+  print("{}\n", amicable_sum(2, 10000));
   return 0;
 }

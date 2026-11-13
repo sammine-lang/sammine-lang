@@ -15,8 +15,8 @@ let sign(x: i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", sign(42));
-  std::printf("%d\n", sign(-5));
-  std::printf("%d\n", sign(0));
+  print("{}\n", sign(42));
+  print("{}\n", sign(-5));
+  print("{}\n", sign(0));
   return 0;
 }

@@ -5,6 +5,6 @@ import calls_own_helper;
 import std;
 
 let main() -> i32 {
-  std::printf("%d\n", calls_own_helper::double_plus_one(3));
+  print("{}\n", calls_own_helper::double_plus_one(3));
   return 0;
 }

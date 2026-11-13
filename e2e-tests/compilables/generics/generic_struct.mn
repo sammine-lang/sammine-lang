@@ -9,6 +9,6 @@ struct Box<T> {
 
 let main() -> i32 {
   let b = Box<i32>{ value: 42 };
-  std::printf("%d", b.value);
+  print("{}", b.value);
   return 0;
 }

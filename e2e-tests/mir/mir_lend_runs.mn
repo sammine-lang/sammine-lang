@@ -30,7 +30,7 @@ let via_method(p: 'ptr<i32>) -> i32 {
 
 let main() -> i32 {
   let p = make(-7);
-  std::printf("%d %d %d %d\n", look(p), sign(p), both(make(5), make(7)),
+  print("{} {} {} {}\n", look(p), sign(p), both(make(5), make(7)),
               via_method(make(7)));
   drop(p);
   0

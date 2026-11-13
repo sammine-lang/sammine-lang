@@ -10,7 +10,7 @@ let big<T>(x: T) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", big<i32>(1));
-  std::printf("%ld\n", big<f64>(1.5));
+  print("{}\n", big<i32>(1));
+  print("{}\n", big<f64>(1.5));
   return 0;
 }

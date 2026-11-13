@@ -17,9 +17,9 @@ let next(r: Range) -> i32 { r.a + 1 }
 
 let main() -> i32 {
   for i in 0i64..3 {
-    std::printf("%ld\n", i);
+    print("{}\n", i);
   };
   let r = Range { a: 7 };
-  std::printf("%d %d\n", r.a, next(r));
+  print("{} {}\n", r.a, next(r));
   return 0;
 }

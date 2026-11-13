@@ -11,11 +11,11 @@ let main() -> i32 {
   let a: i32 = 10;
   let b: i32 = 12;
 
-  std::printf("%d\n", a & b);
-  std::printf("%d\n", a | b);
-  std::printf("%d\n", a ^ b);
-  std::printf("%d\n", a << 2);
-  std::printf("%d\n", a >> 2);
+  print("{}\n", a & b);
+  print("{}\n", a | b);
+  print("{}\n", a ^ b);
+  print("{}\n", a << 2);
+  print("{}\n", a >> 2);
 
   return 0;
 }

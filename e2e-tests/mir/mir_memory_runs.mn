@@ -17,7 +17,7 @@ let roundtrip(p: 'ptr<i32>) -> 'ptr<i32> {
 
 let main() -> i32 {
   let p = roundtrip(bump(make(41)));
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   release(p);
   0
 }

@@ -20,11 +20,11 @@ let malloc(x: i32) -> i32 { x + 2 }
 let exit(c: i32) -> i32 { c + 7 }
 
 let main() -> i32 {
-  std::printf("%d\n", printf(3));
+  print("{}\n", printf(3));
   let p = alloc<i32>(1);
   *p = 5;
-  std::printf("%d %d %d\n", *p, free(1), malloc(1));
+  print("{} {} {}\n", *p, free(1), malloc(1));
   drop(p);
-  std::printf("%d\n", exit(1));
+  print("{}\n", exit(1));
   return 0;
 }

@@ -8,6 +8,6 @@ let main() -> i32 {
   let a = generic_mid::apply_both<i32>(10, 20);
   let b = generic_mid::apply_both<f64>(3.14, 2.71);
   let c = generic_mid::nested_identity<i32>(99);
-  std::printf("%d %.2f %d", a, b, c);
+  print("{} {.2} {}", a, b, c);
   return 0;
 }

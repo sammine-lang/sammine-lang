@@ -22,7 +22,7 @@ let unbox(pp: 'ptr<'ptr<i32>>) -> 'ptr<i32> {
 
 let main() -> i32 {
   let p = unbox(boxed());
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   drop(p);
   0
 }

@@ -6,6 +6,6 @@ import std;
 
 let main() -> i32 {
   let y: i32 = lib::apply<i32>(99);
-  std::printf("%d\n", y);
+  print("{}\n", y);
   return 0;
 }

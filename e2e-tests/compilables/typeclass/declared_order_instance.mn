@@ -1,5 +1,5 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK: 1 0 3
+// CHECK: true false 3
 
 import std;
 
@@ -22,6 +22,6 @@ let main() -> i32 {
   let p = Point { x: 1i64 };
   let q = Point { x: 2i64 };
   let r = p + q;
-  std::printf("%d %d %ld\n", p < q, Color::Red >= Color::Blue, r.x);
+  print("{} {} {}\n", p < q, Color::Red >= Color::Blue, r.x);
   0
 }

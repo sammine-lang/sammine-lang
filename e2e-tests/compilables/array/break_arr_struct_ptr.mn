@@ -14,9 +14,9 @@ let main() -> i32 {
   let s0 : Node = Node { id: 7, val: &a };
   let s1 : Node = Node { id: 13, val: &b };
   let arr : [2]Node = [s0, s1];
-  std::printf("%d\n", arr[0].id);
-  std::printf("%d\n", *arr[0].val);
-  std::printf("%d\n", arr[1].id);
-  std::printf("%d\n", *arr[1].val);
+  print("{}\n", arr[0].id);
+  print("{}\n", *arr[0].val);
+  print("{}\n", arr[1].id);
+  print("{}\n", *arr[1].val);
   return 0;
 }

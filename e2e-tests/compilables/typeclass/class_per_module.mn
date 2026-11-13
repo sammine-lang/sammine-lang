@@ -31,12 +31,12 @@ instance size_a::Size<Mine> {
 
 let main() -> i32 {
   let sq = size_a::Sq { side: 4i64 };
-  std::printf("%ld\n", size_a::Size<size_a::Sq>(sq));
-  std::printf("%ld\n", size_a::describe<size_a::Sq>(sq));
-  std::printf("%ld\n", size_a::Size<size_a::Sq>::describe(sq));
-  std::printf("%ld\n", size_b::Size<i64>(5i64));
-  std::printf("%ld\n", Size<Mine>(Mine { n: 7i64 }));
-  std::printf("%ld\n", size_a::Size<Mine>(Mine { n: 7i64 }));
-  std::printf("%ld\n", size_a::describe<Mine>(Mine { n: 7i64 }));
+  print("{}\n", size_a::Size<size_a::Sq>(sq));
+  print("{}\n", size_a::describe<size_a::Sq>(sq));
+  print("{}\n", size_a::Size<size_a::Sq>::describe(sq));
+  print("{}\n", size_b::Size<i64>(5i64));
+  print("{}\n", Size<Mine>(Mine { n: 7i64 }));
+  print("{}\n", size_a::Size<Mine>(Mine { n: 7i64 }));
+  print("{}\n", size_a::describe<Mine>(Mine { n: 7i64 }));
   return 0;
 }

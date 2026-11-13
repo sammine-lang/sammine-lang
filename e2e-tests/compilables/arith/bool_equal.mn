@@ -8,8 +8,8 @@ import std;
 let main() -> i32 {
   let t : bool = true;
   let f : bool = false;
-  if t == true { std::printf("t_eq\n"); } else { std::printf("fail\n"); };
-  if f == false { std::printf("f_eq\n"); } else { std::printf("fail\n"); };
-  if t != false { std::printf("t_neq\n"); } else { std::printf("fail\n"); };
+  if t == true { print("t_eq\n"); } else { print("fail\n"); };
+  if f == false { print("f_eq\n"); } else { print("fail\n"); };
+  if t != false { print("t_neq\n"); } else { print("fail\n"); };
   return 0;
 }

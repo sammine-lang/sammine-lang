@@ -2,15 +2,15 @@
 // CHECK:          |cross_module_generic_error_test.mn
 // CHECK-NEXT:   22|
 // CHECK-NEXT:   23|let main() -> i32 {
-// CHECK-NEXT:   24|  std::printf("%d %d\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
-// CHECK-NEXT:     |                                          ───┬
-// CHECK-NEXT:     |                                             ╰─ Argument 1 to 'g::identity<i32>': expected i32, got float literal
-// CHECK-NEXT:     |                                          ───┬
-// CHECK-NEXT:     |                                             ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
-// CHECK-NEXT:     |                                                                  ──────┬
-// CHECK-NEXT:     |                                                                        ╰─ Argument 1 to 'g::identity<i32>': expected i32, got ptr<char>
-// CHECK-NEXT:     |                                                                  ──────┬
-// CHECK-NEXT:     |                                                                        ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
+// CHECK-NEXT:   24|  print("{} {}\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
+// CHECK-NEXT:     |                                    ───┬
+// CHECK-NEXT:     |                                       ╰─ Argument 1 to 'g::identity<i32>': expected i32, got float literal
+// CHECK-NEXT:     |                                    ───┬
+// CHECK-NEXT:     |                                       ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
+// CHECK-NEXT:     |                                                            ──────┬
+// CHECK-NEXT:     |                                                                  ╰─ Argument 1 to 'g::identity<i32>': expected i32, got ptr<char>
+// CHECK-NEXT:     |                                                            ──────┬
+// CHECK-NEXT:     |                                                                  ╰─ note: 'g::identity<i32>' has signature: (i32) -> i32
 // CHECK-NEXT:   25|  return 0;
 // CHECK-NEXT:   26|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -21,6 +21,6 @@ import has_generic as g;
 import std;
 
 let main() -> i32 {
-  std::printf("%d %d\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
+  print("{} {}\n", g::identity<i32>(3.14), g::identity<i32>("hello"));
   return 0;
 }

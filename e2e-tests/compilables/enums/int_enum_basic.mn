@@ -8,9 +8,9 @@ type OpenFlags = RDONLY(0) | WRONLY(1) | CREAT(64);
 
 let check_flag(f: OpenFlags) -> i32 {
   case f {
-    OpenFlags::RDONLY => std::printf("matched RDONLY\n"),
-    OpenFlags::WRONLY => std::printf("matched WRONLY\n"),
-    OpenFlags::CREAT => std::printf("matched CREAT\n"),
+    OpenFlags::RDONLY => print("matched RDONLY\n"),
+    OpenFlags::WRONLY => print("matched WRONLY\n"),
+    OpenFlags::CREAT => print("matched CREAT\n"),
   };
   return 0;
 }

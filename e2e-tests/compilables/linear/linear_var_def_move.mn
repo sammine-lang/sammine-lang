@@ -9,6 +9,6 @@ let main() -> i32 {
   let q = p;
   let y : i32 = *q;
   drop(q);
-  std::printf("%d\n", y);
+  print("{}\n", y);
   return 0;
 }

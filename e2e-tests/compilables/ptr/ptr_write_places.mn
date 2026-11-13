@@ -18,7 +18,7 @@ let unsafe main() -> i32 {
   *q = [[0, 0], [0, 0]];
   (*q)[1][0] = 5;
 
-  std::printf("%d %d %d %d %d\n", p[0].n, p[1].n, p[1].inner.a[1],
+  print("{} {} {} {} {}\n", p[0].n, p[1].n, p[1].inner.a[1],
               p[1].inner.t.1, (*q)[1][0]);
   drop(p);
   drop(q);

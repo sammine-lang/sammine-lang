@@ -46,7 +46,7 @@ let unsafe main() -> i32 {
   let n = clear(alloc_buf<i64>(chunks()), 0);
   n[0] = 1i64;
   let n = double_times(n, 1000);
-  std::printf("%lld\n", chunk_digit_sum(n, 0));
+  print("{}\n", chunk_digit_sum(n, 0));
   drop(n);
   return 0;
 }

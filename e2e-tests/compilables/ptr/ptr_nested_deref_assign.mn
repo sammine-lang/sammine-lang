@@ -9,7 +9,7 @@ let main() -> i32 {
   *x = 0;
   *pp = x;
   **pp = 42;
-  std::printf("%d\n", **pp);
+  print("{}\n", **pp);
   drop(*pp);
   drop(pp);
   return 0;

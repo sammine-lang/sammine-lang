@@ -20,6 +20,6 @@ let main() -> i32 {
   c::after_seven_doubles(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
                          c::TwoF64 { x: 7.0, y: 8.0 });
   let r = c::sret_then_five(1i64, 2i64, 3i64, 4i64, 5i64, c::Two { a: 7i64, b: 8i64 });
-  std::printf("sret %ld %ld %ld\n", r.a, r.b, r.c);
+  print("sret {} {} {}\n", r.a, r.b, r.c);
   0
 }

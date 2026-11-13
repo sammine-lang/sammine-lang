@@ -22,6 +22,6 @@ let main() -> i32 {
   let b = &a;
   let v : i32 = *(*b);
   drop(a);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

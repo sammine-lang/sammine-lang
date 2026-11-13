@@ -11,13 +11,13 @@ let none<T>() -> Option<T> { Option<T>::None }
 
 let main() -> i32 {
   case none<i32>() {
-    Some(v) => std::printf("some\n"),
-    None => std::printf("none in generic\n"),
+    Some(v) => print("some\n"),
+    None => print("none in generic\n"),
   };
   let n = Option<f64>::None;
   case n {
-    Some(v) => std::printf("some\n"),
-    None => std::printf("f64 none\n"),
+    Some(v) => print("some\n"),
+    None => print("f64 none\n"),
   };
   0
 }

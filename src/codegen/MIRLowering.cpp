@@ -362,8 +362,8 @@ mlir::FailureOr<mlir::Value> MIRLowering::lowerExpr(ExprAST *expr) {
     return lowerDim(dim);
   if (auto *len = llvm::dyn_cast<LenExprAST>(expr))
     return lowerLen(len);
-  if (auto *panic = llvm::dyn_cast<PanicExprAST>(expr))
-    return lowerPanic(panic);
+  if (auto *format = llvm::dyn_cast<FormatExprAST>(expr))
+    return lowerFormat(format);
   if (auto *str = llvm::dyn_cast<StringExprAST>(expr))
     return lowerString(str);
   if (auto *lit = llvm::dyn_cast<StructLiteralExprAST>(expr))

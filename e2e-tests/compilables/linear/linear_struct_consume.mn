@@ -14,6 +14,6 @@ let main() -> i32 {
   let b : Box = Box { data: p, tag: 1 };
   let v : i32 = *(b.data);
   drop(b.data);
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

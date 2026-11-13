@@ -16,6 +16,6 @@ let sum_multiples(n: i32, acc: i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", sum_multiples(0, 0));
+  print("{}\n", sum_multiples(0, 0));
   0
 }

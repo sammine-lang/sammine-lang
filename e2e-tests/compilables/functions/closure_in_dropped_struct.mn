@@ -21,7 +21,7 @@ struct Job { f: (i32) -> i32, box: 'ptr<i32>, };
 instance Drop<Job> {
   let unsafe Drop(j: Job) -> unit {
     let f = j.f;
-    std::printf("drop job %d\n", f(*j.box));
+    print("drop job {}\n", f(*j.box));
     drop(j.box);
   }
 }
@@ -43,6 +43,6 @@ let run(j: ptr<Job>) -> i32 {
 let main() -> i32 {
   let a = Job { f: add(1), box: boxed(5) };
   let m = Job { f: mul(2, 3), box: boxed(7) };
-  std::printf("%d %d\n", run(&a), run(&m));
+  print("{} {}\n", run(&a), run(&m));
   0
 }

@@ -19,7 +19,7 @@ let main() -> i32 {
     Some(a) => case flip(None) { Some(b) => a + b, None => a, },
     None => 0i64,
   };
-  std::printf("%ld %ld %ld %ld %ld\n", take(keep(None)), take(keep(Some(1i64))),
+  print("{} {} {} {} {}\n", take(keep(None)), take(keep(Some(1i64))),
               take(flip(None)), take(lit), nested);
   0
 }

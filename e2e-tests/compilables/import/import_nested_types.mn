@@ -13,7 +13,7 @@ let main() -> i32 {
     min: shapes::Point { x: 1, y: 2 },
     max: shapes::Point { x: 5, y: 7 },
   };
-  std::printf("%d\n", shapes::width(r));
-  std::printf("%d\n", shapes::area(shapes::Shape::Box(r)));
+  print("{}\n", shapes::width(r));
+  print("{}\n", shapes::area(shapes::Shape::Box(r)));
   0
 }

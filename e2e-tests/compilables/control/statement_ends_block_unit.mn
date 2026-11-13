@@ -19,14 +19,14 @@ let digits(n: i32) -> i32 {
 let main() -> i32 {
   let o = Option<i32>::Some(4);
   case o {
-    Some(v) => { std::printf("got %d\n", v); },
+    Some(v) => { print("got {}\n", v); },
     None => {},
   };
   // A () bound, and passed on.
-  let u = if true { std::printf("then\n"); } else { };
+  let u = if true { print("then\n"); } else { };
   let w = u;
-  let k = case o { Some(v) => { std::printf(""); v }, None => 0 };
+  let k = case o { Some(v) => { print(""); v }, None => 0 };
   let j = case o { Some(v) => v + 3, None => 0 };
-  std::printf("%d %d %d\n", k, j, digits(500));
+  print("{} {} {}\n", k, j, digits(500));
   0
 }

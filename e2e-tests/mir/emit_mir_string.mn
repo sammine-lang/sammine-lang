@@ -7,6 +7,6 @@
 // CHECK-NEXT: %1 = sammine.call @printf(%0, %arg0) : (!sammine.ptr<i8, view>, i32) -> i32
 import std;
 
-let greet(n: i32) { std::printf("hello, %d\n", n); }
+let greet(n: i32) { print("hello, {}\n", n); }
 
 let main() -> i32 { greet(1); 0 }

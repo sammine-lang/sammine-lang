@@ -23,6 +23,6 @@ let main() -> i32 {
   let pairs = [Pair { a: a1(), b: 1 }, Pair { a: a1(), b: 2 }];
   let nested = [[a1()], [a1()]];
   let read = [a1()];
-  std::printf("%d\n", *read[0]);
+  print("{}\n", *read[0]);
   0
 }

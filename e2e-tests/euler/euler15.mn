@@ -13,6 +13,6 @@ let binom(n: i64, k: i64, i: i64, acc: i64) -> i64 {
 
 let main() -> i32 {
   let result: i64 = binom(40, 20, 1, 1);
-  std::printf("%lld\n", result);
+  print("{}\n", result);
   return 0;
 }

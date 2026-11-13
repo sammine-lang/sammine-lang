@@ -6,7 +6,7 @@ import io;
 let main() -> i32 {
   case io::read_line() {
     Line(line, n) => drop(line),
-    Eof => io::println("eof"),
+    Eof => print("eof\n"),
   };
   0
 }

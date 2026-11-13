@@ -1,0 +1,30 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: print() has 2 placeholders but 1 argument
+// CHECK: print() has 0 placeholders but 1 argument
+// CHECK: print()'s format has '{d}' is no placeholder: write '{}', or '{.2}' for a float's digits after the point
+// CHECK: print()'s format has a '{' with no '}' after it; write '{{' for a brace
+// CHECK: print()'s format has a '}' with no '{' before it; write '}}' for a brace
+// CHECK: '{.2}' gives a float's digits after the point, and this is 'i32'
+// CHECK: print()'s format must be a string literal: the compiler reads it to print each argument
+// CHECK: print() prints numbers, bools, chars and strings, not 'P'
+// CHECK: print() needs a format: print("what to say")
+
+// The compiler reads print's format: each {} takes one argument, of a type
+// that prints.
+
+struct P { x: i32, };
+
+let main() -> i32 {
+  let n = 1i32;
+  print("{} {}\n", n);
+  print("old %d\n", n);
+  print("{d}\n", n);
+  print("{\n", n);
+  print("}\n");
+  print("{.2}\n", n);
+  let f = "{}\n";
+  print(f, n);
+  print("{}\n", P { x: 1 });
+  print();
+  0
+}

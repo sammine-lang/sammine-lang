@@ -1,6 +1,5 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK:      piped
-// CHECK-NEXT: as value
+// CHECK: 78
 
 // A module's function can be piped into, or bound and called, by its
 // qualified name.
@@ -8,8 +7,8 @@
 import io;
 
 let main() -> i32 {
-  "piped" |> io::println;
-  let f = io::println;
-  f("as value");
+  7 |> io::print_i32;
+  let f = io::print_i32;
+  f(8);
   0
 }

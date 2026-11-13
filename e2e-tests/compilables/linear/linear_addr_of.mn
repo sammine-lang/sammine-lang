@@ -7,6 +7,6 @@ let main() -> i32 {
   let x : i32 = 77;
   let p : ptr<i32> = &x;
   let v : i32 = *p;
-  std::printf("%d\n", v);
+  print("{}\n", v);
   return 0;
 }

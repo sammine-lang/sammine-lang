@@ -23,10 +23,10 @@ let shown(p: Point) -> i32 { if p.x > 0 { p.x } else { p.y } }
 
 let main() -> i32 {
   let q = swap(Point { x: 1, y: 2 });
-  std::printf("%d %d %d\n", q.x, q.y, norm1(q));
+  print("{} {} {}\n", q.x, q.y, norm1(q));
   let (a, b) = split(7);
-  std::printf("%d %d %d\n", a + b, a, b);
-  std::printf("%d\n", release(make(1, 42)));
-  std::printf("%d\n", boxed(9) * shown(Point { x: 0, y: 1 }));
+  print("{} {} {}\n", a + b, a, b);
+  print("{}\n", release(make(1, 42)));
+  print("{}\n", boxed(9) * shown(Point { x: 0, y: 1 }));
   0
 }

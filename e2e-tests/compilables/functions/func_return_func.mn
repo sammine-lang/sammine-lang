@@ -14,8 +14,8 @@ let add(a: i32, b: i32) -> i32 {
 
 let main() -> i32 {
   let add5 : (i32) -> i32 = add(5);
-  std::printf("%d\n", add5(3));
-  std::printf("%d\n", add5(7));
-  std::printf("%d\n", add5(0));
+  print("{}\n", add5(3));
+  print("{}\n", add5(7));
+  print("{}\n", add5(0));
   return 0;
 }

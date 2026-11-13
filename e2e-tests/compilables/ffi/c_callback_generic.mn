@@ -12,7 +12,7 @@ reuse pthread_create(t: ptr<u64>, attr: i64, f: (i64) -> i64, arg: i64) -> i32;
 reuse pthread_join(t: u64, result: i64) -> i32;
 
 let run<T>(arg: i64) -> i64 {
-  std::printf("thread %ld for %ld bytes\n", arg, Sized<T>());
+  print("thread {} for {} bytes\n", arg, Sized<T>());
   0
 }
 
@@ -20,7 +20,7 @@ let start<T>(arg: i64) -> unit {
   let t = alloc<u64>(1);
   *t = 0u64;
   pthread_create(t, 0i64, run<T>, arg);
-  std::printf("joined %d\n", pthread_join(*t, 0i64));
+  print("joined {}\n", pthread_join(*t, 0i64));
   drop(t);
 }
 

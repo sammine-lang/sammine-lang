@@ -6,8 +6,8 @@ import std;
 
 let yesno(b: bool) -> i32 {
   case b {
-    true => std::printf("yes\n"),
-    false => std::printf("no\n"),
+    true => print("yes\n"),
+    false => print("no\n"),
   };
   return 0;
 }

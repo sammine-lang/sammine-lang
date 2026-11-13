@@ -20,9 +20,9 @@ let main() -> i32 {
   } else {
     [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }]
   };
-  std::printf("%d\n", a[0].x);
-  std::printf("%d\n", a[0].y);
-  std::printf("%d\n", b[0].x);
-  std::printf("%d\n", b[0].y);
+  print("{}\n", a[0].x);
+  print("{}\n", a[0].y);
+  print("{}\n", b[0].x);
+  print("{}\n", b[0].y);
   return 0;
 }

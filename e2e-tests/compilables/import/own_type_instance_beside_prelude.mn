@@ -16,7 +16,7 @@ instance Hash<Range<i32>> {
 
 let main() -> i32 {
   let r = Range<i32> { a: 1, b: 2, c: 3 };
-  std::printf("%lu %lu\n", Hash<Range<i32>>(r),
+  print("{} {}\n", Hash<Range<i32>>(r),
               hashes_prelude_range::hash_of_range(1));
   return 0;
 }

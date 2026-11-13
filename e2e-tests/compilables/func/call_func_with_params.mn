@@ -9,6 +9,6 @@ let foo(i: i32) -> i32 {
 
 let main() -> i32 {
   let result : i32 = foo(42);
-  std::printf("%d\n", result);
+  print("{}\n", result);
   return 0;
 }

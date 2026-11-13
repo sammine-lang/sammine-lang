@@ -8,7 +8,7 @@ let unsafe main() -> i32 {
   let xs = buffer::filled(3i64, 7i64);
   let ys = buffer::filled(2i64, 2.5);
   let none = buffer::filled(0i64, 1i64);
-  std::printf("%ld %ld %ld %f %f\n", xs[0], xs[1], xs[2], ys[0], ys[1]);
+  print("{} {} {} {} {}\n", xs[0], xs[1], xs[2], ys[0], ys[1]);
   drop(xs);
   drop(ys);
   drop(none);

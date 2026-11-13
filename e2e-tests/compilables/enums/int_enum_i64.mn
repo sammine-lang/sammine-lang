@@ -9,7 +9,7 @@ type Big: i64 = Large(4294967296) | Small(0);
 let main() -> i32 {
   let l: Big = Large;
   let s: Big = Small;
-  std::printf("%ld\n", l);
-  std::printf("%ld\n", s);
+  print("{}\n", l);
+  print("{}\n", s);
   return 0;
 }

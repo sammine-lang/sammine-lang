@@ -11,7 +11,7 @@ let make_pair() -> (i64, f64) {
 
 let main() -> i32 {
   let (a, b) = make_pair();
-  std::printf("%ld\n", a);
-  std::printf("%f\n", b);
+  print("{}\n", a);
+  print("{}\n", b);
   return 0;
 }

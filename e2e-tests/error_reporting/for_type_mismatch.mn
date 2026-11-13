@@ -5,7 +5,7 @@ import std;
 
 let main() -> i32 {
   for i in 0i64..5u32 {
-    std::printf("%ld\n", i);
+    print("{}\n", i);
   };
   return 0;
 }

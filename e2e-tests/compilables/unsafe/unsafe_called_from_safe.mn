@@ -18,7 +18,7 @@ let main() -> i32 {
   let p = put(alloc_buf<i64>(2), 0i64, 10i64);
   let p = apply(put, p);
   // CHECK: 10 20
-  std::printf("%lld %lld\n", get<i64>(p, 0i64), get(p, 1i64));
+  print("{} {}\n", get<i64>(p, 0i64), get(p, 1i64));
   drop(p);
   return 0;
 }

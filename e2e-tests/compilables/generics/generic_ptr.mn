@@ -9,6 +9,6 @@ let main() -> i32 {
   let x = 42;
   let p = &x;
   let result = deref_val(p);
-  std::printf("%d", result);
+  print("{}", result);
   return 0;
 }

@@ -7,7 +7,7 @@ import std;
 let main() -> i32 {
   let a = has_generic::identity<i32>(42);
   let b = has_generic::identity<i64>(7);
-  std::printf("%d\n", a);
-  std::printf("%ld\n", b);
+  print("{}\n", a);
+  print("{}\n", b);
   return 0;
 }

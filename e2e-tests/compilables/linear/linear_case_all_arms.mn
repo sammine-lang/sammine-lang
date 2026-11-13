@@ -13,6 +13,6 @@ let main() -> i32 {
     Color::Green => drop(p),
     Color::Blue => drop(p),
   };
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

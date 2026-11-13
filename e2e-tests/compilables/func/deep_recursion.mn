@@ -16,7 +16,7 @@ let count(i: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", count_tail(10000000i64, 0i64));
-  std::printf("%ld\n", count(10000000i64));
+  print("{}\n", count_tail(10000000i64, 0i64));
+  print("{}\n", count(10000000i64));
   return 0;
 }

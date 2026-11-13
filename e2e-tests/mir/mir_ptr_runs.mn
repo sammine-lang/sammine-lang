@@ -12,7 +12,7 @@ let main() -> i32 {
   *p = 41;
   let q = pass(p);
   let x: i64 = 3i64;
-  std::printf("%d %d\n", *q + 1, pick(&x, &x));
+  print("{} {}\n", *q + 1, pick(&x, &x));
   drop(q);
   0
 }

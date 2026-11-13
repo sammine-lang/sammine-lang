@@ -11,7 +11,7 @@ let main() -> i32 {
   let b = alloc<[3]i32>(1);
   (*b)[0] = 10;
   (*b)[2] = 30;
-  std::printf("%d %d\n", read_elem(b, 0), read_elem(b, 2));
+  print("{} {}\n", read_elem(b, 0), read_elem(b, 2));
   drop(b);
   return 0;
 }

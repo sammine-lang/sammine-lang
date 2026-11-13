@@ -1,10 +1,10 @@
 // RUN: (! %sammine --file %full %O 2>&1) | %check %full
-// CHECK: missing_instance.mn:17:18
+// CHECK: missing_instance.mn:17:16
 // CHECK-NEXT:    15|
 // CHECK-NEXT:    16|let main() -> i32 {
-// CHECK-NEXT:    17|  printf("%ld\n", Sized<ptr<i32>>());
-// CHECK-NEXT:     |                  ────┬
-// CHECK-NEXT:     |                      ╰─ No instance of Sized<ptr<i32>>
+// CHECK-NEXT:    17|  print("{}\n", Sized<ptr<i32>>());
+// CHECK-NEXT:     |                ────┬
+// CHECK-NEXT:     |                    ╰─ No instance of Sized<ptr<i32>>
 // CHECK-NEXT:    18|  return 0;
 // CHECK-NEXT:    19|}
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
@@ -14,6 +14,6 @@
 reuse printf(fmt : ptr<char>, ...) -> i32;
 
 let main() -> i32 {
-  printf("%ld\n", Sized<ptr<i32>>());
+  print("{}\n", Sized<ptr<i32>>());
   return 0;
 }

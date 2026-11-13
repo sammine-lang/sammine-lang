@@ -8,6 +8,6 @@ let main() -> i32 {
   *p = 3.14;
   let y : f64 = *p;
   drop(p);
-  std::printf("%f\n", y);
+  print("{}\n", y);
   return 0;
 }

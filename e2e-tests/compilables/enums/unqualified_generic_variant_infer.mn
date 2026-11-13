@@ -20,17 +20,17 @@ let main() -> i32 {
   let b = Maybe<f64>::Nothing;
   let s = Some(3i64);
   let j = Just(2.5);
-  case s { Some(v) => std::printf("%ld ", v), None => 0, };
-  case j { Just(v) => std::printf("%f\n", v), Nothing => 0, };
+  case s { Some(v) => print("{} ", v), None => (), };
+  case j { Just(v) => print("{}\n", v), Nothing => (), };
   // Unsuffixed literals take their default types, i32 and f64.
   let k = Some(7);
   let x: Option<i32> = k;
   let l = Some(1.5);
-  case x { Some(v) => std::printf("%d ", v), None => 0, };
-  case l { Some(v) => std::printf("%f\n", v), None => 0, };
+  case x { Some(v) => print("{} ", v), None => (), };
+  case l { Some(v) => print("{}\n", v), None => (), };
   // In a generic body, and as an argument.
-  case wrap(8i64) { Some(v) => std::printf("%ld ", v), None => 0, };
-  std::printf("%ld %ld\n", or_zero(Just(9i64)),
+  case wrap(8i64) { Some(v) => print("{} ", v), None => (), };
+  print("{} {}\n", or_zero(Just(9i64)),
               or_zero(Maybe<i64>::Just(4i64)));
   0
 }

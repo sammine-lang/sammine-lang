@@ -10,9 +10,9 @@ struct Point { x: i32, y: i32, };
 
 let main() -> i32 {
   let a : [2]Point = [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }];
-  std::printf("%d\n", a[0].x);
-  std::printf("%d\n", a[0].y);
-  std::printf("%d\n", a[1].x);
-  std::printf("%d\n", a[1].y);
+  print("{}\n", a[0].x);
+  print("{}\n", a[0].y);
+  print("{}\n", a[1].x);
+  print("{}\n", a[1].y);
   return 0;
 }

@@ -1,6 +1,6 @@
 export reuse printf(fmt : ptr<char>, ...) -> i32;
 
 export let greet() -> i32 {
-  printf("hello\n");
+  print("hello\n");
   return 0;
 }

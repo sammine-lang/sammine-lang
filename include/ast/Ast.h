@@ -832,22 +832,31 @@ public:
   AST_NODE_METHODS("LenExprAST", NodeKind::LenExprAST)
 };
 
-/// `panic("message", args...)`: prints where it is and the message, as
-/// printf formats it with the arguments, to stderr, and ends the program
-/// with status 1. Nothing is dropped. It gives no value, so it fits where
+/// `print("format", args...)` or `panic("format", args...)`: the format
+/// with each `{}` in it replaced by an argument, as its type prints
+/// (util/FormatString.h). `print` writes it to stdout and is (). `panic`
+/// writes where it is and the message to stderr and ends the program with
+/// status 1; nothing is dropped, and it gives no value, so it fits where
 /// any is expected: its type is Never.
-class PanicExprAST : public ExprAST {
+class FormatExprAST : public ExprAST {
 public:
+  enum class Kind { Print, Panic };
+  Kind kind;
   std::vector<std::unique_ptr<ExprAST>> arguments;
-  explicit PanicExprAST(std::shared_ptr<Token> tok,
-                        std::vector<std::unique_ptr<ExprAST>> arguments_)
-      : ExprAST(NodeKind::PanicExprAST), arguments(std::move(arguments_)) {
+  explicit FormatExprAST(Kind kind_, std::shared_ptr<Token> tok,
+                         std::vector<std::unique_ptr<ExprAST>> arguments_)
+      : ExprAST(NodeKind::FormatExprAST), kind(kind_),
+        arguments(std::move(arguments_)) {
     this->join_location(tok);
     for (auto &arg : arguments)
       this->join_location(arg.get());
   }
+  /// What source calls it: `print` or `panic`.
+  std::string_view keyword() const {
+    return kind == Kind::Print ? "print" : "panic";
+  }
   std::string to_string() const override;
-  AST_NODE_METHODS("PanicExprAST", NodeKind::PanicExprAST)
+  AST_NODE_METHODS("FormatExprAST", NodeKind::FormatExprAST)
 };
 
 class DimExprAST : public ExprAST {

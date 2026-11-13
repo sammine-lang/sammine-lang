@@ -8,7 +8,7 @@ let main() -> i32 {
   let p = &x;
   let q = alloc<i32>(1);
   *q = 7;
-  std::printf("%d %d\n", *p, *q);
+  print("{} {}\n", *p, *q);
   drop(q);
   return 0;
 }

@@ -10,6 +10,6 @@ let main() -> i32 {
   } else {
     drop(p);
   };
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

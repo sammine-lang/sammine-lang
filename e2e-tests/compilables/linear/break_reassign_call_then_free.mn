@@ -8,7 +8,7 @@
 // CHECK-NEXT:   32|  drop(p);
 // CHECK-NEXT:     |  ─────┬
 // CHECK-NEXT:     |       ╰─ Cannot use 'p' — it was already passed to function previously
-// CHECK-NEXT:   33|  std::printf("%d
+// CHECK-NEXT:   33|  print("{}
 // CHECK-NEXT:   34|", v);
 // CHECK:      # Did something seems wrong? Report it via [https://codeberg.org/badumbatish/sammine-lang/issues]
 // CHECK-NEXT: # Give us a screenshot of the error as well as your contextual source code
@@ -30,7 +30,7 @@ let main() -> i32 {
   *p = 42;
   let v : i32 = consume_ptr(p);
   drop(p);
-  std::printf("%d
+  print("{}
 ", v);
   return 0;
 }

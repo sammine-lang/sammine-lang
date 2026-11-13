@@ -14,15 +14,15 @@ let main() -> i32 {
   // typed variables
   let a : i32 = 3;
   let b : i32 = 5;
-  if a < b { std::printf("less\n"); } else { std::printf("fail\n"); };
-  if a <= a { std::printf("less_equal\n"); } else { std::printf("fail\n"); };
-  if b > a { std::printf("greater\n"); } else { std::printf("fail\n"); };
-  if b >= b { std::printf("greater_equal\n"); } else { std::printf("fail\n"); };
+  if a < b { print("less\n"); } else { print("fail\n"); };
+  if a <= a { print("less_equal\n"); } else { print("fail\n"); };
+  if b > a { print("greater\n"); } else { print("fail\n"); };
+  if b >= b { print("greater_equal\n"); } else { print("fail\n"); };
 
   // bare integer literals
-  if 3 < 5 { std::printf("lit_less\n"); } else { std::printf("fail\n"); };
-  if 3 <= 3 { std::printf("lit_less_equal\n"); } else { std::printf("fail\n"); };
-  if 5 > 3 { std::printf("lit_greater\n"); } else { std::printf("fail\n"); };
-  if 5 >= 5 { std::printf("lit_greater_equal\n"); } else { std::printf("fail\n"); };
+  if 3 < 5 { print("lit_less\n"); } else { print("fail\n"); };
+  if 3 <= 3 { print("lit_less_equal\n"); } else { print("fail\n"); };
+  if 5 > 3 { print("lit_greater\n"); } else { print("fail\n"); };
+  if 5 >= 5 { print("lit_greater_equal\n"); } else { print("fail\n"); };
   return 0;
 }

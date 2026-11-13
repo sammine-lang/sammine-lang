@@ -12,8 +12,8 @@ let make_array() -> [3]i64 {
 
 let main() -> i32 {
   let a = make_array();
-  std::printf("%ld\n", a[0]);
-  std::printf("%ld\n", a[1]);
-  std::printf("%ld\n", a[2]);
+  print("{}\n", a[0]);
+  print("{}\n", a[1]);
+  print("{}\n", a[2]);
   return 0;
 }

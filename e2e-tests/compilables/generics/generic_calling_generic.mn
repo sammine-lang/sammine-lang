@@ -11,7 +11,7 @@ let apply_identity<T>(x: T) -> T {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", apply_identity<i32>(42));
-  std::printf("%.2f\n", apply_identity<f64>(3.14));
+  print("{}\n", apply_identity<i32>(42));
+  print("{.2}\n", apply_identity<f64>(3.14));
   return 0;
 }

@@ -31,24 +31,24 @@ let average(total: i64, count: i32) -> f64 {
 let widen<T>(x: T) -> i64 { x as i64 }
 
 let main() -> i32 {
-  std::printf("%d\n", letter_value('C'));
-  std::printf("%f\n", average(10i64, 4));
+  print("{}\n", letter_value('C'));
+  print("{}\n", average(10i64, 4));
   // Narrowing keeps the low bits, like C.
-  std::printf("%d\n", 5000000000i64 as i32);
+  print("{}\n", 5000000000i64 as i32);
   // A literal takes the type it is converted to when it can.
-  std::printf("%ld\n", 5000000000 as i64);
-  std::printf("%u\n", -1 as u32);
+  print("{}\n", 5000000000 as i64);
+  print("{}\n", -1 as u32);
   // Widening an unsigned value fills with zeros, a signed one with its sign.
-  std::printf("%lu\n", 4294967295u32 as u64);
-  std::printf("%ld\n", -1i32 as i64);
-  std::printf("%c\n", 66 as char);
-  std::printf("%f\n", 1.5f32 as f64);
-  std::printf("%f\n", 7 as f64);
+  print("{}\n", 4294967295u32 as u64);
+  print("{}\n", -1i32 as i64);
+  print("{}\n", 66 as char);
+  print("{}\n", 1.5f32 as f64);
+  print("{}\n", 7 as f64);
   // `as` is sugar for the Convert instance, which can be called directly.
-  std::printf("%d\n", Convert<char, i32>('a'));
+  print("{}\n", Convert<char, i32>('a'));
   // `as` binds tighter than `*`, and chains left to right.
-  std::printf("%ld\n", 3 as i64 * 2 as i64);
-  std::printf("%d\n", 'A' as i32 as i64 as i32);
-  std::printf("%ld %ld %ld\n", widen<i32>(-7), widen<char>('a'), widen<f64>(3.7));
+  print("{}\n", 3 as i64 * 2 as i64);
+  print("{}\n", 'A' as i32 as i64 as i32);
+  print("{} {} {}\n", widen<i32>(-7), widen<char>('a'), widen<f64>(3.7));
   return 0;
 }

@@ -6,7 +6,7 @@ import std;
 
 let main() -> i32 {
   let x : i64 = 100;
-  std::printf("%ld\n", -x);
-  std::printf("%ld\n", -(-x));
+  print("{}\n", -x);
+  print("{}\n", -(-x));
   return 0;
 }

@@ -12,7 +12,7 @@ import std;
 
 let main() -> i32 {
   let p = private_types::make_pub();
-  std::printf("%ld %ld %ld %ld\n", private_types::in_body<i32>(0),
+  print("{} {} {} {}\n", private_types::in_body<i32>(0),
               private_types::make().v, p.h.v, p.n);
   return 0;
 }

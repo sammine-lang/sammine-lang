@@ -2,7 +2,7 @@
 // RUN: %sammine --file %full %O && %T/%base.exe | %check %full
 // RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
 // REQUIRES: asan
-// CHECK:      get 11 20 -1, length 2, contains 1 0
+// CHECK:      get 11 20 -1, length 2, contains true false
 // CHECK-NEXT: removed 11 -1, length 1
 // CHECK-NEXT: workload length 750, sum 365793922
 // CHECK-NEXT: removed box 6, kept box 7
@@ -61,18 +61,18 @@ let unbox(o: Option<'ptr<i32>>) -> i32 {
 let main() -> i32 {
   let m = map::insert<i32, i32>(map::new<i32, i32>(), 1, 10);
   let m = map::insert<i32, i32>(map::insert<i32, i32>(m, 2, 20), 1, 11);
-  std::printf("get %d %d %d, length %lld, contains %d %d\n",
+  print("get {} {} {}, length {}, contains {} {}\n",
               show(map::get<i32, i32>(&m, 1)), show(map::get<i32, i32>(&m, 2)),
               show(map::get<i32, i32>(&m, 3)), map::length<i32, i32>(&m),
               map::contains<i32, i32>(&m, 2), map::contains<i32, i32>(&m, 3));
   let (m, a) = map::remove<i32, i32>(m, 1);
   let (m, b) = map::remove<i32, i32>(m, 1);
-  std::printf("removed %d %d, length %lld\n", show(a), show(b),
+  print("removed {} {}, length {}\n", show(a), show(b),
               map::length<i32, i32>(&m));
   map::delete<i32, i32>(m);
 
   let big = step(map::new<i32, i32>(), 20000, 42i64);
-  std::printf("workload length %lld, sum %lld\n", map::length<i32, i32>(&big),
+  print("workload length {}, sum {}\n", map::length<i32, i32>(&big),
               sum(&big, 0, 0i64));
   map::delete<i32, i32>(big);
 
@@ -82,7 +82,7 @@ let main() -> i32 {
                                       1, boxed(7));
   let (o, six) = map::remove<i32, 'ptr<i32>>(o, 2);
   let (o, seven) = map::remove<i32, 'ptr<i32>>(o, 1);
-  std::printf("removed box %d, kept box %d\n", unbox(six), unbox(seven));
+  print("removed box {}, kept box {}\n", unbox(six), unbox(seven));
   map::delete<i32, 'ptr<i32>>(o);
   0
 }

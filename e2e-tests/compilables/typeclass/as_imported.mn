@@ -9,8 +9,8 @@ import conversions;
 import std;
 
 let main() -> i32 {
-  std::printf("%f\n", conversions::percent(1, 4));
-  std::printf("%ld\n", conversions::widened<f64>(3.7));
-  std::printf("%ld\n", conversions::widened<char>('a'));
+  print("{}\n", conversions::percent(1, 4));
+  print("{}\n", conversions::widened<f64>(3.7));
+  print("{}\n", conversions::widened<char>('a'));
   return 0;
 }

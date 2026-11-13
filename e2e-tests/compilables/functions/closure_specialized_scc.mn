@@ -51,13 +51,13 @@ let tick(n: i32) -> i32 { ping(add(100), n - 1, 0) }
 
 let main() -> i32 {
   // Entered at even and at odd with sets alike: one copy, and mul's another.
-  std::printf("even %d %d odd %d\n", even(add(1), 4, 0), odd(add(2), 4, 0),
+  print("even {} {} odd {}\n", even(add(1), 4, 0), odd(add(2), 4, 0),
               odd(mul(2), 3, 1));
   let p = ping(add(1), 4, 0);
   let q = pong(add(2), 4, 0);
   // A closure of a member is a place too.
   let k = ping(mul(2), 3);
   // Wraps past i32, as it should.
-  std::printf("ping %d %d %d %d\n", p, q, k(1), ping(mul(3), 52, 1));
+  print("ping {} {} {} {}\n", p, q, k(1), ping(mul(3), 52, 1));
   0
 }

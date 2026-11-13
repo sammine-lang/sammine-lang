@@ -29,7 +29,7 @@ public:
   void preorder_walk(IndexExprAST *ast) override;
   void preorder_walk(LenExprAST *ast) override;
   void preorder_walk(DimExprAST *ast) override;
-  void preorder_walk(PanicExprAST *ast) override;
+  void preorder_walk(FormatExprAST *ast) override;
   void preorder_walk(StructLiteralExprAST *ast) override;
   void preorder_walk(FieldAccessExprAST *ast) override;
   void preorder_walk(TupleLiteralExprAST *ast) override;

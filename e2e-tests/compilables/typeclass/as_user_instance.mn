@@ -29,11 +29,11 @@ instance Convert<Boxed, Plain> {
 
 let main() -> i32 {
   let f = Celsius { val: 100.0 } as Fahrenheit;
-  std::printf("%f\n", f.val);
+  print("{}\n", f.val);
 
   let p = alloc<i32>(1);
   *p = 42;
   let plain = Boxed { p: p } as Plain;
-  std::printf("%d\n", plain.n);
+  print("{}\n", plain.n);
   return 0;
 }

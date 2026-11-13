@@ -13,7 +13,7 @@ let f(x : i32) -> i32 {
 }
 
 let main() -> i32 {
-  std::printf("%d\n", f(5));
-  std::printf("%d\n", f(0));
+  print("{}\n", f(5));
+  print("{}\n", f(0));
   return 0;
 }

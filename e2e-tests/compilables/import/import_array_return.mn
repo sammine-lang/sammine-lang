@@ -7,6 +7,6 @@ import std;
 
 let main() -> i32 {
   let t = triples::triple(5i64);
-  std::printf("%lld %lld %lld\n", t[0], t[1], t[2]);
+  print("{} {} {}\n", t[0], t[1], t[2]);
   0
 }

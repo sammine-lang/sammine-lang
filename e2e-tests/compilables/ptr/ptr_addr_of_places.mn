@@ -18,7 +18,7 @@ let main() -> i32 {
   let arr: [2]i32 = [0, 5];
   // A local may reuse a function's name; it is still a variable.
   let f = 6;
-  std::printf("%d %d %d %d %d %d\n", read_param(1), *&s.x, *&s.a[1], *&t.1,
+  print("{} {} {} {} {} {}\n", read_param(1), *&s.x, *&s.a[1], *&t.1,
               *&arr[1], *&f);
   return 0;
 }

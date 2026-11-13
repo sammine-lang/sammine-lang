@@ -22,6 +22,6 @@ let find_max(i: i64, best_i: i64, best_cnt: i64) -> i64 {
 
 let main() -> i32 {
   let result: i64 = find_max(1, 1, 1);
-  std::printf("%lld\n", result);
+  print("{}\n", result);
   return 0;
 }

@@ -14,11 +14,11 @@ struct Point {
 let main() -> i32 {
   let p: 'ptr<Point> = alloc<Point>(1);
   *p = Point { x: 10, y: 20 };
-  std::printf("%d\n", (*p).x);
-  std::printf("%d\n", (*p).y);
+  print("{}\n", (*p).x);
+  print("{}\n", (*p).y);
   *p = Point { x: 30, y: 40 };
-  std::printf("%d\n", (*p).x);
-  std::printf("%d\n", (*p).y);
+  print("{}\n", (*p).x);
+  print("{}\n", (*p).y);
   drop(p);
   return 0;
 }

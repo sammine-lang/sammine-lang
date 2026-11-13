@@ -6,6 +6,6 @@ import math;
 import std;
 
 let main() -> i32 {
-  std::printf("%d\n", math::multiply(3, 4));
+  print("{}\n", math::multiply(3, 4));
   return 0;
 }

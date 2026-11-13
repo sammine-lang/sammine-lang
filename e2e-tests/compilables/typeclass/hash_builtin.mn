@@ -15,10 +15,10 @@ import std;
 let mix(n: i32) -> i32 { n + 1 }
 
 let main() -> i32 {
-  std::printf("i32 %llu %llu\n", Hash<i32>(1), Hash<i32>(-1));
-  std::printf("u32 %llu i64 %llu\n", Hash<u32>(5u32), Hash<i64>(1099511627776i64));
-  std::printf("char %llu bool %llu %llu\n", Hash<char>('a'), Hash<bool>(true),
+  print("i32 {} {}\n", Hash<i32>(1), Hash<i32>(-1));
+  print("u32 {} i64 {}\n", Hash<u32>(5u32), Hash<i64>(1099511627776i64));
+  print("char {} bool {} {}\n", Hash<char>('a'), Hash<bool>(true),
               Hash<bool>(false));
-  std::printf("mix %d\n", mix(40));
+  print("mix {}\n", mix(40));
   0
 }

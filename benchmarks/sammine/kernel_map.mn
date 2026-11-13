@@ -12,7 +12,7 @@ let main() -> i32 {
     let b = double_arr(a);
     *sum_p = *sum_p + b[0];
   };
-  io::printf("%f\n", *sum_p);
+  print("{}\n", *sum_p);
   drop(sum_p);
   0
 }

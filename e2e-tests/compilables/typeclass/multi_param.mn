@@ -19,6 +19,6 @@ instance Converter<Celsius, Fahrenheit> {
 let main() -> i32 {
   let c: Celsius = Celsius { val: 5 };
   let f: Fahrenheit = Converter<Celsius, Fahrenheit>(c);
-  std::printf("%d\n", f.val);
+  print("{}\n", f.val);
   return 0;
 }

@@ -5,11 +5,11 @@
 import std;
 
 let do_nothing() {
-  std::printf("inside\n");
+  print("inside\n");
 }
 
 let main() -> i32 {
   do_nothing();
-  std::printf("ok\n");
+  print("ok\n");
   return 0;
 }

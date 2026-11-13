@@ -21,7 +21,7 @@ let main() -> i32 {
   let v = vec::push<i32>(vec::push<i32>(vec::new<i32>(1), 10), 20);
   let h = Holder { t: Trio { a: 1, b: 2, c: 3 } };
   // CHECK: 10 20 30 3 8 2
-  std::printf("%d %d %d %d %d %d\n", v[0], v[1], v[0] + v[1], last(h.t),
+  print("{} {} {} {} {} {}\n", v[0], v[1], v[0] + v[1], last(h.t),
               make()[1], h.t[1]);
   vec::delete<i32>(v);
   return 0;

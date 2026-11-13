@@ -26,8 +26,8 @@ let main() -> i32 {
     Selector::Medium => [300, 301, 302],
     Selector::Large  => [3000, 3001, 3002],
   };
-  std::printf("%d\n", a[0]);
-  std::printf("%d\n", b[0]);
-  std::printf("%d\n", c[0]);
+  print("{}\n", a[0]);
+  print("{}\n", b[0]);
+  print("{}\n", c[0]);
   return 0;
 }

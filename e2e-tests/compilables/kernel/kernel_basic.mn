@@ -7,6 +7,6 @@ kernel x() -> i32 { 0 }
 
 let main() -> i32 {
   io::print_i32(x());
-  io::printf("\n");
+  print("\n");
   0
 }

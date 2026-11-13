@@ -17,11 +17,11 @@ let mix(a: i64, b: i64, c: i64, x: i64) -> i64 { a * x + b * c }
 
 let main() -> i32 {
   let f = lib::adder(10i64);
-  std::printf("adder %ld\n", f(2i64));
+  print("adder {}\n", f(2i64));
   let s = lib::step(mix(2i64, 3i64, 1i64), 2i64);
-  std::printf("run %ld\n", lib::run(s, 4i64) - 0i64);
+  print("run {}\n", lib::run(s, 4i64) - 0i64);
   let r = lib::repeat(lib::step(lib::adder(2i64), 3i64));
-  std::printf("repeat %ld\n", r(3i64, 1000i64));
-  std::printf("own %ld\n", lib::own());
+  print("repeat {}\n", r(3i64, 1000i64));
+  print("own {}\n", lib::own());
   0
 }

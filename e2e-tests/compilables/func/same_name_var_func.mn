@@ -9,6 +9,6 @@ let f() -> i32 {
 
 let main() -> i32 {
   let f = 1;
-  std::printf("%d\n", f);
+  print("{}\n", f);
   return 0;
 }

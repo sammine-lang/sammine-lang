@@ -9,6 +9,6 @@ let main() -> i32 {
     *p = i;
     drop(p);
   };
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

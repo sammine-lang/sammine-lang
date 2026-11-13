@@ -12,6 +12,6 @@ let apply(f: (i32) -> i32, x: i32) -> i32 { f(x) }
 let main() -> i32 {
   let x : i32 = 42;
   let f = deref_add(&x);
-  std::printf("%d\n", apply(f, 1));
+  print("{}\n", apply(f, 1));
   0
 }

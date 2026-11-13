@@ -19,7 +19,7 @@ let second(p: Pair<i64>) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld %ld %ld\n", pick(2, 3000000000i64), apply(3, twice_plus_one),
+  print("{} {} {}\n", pick(2, 3000000000i64), apply(3, twice_plus_one),
               second(Both(1, 7i64)));
   0
 }

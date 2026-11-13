@@ -32,6 +32,6 @@ let permutation(n: i64, left: i64, used: i64, acc: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld\n", permutation(999999, 10, 0, 0));
+  print("{}\n", permutation(999999, 10, 0, 0));
   0
 }

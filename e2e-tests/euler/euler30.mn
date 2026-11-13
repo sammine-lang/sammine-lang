@@ -37,6 +37,6 @@ let digit_power_numbers(p: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld %ld\n", digit_power_numbers(4), digit_power_numbers(5));
+  print("{} {}\n", digit_power_numbers(4), digit_power_numbers(5));
   0
 }

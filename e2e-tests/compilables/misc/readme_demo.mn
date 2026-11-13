@@ -78,14 +78,14 @@ struct Log { id: i32, buf: 'ptr<i32>, };
 
 instance Drop<Log> {
   let unsafe Drop(l: Log) -> unit {
-    std::printf("closing log %d\n", l.id);
+    print("closing log {}\n", l.id);
     drop(l.buf)
   }
 }
 
 let write_log() -> unit {
   let log = Log { id: 1, buf: boxed(0) };
-  std::printf("42\n");                       // log is dropped after this
+  print("42\n");                       // log is dropped after this
 }
 
 // 'buf<T> owns room for many values; its slots are reached by index, only
@@ -124,28 +124,28 @@ let unsafe main() -> i32 {                   // unsafe: it indexes buffers
   let v3 = Vec2 { x: 10, y: 15 } + Vec2 { x: 20, y: 25 };
   let sz = Sized<i32>();                     // a built-in typeclass
 
-  std::printf("%d\n", fib(9));               // 34
-  std::printf("(%d, %d)\n", v3.x, v3.y);     // (30, 40)
-  std::printf("sizeof i32 = %ld\n", sz);     // sizeof i32 = 4
-  std::printf("%c\n", 'A');                  // A
-  std::printf("area %d\n", area(Rect(3, 4)));
+  print("{}\n", fib(9));               // 34
+  print("({}, {})\n", v3.x, v3.y);     // (30, 40)
+  print("sizeof i32 = {}\n", sz);     // sizeof i32 = 4
+  print("{}\n", 'A');                  // A
+  print("area {}\n", area(Rect(3, 4)));
 
   // --- Option, and owned values in it ---
   case Some(boxed(7)) {
-    Some(p) => { std::printf("some %d\n", peek(p)); () },
+    Some(p) => { print("some {}\n", peek(p)); () },
     None => { },
   };                                         // p is dropped at the arm's end
 
   // --- Buffers, in unsafe code; a Vec over one ---
   let b = tens(3i64);
-  let shown = std::printf("%lld %lld %lld\n", b[0], b[1], b[2]);
+  let shown = print("{} {} {}\n", b[0], b[1], b[2]);
   let v = vec::new<'ptr<i32>>(1);            // grows as needed
   let v = vec::push(v, boxed(10));
   let v = vec::push(v, boxed(20));
   let v = vec::push(v, boxed(30));
-  std::printf("vec: %lld items, last %d\n", v.length, peek(v.data[2]));
+  print("vec: {} items, last {}\n", v.length, peek(v.data[2]));
 
   write_log();
-  std::printf("done\n");
+  print("done\n");
   0                                          // b, v and all it holds drop here
 }

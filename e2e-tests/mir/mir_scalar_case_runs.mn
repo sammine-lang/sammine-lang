@@ -1,9 +1,9 @@
 // RUN: %sammine_jit --file %full | %check %full
 // Integer-backed enums, literal cases, chars and bitwise operators through
 // MIR give the same answers.
-// CHECK: 10 20 30 1
+// CHECK: 10 20 30 true
 // CHECK-NEXT: 1 2 0 7 0
-// CHECK-NEXT: 1 0 255 1
+// CHECK-NEXT: true false 255 1
 import std;
 
 type Flags = Read(1) | Write(2) | Exec(4);
@@ -20,8 +20,8 @@ let is_lower(c: char) -> bool { c >= 'a' && c <= 'z' }
 let mask(a: i32) -> i32 { a & 255 }
 
 let main() -> i32 {
-  std::printf("%d %d %d %d\n", weight(Flags::Read), weight(Flags::Write), weight(Flags::Exec), is_large(Big::Large));
-  std::printf("%d %d %d %d %d\n", name_len('a'), name_len('b'), name_len('z'), small(7i64), truthy(true));
-  std::printf("%d %d %d %d\n", is_lower('q'), is_lower('Q'), mask(-1), truthy(false));
+  print("{} {} {} {}\n", weight(Flags::Read), weight(Flags::Write), weight(Flags::Exec), is_large(Big::Large));
+  print("{} {} {} {} {}\n", name_len('a'), name_len('b'), name_len('z'), small(7i64), truthy(true));
+  print("{} {} {} {}\n", is_lower('q'), is_lower('Q'), mask(-1), truthy(false));
   0
 }

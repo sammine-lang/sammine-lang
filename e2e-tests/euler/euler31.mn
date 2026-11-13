@@ -29,6 +29,6 @@ let ways(amount: i64, kinds: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld %ld\n", ways(10, 8), ways(200, 8));
+  print("{} {}\n", ways(10, 8), ways(200, 8));
   0
 }

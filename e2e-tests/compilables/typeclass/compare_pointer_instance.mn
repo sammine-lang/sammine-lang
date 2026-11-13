@@ -1,5 +1,5 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK: 0 0
+// CHECK: false false
 
 // A user's instance on a pointer type, Less<ptr<Box>>, is what < calls, though
 // pointers have a built-in == that compares addresses. The boxes hold equal
@@ -16,6 +16,6 @@ instance Less<ptr<Box>> {
 let main() -> i32 {
   let a = Box { v: 1 };
   let b = Box { v: 1 };
-  std::printf("%d %d\n", &a < &b, &b < &a);
+  print("{} {}\n", &a < &b, &b < &a);
   return 0;
 }

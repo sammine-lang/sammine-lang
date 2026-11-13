@@ -9,8 +9,8 @@ let main() -> i32 {
   let c1 : char = 'A';
   let c2 : char = 'z';
   let newline : char = '\n';
-  std::printf("%c\n", c1);
-  std::printf("%c\n", c2);
-  std::printf("%d\n", newline);
+  print("{}\n", c1);
+  print("{}\n", c2);
+  print("{}\n", newline as i32);
   return 0;
 }

@@ -5,6 +5,6 @@ import std;
 
 let main() -> i32 {
   let result = generic_level_b::wrap_id<i32>(77);
-  std::printf("%d", result);
+  print("{}", result);
   return 0;
 }

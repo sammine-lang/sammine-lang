@@ -7,9 +7,9 @@ import std;
 let main() -> i32 {
   let p : 'ptr<i32> = alloc<i32>(1);
   *p = 10;
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   *p = 20;
-  std::printf("%d\n", *p);
+  print("{}\n", *p);
   drop(p);
   return 0;
 }

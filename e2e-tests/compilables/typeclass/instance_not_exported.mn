@@ -7,6 +7,6 @@ import shapes;
 import std;
 
 let main() -> i32 {
-  std::printf("%f\n", shapes::Area<shapes::Circle>(shapes::Circle { r: 1.0 }));
+  print("{}\n", shapes::Area<shapes::Circle>(shapes::Circle { r: 1.0 }));
   return 0;
 }

@@ -19,7 +19,7 @@ let done(p: 'ptr<i32>) { release(p); }
 
 let main() -> i32 {
   let p = set5(alloc<i32>(1));
-  std::printf("%lld %d %d %d %lld %lld\n", sum_sq(3i64, 4i64), twice(5),
+  print("{} {} {} {} {} {}\n", sum_sq(3i64, 4i64), twice(5),
               clamp_add(-2, 3), *p, down(5i64), sq(3i64));
   done(p);
   0

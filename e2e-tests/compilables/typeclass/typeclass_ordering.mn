@@ -24,6 +24,6 @@ instance Doubled<i32> {
 }
 
 let main() -> i32 {
-  printf("%ld\n", double_size<i32>());
+  print("{}\n", double_size<i32>());
   return 0;
 }

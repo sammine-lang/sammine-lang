@@ -1,7 +1,7 @@
 export reuse printf(fmt : ptr<char>, ...) -> i32;
 
 export let greet_c() -> i32 {
-  printf("hello from export let\n");
+  print("hello from export let\n");
   return 77;
 }
 

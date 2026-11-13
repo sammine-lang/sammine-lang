@@ -6,14 +6,14 @@ import io;
 let main() -> i32 {
   case io::read_line() {
     Line(line, n) => {
-      io::print("got: ");
-      io::print(line);
-      io::print(" (");
+      print("got: ");
+      print("{}", line);
+      print(" (");
       io::print_i64(n);
-      io::println(")");
+      print(")\n");
       drop(line);
     },
-    Eof => io::println("eof"),
+    Eof => print("eof\n"),
   };
   0
 }

@@ -1,7 +1,7 @@
 // RUN: %sammine_jit --file %full | %check %full
-// CHECK:      1 0
-// CHECK-NEXT: 1 0
-// CHECK-NEXT: 1
+// CHECK:      true false
+// CHECK-NEXT: true false
+// CHECK-NEXT: true
 // CHECK-NEXT: 2.1
 
 // <, > and == go through Less, Greater and Equal, as + goes through Add, so a
@@ -32,10 +32,10 @@ let newer<T>(a: T, b: T) -> T { if a > b { a } else { b } }
 let main() -> i32 {
   let v1 = Version { major: 1, minor: 4 };
   let v2 = Version { major: 2, minor: 1 };
-  std::printf("%d %d\n", v1 < v2, v2 < v1);
-  std::printf("%d %d\n", v1 == Version { major: 1, minor: 4 }, v1 == v2);
-  std::printf("%d\n", Less<Version>(v1, v2));
+  print("{} {}\n", v1 < v2, v2 < v1);
+  print("{} {}\n", v1 == Version { major: 1, minor: 4 }, v1 == v2);
+  print("{}\n", Less<Version>(v1, v2));
   let n = newer<Version>(v1, v2);
-  std::printf("%d.%d\n", n.major, n.minor);
+  print("{}.{}\n", n.major, n.minor);
   return 0;
 }

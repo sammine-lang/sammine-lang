@@ -9,6 +9,6 @@ import std;
 let main() -> i32 {
   let pp = alloc<'ptr<i32>>(1);
   drop(pp);
-  std::printf("done\n");
+  print("done\n");
   0
 }

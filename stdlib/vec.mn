@@ -7,7 +7,7 @@ export struct Vec<T> {
 // Ends the program unless i is one of a Vec's first n values.
 let check_index(i: i64, n: i64) -> unit {
   if i < 0i64 || i >= n {
-    panic("index %lld out of bounds for a Vec of length %lld", i, n)
+    panic("index {} out of bounds for a Vec of length {}", i, n)
   } else {
     ()
   }

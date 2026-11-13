@@ -20,9 +20,9 @@ let main() -> i32 {
   let p = alloc<i32>(1);
   *p = 40;
   let g = add(10);
-  std::printf("%d %d %d %lld\n", apply(inc, 5), apply(g, 5), apply(peek_plus(p), 7), factorial(5i64));
+  print("{} {} {} {}\n", apply(inc, 5), apply(g, 5), apply(peek_plus(p), 7), factorial(5i64));
   drop(p);
   let absolute = abs;
-  std::printf("%d\n", absolute(-3));
+  print("{}\n", absolute(-3));
   0
 }

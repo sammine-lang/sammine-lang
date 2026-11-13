@@ -10,6 +10,6 @@ let main() -> i32 {
   let (a, b) = t;
   drop(a);
   drop(b);
-  std::printf("done\n");
+  print("done\n");
   return 0;
 }

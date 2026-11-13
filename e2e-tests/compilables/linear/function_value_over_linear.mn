@@ -18,7 +18,7 @@ let twice(step: ('buf<i64>, i64) -> 'buf<i64>, p: 'buf<i64>) -> 'buf<i64> {
 
 let unsafe main() -> i32 {
   let p = twice(set, alloc_buf<i64>(1));
-  std::printf("%ld\n", p[0]);
+  print("{}\n", p[0]);
   drop(p);
   0
 }

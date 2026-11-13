@@ -51,6 +51,6 @@ let pandigital_products(n: i64) -> i64 {
 }
 
 let main() -> i32 {
-  std::printf("%ld %ld\n", if_product(9, 7254), pandigital_products(9));
+  print("{} {}\n", if_product(9, 7254), pandigital_products(9));
   0
 }
