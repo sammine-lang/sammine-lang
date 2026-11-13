@@ -5,7 +5,7 @@ import io;
 import str;
 
 let main() -> i32 {
-  let content = "line written ok\n" as ptr<char>;
+  let content = "line written ok\n";
   io::write_file("/tmp/sammine_test_handle.txt", content, 16);
 
   let f: io::File = io::open("/tmp/sammine_test_handle.txt", "r");

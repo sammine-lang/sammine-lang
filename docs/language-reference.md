@@ -36,6 +36,7 @@ text ends, so one is no string and doesn't print as one.
 let name = "ada";                        // string
 struct Person { name: string, age: i32, };
 let chars = name as ptr<char>;           // a view of its chars, always allowed
+count(name);                             // or lent as one, to a ptr<char> parameter
 let unsafe text(p: ptr<char>) -> string { p as string }   // unsafe: p must end
 ```
 

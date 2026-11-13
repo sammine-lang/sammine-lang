@@ -6,7 +6,7 @@ import io;
 import str;
 
 let main() -> i32 {
-  io::write_file("/tmp/sammine_test_eof.txt", "first\n" as ptr<char>, 6);
+  io::write_file("/tmp/sammine_test_eof.txt", "first\n", 6);
   let f = io::open("/tmp/sammine_test_eof.txt", "r");
 
   let (f, first) = io::file_read_line(f);

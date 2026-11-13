@@ -413,6 +413,12 @@ bool TypeMapOrdering::structurally_compatible(const Type &to,
 // and return type validation.
 bool TypeMapOrdering::lendable_to_from(const Type &to,
                                        const Type &from) const {
+  // A string's chars are read through a view of them, as a buffer's are.
+  if (from.type_kind == TypeKind::String)
+    return to.type_kind == TypeKind::Pointer &&
+           to.linearity == Linearity::NonLinear &&
+           std::get<PointerType>(to.type_data).get_pointee().type_kind ==
+               TypeKind::Char;
   return to.type_kind == TypeKind::Pointer &&
          from.type_kind == TypeKind::Pointer &&
          to.linearity == Linearity::NonLinear &&

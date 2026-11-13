@@ -2,6 +2,7 @@
 // CHECK:      yes no
 // CHECK-NEXT: ada 36
 // CHECK-NEXT: i 2
+// CHECK-NEXT: 5 3
 
 // A literal is a string: text that lives as long as the program. It goes
 // where any value goes, a field or a function's result, and prints the
@@ -23,10 +24,25 @@ let unsafe tail(s: string) -> string {
   &chars[1] as string
 }
 
+// A string is lent to a ptr<char> parameter, as a buffer is: one function
+// counts the chars of either.
+let unsafe count(chars: ptr<char>) -> i64 {
+  if chars[0] == '\0' { 0i64 } else { 1i64 + count(&chars[1]) }
+}
+
+let unsafe three() -> 'buf<char> {
+  let b = alloc_buf<char>(4);
+  b[0] = 'a'; b[1] = 'b'; b[2] = 'c'; b[3] = '\0';
+  b
+}
+
 let main() -> i32 {
   print("{} {}\n", answer(true), answer(false));
   let p = Person { name: "ada", age: 36 };
   print("{} {}\n", p.name, p.age);
   print("{} {}\n", second("hi"), tail("x2"));
+  let owned = three();
+  print("{} {}\n", count("hello"), count(owned));
+  drop(owned);
   0
 }

@@ -756,7 +756,8 @@ struct TypeMapOrdering {
   bool qualifier_compatible(const Type &to, const Type &from) const;
 
   /// Call arguments only: an owned 'ptr<T> can be lent to a ptr<T> parameter.
-  /// The caller keeps ownership; the callee only reads through it.
+  /// The caller keeps ownership; the callee only reads through it. A string
+  /// is lent to a ptr<char> the same way: a view of its chars.
   bool lendable_to_from(const Type &to, const Type &from) const;
 };
 

@@ -25,7 +25,7 @@
 ### Literals
 - Integer (no decimal) → `Integer`; with decimal → `Flt`
 - Suffixes: `i32`/`i64`/`u32`/`u64`/`f64`/`f32`
-- A string literal → `string` (`TypeKind::String`, no payload): text that lives as long as the program, ending where C reads to. Its MIR type is a view of char (`MIRTypes`), so nothing below the checker tells it from one, and it is no view to the checker: it goes in fields and results. `Convert<string, ptr<char>>` and back are built in, one pointer (`lowerBuiltinInstance`); the way back is allowed only in an unsafe function (`synthesize(CastExprAST)`). A `ptr<char>` is no string, so it has no `Format`. Char → `Char`
+- A string literal → `string` (`TypeKind::String`, no payload): text that lives as long as the program, ending where C reads to. Its MIR type is a view of char (`MIRTypes`), so nothing below the checker tells it from one, and it is no view to the checker: it goes in fields and results. `Convert<string, ptr<char>>` and back are built in, one pointer (`lowerBuiltinInstance`); the way back is allowed only in an unsafe function (`synthesize(CastExprAST)`). A string passed to a `ptr<char>` parameter is lent as that view (`lendable_to_from`, the rule that lends an owned pointer), so one function takes a literal's chars and a buffer's. A `ptr<char>` is no string, so it has no `Format`. Char → `Char`
 - `main`: must return `i32`, take 0 or 2 params `(i32, ptr<ptr<char>>)`
 
 ### Operators
