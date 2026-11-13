@@ -1,0 +1,41 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 145 40730
+
+// Project Euler Problem 34: Digit factorials
+// 145 is a curious number, as 1! + 4! + 5! = 145. Find the sum of all the
+// numbers equal to the sum of the factorials of their digits. 1! = 1 and
+// 2! = 2 are not sums, so not counted.
+
+import std;
+import range;
+
+let factorial(n: i64) -> i64 { if n == 0 { 1 } else { n * factorial(n - 1) } }
+
+let pow10(d: i64) -> i64 { if d == 0 { 1 } else { 10 * pow10(d - 1) } }
+
+let digit_factorial_sum(n: i64) -> i64 {
+  if n == 0 { 0 } else { factorial(n % 10) + digit_factorial_sum(n / 10) }
+}
+
+// The digits past which no number is the sum: d digits sum to at most
+// d * 9!, short of the least d-digit number, 10^(d - 1), once d is large.
+let most_digits(d: i64) -> i64 {
+  if d * factorial(9) < pow10(d - 1) { d - 1 } else { most_digits(d + 1) }
+}
+
+// n, when it is the sum of its digits' factorials.
+let if_sum(n: i64) -> i64 {
+  if digit_factorial_sum(n) == n { n } else { 0 }
+}
+
+// The numbers of two digits or more that are the sum of their digits'
+// factorials; none has more than most_digits digits, or is past that many
+// 9s' factorials.
+let digit_factorial_numbers() -> i64 {
+  range::sum(10, most_digits(1) * factorial(9) + 1, if_sum)
+}
+
+let main() -> i32 {
+  print("{} {}\n", if_sum(145), digit_factorial_numbers());
+  0
+}
