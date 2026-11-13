@@ -1,0 +1,19 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ '*qq' was moved here
+// CHECK: ╰─ 'qq' must point at a value when it is passed to a function, but '*qq' was moved
+
+// Moving *qq out leaves qq pointing at nothing until something is stored.
+
+let take(pp: 'ptr<'ptr<i32>>) -> unit {
+  drop(*pp);
+  drop(pp)
+}
+
+let main() -> i32 {
+  let qq = alloc<'ptr<i32>>(1);
+  *qq = alloc<i32>(1);
+  let q = *qq;
+  drop(q);
+  take(qq);
+  0
+}

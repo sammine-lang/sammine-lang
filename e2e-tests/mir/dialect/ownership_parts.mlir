@@ -194,3 +194,55 @@ func.func @free_buffer_of_owners(%n: i32) attributes {sammine.mir} {
   sammine.free %b : !sammine.ptr<!sammine.ptr<i32, owned>, buffer>
   return
 }
+
+// -----
+
+// A parameter's pointee holds a value: its caller put one there. Freeing
+// only the outer pointer leaks it.
+func.func @param_pointee_live(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+  // expected-error @-1 {{Temporary owning memory must not be discarded (bind it with 'let' first)}}
+  sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  return
+}
+
+// -----
+
+func.func private @boxed() -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+
+// So does a call's result's: what it points at can be moved out.
+func.func @call_result_pointee_live() attributes {sammine.mir} {
+  %0 = sammine.call @boxed() : () -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  %place = sammine.deref %pp : <!sammine.ptr<i32, owned>, owned>
+  %p = sammine.move %place : <!sammine.ptr<i32, owned>>
+  sammine.free %p : !sammine.ptr<i32, owned>
+  sammine.free %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  return
+}
+
+// -----
+
+// What alloc gives points at nothing, so it can't leave the function so.
+func.func @return_empty(%n: i32) -> !sammine.ptr<!sammine.ptr<i32, owned>, owned> attributes {sammine.mir} {
+  %0 = sammine.alloc %n : i32 -> !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  %pp = sammine.let "pp" %0 : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  // expected-error @+1 {{'pp' must point at a value when it is returned, but '*pp' holds nothing yet}}
+  return %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+}
+
+// -----
+
+func.func private @take(!sammine.ptr<!sammine.ptr<i32, owned>, owned>)
+
+// Nor be passed on once what it pointed at was moved out.
+func.func @pass_after_move(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, owned>) attributes {sammine.mir} {
+  %pp1 = sammine.let "pp" %pp : !sammine.ptr<!sammine.ptr<i32, owned>, owned>
+  %place = sammine.deref %pp1 : <!sammine.ptr<i32, owned>, owned>
+  // expected-note @+1 {{'*pp' was moved here}}
+  %p = sammine.move %place : <!sammine.ptr<i32, owned>>
+  %q = sammine.let "q" %p : !sammine.ptr<i32, owned>
+  sammine.free %q : !sammine.ptr<i32, owned>
+  // expected-error @+1 {{'pp' must point at a value when it is passed to a function, but '*pp' was moved}}
+  sammine.call @take(%pp1) : (!sammine.ptr<!sammine.ptr<i32, owned>, owned>) -> ()
+  return
+}

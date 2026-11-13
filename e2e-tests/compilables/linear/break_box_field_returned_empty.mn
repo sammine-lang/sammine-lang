@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ 's.p' must point at a value when it is returned, but '*s.p' holds nothing yet
+
+struct S { p: 'ptr<'ptr<i32>>, };
+
+let make() -> S {
+  let s = S { p: alloc<'ptr<i32>>(1) };
+  return s;
+}
+
+let main() -> i32 { 0 }

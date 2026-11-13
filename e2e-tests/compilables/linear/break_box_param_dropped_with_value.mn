@@ -1,0 +1,8 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Linear variable '*pp' must be consumed before scope exit (use drop() to deallocate)
+
+// A parameter's pointee holds a value: its caller had to put one there.
+
+let only_outer(pp: 'ptr<'ptr<i32>>) -> unit { drop(pp) }
+
+let main() -> i32 { 0 }

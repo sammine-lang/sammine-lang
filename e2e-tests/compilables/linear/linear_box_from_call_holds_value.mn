@@ -1,0 +1,28 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 42
+
+// A 'ptr holds a value once it leaves the function that allocated it, so
+// what a call returns, or a parameter is, can be taken out of it.
+
+import std;
+
+let boxed() -> 'ptr<'ptr<i32>> {
+  let pp = alloc<'ptr<i32>>(1);
+  let p = alloc<i32>(1);
+  *p = 42;
+  *pp = p;
+  pp
+}
+
+let unbox(pp: 'ptr<'ptr<i32>>) -> 'ptr<i32> {
+  let p = *pp;
+  drop(pp);
+  p
+}
+
+let main() -> i32 {
+  let p = unbox(boxed());
+  std::printf("%d\n", *p);
+  drop(p);
+  0
+}

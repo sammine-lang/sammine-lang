@@ -1,0 +1,11 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ 'pp' must point at a value when it is returned, but '*pp' holds nothing yet
+
+// alloc gives a pointer to nothing; it must be filled before it leaves.
+
+let empty() -> 'ptr<'ptr<i32>> {
+  let pp = alloc<'ptr<i32>>(1);
+  return pp;
+}
+
+let main() -> i32 { 0 }

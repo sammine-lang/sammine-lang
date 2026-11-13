@@ -1,6 +1,6 @@
 # Plan: automatic drops
 
-Status: in progress. Steps 1 (`drop`) and 2 (`'buf<T>`) are done.
+Status: in progress. Steps 1 (`drop`), 2 (`'buf<T>`) and 3 (the box rule) are done.
 
 ## Goal
 
@@ -225,7 +225,9 @@ Each a commit, the suite passing after each.
    their buffers to it; `grow_buf` drops `old_d`. (Done.)
 3. The box rule: a `'ptr` passed, returned or stored holds a value;
    parameters' and calls' pointees are live. The new error, its tests, and
-   fixes to test code that breaks the rule.
+   fixes to test code that breaks the rule. (Done; none broke. It also
+   fixed a value stored in some branches only being taken for empty:
+   dropped, overwritten or returned so, it leaked unreported.)
 4. `sammine.drop`, its verifier and its lowering for `'buf<T>` and for
    `'ptr<T>` where `T` owns nothing. MIR tests.
 5. `io::File`: the file handle in a struct, so no pointer drop frees it.

@@ -1,0 +1,12 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ Linear variable '*pp' must be consumed before scope exit: it is stored in some branches
+
+// *pp holds a value only where the if stored one: dropping pp alone leaks
+// it there.
+
+let main() -> i32 {
+  let pp = alloc<'ptr<i32>>(1);
+  if true { *pp = alloc<i32>(1); };
+  drop(pp);
+  0
+}

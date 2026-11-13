@@ -1,0 +1,25 @@
+// RUN: %sammine_jit --file %full | %check %full
+// CHECK: 7
+
+// Moved out and stored again, *qq holds a value when qq is passed.
+
+import std;
+
+let take(pp: 'ptr<'ptr<i32>>) -> unit {
+  let p = *pp;
+  std::printf("%d\n", *p);
+  drop(p);
+  drop(pp)
+}
+
+let main() -> i32 {
+  let qq = alloc<'ptr<i32>>(1);
+  *qq = alloc<i32>(1);
+  let q = *qq;
+  drop(q);
+  let r = alloc<i32>(1);
+  *r = 7;
+  *qq = r;
+  take(qq);
+  0
+}

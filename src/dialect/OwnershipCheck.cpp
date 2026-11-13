@@ -90,7 +90,8 @@ struct Owner {
     /// It was moved on every path here; with no reason, it never held
     /// anything (what alloc gives points at nothing yet).
     Moved,
-    /// Moved on some paths here only.
+    /// Moved on some paths here only; with no reason, it holds a value on
+    /// some paths only (stored in some branches).
     MaybeMoved,
   };
   Kind kind = Live;
@@ -104,7 +105,13 @@ struct Owner {
   static Owner live(mlir::Location at) { return {Live, at, {}, nullptr, {}}; }
   /// Holding nothing: what an owned pointer just made points at.
   static Owner empty(mlir::Location at) { return {Moved, at, {}, nullptr, {}}; }
-  bool isEmpty() const { return kind != Live && reason.empty(); }
+  /// Whether it holds nothing on every path here.
+  bool isEmpty() const { return kind == Moved && reason.empty(); }
+  /// Whether it holds a value on some paths only, never having held one on
+  /// the others.
+  bool isPartlyFilled() const { return kind == MaybeMoved && reason.empty(); }
+  /// Whether it never held a value on some path: empty, or partly filled.
+  bool neverHeld() const { return kind != Live && reason.empty(); }
   bool operator==(const Owner &) const = default;
 };
 
@@ -125,8 +132,12 @@ Owner join(const Owner &a, const Owner &b) {
   if (a.kind == Owner::Live && b.kind == Owner::Live)
     return a;
   if (a.kind == Owner::Live || b.kind == Owner::Live) {
+    auto &live = a.kind == Owner::Live ? a : b;
     Owner moved = a.kind == Owner::Live ? b : a;
     moved.kind = Owner::MaybeMoved;
+    // Filled on one path only: where it was filled is what to show.
+    if (moved.reason.empty())
+      moved.definedAt = live.definedAt;
     return moved;
   }
   Owner first = before(b.movedAt, a.movedAt) ? b : a;
@@ -253,13 +264,16 @@ llvm::SmallVector<Step> partsOf(mlir::Type type) {
   return parts;
 }
 
-/// `path` and its parts, as a new value of its type has them: live, but
-/// what an owned pointer points at holds nothing yet.
+/// `path` and its parts, as a new value of its type has them: all live, as
+/// a 'ptr holds a value once it leaves the function that allocated it,
+/// unless the value is `empty`, or was `allocated` here, so that what it
+/// points at holds nothing yet.
 void fresh(Owners &owners, const Path &path, mlir::Location at,
-           bool empty = false) {
+           bool empty = false, bool allocated = false) {
   owners[path] = empty ? Owner::empty(at) : Owner::live(at);
   for (auto step : partsOf(typeOf(path)))
-    fresh(owners, path.child(step), at, empty || step.kind == Step::Pointee);
+    fresh(owners, path.child(step), at,
+          empty || (allocated && step.kind == Step::Pointee));
 }
 
 mlir::Location definedAt(mlir::Value value) {
@@ -528,7 +542,7 @@ private:
     for (auto &[part, owner] : owners_) {
       if (!path.contains(part))
         continue;
-      if (part == path || owner.kind == Owner::Live || owner.isEmpty()) {
+      if (part == path || owner.kind == Owner::Live || owner.neverHeld()) {
         owner.kind = Owner::Moved;
         owner.movedAt = by->getLoc();
         owner.movedBy = by;
@@ -549,7 +563,7 @@ private:
       return false;
     auto name = "'" + nameOf(path) + "'";
     auto prefix = "Cannot " + verb.str() + " " + name + " — ";
-    if (owner->isEmpty()) {
+    if (owner->neverHeld()) {
       reports_->error(op->getLoc(),
                       prefix + "no owned value is known to be stored there");
       return false;
@@ -573,6 +587,56 @@ private:
     return false;
   }
 
+  /// What `op` hands on leaves what the check sees: a 'ptr in it must hold
+  /// a value, so that whoever gets it can count on one. Reports a pointer
+  /// in what `value` names whose pointee holds nothing, on some path or all.
+  void checkHolds(mlir::Value value, mlir::Operation *op) {
+    auto path = pathOf(value);
+    if (!reports_ || !path || !lookup(*path) ||
+        lookup(*path)->kind != Owner::Live)
+      return;
+    for (auto &[part, owner] : owners_) {
+      if (!path->contains(part) || part.steps.empty() ||
+          part.steps.back().kind != Step::Pointee || owner.kind == Owner::Live)
+        continue;
+      Path pointer{part.root, {part.steps.begin(), part.steps.end() - 1}};
+      if (!reports_->first(pointer))
+        continue;
+      auto name = nameOf(pointer);
+      auto subject =
+          name.empty() ? std::string("An owned pointer") : "'" + name + "'";
+      auto msg = subject + " must point at a value when it is " +
+                 handedOnAs(op).str() + ", but ";
+      if (owner.neverHeld()) {
+        auto holds = name.empty() ? std::string("it points at")
+                                  : "'" + nameOf(part) + "' holds";
+        reports_->error(op->getLoc(),
+                        msg + holds +
+                            (owner.isEmpty()
+                                 ? " nothing yet"
+                                 : " a value in some branches only"));
+        continue;
+      }
+      reports_->error(op->getLoc(),
+                      msg + "'" + nameOf(part) + "' was " + owner.reason.str() +
+                          (owner.kind == Owner::MaybeMoved ? " in some branches"
+                                                           : ""))
+              .attachNote(mlir::Location(owner.movedAt))
+          << "'" << nameOf(part) << "' was " << owner.reason << " here";
+    }
+  }
+
+  /// How `op` hands on what it takes, for checkHolds.
+  static llvm::StringRef handedOnAs(mlir::Operation *op) {
+    if (mlir::isa<mlir::func::ReturnOp>(op))
+      return "returned";
+    if (mlir::isa<smn::ClosureOp>(op))
+      return "bound into a closure";
+    if (mlir::isa<smn::StoreOp>(op))
+      return "stored";
+    return "passed to a function";
+  }
+
   /// Moves the whole of what `value` names, for `op`.
   void take(mlir::Value value, mlir::Operation *op, llvm::StringRef why) {
     auto path = pathOf(value);
@@ -583,7 +647,7 @@ private:
       // with it whatever it holds.
       for (auto &[part, owner] : owners_) {
         if (!path->contains(part) || part == *path ||
-            owner.kind == Owner::Live || owner.isEmpty())
+            owner.kind == Owner::Live || owner.neverHeld())
           continue;
         if (llvm::any_of(llvm::drop_begin(part.steps, path->steps.size()),
                          [](Step s) { return s.kind == Step::Pointee; }))
@@ -659,6 +723,11 @@ private:
       reports_->error(definedAt(path.root),
                       "Temporary owning memory must not be discarded (bind "
                       "it with 'let' first)");
+    } else if (owner.isPartlyFilled()) {
+      reports_->error(mlir::Location(owner.definedAt),
+                      "Linear variable '" + name +
+                          "' must be consumed before scope exit: it is stored "
+                          "in some branches");
     } else if (owner.kind == Owner::MaybeMoved) {
       reports_->error(mlir::Location(owner.definedAt),
                       "Linear variable '" + name +
@@ -738,21 +807,21 @@ void Transfer::apply(mlir::Operation *op) {
     if (!smn::ownsMemory(value.getType()))
       return;
     Owners before = owners_;
-    take(value, op, "moved");
     auto target = pathOf(store.getPlace());
+    // Stored where the check doesn't follow, as a buffer's values.
+    if (!target || !lookup(*target))
+      checkHolds(value, op);
+    take(value, op, "moved");
     if (!target || !lookup(*target))
       return;
-    // A place takes a value only once what it held is gone.
+    // A place takes a value only once what it held is gone, on every path.
     llvm::SmallVector<Path> live;
     liveOwners(*target, live);
-    if (llvm::any_of(live, [&](const Path &p) {
-          return lookup(p)->kind == Owner::Live;
-        })) {
-      if (reports_)
-        reports_->error(loc, "Reassigning linear variable '" + nameOf(*target) +
-                                 "' without consuming its previous value");
-      return;
-    }
+    // Reported, the place holds the new value all the same, so what follows
+    // isn't reported as well.
+    if (!live.empty() && reports_)
+      reports_->error(loc, "Reassigning linear variable '" + nameOf(*target) +
+                               "' without consuming its previous value");
     for (auto &[path, owner] : Owners(owners_))
       if (target->contains(path))
         owners_.erase(path);
@@ -789,8 +858,10 @@ void Transfer::apply(mlir::Operation *op) {
     return;
   }
   if (auto ret = mlir::dyn_cast<mlir::func::ReturnOp>(op)) {
-    for (auto operand : ret.getOperands())
+    for (auto operand : ret.getOperands()) {
+      checkHolds(operand, op);
       take(operand, op, "returned");
+    }
     checkLeaks();
     return;
   }
@@ -858,18 +929,24 @@ void Transfer::apply(mlir::Operation *op) {
 
   // Anything else takes what it is given and makes new values: a struct,
   // tuple, array or variant owns what it is built from.
+  bool handsOn =
+      mlir::isa<smn::CallOp, smn::CallIndirectOp, smn::ClosureOp>(op);
   if (mlir::isa<smn::CallOp, smn::CallIndirectOp>(op))
     checkLendAndMove(op);
   Owners before = owners_;
-  for (auto operand : op->getOperands())
+  for (auto operand : op->getOperands()) {
+    if (handsOn)
+      checkHolds(operand, op);
     take(operand, op, reasonFor(op));
+  }
   bool builds = mlir::isa<smn::AggregateOp, smn::VariantOp>(op);
   for (auto result : op->getResults()) {
     if (!smn::ownsMemory(result.getType()))
       continue;
     Path path{result, {}};
     if (!builds) {
-      fresh(owners_, path, loc);
+      fresh(owners_, path, loc, /*empty=*/false,
+            /*allocated=*/mlir::isa<smn::AllocOp>(op));
       continue;
     }
     owners_[path] = Owner::live(loc);
@@ -985,8 +1062,8 @@ public:
     propagateIfChanged(after, after->join(owners));
   }
 
-  // A function's arguments are live where it starts; what an owned one
-  // points at holds nothing, as far as the function knows.
+  // A function's arguments are live where it starts, and what an owned one
+  // points at holds a value: its caller had to put one there.
   void setToEntryState(OwnershipState *lattice) override {
     Owners owners;
     if (auto *point = llvm::dyn_cast_if_present<mlir::ProgramPoint *>(

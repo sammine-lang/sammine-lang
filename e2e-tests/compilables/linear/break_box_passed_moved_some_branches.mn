@@ -1,0 +1,16 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: ╰─ '*rr' was dropped here
+// CHECK: ╰─ 'rr' must point at a value when it is passed to a function, but '*rr' was dropped in some branches
+
+let take(pp: 'ptr<'ptr<i32>>) -> unit {
+  drop(*pp);
+  drop(pp)
+}
+
+let main() -> i32 {
+  let rr = alloc<'ptr<i32>>(1);
+  *rr = alloc<i32>(1);
+  if true { drop(*rr); };
+  take(rr);
+  0
+}
