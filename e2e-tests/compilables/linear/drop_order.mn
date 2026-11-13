@@ -1,0 +1,41 @@
+// RUN: %sammine --file %full %O --opt-level 0 && %asan %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
+// CHECK:      end of main
+// CHECK-NEXT: drop 7
+// CHECK-NEXT: drop 8
+// CHECK-NEXT: drop 5
+// CHECK-NEXT: drop 6
+// CHECK-NEXT: drop 3
+// CHECK-NEXT: drop 4
+// CHECK-NEXT: drop 2
+// CHECK-NEXT: drop 1
+
+// The order values drop in, which a Drop instance that prints shows:
+// bindings last bound first, as Rust; within a value, its fields and
+// elements in the order it declares them.
+
+import std;
+
+struct Loud { id: i32, p: 'ptr<i32>, };
+
+instance Drop<Loud> {
+  let unsafe Drop(l: Loud) -> unit {
+    std::printf("drop %d\n", l.id);
+    drop(l.p)
+  }
+}
+
+struct Pair { first: Loud, second: Loud, };
+
+let loud(id: i32) -> Loud { Loud { id: id, p: alloc<i32>(1) } }
+
+let main() -> i32 {
+  let a = loud(1);
+  let b = loud(2);
+  let pair = Pair { first: loud(3), second: loud(4) };
+  let tuple = (loud(5), loud(6));
+  let array = [loud(7), loud(8)];
+  std::printf("end of main\n");
+  0
+}

@@ -176,12 +176,15 @@ private:
     return paths;
   }
 
-  /// Last bound first, a pointee before its box.
+  /// Last bound first; within a value, its parts in declaration order, and
+  /// what a part holds before the part, as a pointee before its box.
   void sort(llvm::SmallVectorImpl<Path> &paths) {
-    llvm::sort(paths, [&](const Path &a, const Path &b) {
+    llvm::stable_sort(paths, [&](const Path &a, const Path &b) {
       if (a.root != b.root)
         return order_.lookup(a.root) > order_.lookup(b.root);
-      return b < a;
+      if (a.contains(b) != b.contains(a))
+        return b.contains(a);
+      return a < b;
     });
   }
 
