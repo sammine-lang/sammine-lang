@@ -5,7 +5,7 @@
 - `TokTick` = `'` (linear pointer prefix `'ptr<T>`, `'buf<T>`; `buf` is an identifier, a type name only after the tick)
 - `TokFloorDiv` (`/_`), `TokCeilDiv` (`/^`) — defined but not in precedence table yet
 - `TokEllipsis` (`...`) — varargs and range syntax
-- Number suffixes consumed as part of lexeme (`42i32`, `3.14f64`)
+- Number suffixes consumed as part of lexeme (`42i32`, `3.14f64`). A fraction is a `.` followed by a digit: `1.` is `1` then a dot, as `docs/grammar.md` has FLOAT
 - A number right after a `.` (`TokenStream::ends_with(TokDot)`) is a tuple's index: its digits only, no fraction and no suffix, so `t.0.1` and `t.0.x` are field accesses one after the other. The type checker reads the whole lexeme as the index (`std::from_chars`), dropping nothing
 - Escape sequences in strings/chars: `\n`, `\t`, `\r`, `\\`, `\'`, `\0`
 - Token stream supports speculative parsing: `mark_rollback()`, `rollback()`, `split_current()` (for splitting `>>` into `>` + `>`)

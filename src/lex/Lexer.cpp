@@ -245,11 +245,12 @@ size_t Lexer::handleNumber(size_t i, const std::string &input) {
       i = advance(i);
     } while (i < input.length() && isdigit(input[i]));
 
-    if (!index && input[i] == '.' &&
-        !(i + 1 < input.length() && input[i + 1] == '.')) {
+    // A fraction is a `.` and the digits after it: `1.` is no number, as
+    // the grammar has it, and `1..5` is a range.
+    if (!index && input[i] == '.' && i + 1 < input.length() &&
+        isdigit(input[i + 1])) {
       NumStr += input[i];
       i = advance(i);
-      // The fraction's digits, if it has any: `1.` is a number too.
       while (i < input.length() && isdigit(input[i])) {
         NumStr += input[i];
         i = advance(i);

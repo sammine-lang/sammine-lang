@@ -1,0 +1,10 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Expected field name or tuple index after '.'
+
+// A float literal has digits after its point: `1.` is the integer 1 and a
+// dot with nothing after it.
+
+let main() -> i32 {
+  let x = 1.;
+  0
+}

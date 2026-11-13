@@ -186,6 +186,21 @@ TEST_CASE("Complex combination", "[Lexer]") {
     }
   }
 
+  SECTION("A fraction needs its digits") {
+    // `1.` is the number 1 and a dot, not a float.
+    sammine_lang::Lexer lex("2.5 1.");
+    const std::pair<sammine_lang::TokenType, std::string> expected[] = {
+        {sammine_lang::TokNum, "2.5"},
+        {sammine_lang::TokNum, "1"},
+        {sammine_lang::TokDot, "."},
+    };
+    for (auto &[type, lexeme] : expected) {
+      auto token = lex.consume().get();
+      REQUIRE(token->tok_type == type);
+      REQUIRE(token->lexeme == lexeme);
+    }
+  }
+
   SECTION("Identifer and operator") {
     sammine_lang::Lexer lex("x+=2.3");
     auto token = lex.consume().get();
