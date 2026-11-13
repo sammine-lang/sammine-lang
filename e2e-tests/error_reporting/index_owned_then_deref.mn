@@ -1,0 +1,15 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: Indexing 'vec::Vec<'ptr<i32>>' would copy out ''ptr<i32>', which owns memory the collection still owns
+// CHECK-NOT: Poisoned
+// CHECK-NOT: Cannot dereference
+
+// Indexing a Vec of owned values is reported once: the * of what it would
+// have given isn't reported again.
+import vec;
+
+let main() -> i32 {
+  let w = vec::push<'ptr<i32>>(vec::new<'ptr<i32>>(1), alloc<i32>(1));
+  let n = *w[0];
+  vec::delete<'ptr<i32>>(w);
+  n
+}

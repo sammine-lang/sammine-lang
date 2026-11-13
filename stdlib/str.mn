@@ -28,6 +28,59 @@ export let delete(s: String) -> unit {
   drop(s)
 }
 
+// How many characters s holds, its terminator not counted.
+export let length(s: ptr<String>) -> i64 { (*s).length }
+
+// Character i of s, or None outside 0..length(s): s[i] that doesn't end
+// the program.
+export let unsafe get(s: ptr<String>, i: i64) -> Option<char> {
+  if i < 0i64 || i >= (*s).length {
+    Option<char>::None
+  } else {
+    Option<char>::Some((*s).data[i])
+  }
+}
+
+// A buffer with room for c characters and the terminator, holding the
+// first length of data and its terminator. data is freed.
+let unsafe grow(data: 'buf<char>, length: i64, c: i64) -> 'buf<char> {
+  let bigger = memcpy(malloc(c + 1i64), data, length + 1i64);
+  drop(data);
+  bigger
+}
+
+// Room for at least need characters: s's, or twice it, or need.
+let room(cap: i64, need: i64) -> i64 {
+  if need <= cap {
+    cap
+  } else if need <= cap * 2i64 {
+    cap * 2i64
+  } else {
+    need
+  }
+}
+
+// s with c after its characters.
+export let unsafe push(s: String, c: char) -> String {
+  let cap = room(s.cap, s.length + 1i64);
+  let data = if cap == s.cap { s.data } else { grow(s.data, s.length, cap) };
+  data[s.length] = c;
+  data[s.length + 1i64] = '\0';
+  String { data: data, length: s.length + 1i64, cap: cap }
+}
+
+// s with the characters of t after its own.
+export let unsafe append(s: String, t: ptr<char>) -> String {
+  let n = strlen(t);
+  let cap = room(s.cap, s.length + n);
+  let data = if cap == s.cap { s.data } else { grow(s.data, s.length, cap) };
+  // t's terminator too.
+  for i in 0i64..n + 1i64 {
+    data[s.length + i] = t[i];
+  };
+  String { data: data, length: s.length + n, cap: cap }
+}
+
 // s[i]: byte i of the first s.length, the terminator not among them. An
 // index outside them ends the program.
 export instance Indexer<String, char> {
@@ -47,6 +100,12 @@ reuse strcmp(a: ptr<char>, b: ptr<char>) -> i32;
 // by byte as C's strcmp does.
 export let compare(a: ptr<String>, b: ptr<String>) -> i32 {
   strcmp((*a).data, (*b).data)
+}
+
+// Whether a and b hold the same characters. `==` on two views compares
+// where they point, as for any pointer; this compares what they hold.
+export let eq(a: ptr<String>, b: ptr<String>) -> bool {
+  (*a).length == (*b).length && compare(a, b) == 0
 }
 
 // Strings are ordered through views, &a < &b: a comparison only reads them.

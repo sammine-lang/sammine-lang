@@ -21,8 +21,21 @@ export let new<T>(cap: i64) -> Vec<T> {
   Vec<T> { data: alloc_buf<T>(cap), length: 0i64, cap: cap }
 }
 
-let unsafe grow_buf<T>(old_d: 'buf<T>, l: i64, old_c: i64) -> 'buf<T> {
-  let new_c = old_c * 2i64;
+// How many values v holds.
+export let length<T>(v: ptr<Vec<T>>) -> i64 { (*v).length }
+
+// Value i of v, or None outside 0..length(v): v[i] that doesn't end the
+// program. For values that own nothing, as v[i].
+export let unsafe get<T>(v: ptr<Vec<T>>, i: i64) -> Option<T> {
+  if i < 0i64 || i >= (*v).length {
+    Option<T>::None
+  } else {
+    Option<T>::Some((*v).data[i])
+  }
+}
+
+// The first l values of old_d, moved into a buffer of new_c.
+let unsafe grow_buf<T>(old_d: 'buf<T>, l: i64, new_c: i64) -> 'buf<T> {
   let new_d = alloc_buf<T>(new_c);
   for i in 0i64..l {
     new_d[i] = old_d[i];
@@ -31,14 +44,40 @@ let unsafe grow_buf<T>(old_d: 'buf<T>, l: i64, old_c: i64) -> 'buf<T> {
   new_d
 }
 
+// v with val after its values. A full v doubles its room, and one made
+// with no room gets some.
 export let unsafe push<T>(v: Vec<T>, val: T) -> Vec<T> {
   if v.length == v.cap {
-    let d2 = grow_buf<T>(v.data, v.length, v.cap);
+    let c2 = if v.cap == 0i64 { 4i64 } else { v.cap * 2i64 };
+    let d2 = grow_buf<T>(v.data, v.length, c2);
     d2[v.length] = val;
-    Vec<T> { data: d2, length: v.length + 1i64, cap: v.cap * 2i64 }
+    Vec<T> { data: d2, length: v.length + 1i64, cap: c2 }
   } else {
     v.data[v.length] = val;
     Vec<T> { data: v.data, length: v.length + 1i64, cap: v.cap }
+  }
+}
+
+// v without its last value, and that value, or None if v is empty.
+export let unsafe pop<T>(v: Vec<T>) -> (Vec<T>, Option<T>) {
+  if v.length == 0i64 {
+    (Vec<T> { data: v.data, length: v.length, cap: v.cap }, Option<T>::None)
+  } else {
+    let last = v.data[v.length - 1i64];
+    (Vec<T> { data: v.data, length: v.length - 1i64, cap: v.cap },
+     Option<T>::Some(last))
+  }
+}
+
+// v with value i replaced by val, the value it held dropped. An index
+// outside 0..length(v) ends the program, as v[i] does.
+export let unsafe set<T>(v: Vec<T>, i: i64, val: T) -> Vec<T> {
+  if i < 0i64 || i >= v.length {
+    panic("index %lld out of bounds for a Vec of length %lld", i, v.length)
+  } else {
+    drop(v.data[i]);
+    v.data[i] = val;
+    Vec<T> { data: v.data, length: v.length, cap: v.cap }
   }
 }
 

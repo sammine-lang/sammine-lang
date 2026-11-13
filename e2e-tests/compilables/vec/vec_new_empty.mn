@@ -1,0 +1,21 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// CHECK: 9 values, the last 9, room for {{[0-9]+}}
+
+// A Vec made with no room gets some when pushed to: it used to double
+// nothing, and write past a buffer of none.
+
+import std;
+import vec;
+
+let fill(v: vec::Vec<i32>, n: i32) -> vec::Vec<i32> {
+  if n == 0 { v } else { fill(vec::push<i32>(v, 10 - n), n - 1) }
+}
+
+let main() -> i32 {
+  let v = fill(vec::new<i32>(0), 9);
+  std::printf("%lld values, the last %d, room for %lld\n",
+              vec::length<i32>(&v), v[8], v.cap);
+  vec::delete<i32>(v);
+  0
+}

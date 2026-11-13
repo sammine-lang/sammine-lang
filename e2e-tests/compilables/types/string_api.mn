@@ -1,0 +1,35 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
+// CHECK:      abcdefghijklmnop! length 17
+// CHECK-NEXT: get a ! ?
+// CHECK-NEXT: eq 1 0 1
+
+// push and append grow a String, keeping it terminated; get is s[i]
+// giving None where s[i] would end the program; eq compares what two
+// views hold, where == compares where they point.
+
+import std;
+import str;
+
+let show(o: Option<char>) -> char { case o { Some(c) => c, None => '?' } }
+
+let main() -> i32 {
+  let s = str::push(str::new("ab"), 'c');
+  let s = str::push(str::append(s, "defghijklmnop"), '!');
+  std::printf("%s length %lld\n", s.data, str::length(&s));
+  std::printf("get %c %c %c\n", show(str::get(&s, 0i64)),
+              show(str::get(&s, 16i64)), show(str::get(&s, 17i64)));
+  // Grown from nothing.
+  let e = str::append(str::push(str::new(""), 'x'), "");
+  let t = str::new("x");
+  let u = str::new("xy");
+  std::printf("eq %d %d %d\n", str::eq(&e, &t), str::eq(&t, &u),
+              str::eq(&s, &s));
+  str::delete(s);
+  str::delete(e);
+  str::delete(t);
+  str::delete(u);
+  0
+}

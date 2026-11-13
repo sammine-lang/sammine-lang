@@ -1,0 +1,55 @@
+// RUN: %sammine_jit --file %full | %check %full
+// RUN: %sammine --file %full %O && %T/%base.exe | %check %full
+// RUN: %sammine --file %full %O && %asan %T/%base.exe | %check %full
+// REQUIRES: asan
+// CHECK:      length 3, get 2 -1 -1
+// CHECK-NEXT: set then pop: 10 2, length 2, popped 3
+// CHECK-NEXT: drained 2 10 -1, length 0
+// CHECK-NEXT: popped box 6, kept box 7
+
+// length, get, set and pop. get is v[i] giving None where v[i] would end
+// the program. set drops the value it replaces, pop hands the last one
+// back; under ASan nothing leaks and nothing is freed twice.
+
+import std;
+import vec;
+
+let show(o: Option<i32>) -> i32 { case o { Some(x) => x, None => -1 } }
+let boxed(n: i32) -> 'ptr<i32> { let p = alloc<i32>(1); *p = n; p }
+let unbox(o: Option<'ptr<i32>>) -> i32 {
+  case o {
+    Some(p) => {
+      let n = *p;
+      drop(p);
+      n
+    },
+    None => 0,
+  }
+}
+
+let main() -> i32 {
+  let v = vec::push<i32>(vec::push<i32>(vec::push<i32>(vec::new<i32>(2), 1),
+                                        2), 3);
+  std::printf("length %lld, get %d %d %d\n", vec::length<i32>(&v),
+              show(vec::get<i32>(&v, 1i64)), show(vec::get<i32>(&v, 3i64)),
+              show(vec::get<i32>(&v, 0i64 - 1i64)));
+  let v = vec::set<i32>(v, 0i64, 10);
+  let (v, last) = vec::pop<i32>(v);
+  std::printf("set then pop: %d %d, length %lld, popped %d\n", v[0], v[1],
+              vec::length<i32>(&v), show(last));
+  let (v, a) = vec::pop<i32>(v);
+  let (v, b) = vec::pop<i32>(v);
+  let (v, c) = vec::pop<i32>(v);
+  std::printf("drained %d %d %d, length %lld\n", show(a), show(b), show(c),
+              vec::length<i32>(&v));
+  vec::delete<i32>(v);
+
+  let w = vec::push<'ptr<i32>>(vec::push<'ptr<i32>>(vec::new<'ptr<i32>>(1),
+                                                    boxed(5)), boxed(6));
+  let w = vec::set<'ptr<i32>>(w, 0i64, boxed(7));
+  let (w, top) = vec::pop<'ptr<i32>>(w);
+  let (w, kept) = vec::pop<'ptr<i32>>(w);
+  std::printf("popped box %d, kept box %d\n", unbox(top), unbox(kept));
+  vec::delete<'ptr<i32>>(w);
+  0
+}

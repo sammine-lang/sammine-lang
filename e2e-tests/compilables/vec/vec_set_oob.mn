@@ -1,0 +1,13 @@
+// RUN: (! %sammine_jit --file %full 2>&1) | %check %full
+// set's index is checked as v[i]'s is.
+// CHECK: panic: index 1 out of bounds for a Vec of length 1
+// CHECK-NOT: unreachable
+import std;
+import vec;
+
+let main() -> i32 {
+  let v = vec::set<i32>(vec::push<i32>(vec::new<i32>(1), 1), 1i64, 2);
+  std::printf("unreachable %d\n", v[0]);
+  vec::delete<i32>(v);
+  0
+}
