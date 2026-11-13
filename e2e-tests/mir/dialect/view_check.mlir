@@ -23,7 +23,7 @@ func.func @write_through_held_view(%q: !sammine.ptr<i32, view>) attributes {samm
   %slot = sammine.local "q" : <!sammine.ptr<i32, view>>
   sammine.store %q, %slot : <!sammine.ptr<i32, view>>
   // expected-error @+1 {{Cannot write through non-owning pointer 'q' — only an owned pointer can be written}}
-  %at = sammine.through %slot : <!sammine.ptr<i32, view>> -> <i32>
+  %at = sammine.deref %slot : !sammine.place<!sammine.ptr<i32, view>>
   %c = arith.constant 2 : i32
   sammine.store %c, %at : <i32>
   return

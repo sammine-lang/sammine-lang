@@ -43,14 +43,12 @@ MIRLowering::lowerPointee(ExprAST *pointer, mlir::Location location) {
     auto place = lowerPlace(pointer);
     if (mlir::failed(place))
       return mlir::failure();
-    return smn::ThroughOp::create(builder_, location, *place).getResult();
+    return smn::DerefOp::create(builder_, location, *place).getResult();
   }
   auto ptr = lowerValue(pointer);
   if (mlir::failed(ptr))
     return mlir::failure();
-  auto pointee = mlir::cast<smn::PtrType>(ptr->getType()).getPointee();
-  return smn::DerefOp::create(builder_, location, placeOf(pointee), *ptr)
-      .getResult();
+  return smn::DerefOp::create(builder_, location, *ptr).getResult();
 }
 
 // Reading `*p` or `p[i]`, for p a pointer.

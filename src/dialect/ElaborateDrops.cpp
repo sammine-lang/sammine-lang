@@ -316,17 +316,7 @@ private:
     for (auto &step : path.steps) {
       if (step.kind == Step::Pointee) {
         // Through the pointer, which stays where it is.
-        auto type = current.getType();
-        auto place = mlir::dyn_cast<smn::PlaceType>(type);
-        auto ptr =
-            mlir::cast<smn::PtrType>(place ? place.getValueType() : type);
-        auto pointee =
-            smn::PlaceType::get(builder.getContext(), ptr.getPointee());
-        current =
-            place ? smn::ThroughOp::create(builder, loc, pointee, current)
-                        .getResult()
-                  : smn::DerefOp::create(builder, loc, pointee, current)
-                        .getResult();
+        current = smn::DerefOp::create(builder, loc, current).getResult();
         continue;
       }
       auto index = static_cast<uint64_t>(step.a);

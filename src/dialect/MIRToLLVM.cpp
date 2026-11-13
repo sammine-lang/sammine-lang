@@ -9,6 +9,7 @@
 #include "mlir/Dialect/Func/Transforms/FuncConversions.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMTypes.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Interfaces/DataLayoutInterfaces.h"
 #include "mlir/Transforms/DialectConversion.h"
@@ -223,8 +224,7 @@ struct DropLowering : public mlir::OpConversionPattern<smn::DropOp> {
   }
 };
 
-// A place is where its pointer points, so *p is p itself, and a view lent of
-// a place is its address, the same pointer again.
+// A view of a place is its address, the pointer the place is.
 template <typename AddressOp>
 struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
   using mlir::OpConversionPattern<AddressOp>::OpConversionPattern;
@@ -236,14 +236,18 @@ struct SameAddressLowering : public mlir::OpConversionPattern<AddressOp> {
   }
 };
 
-// The place a pointer held in a place points at: the pointer, loaded.
-struct ThroughLowering : public mlir::OpConversionPattern<smn::ThroughOp> {
+// A place is where its pointer points, so *p is p itself: the pointer, or
+// the one held in a place, loaded.
+struct DerefLowering : public mlir::OpConversionPattern<smn::DerefOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
-  matchAndRewrite(smn::ThroughOp op, OpAdaptor adaptor,
+  matchAndRewrite(smn::DerefOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
-    rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(
-        op, llvmPtr(op.getContext()), adaptor.getPlace());
+    if (op.isHeld())
+      rewriter.replaceOpWithNewOp<mlir::LLVM::LoadOp>(
+          op, llvmPtr(op.getContext()), adaptor.getPointer());
+    else
+      rewriter.replaceOp(op, adaptor.getPointer());
     return mlir::success();
   }
 };
@@ -737,10 +741,10 @@ struct AddressLowering : public mlir::OpConversionPattern<smn::AddressOp> {
 };
 
 struct UnreachableLowering
-    : public mlir::OpConversionPattern<smn::UnreachableOp> {
+    : public mlir::OpConversionPattern<mlir::ub::UnreachableOp> {
   using OpConversionPattern::OpConversionPattern;
   mlir::LogicalResult
-  matchAndRewrite(smn::UnreachableOp op, OpAdaptor adaptor,
+  matchAndRewrite(mlir::ub::UnreachableOp op, OpAdaptor adaptor,
                   mlir::ConversionPatternRewriter &rewriter) const override {
     rewriter.replaceOpWithNewOp<mlir::LLVM::UnreachableOp>(op);
     return mlir::success();
@@ -942,8 +946,8 @@ struct MIRToLLVMPass
     mlir::populateFunctionOpInterfaceTypeConversionPattern<mlir::func::FuncOp>(
         patterns, converter);
     patterns.add<
-        AllocLowering, DropLowering, LetLowering, ThroughLowering,
-        SameAddressLowering<smn::DerefOp>, SameAddressLowering<smn::LendOp>,
+        AllocLowering, DropLowering, LetLowering, DerefLowering,
+        SameAddressLowering<smn::LendOp>,
         SameAddressLowering<smn::AddrOp>, PtrElemLowering, FieldLowering,
         ElemLowering, ReadLowering<smn::CopyOp>, ReadLowering<smn::MoveOp>,
         StoreLowering, CallLowering, ExtractLowering, VariantLowering,
@@ -971,6 +975,8 @@ struct MIRToLLVMPass
     // kernel wrappers' ops, which lower-sammine-ops lowers before this pass.
     target.addIllegalDialect<smn::SammineDialect>();
     target.addLegalOp<smn::ToDeviceOp, smn::ToHostOp>();
+    // The point MIR never reaches is LLVM's.
+    target.addIllegalOp<mlir::ub::UnreachableOp>();
     // Any other op only needs converting if it takes or gives a MIR type:
     // most of a module, e.g. llvm.unreachable, has nothing to do with MIR.
     target.markUnknownOpDynamicallyLegal(

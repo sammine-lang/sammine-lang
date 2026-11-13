@@ -78,6 +78,29 @@ static void printFieldList(mlir::AsmPrinter &printer,
 #define GET_TYPEDEF_CLASSES
 #include "SammineTypes.cpp.inc"
 
+// What sammine.deref goes through, as `custom<PointerOrHeld>`: a pointer
+// short, `<i32, owned>`, as an operand that is always one prints; a place
+// holding one in full, to tell them apart.
+static mlir::ParseResult parsePointerOrHeld(mlir::OpAsmParser &parser,
+                                            mlir::Type &type) {
+  auto full = parser.parseOptionalType(type);
+  if (full.has_value())
+    return *full;
+  sammine_lang::smn::PtrType pointer;
+  if (parser.parseCustomTypeWithFallback(pointer))
+    return mlir::failure();
+  type = pointer;
+  return mlir::success();
+}
+
+static void printPointerOrHeld(mlir::OpAsmPrinter &printer, mlir::Operation *,
+                               mlir::Type type) {
+  if (auto pointer = mlir::dyn_cast<sammine_lang::smn::PtrType>(type))
+    printer.printStrippedAttrOrType(pointer);
+  else
+    printer << type;
+}
+
 #define GET_OP_CLASSES
 #include "SammineOps.cpp.inc"
 
@@ -282,6 +305,12 @@ arrayElements(mlir::Type type) {
                                        array.getElement());
 }
 
+PtrType pointerIn(mlir::Type type) {
+  if (auto place = mlir::dyn_cast<PlaceType>(type))
+    type = place.getValueType();
+  return mlir::dyn_cast<PtrType>(type);
+}
+
 bool ownsMemory(mlir::Type type) {
   if (auto ptr = mlir::dyn_cast<PtrType>(type))
     return ptr.isOwned();
@@ -316,16 +345,6 @@ EnumType::verify(llvm::function_ref<mlir::InFlightDiagnostic()> emitError,
   if (!llvm::all_of(variants, llvm::IsaPred<TupleType>))
     return emitError() << "enum '" << enumName
                        << "' has a payload that isn't a tuple";
-  return mlir::success();
-}
-
-mlir::LogicalResult ThroughOp::verify() {
-  auto ptr = mlir::dyn_cast<PtrType>(getPlace().getType().getValueType());
-  if (!ptr)
-    return emitOpError("goes through a place holding a pointer, not ")
-           << getPlace().getType();
-  if (getPointee().getType().getValueType() != ptr.getPointee())
-    return emitOpError("gives the place the held pointer points at");
   return mlir::success();
 }
 

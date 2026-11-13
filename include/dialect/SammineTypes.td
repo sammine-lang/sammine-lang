@@ -128,6 +128,10 @@ def Sammine_OwnedPtr : Type<
          CPred<"::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">]>,
     "owned pointer">;
 
+def Sammine_PointerOrHeld : Type<
+    CPred<"static_cast<bool>(::sammine_lang::smn::pointerIn($_self))">,
+    "pointer, or place holding one">;
+
 def Sammine_CharView : Type<
     And<[Sammine_PtrType.predicate,
          CPred<"!::llvm::cast<::sammine_lang::smn::PtrType>($_self).isOwned()">,

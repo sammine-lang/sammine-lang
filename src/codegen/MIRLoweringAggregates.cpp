@@ -3,6 +3,7 @@
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/IR/Matchers.h"
 
 //! \file MIRLoweringAggregates.cpp
@@ -244,7 +245,7 @@ mlir::LogicalResult MIRLowering::fail(mlir::Location location,
                       runtime::kDprintf, operands);
   smn::CallOp::create(builder_, location, mlir::TypeRange{}, runtime::kExit,
                       mlir::ValueRange{intConstant(location, i32, 1)});
-  smn::UnreachableOp::create(builder_, location);
+  mlir::ub::UnreachableOp::create(builder_, location);
   return mlir::success();
 }
 

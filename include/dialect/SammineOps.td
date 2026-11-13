@@ -24,9 +24,9 @@ def ToHostOp : Sammine_Op<"to_host", [Pure]> {
 // MIR: memory and ownership. See knowledge_base/plans/mir.md.
 //===----------------------------------------------------------------------===//
 
-// The place a pointer of type $_self points at.
+// The place the pointer $_self is, or holds, points at.
 defvar PlaceOfPointee = [{::sammine_lang::smn::PlaceType::get($_self.getContext(),
-    ::llvm::cast<::sammine_lang::smn::PtrType>($_self).getPointee())}];
+    ::sammine_lang::smn::pointerIn($_self).getPointee())}];
 // The type of the value a place of type $_self holds.
 defvar ValueOfPlace =
     [{::llvm::cast<::sammine_lang::smn::PlaceType>($_self).getValueType()}];
@@ -75,11 +75,26 @@ def DropOp : Sammine_Op<"drop", [MemoryEffects<[MemFree]>]> {
 
 def DerefOp : Sammine_Op<"deref", [Pure,
     TypesMatchWith<"the place holds what the pointer points at",
-                   "ptr", "place", PlaceOfPointee>]> {
+                   "pointer", "place", PlaceOfPointee>]> {
   let summary = "the place a pointer points at, `*p`";
-  let arguments = (ins Sammine_PtrType:$ptr);
+  let description = [{
+    The pointer is a value, or one held in a place, as `*pp` is in `**pp`:
+    that one stays where it is, and is only read.
+  }];
+  let arguments = (ins Sammine_PointerOrHeld:$pointer);
   let results = (outs Sammine_PlaceType:$place);
-  let assemblyFormat = "$ptr attr-dict `:` type($ptr)";
+  let assemblyFormat = "$pointer attr-dict `:` custom<PointerOrHeld>(type($pointer))";
+  let builders = [OpBuilder<(ins "::mlir::Value":$pointer), [{
+    auto type = pointer.getType();
+    build($_builder, $_state, }] # !subst("$_self", "type", PlaceOfPointee) # [{,
+          pointer);
+  }]>];
+  let extraClassDeclaration = [{
+    /// The type of the pointer gone through.
+    PtrType getPointerType() { return pointerIn(getPointer().getType()); }
+    /// Whether the pointer is held in a place, not a value.
+    bool isHeld() { return ::llvm::isa<PlaceType>(getPointer().getType()); }
+  }];
 }
 
 def ClosureOp : Sammine_Op<"closure",
@@ -157,26 +172,6 @@ def AddrOp : Sammine_Op<"addr", [Pure,
   let arguments = (ins Sammine_PlaceType:$place);
   let results = (outs Sammine_PtrType:$result);
   let assemblyFormat = "$place attr-dict `:` type($place)";
-}
-
-def ThroughOp : Sammine_Op<"through", [Pure]> {
-  let summary = "the place a pointer held in a place points at, `**pp`";
-  let description = [{
-    `*e` where e is itself a place holding a pointer, as `*pp` is: the
-    pointer stays where it is, as sammine.deref leaves a pointer value.
-  }];
-  let arguments = (ins Sammine_PlaceType:$place);
-  let results = (outs Sammine_PlaceType:$pointee);
-  let assemblyFormat =
-      "$place attr-dict `:` type($place) `->` type($pointee)";
-  let hasVerifier = 1;
-  let builders = [OpBuilder<(ins "::mlir::Value":$place), [{
-    auto ptr = ::llvm::cast<::sammine_lang::smn::PtrType>(
-        ::llvm::cast<::sammine_lang::smn::PlaceType>(place.getType())
-            .getValueType());
-    build($_builder, $_state, ::sammine_lang::smn::PlaceType::get(
-        $_builder.getContext(), ptr.getPointee()), place);
-  }]>];
 }
 
 def PtrElemOp : Sammine_Op<"ptr_elem", [Pure,
@@ -302,11 +297,6 @@ def ElementOp : Sammine_Op<"element", [Pure]> {
   let results = (outs AnyType:$result);
   let assemblyFormat = "$array `[` $index `]` attr-dict `:` type($array) `,` type($index) `->` type($result)";
   let hasVerifier = 1;
-}
-
-def UnreachableOp : Sammine_Op<"unreachable", [Terminator]> {
-  let summary = "a point the program never reaches, as after exit()";
-  let assemblyFormat = "attr-dict";
 }
 
 def CopyOp : Sammine_Op<"copy", [MemoryEffects<[MemRead]>,

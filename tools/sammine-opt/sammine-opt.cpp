@@ -14,6 +14,7 @@
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 
@@ -31,7 +32,7 @@ int main(int argc, char **argv) {
   // didn't go through it.
   registry.insert<sammine_lang::smn::SammineDialect, mlir::func::FuncDialect,
                   mlir::arith::ArithDialect, mlir::cf::ControlFlowDialect,
-                  mlir::LLVM::LLVMDialect>();
+                  mlir::LLVM::LLVMDialect, mlir::ub::UBDialect>();
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "sammine MIR optimizer\n", registry));
 }

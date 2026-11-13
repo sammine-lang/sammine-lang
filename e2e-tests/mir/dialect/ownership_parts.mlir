@@ -170,7 +170,7 @@ func.func @through_held_pointer(%n: i32) attributes {sammine.mir} {
   sammine.store %1, %held : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>>
   %2 = sammine.alloc %n : i32 -> !sammine.ptr<i32, owned>
   %again = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>
-  %inner = sammine.through %again : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>> -> <!sammine.ptr<i32, owned>>
+  %inner = sammine.deref %again : !sammine.place<!sammine.ptr<!sammine.ptr<i32, owned>, owned>>
   // expected-error @+1 {{'**pp' is still owned where it goes out of use}}
   sammine.store %2, %inner : <!sammine.ptr<i32, owned>>
   %last = sammine.deref %pp : <!sammine.ptr<!sammine.ptr<i32, owned>, owned>, owned>

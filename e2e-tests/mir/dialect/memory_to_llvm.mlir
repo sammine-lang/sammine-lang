@@ -57,7 +57,7 @@ func.func @elem(%p: !sammine.ptr<i32, view>, %i: i64) -> i32 {
 // CHECK-NEXT: %1 = llvm.load %0 : !llvm.ptr -> i32
 func.func @through(%pp: !sammine.ptr<!sammine.ptr<i32, owned>, view>) -> i32 {
   %held = sammine.deref %pp : !sammine.ptr<!sammine.ptr<i32, owned>, view>
-  %place = sammine.through %held : !sammine.place<!sammine.ptr<i32, owned>> -> !sammine.place<i32>
+  %place = sammine.deref %held : !sammine.place<!sammine.ptr<i32, owned>>
   %v = sammine.copy %place : !sammine.place<i32>
   return %v : i32
 }

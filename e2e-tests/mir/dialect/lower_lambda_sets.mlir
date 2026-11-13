@@ -34,7 +34,7 @@ func.func private @one(%x: i32) -> i32 attributes {sammine.mir} {
 // CHECK: sammine.payload
 // CHECK: sammine.call @add(
 // CHECK: sammine.call @neg(%arg1)
-// CHECK: sammine.unreachable
+// CHECK: ub.unreachable
 func.func private @two(%b: i1, %x: i32) -> i32 attributes {sammine.mir} {
   cf.cond_br %b, ^plus, ^minus
 ^plus:

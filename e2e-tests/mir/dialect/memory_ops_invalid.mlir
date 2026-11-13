@@ -43,3 +43,13 @@ func.func @lend_returned(%p: !sammine.ptr<i32, owned>) -> !sammine.ptr<i32, view
   %v = sammine.lend %place : !sammine.place<i32>
   return %v : !sammine.ptr<i32, view>
 }
+
+// -----
+
+// `*e` goes through a pointer, or a place holding one.
+func.func @deref_no_pointer(%p: !sammine.ptr<i32, view>) {
+  %place = sammine.deref %p : !sammine.ptr<i32, view>
+  // expected-error @+1 {{'sammine.deref' 'pointer' must be pointer, or place holding one, but got '!sammine.place<i32>'}}
+  %at = sammine.deref %place : !sammine.place<i32>
+  return
+}

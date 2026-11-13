@@ -106,6 +106,10 @@ mlir::Type mapType(mlir::Type type,
 /// offsets its enum's type has now: after the types of payloads changed.
 void refreshPayloadOffsets(mlir::Operation *root);
 
+/// The pointer `type` is, or the one a place of `type` holds; null for any
+/// other type.
+PtrType pointerIn(mlir::Type type);
+
 /// Whether a value of `type` owns memory, which its holder must free or hand
 /// on: an owned pointer, or a struct, tuple or enum holding one.
 bool ownsMemory(mlir::Type type);

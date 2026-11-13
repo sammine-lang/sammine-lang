@@ -48,6 +48,7 @@
 #include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
 #include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
@@ -362,6 +363,7 @@ void Compiler::mir() {
   mlirCtx.getOrLoadDialect<mlir::LLVM::LLVMDialect>();
   mlirCtx.getOrLoadDialect<mlir::scf::SCFDialect>();
   mlirCtx.getOrLoadDialect<mlir::cf::ControlFlowDialect>();
+  mlirCtx.getOrLoadDialect<mlir::ub::UBDialect>();
   // MIR's types and ops, and the GPU transfer ops.
   mlirCtx.getOrLoadDialect<smn::SammineDialect>();
 

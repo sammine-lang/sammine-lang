@@ -3,6 +3,7 @@
 
 #include "mlir/Dialect/ControlFlow/IR/ControlFlowOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/UB/IR/UBOps.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir/IR/PatternMatch.h"
@@ -317,7 +318,7 @@ void LambdaSets::collect(mlir::Operation *op, mlir::func::FuncOp func) {
     whole(op->getResult(0), op->getOperand(0));
   } else if (auto store = mlir::dyn_cast<smn::StoreOp>(op)) {
     whole(store.getValue(), store.getPlace());
-  } else if (mlir::isa<smn::DerefOp, smn::AddrOp, smn::LendOp, smn::ThroughOp,
+  } else if (mlir::isa<smn::DerefOp, smn::AddrOp, smn::LendOp,
                        smn::PtrElemOp>(op)) {
     // A pointer's, a place's and its pointee's variables are the same.
     whole(op->getResult(0), op->getOperand(0));
@@ -624,7 +625,7 @@ void lowerCall(smn::CallIndirectOp call,
 
   if (closures.empty()) {
     // No closure reaches it: the call is never made.
-    smn::UnreachableOp::create(builder, loc);
+    mlir::ub::UnreachableOp::create(builder, loc);
   } else if (auto en = mlir::dyn_cast<smn::EnumType>(value.getType())) {
     auto tag = smn::TagOp::create(builder, loc, builder.getI32Type(), value);
     llvm::SmallVector<llvm::APInt> tags;
@@ -648,7 +649,7 @@ void lowerCall(smn::CallIndirectOp call,
     auto *otherwise = new mlir::Block();
     region->getBlocks().insert(after->getIterator(), otherwise);
     mlir::OpBuilder ob(otherwise, otherwise->end());
-    smn::UnreachableOp::create(ob, loc);
+    mlir::ub::UnreachableOp::create(ob, loc);
     auto caseValues = mlir::DenseIntElementsAttr::get(
         mlir::VectorType::get({static_cast<int64_t>(tags.size())},
                               builder.getI32Type()),
@@ -698,6 +699,10 @@ struct LowerLambdaSetsPass
   llvm::StringRef getDescription() const override {
     return "Make each function value of a known lambda set what its closure "
            "binds, and each call through one a direct call";
+  }
+  // A call no closure reaches becomes ub.unreachable.
+  void getDependentDialects(mlir::DialectRegistry &registry) const override {
+    registry.insert<mlir::ub::UBDialect>();
   }
   void runOnOperation() override {
     if (mlir::failed(lowerLambdaSets(getOperation())))

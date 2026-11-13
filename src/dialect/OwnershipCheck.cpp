@@ -61,7 +61,7 @@ llvm::StringRef verbFor(mlir::Operation *op, bool takes) {
     return "use";
   if (mlir::isa<smn::AddrOp>(op))
     return "take the address of";
-  if (!mlir::isa<smn::DerefOp, smn::ThroughOp>(op))
+  if (!mlir::isa<smn::DerefOp>(op))
     return "use";
   // Reaching what a pointer points at: for what?
   auto place = op->getResult(0);

@@ -24,7 +24,7 @@ namespace {
 /// slot of its own, reached through no pointer.
 mlir::Operation *reachedThrough(mlir::Value place) {
   while (auto *op = place.getDefiningOp()) {
-    if (mlir::isa<smn::DerefOp, smn::ThroughOp>(op))
+    if (mlir::isa<smn::DerefOp>(op))
       return op;
     if (auto field = mlir::dyn_cast<smn::FieldOp>(op))
       place = field.getBase();
@@ -38,12 +38,9 @@ mlir::Operation *reachedThrough(mlir::Value place) {
   return nullptr;
 }
 
-/// The pointer `through`, a deref or a through, goes through.
+/// The pointer `through`, a deref, goes through.
 smn::PtrType pointerOf(mlir::Operation *through) {
-  if (auto deref = mlir::dyn_cast<smn::DerefOp>(through))
-    return deref.getPtr().getType();
-  return mlir::cast<smn::PtrType>(
-      mlir::cast<smn::ThroughOp>(through).getPlace().getType().getValueType());
+  return mlir::cast<smn::DerefOp>(through).getPointerType();
 }
 
 /// The binding that names the pointer `through` goes through, if MIR knows
@@ -292,7 +289,7 @@ private:
           changed |=
               add(placeRoot(store.getPlace()), taintOf(store.getValue()));
         } else if (mlir::isa<smn::CopyOp, smn::MoveOp, smn::AddrOp, smn::LendOp,
-                             smn::DerefOp, smn::ThroughOp>(op)) {
+                             smn::DerefOp>(op)) {
           // What is read from a place holds what the place does, and so
           // does a pointer to it, and the place a pointer is reached to.
           changed |=

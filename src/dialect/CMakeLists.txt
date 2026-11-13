@@ -54,6 +54,6 @@ add_library(SammineDialectTransforms STATIC
 )
 target_link_libraries(SammineDialectTransforms PRIVATE project_options)
 target_link_libraries(SammineDialectTransforms PUBLIC
-  SammineDialect SammineCABI MLIRArithDialect MLIRFuncDialect MLIRFuncTransforms MLIRControlFlowTransforms MLIRLLVMDialect MLIRDataLayoutInterfaces
+  SammineDialect SammineCABI MLIRArithDialect MLIRFuncDialect MLIRUBDialect MLIRFuncTransforms MLIRControlFlowTransforms MLIRLLVMDialect MLIRDataLayoutInterfaces
   MLIRGPUDialect MLIRMemRefDialect MLIRTransformUtils MLIRPass MLIRAnalysis
 )

@@ -428,19 +428,15 @@ void Transfer::apply(mlir::Operation *op) {
     owner.movedBy = op;
     return;
   }
-  if (mlir::isa<smn::DerefOp, smn::ThroughOp>(op)) {
+  if (auto deref = mlir::dyn_cast<smn::DerefOp>(op)) {
     // Reaching what a pointer points at reads the pointer: a value, or one
     // held in a place.
-    auto pointer = op->getOperand(0);
-    auto type = pointer.getType();
-    if (auto place = mlir::dyn_cast<smn::PlaceType>(type))
-      type = place.getValueType();
-    if (isOwnedPtr(type))
-      look(pointer, op);
+    if (isOwnedPtr(deref.getPointerType()))
+      look(deref.getPointer(), op);
     return;
   }
   if (mlir::isa<smn::LendOp, smn::AddrOp>(op)) {
-    // A view of what a pointer points at: the deref or through that reached
+    // A view of what a pointer points at: the deref that reached
     // it read the pointer, and the view may see it hold nothing, as the
     // pointer's type allows. A view of any other place reads the place.
     auto place = pathOf(op->getOperand(0));

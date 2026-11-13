@@ -105,11 +105,8 @@ std::optional<PartOf> partOf(mlir::Operation *op) {
       })
       .Case(
           [](smn::ElemOp op) { return PartOf{op.getBase(), {Step::Element}}; })
-      .Case([&](smn::ThroughOp op) {
-        return pointee(op.getPlace(), op.getPlace().getType().getValueType());
-      })
       .Case([&](smn::DerefOp op) {
-        return pointee(op.getPtr(), op.getPtr().getType());
+        return pointee(op.getPointer(), op.getPointerType());
       })
       .Default([](mlir::Operation *) { return std::nullopt; });
 }
@@ -125,7 +122,7 @@ std::optional<Path> pathOf(mlir::Value value) {
     return std::nullopt;
   if (!op ||
       !mlir::isa<smn::ExtractOp, smn::PayloadOp, smn::ElementOp, smn::FieldOp,
-                 smn::ElemOp, smn::DerefOp, smn::ThroughOp>(op)) {
+                 smn::ElemOp, smn::DerefOp>(op)) {
     if (!smn::ownsMemory(value.getType()))
       return std::nullopt;
     return Path{value, {}};
