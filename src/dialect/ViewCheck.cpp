@@ -153,9 +153,9 @@ void ViewCheck::checkBound(smn::ClosureOp closure) {
     if (!smn::ownsMemory(bound.getType()))
       continue;
     auto path = ownership::pathOf(bound);
-    auto name = path ? ownership::nameOf(*path) : "";
+    auto name = path ? ownership::nameOf(*path) : std::nullopt;
     error(closure.getLoc(),
-          "Cannot bind " + (name.empty() ? "a value" : "'" + name + "'") +
+          "Cannot bind " + (name ? "'" + *name + "'" : "a value") +
               " that owns memory into a partial application of '" +
               calleeName(closure, closure.getCallee()) +
               "': the closure can be called more than once");

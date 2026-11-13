@@ -1,0 +1,23 @@
+// RUN: (! %sammine --file %full %O 2>&1) | %check %full
+// CHECK: drop_value_moved_apart_temporary.mn:21:10
+// CHECK: ╰─ Cannot move part of a temporary out of a temporary: it drops whole, through 'Drop<Job>::Drop'; take it apart in an unsafe function
+
+// A value no binding names has no name for a message to quote: it is
+// spoken of as the temporary it is.
+
+struct Job { box: 'ptr<i32>, };
+
+instance Drop<Job> {
+  let unsafe Drop(j: Job) -> unit { drop(j.box); }
+}
+
+let make() -> Job {
+  let p = alloc<i32>(1);
+  *p = 1;
+  Job { box: p }
+}
+
+let main() -> i32 {
+  let h = make().box;
+  0
+}

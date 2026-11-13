@@ -153,10 +153,10 @@ std::optional<std::string> bindingName(mlir::Value root) {
   return std::nullopt;
 }
 
-std::string nameOf(const Path &path) {
+std::optional<std::string> nameOf(const Path &path) {
   auto root = bindingName(path.root);
   if (!root)
-    return "";
+    return std::nullopt;
   std::string name = *root;
   Path prefix{path.root, {}};
   for (auto &step : path.steps) {

@@ -95,8 +95,8 @@ mlir::Location definedAt(mlir::Value value);
 /// place goes by the place's.
 std::optional<std::string> bindingName(mlir::Value root);
 
-/// `path` as the source writes it: `b.data`, `*p.a`, `o.i.a`; empty for a
+/// `path` as the source writes it: `b.data`, `*p.a`, `o.i.a`; none for a
 /// value no binding names.
-std::string nameOf(const Path &path);
+std::optional<std::string> nameOf(const Path &path);
 
 } // namespace sammine_lang::ownership

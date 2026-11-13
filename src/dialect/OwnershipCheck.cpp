@@ -86,7 +86,13 @@ llvm::StringRef handedOnAs(mlir::Operation *op) {
   return "passed to a function";
 }
 
-std::string quoted(const Path &path) { return "'" + nameOf(path) + "'"; }
+/// How a message speaks of `path`: by its name, quoted, or, of a value no
+/// binding names, as the temporary it is, or a part of one.
+std::string quoted(const Path &path) {
+  if (auto name = nameOf(path))
+    return "'" + *name + "'";
+  return path.steps.empty() ? "a temporary" : "part of a temporary";
+}
 
 // --- Reporting ------------------------------------------------------------
 
@@ -142,13 +148,12 @@ public:
     if (!first(pointer))
       return;
     auto name = nameOf(pointer);
-    auto subject =
-        name.empty() ? std::string("An owned pointer") : "'" + name + "'";
+    auto subject = name ? "'" + *name + "'" : std::string("An owned pointer");
     auto msg = subject + " must point at a value when it is " +
                handedOnAs(op).str() + ", but ";
     if (owner.neverHeld()) {
-      auto holds = name.empty() ? std::string("it points at")
-                                : quoted(pointee) + " holds";
+      auto holds =
+          name ? quoted(pointee) + " holds" : std::string("it points at");
       error(op->getLoc(),
             msg + holds +
                 // Held on a path and dropped where the paths join, it held
@@ -180,7 +185,7 @@ public:
 
   void overwritten(const Path &target, mlir::Operation *store) override {
     error(store->getLoc(),
-          "Storing into '" + nameOf(target) + "' while it still owns a value");
+          "Storing into " + quoted(target) + " while it still owns a value");
   }
 
   void movedOutOfArray(const Path &element, mlir::Location at) override {
@@ -261,25 +266,25 @@ private:
       return;
     auto &owner = owners.at(path);
     auto name = nameOf(path);
-    if (name.empty()) {
+    if (!name) {
       // A value nothing took has no owner. The error underlines it; its type
       // isn't spelled, as MIR's integers carry no sign to spell u32 by.
       error(definedAt(path.root), "Temporary owning memory must not be "
                                   "discarded (bind it with 'let' first)");
     } else if (owner.isPartlyFilled()) {
-      error(owner.definedAt, "'" + name +
+      error(owner.definedAt, "'" + *name +
                                  "' is still owned where it goes out of use: "
                                  "it is stored in some branches");
     } else if (owner.kind == Owner::MaybeMoved) {
       auto why = reasonFor(owner.movedBy).str();
-      error(owner.definedAt, "'" + name +
+      error(owner.definedAt, "'" + *name +
                                  "' is moved in some branches and still "
                                  "owned in others")
               .attachNote(owner.movedBy->getLoc())
-          << "'" << name << "' was " << why << " here";
+          << "'" << *name << "' was " << why << " here";
     } else {
       error(owner.definedAt,
-            "'" + name + "' is still owned where it goes out of use");
+            "'" + *name + "' is still owned where it goes out of use");
     }
   }
 };
